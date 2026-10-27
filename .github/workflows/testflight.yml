@@ -430,8 +430,24 @@ jobs:
           cp -f "$SRC/AppIcon60@3x.png" "$APP_PATH/AppIcon60@3x.png"
           cp -f "$SRC/AppIcon60@2x.png" "$APP_PATH/Icon-60@2x.png"
           cp -f "$SRC/AppIcon60@3x.png" "$APP_PATH/Icon-60@3x.png"
+          mkdir -p "$APP_PATH/Fixtures"
+          cp -f "$SRC/Fonts/"*.otf "$APP_PATH/"
+          cp -f "$SRC/Fixtures/"*.json "$APP_PATH/Fixtures/"
+          if [ ! -f "$APP_PATH/Assets.car" ]; then
+            echo "Assets.car missing from archive; compiling asset catalog."
+            xcrun actool "$SRC/Assets.xcassets" \
+              --compile "$APP_PATH" \
+              --platform iphoneos \
+              --minimum-deployment-target 17.0 \
+              --app-icon AppIcon \
+              --output-partial-info-plist "$RUNNER_TEMP/actool-info.plist" \
+              --target-device iphone \
+              --compress-pngs \
+              --include-all-app-icons \
+              --notices --warnings
+          fi
           echo "=== App bundle after icon copy ==="
-          ls -la "$APP_PATH/AppIcon60@2x.png" "$APP_PATH/AppIcon60@3x.png" "$APP_PATH/Icon-60@2x.png"
+          ls -la "$APP_PATH/AppIcon60@2x.png" "$APP_PATH/Icon-60@2x.png" "$APP_PATH/Geist-Regular.otf" "$APP_PATH/Assets.car"
           file "$APP_PATH/AppIcon60@2x.png"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           codesign --force --sign "iPhone Distribution" \
@@ -453,6 +469,8 @@ jobs:
           echo "=== App bundle icons ==="
           ls -la "$APP_PATH"/*.png "$APP_PATH"/AppIcon* 2>/dev/null || true
           test -f "$APP_PATH/AppIcon60@2x.png"
+          test -f "$APP_PATH/Geist-Regular.otf"
+          test -f "$APP_PATH/Assets.car"
           FILE_INFO=$(file "$APP_PATH/AppIcon60@2x.png")
           echo "$FILE_INFO"
           echo "$FILE_INFO" | grep -q "120 x 120"
@@ -508,11 +526,27 @@ jobs:
           cp -f "$SRC/AppIcon60@3x.png" "$APP/AppIcon60@3x.png"
           cp -f "$SRC/AppIcon60@2x.png" "$APP/Icon-60@2x.png"
           cp -f "$SRC/AppIcon60@3x.png" "$APP/Icon-60@3x.png"
+          mkdir -p "$APP/Fixtures"
+          cp -f "$SRC/Fonts/"*.otf "$APP/"
+          cp -f "$SRC/Fixtures/"*.json "$APP/Fixtures/"
+          if [ ! -f "$APP/Assets.car" ]; then
+            xcrun actool "$SRC/Assets.xcassets" \
+              --compile "$APP" \
+              --platform iphoneos \
+              --minimum-deployment-target 17.0 \
+              --app-icon AppIcon \
+              --output-partial-info-plist "$RUNNER_TEMP/actool-ipa.plist" \
+              --target-device iphone \
+              --compress-pngs \
+              --include-all-app-icons
+          fi
           echo "=== IPA app icons ==="
-          ls -la "$APP"/*.png "$APP"/AppIcon* "$APP"/Icon-60* 2>/dev/null || true
+          ls -la "$APP"/*.png "$APP"/AppIcon* "$APP"/Icon-60* "$APP"/Geist-Regular.otf "$APP"/Assets.car 2>/dev/null || true
           FILE_INFO=$(file "$APP/AppIcon60@2x.png")
           echo "$FILE_INFO"
           echo "$FILE_INFO" | grep -q "120 x 120"
+          test -f "$APP/Assets.car"
+          test -f "$APP/Geist-Regular.otf"
           echo "CFBundleIconName=$(plutil -extract CFBundleIconName raw "$APP/Info.plist")"
           plutil -extract CFBundleIcons raw "$APP/Info.plist" || true
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"

@@ -7,6 +7,9 @@ options:
   createIntermediateGroups: true
   generateEmptyDirectories: true
   defaultConfig: Debug
+  fileTypes:
+    icon:
+      file: true
 
 settings:
   base:
@@ -26,40 +29,60 @@ targets:
     sources:
       - path: Golflet/Sources
         type: group
+      - path: Golflet/Resources/Assets.xcassets
+        buildPhase: resources
+      - path: Golflet/Resources/Fonts
+        buildPhase: resources
+      - path: Golflet/Resources/Fixtures
+        type: folder
+        buildPhase: resources
     resources:
+      - path: Golflet/Resources/AppIcon.icon
+        type: file
       - path: Golflet/Resources/Assets.xcassets
       - path: Golflet/Resources/Fixtures
         type: folder
-      - path: Golflet/Resources/Fixtures/rounds.json
-      - path: Golflet/Resources/Fixtures/courses.json
-      - path: Golflet/Resources/Fixtures/tees.json
-      - path: Golflet/Resources/Fixtures/per_hole_stats.json
       - path: Golflet/Resources/Fonts/Geist-Regular.otf
       - path: Golflet/Resources/Fonts/Geist-Medium.otf
       - path: Golflet/Resources/Fonts/Geist-SemiBold.otf
-    # AppIcon60@2x.png / @3x.png stay out of `resources`: actool swallows
-    # loose files named AppIcon* into Assets.car and deletes them from the
-    # .app root. ASC still requires a 120x120 PNG next to the binary.
+    # Loose AppIcon*.png stay out of `resources`: actool swallows them.
+    # Copy fonts, fixtures, catalog and 120px icons after every build so
+    # the .app is complete even if XcodeGen drops Copy Bundle Resources.
     postBuildScripts:
-      - name: Copy App Store icon PNGs
+      - name: Copy bundle resources and App Store icons
         basedOnDependencyAnalysis: false
         inputFiles:
           - $(SRCROOT)/Golflet/Resources/AppIcon60@2x.png
           - $(SRCROOT)/Golflet/Resources/AppIcon60@3x.png
+          - $(SRCROOT)/Golflet/Resources/Fonts/Geist-Regular.otf
+          - $(SRCROOT)/Golflet/Resources/Assets.xcassets
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIcon60@2x.png
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIcon60@3x.png
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Geist-Regular.otf
         script: |
           set -euo pipefail
           DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
           SRC="${SRCROOT}/Golflet/Resources"
-          mkdir -p "${DEST}"
+          mkdir -p "${DEST}/Fixtures"
           cp -f "${SRC}/AppIcon60@2x.png" "${DEST}/AppIcon60@2x.png"
           cp -f "${SRC}/AppIcon60@3x.png" "${DEST}/AppIcon60@3x.png"
           cp -f "${SRC}/AppIcon60@2x.png" "${DEST}/Icon-60@2x.png"
           cp -f "${SRC}/AppIcon60@3x.png" "${DEST}/Icon-60@3x.png"
-          echo "Copied App Store icons into ${DEST}"
-          ls -la "${DEST}/AppIcon60@2x.png" "${DEST}/Icon-60@2x.png"
+          cp -f "${SRC}/Fonts/"*.otf "${DEST}/"
+          cp -f "${SRC}/Fixtures/"*.json "${DEST}/Fixtures/"
+          PLATFORM="${PLATFORM_NAME:-iphoneos}"
+          xcrun actool "${SRC}/Assets.xcassets" \
+            --compile "${DEST}" \
+            --platform "${PLATFORM}" \
+            --minimum-deployment-target 17.0 \
+            --app-icon AppIcon \
+            --output-partial-info-plist "${TEMP_DIR:-/tmp}/golflet-actool.plist" \
+            --target-device iphone \
+            --compress-pngs \
+            --include-all-app-icons \
+            --notices --warnings
+          echo "Copied bundle resources into ${DEST}"
+          ls -la "${DEST}/AppIcon60@2x.png" "${DEST}/Geist-Regular.otf" "${DEST}/Assets.car"
     info:
       path: Golflet/Resources/Info.plist
       properties:
