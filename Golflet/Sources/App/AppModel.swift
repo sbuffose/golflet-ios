@@ -4,6 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
+    var user: GolfletUser?
     var profile = PlayerProfile(displayName: "Jugador Demo", initials: "JD", currentHandicap: 3.1)
     var clubs: [LinkedClub] = []
     var rounds: [Round] = []
@@ -11,7 +12,9 @@ final class AppModel {
     var tees: [TeeRating] = []
     var holeStats: [CourseHoleStats] = []
     var bag: [BagClub] = []
+    var catalogue: [ClubCatalogEntry] = []
     var isLoaded = false
+    var isBusy = false
     var errorMessage: String?
     var selectedTab: AppTab = .inicio
     var courseFilter: CourseFilter = .all
@@ -19,15 +22,23 @@ final class AppModel {
     var presentedRound: Round?
     var presentedHole: Int?
     var showsClubs = false
+    var syncSession: SyncSession?
+    var celebrateCards: Int?
+    var toastMessage: String?
+    var isSignedIn: Bool
 
     let api: any GolfletAPI
     let notes: NotesStore
+    private var reopenClubsAfterFailure = false
 
     init(api: any GolfletAPI, notes: NotesStore) {
         self.api = api
         self.notes = notes
+        self.isSignedIn = api.isAuthenticated
     }
 
+    var isAuthenticated: Bool { isSignedIn }
+    var isLive: Bool { !api.persistsLocally }
     var home: HomeSnapshot { StatsEngine.home(rounds: rounds) }
     var summary: SummarySnapshot { StatsEngine.summary(rounds: rounds, filter: courseFilter) }
 
@@ -36,23 +47,18 @@ final class AppModel {
     }
 
     func load() async {
-        errorMessage = nil
+        guard isAuthenticated else {
+            isLoaded = true
+            return
+        }
         do {
-            async let clubsTask = api.linkedClubs()
-            async let profileTask = api.profile()
-            async let roundsTask = api.rounds(filter: RoundFilter())
-            async let coursesTask = api.courses()
-            async let teesTask = api.tees()
-            async let statsTask = api.holeStats()
-            clubs = try await clubsTask
-            profile = try await profileTask
-            rounds = try await roundsTask
-            courses = try await coursesTask
-            tees = try await teesTask
-            holeStats = try await statsTask
-            bag = notes.bag()
-            if let last = rounds.sorted(by: { $0.date > $1.date }).first {
-                selectedCourseName = last.course == "Azul" || last.course == "Colorada" ? last.course : "Colorada"
+            let snap = try await api.bootstrap()
+            apply(snap)
+            if api.persistsLocally {
+                bag = notes.bag()
+            }
+            if catalogue.isEmpty {
+                catalogue = (try? await api.clubCatalogue()) ?? []
             }
             isLoaded = true
         } catch {
@@ -61,21 +67,109 @@ final class AppModel {
         }
     }
 
-    func addClub(urlString: String, matricula: String, clave: String) async {
-        errorMessage = nil
-        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolved = trimmed.isEmpty ? "https://golf.e-jockeyclub.org.ar/golf" : trimmed
-        guard let url = URL(string: resolved) else {
-            errorMessage = "La URL no es válida."
-            return
+    func signUp(name: String, email: String, password: String) async {
+        await run {
+            try await api.signUp(name: name, email: email, password: password)
+            isSignedIn = true
+            await load()
+        }
+    }
+
+    func signIn(email: String, password: String) async {
+        await run {
+            try await api.signIn(email: email, password: password)
+            isSignedIn = true
+            await load()
+        }
+    }
+
+    func signOut() async {
+        await run {
+            try await api.signOut()
+            isSignedIn = false
+            user = nil
+            clubs = []
+            rounds = []
+            courses = []
+            tees = []
+            holeStats = []
+            bag = []
+            isLoaded = true
+        }
+    }
+
+    func addClub(clubID: Int?, urlString: String, matricula: String, clave: String, savePassword: Bool) async {
+        let name = clubID.flatMap { id in catalogue.first { $0.id == id }?.name } ?? "tu club"
+        await performClubSync(clubName: name, accountId: nil, knownCards: nil, kind: .link) { progressID in
+            let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+            return try await api.linkClub(
+                clubID: clubID,
+                baseURL: clubID == nil ? trimmed : nil,
+                matricula: matricula,
+                password: clave,
+                savePassword: savePassword,
+                progressID: progressID
+            )
+        }
+    }
+
+    func requestSync(_ club: LinkedClub, password: String? = nil, savePassword: Bool = false) {
+        let progressID = beginRunningSession(
+            clubName: club.name,
+            accountId: club.accountId,
+            knownCards: club.cardCount,
+            kind: .refresh
+        )
+        Task {
+            await finishClubSync(progressID: progressID, knownCards: club.cardCount, kind: .refresh) { id in
+                try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword, progressID: id)
+            }
+        }
+    }
+
+    func syncClub(_ club: LinkedClub, password: String? = nil, savePassword: Bool = false) async {
+        await performClubSync(clubName: club.name, accountId: club.accountId, knownCards: club.cardCount, kind: .refresh) { progressID in
+            try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword, progressID: progressID)
+        }
+    }
+
+    func finishSuccessfulSync() {
+        selectedTab = .inicio
+        showsClubs = false
+        syncSession = nil
+    }
+
+    func forgetPassword(_ club: LinkedClub) async {
+        await run {
+            try await api.forgetPassword(accountId: club.accountId)
+            await load()
+        }
+    }
+
+    func unlink(_ club: LinkedClub) async {
+        await run {
+            try await api.unlink(accountId: club.accountId)
+            await load()
+        }
+    }
+
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, text: String) async {
+        notes.saveNote(roundId: roundId, text: text)
+        if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
+            rounds[index].putts = putts
+            rounds[index].gir = gir
+            rounds[index].fir = fir
+            rounds[index].notes = text
+            rounds[index].notesAt = Date()
+        }
+        if presentedRound?.roundId == roundId {
+            presentedRound?.putts = putts
+            presentedRound?.gir = gir
+            presentedRound?.fir = fir
+            presentedRound?.notes = text
         }
         do {
-            let club = try await api.login(clubURL: url, matricula: matricula, clave: clave)
-            if !clubs.contains(where: { $0.code == club.code }) {
-                clubs.append(club)
-            } else {
-                clubs = clubs.map { $0.code == club.code ? club : $0 }
-            }
+            try await api.saveRoundNotes(roundId: roundId, putts: putts, gir: gir, fir: fir, notes: text)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -87,10 +181,170 @@ final class AppModel {
             return BagClub(name: name, carry: carry, total: total)
         }
         notes.saveBag(bag)
+        Task { [bag] in
+            do {
+                self.bag = try await api.saveBag(bag)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     func openLastRound() {
         presentedRound = home.lastRound
+    }
+
+    @discardableResult
+    private func beginRunningSession(
+        clubName: String,
+        accountId: String?,
+        knownCards: Int?,
+        kind: SyncSession.Kind
+    ) -> String {
+        errorMessage = nil
+        isBusy = true
+        let progressID = UUID().uuidString
+        syncSession = SyncSession(
+            id: UUID(),
+            progressID: progressID,
+            kind: kind,
+            clubName: clubName,
+            accountId: accountId,
+            knownCards: knownCards,
+            startedAt: Date(),
+            progress: SyncAPIProgress(club: clubName, stage: .connect),
+            outcome: .running
+        )
+        reopenClubsAfterFailure = showsClubs
+        showsClubs = false
+        return progressID
+    }
+
+    private func performClubSync(
+        clubName: String,
+        accountId: String?,
+        knownCards: Int?,
+        kind: SyncSession.Kind,
+        work: (String) async throws -> SyncResult
+    ) async {
+        let progressID = beginRunningSession(
+            clubName: clubName,
+            accountId: accountId,
+            knownCards: knownCards,
+            kind: kind
+        )
+        await finishClubSync(progressID: progressID, knownCards: knownCards, kind: kind, work: work)
+    }
+
+    private func finishClubSync(
+        progressID: String,
+        knownCards: Int?,
+        kind: SyncSession.Kind,
+        work: (String) async throws -> SyncResult
+    ) async {
+        guard let session = syncSession, session.progressID == progressID else {
+            isBusy = false
+            return
+        }
+        let poller = Task { await pollRemoteProgress(sessionID: session.id, progressID: progressID) }
+        defer {
+            poller.cancel()
+            isBusy = false
+        }
+
+        do {
+            let result = try await work(progressID)
+            if result.ok {
+                await load()
+                selectedTab = .inicio
+                showsClubs = false
+                let cards = result.cardCount ?? home.cards
+                let added = result.newCards ?? max(0, cards - (knownCards ?? 0))
+                markSyncSucceeded(sessionID: session.id, cards: cards, newCards: added)
+                celebrateCards = cards
+                toastMessage = added > 0 && (knownCards ?? 0) > 0
+                    ? "\(added) tarjetas nuevas · \(cards) en total"
+                    : "Al día · \(cards) tarjetas"
+            } else {
+                await failSync(sessionID: session.id, kind: kind, message: result.message)
+            }
+        } catch {
+            await failSync(sessionID: session.id, kind: kind, message: error.localizedDescription)
+        }
+    }
+
+    private func applyRemoteProgress(_ progress: SyncAPIProgress, sessionID: UUID) {
+        guard var session = syncSession, session.id == sessionID, session.outcome == .running else { return }
+        var next = progress
+        if next.stage == .cards, let total = next.total {
+            next.cardsTotal = total
+        } else if next.cardsTotal == nil {
+            next.cardsTotal = session.progress.cardsTotal
+        }
+        if next.listTotal == nil { next.listTotal = session.progress.listTotal }
+        if next.club == nil { next.club = session.clubName }
+        session.progress = next
+        syncSession = session
+    }
+
+    private func markSyncSucceeded(sessionID: UUID, cards: Int, newCards: Int) {
+        guard var session = syncSession, session.id == sessionID else { return }
+        session.outcome = .succeeded
+        session.resultCards = cards
+        session.resultNewCards = newCards
+        session.progress.stage = .done
+        session.progress.finished = true
+        session.progress.listTotal = session.progress.listTotal ?? cards
+        session.progress.cardsTotal = session.progress.cardsTotal ?? newCards
+        syncSession = session
+    }
+
+    private func failSync(sessionID: UUID, kind: SyncSession.Kind, message: String) async {
+        errorMessage = message
+        if var session = syncSession, session.id == sessionID {
+            session.outcome = .failed
+            session.errorMessage = message
+            session.progress.error = message
+            syncSession = session
+        }
+        let wait = RuntimeFlags.isUITesting ? 0.2 : (kind == .link ? 1.6 : 2.2)
+        try? await Task.sleep(for: .seconds(wait))
+        if syncSession?.id == sessionID {
+            syncSession = nil
+        }
+        if reopenClubsAfterFailure { showsClubs = true }
+    }
+
+    private func pollRemoteProgress(sessionID: UUID, progressID: String) async {
+        try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 40 : 350))
+        while !Task.isCancelled, syncSession?.id == sessionID, syncSession?.outcome == .running {
+            if let progress = await api.pollSyncProgress(progressID: progressID) {
+                applyRemoteProgress(progress, sessionID: sessionID)
+            }
+            try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 80 : 700))
+        }
+    }
+
+    private func apply(_ snap: AppSnapshot) {
+        user = snap.user
+        profile = snap.profile
+        clubs = snap.clubs
+        rounds = snap.rounds
+        courses = snap.courses
+        tees = snap.tees
+        holeStats = snap.holeStats
+        bag = snap.bag
+        if let last = snap.rounds.sorted(by: { $0.date > $1.date }).first,
+           last.course == "Azul" || last.course == "Colorada" {
+            selectedCourseName = last.course
+        }
+    }
+
+    private func run(_ work: () async throws -> Void) async {
+        errorMessage = nil
+        isBusy = true
+        defer { isBusy = false }
+        do { try await work() } catch { errorMessage = error.localizedDescription }
     }
 }
 

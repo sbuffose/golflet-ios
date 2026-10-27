@@ -3,11 +3,21 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shownCards: Int?
+    @State private var cardsGold = false
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-inicio") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 28) {
+                    if model.isLoaded {
+                        Text("home-ready")
+                            .font(.system(size: 1))
+                            .foregroundStyle(.clear)
+                            .frame(width: 1, height: 1)
+                            .accessibilityIdentifier("home-ready")
+                    }
                     header
                     handicapCard
                     lastRound
@@ -21,6 +31,10 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
+        .onChange(of: model.celebrateCards) { _, value in
+            guard let value else { return }
+            Task { await countUpCards(to: value) }
+        }
     }
 
     private var header: some View {
@@ -28,6 +42,21 @@ struct HomeView: View {
             HStack(alignment: .center) {
                 GOverline(text: model.clubs.first?.name ?? "Golflet")
                 Spacer()
+                if let club = model.clubs.first {
+                    Button {
+                        model.requestSync(club)
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(p.ink2)
+                            .frame(width: 36, height: 36)
+                            .background(p.surface)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Actualizar")
+                    .accessibilityIdentifier("home-sync-\(club.accountId)")
+                }
                 Button { model.showsClubs = true } label: {
                     AvatarCircle(initials: model.profile.initials)
                 }
@@ -72,7 +101,7 @@ struct HomeView: View {
                 .foregroundStyle(p.onPrimary.opacity(0.7))
 
                 HStack(alignment: .top) {
-                    heroMini("Tarjetas", "\(snap.cards)")
+                    heroMini("Tarjetas", "\(shownCards ?? snap.cards)", gold: cardsGold)
                     Spacer()
                     heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
                     Spacer()
@@ -84,7 +113,7 @@ struct HomeView: View {
         .accessibilityIdentifier("handicap-card")
     }
 
-    private func heroMini(_ label: String, _ value: String) -> some View {
+    private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(GType.label)
@@ -92,8 +121,29 @@ struct HomeView: View {
             Text(value)
                 .font(GType.statM)
                 .tabular()
-                .foregroundStyle(p.onPrimary)
+                .foregroundStyle(gold ? p.accent : p.onPrimary)
         }
+    }
+
+    private func countUpCards(to target: Int) async {
+        if reduceMotion {
+            shownCards = target
+            return
+        }
+        shownCards = 0
+        cardsGold = true
+        let duration = 0.9
+        let start = Date()
+        while Date().timeIntervalSince(start) < duration {
+            let t = min(1, Date().timeIntervalSince(start) / duration)
+            let eased = 1 - pow(1 - t, 3)
+            shownCards = Int((Double(target) * eased).rounded())
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+        shownCards = target
+        try? await Task.sleep(for: .seconds(1.6))
+        cardsGold = false
+        model.celebrateCards = nil
     }
 
     private var lastRound: some View {
@@ -154,26 +204,37 @@ struct HomeView: View {
             GCard(radius: 22, padding: 16) {
                 VStack(spacing: 14) {
                     ForEach(model.clubs) { club in
-                        HStack(spacing: 12) {
-                            Text(String(club.name.prefix(1)))
-                                .font(GFont.ui(14, weight: .semibold))
-                                .foregroundStyle(p.onPrimary)
-                                .frame(width: 32, height: 32)
-                                .background(p.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(club.name)
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                HStack(spacing: 6) {
-                                    Circle().fill(p.positive).frame(width: 6, height: 6)
-                                    Text("Conectado · Matrícula \(club.matricula)")
-                                        .font(GType.label)
-                                        .foregroundStyle(p.ink2)
+                        Button {
+                            model.requestSync(club)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(String(club.name.prefix(1)))
+                                    .font(GFont.ui(14, weight: .semibold))
+                                    .foregroundStyle(p.onPrimary)
+                                    .frame(width: 32, height: 32)
+                                    .background(p.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(club.name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    HStack(spacing: 6) {
+                                        Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 6, height: 6)
+                                        Text(club.lastSyncMessage ?? "Conectado · Matrícula \(club.matricula)")
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink2)
+                                            .lineLimit(1)
+                                    }
                                 }
+                                Spacer()
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(p.ink2)
+                                    .accessibilityLabel("Actualizar")
                             }
-                            Spacer()
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-club-\(club.accountId)")
                     }
                     Button { model.showsClubs = true } label: {
                         HStack(spacing: 12) {
@@ -184,7 +245,7 @@ struct HomeView: View {
                                 .background(p.surface2)
                                 .clipShape(Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Sumar otro club")
+                                Text(model.clubs.isEmpty ? "Vincular mi club" : "Sumar otro club")
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
                                 Text("Golfistics de tu club + matrícula")

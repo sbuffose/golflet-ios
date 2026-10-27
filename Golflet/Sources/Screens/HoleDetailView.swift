@@ -14,7 +14,7 @@ struct HoleDetailView: View {
     private var currentHole: Int { model.presentedHole ?? holeNumber }
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-hoyo") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     header
@@ -39,6 +39,7 @@ struct HoleDetailView: View {
                         .background(p.surface)
                         .clipShape(Circle())
                 }
+                .accessibilityIdentifier("close-hole")
                 Spacer()
                 HStack(spacing: 8) {
                     Button { step(-1) } label: {

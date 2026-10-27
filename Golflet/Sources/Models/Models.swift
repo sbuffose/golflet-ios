@@ -88,6 +88,12 @@ struct Round: Identifiable, Hashable, Sendable {
     var adjustedGross: Int?
     var courseHandicap: Int?
     var hcpAllowancePct: Int?
+    var courseKey: String = ""
+    var putts: Int? = nil
+    var gir: Int? = nil
+    var fir: Int? = nil
+    var notes: String? = nil
+    var notesAt: Date? = nil
 }
 
 struct CourseHole: Identifiable, Hashable, Sendable {
@@ -165,12 +171,131 @@ struct CourseHoleStats: Identifiable, Hashable, Sendable {
 }
 
 struct LinkedClub: Identifiable, Hashable, Sendable {
-    var id: String { code }
+    var id: String { accountId }
+    var accountId: String
     var code: String
     var name: String
     var baseURL: URL
     var matricula: String
     var isDemo: Bool
+    var passwordSaved: Bool = false
+    var lastSyncStatus: String? = nil
+    var lastSyncMessage: String? = nil
+    var lastSyncAt: Date? = nil
+    var cardCount: Int = 0
+}
+
+struct ClubCatalogEntry: Identifiable, Hashable, Sendable {
+    var id: Int
+    var name: String
+    var baseURL: String
+}
+
+struct GolfletUser: Hashable, Sendable {
+    var id: String
+    var email: String
+    var name: String
+}
+
+struct HIPoint: Hashable, Sendable {
+    var date: Date
+    var handicap: Double
+}
+
+struct SyncResult: Hashable, Sendable {
+    var ok: Bool
+    var message: String
+    var cardCount: Int? = nil
+    var newCards: Int? = nil
+}
+
+enum SyncStage: String, Sendable, Hashable, CaseIterable {
+    case connect, list, cards, handicap, save, done
+
+    static let visible: [SyncStage] = [.connect, .list, .cards, .handicap, .save]
+
+    static func parse(_ raw: String?) -> SyncStage? {
+        guard let raw else { return nil }
+        switch raw.lowercased() {
+        case "connect", "connecting": return .connect
+        case "list", "listing": return .list
+        case "cards", "reading": return .cards
+        case "handicap", "hi": return .handicap
+        case "save", "saving": return .save
+        case "done", "success", "ok": return .done
+        default: return nil
+        }
+    }
+}
+
+enum SyncStepState: String, Sendable, Hashable {
+    case todo, active, done, error
+}
+
+struct SyncAPIProgress: Hashable, Sendable {
+    var club: String?
+    var stage: SyncStage
+    var done: Int? = nil
+    var total: Int? = nil
+    var listTotal: Int? = nil
+    var finished: Bool = false
+    var error: String? = nil
+    var cardsTotal: Int? = nil
+}
+
+struct SyncSession: Identifiable, Hashable, Sendable {
+    enum Kind: String, Sendable, Hashable {
+        case link
+        case refresh
+    }
+
+    enum Outcome: String, Sendable, Hashable {
+        case running
+        case succeeded
+        case failed
+    }
+
+    var id: UUID
+    var progressID: String
+    var kind: Kind
+    var clubName: String
+    var accountId: String?
+    var knownCards: Int?
+    var startedAt: Date
+    var progress: SyncAPIProgress
+    var outcome: Outcome
+    var resultCards: Int? = nil
+    var resultNewCards: Int? = nil
+    var errorMessage: String? = nil
+
+    var title: String {
+        if outcome == .failed { return "No se pudo actualizar" }
+        if outcome == .succeeded {
+            if let n = resultCards { return "Listo · \(n) tarjetas" }
+            return "Listo"
+        }
+        return "Leyendo tus tarjetas"
+    }
+}
+
+enum RuntimeFlags {
+    static var isUITesting: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-ui-testing") || args.contains("-ui-testing-auth")
+    }
+}
+
+
+struct AppSnapshot: Sendable {
+    var user: GolfletUser?
+    var profile: PlayerProfile
+    var clubs: [LinkedClub]
+    var rounds: [Round]
+    var courses: [Course]
+    var tees: [TeeRating]
+    var holeStats: [CourseHoleStats]
+    var bag: [BagClub]
+    var hiHistory: [HIPoint]
 }
 
 struct PlayerProfile: Hashable, Sendable {
@@ -217,16 +342,20 @@ struct RoundFilter: Sendable {
 
 enum GolfletError: LocalizedError {
     case notImplemented
+    case notAuthenticated
     case invalidClub
     case fixtureMissing(String)
     case decoding(String)
+    case server(String)
 
     var errorDescription: String? {
         switch self {
         case .notImplemented: return "El API en vivo todavía no está conectado."
+        case .notAuthenticated: return "Tenés que entrar a tu cuenta de Golflet."
         case .invalidClub: return "No reconocimos esa URL de Golfistics."
         case .fixtureMissing(let n): return "Falta el fixture \(n)."
         case .decoding(let n): return "No se pudo leer \(n)."
+        case .server(let message): return message
         }
     }
 }
@@ -244,5 +373,43 @@ enum JSONFlex {
         if let d = value as? Double { return Int(d.rounded()) }
         if let s = value as? String { return Int(s) }
         return nil
+    }
+
+    static func bool(from value: Any?) -> Bool? {
+        if let b = value as? Bool { return b }
+        if let i = value as? Int { return i != 0 }
+        if let d = value as? Double { return d != 0 }
+        if let s = value as? String {
+            switch s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1", "yes", "si", "sí": return true
+            case "false", "0", "no": return false
+            default: return nil
+            }
+        }
+        return nil
+    }
+
+    static func objectArray(from object: Any) -> [[String: Any]]? {
+        if let typed = object as? [[String: Any]] { return typed }
+        guard let items = object as? [Any] else { return nil }
+        var result: [[String: Any]] = []
+        result.reserveCapacity(items.count)
+        for item in items {
+            if let dict = item as? [String: Any] {
+                result.append(dict)
+                continue
+            }
+            if let dict = item as? NSDictionary {
+                var mapped: [String: Any] = [:]
+                mapped.reserveCapacity(dict.count)
+                dict.forEach { key, value in
+                    if let key = key as? String { mapped[key] = value }
+                }
+                result.append(mapped)
+                continue
+            }
+            return nil
+        }
+        return result
     }
 }

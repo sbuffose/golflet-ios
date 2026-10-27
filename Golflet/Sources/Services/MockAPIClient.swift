@@ -1,78 +1,172 @@
 import Foundation
 
 struct MockAPIClient: GolfletAPI {
+    var autoSession: Bool
     private let demoCode = "118"
     private let demoName = "Jockey Club Buenos Aires"
     private let demoURL = URL(string: "https://golf.e-jockeyclub.org.ar/golf")!
 
-    func login(clubURL: URL, matricula: String, clave: String) async throws -> LinkedClub {
-        let recognized = recognizedClub(from: clubURL)
-        let credential = ClubCredential(
-            clubCode: recognized.code,
-            clubName: recognized.name,
-            baseURL: recognized.url.absoluteString,
-            matricula: matricula,
-            clave: clave
-        )
-        try KeychainStore.save(credential)
-        return LinkedClub(
-            code: recognized.code,
-            name: recognized.name,
-            baseURL: recognized.url,
-            matricula: matricula,
-            isDemo: recognized.code == demoCode
-        )
-    }
+    private static let sessionLock = NSLock()
+    private static var mockSignedIn = false
+    private static var mockLinked = true
+    private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
+    private static var progressByID: [String: SyncAPIProgress] = [:]
 
-    func linkedClubs() async throws -> [LinkedClub] {
-        var stored = KeychainStore.loadAll().map {
-            LinkedClub(
-                code: $0.clubCode,
-                name: $0.clubName,
-                baseURL: URL(string: $0.baseURL) ?? demoURL,
-                matricula: $0.matricula,
-                isDemo: $0.clubCode == demoCode
-            )
+    init(autoSession: Bool = true) {
+        self.autoSession = autoSession
+        Self.sessionLock.lock()
+        Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
+        if autoSession {
+            Self.mockSignedIn = true
+            Self.mockLinked = true
+        } else {
+            Self.mockSignedIn = false
+            Self.mockLinked = false
         }
-        if stored.isEmpty {
-            let demo = ClubCredential(
-                clubCode: demoCode,
-                clubName: demoName,
-                baseURL: demoURL.absoluteString,
-                matricula: "94506",
-                clave: "demo"
-            )
-            try? KeychainStore.save(demo)
-            stored = [
-                LinkedClub(code: demoCode, name: demoName, baseURL: demoURL, matricula: "94506", isDemo: true)
-            ]
-        }
-        return stored
+        Self.sessionLock.unlock()
     }
 
-    func unlink(clubCode: String) async throws {
-        KeychainStore.delete(clubCode: clubCode)
+    var isAuthenticated: Bool {
+        Self.sessionLock.lock()
+        defer { Self.sessionLock.unlock() }
+        return Self.mockSignedIn
     }
 
-    func profile() async throws -> PlayerProfile {
-        let rounds = try await self.rounds(filter: RoundFilter())
+    var persistsLocally: Bool { true }
+
+    func signUp(name: String, email: String, password: String) async throws {
+        _ = password
+        Self.sessionLock.lock()
+        Self.mockUser = GolfletUser(id: "demo", email: email, name: name.isEmpty ? "Jugador Demo" : name)
+        Self.mockSignedIn = true
+        Self.mockLinked = false
+        Self.sessionLock.unlock()
+    }
+
+    func signIn(email: String, password: String) async throws {
+        guard password.count >= 8 else { throw GolfletError.server("La contraseña tiene que tener al menos 8 caracteres.") }
+        Self.sessionLock.lock()
+        Self.mockUser = GolfletUser(id: "demo", email: email, name: "Jugador Demo")
+        Self.mockSignedIn = true
+        Self.sessionLock.unlock()
+    }
+
+    func signOut() async throws {
+        Self.sessionLock.lock()
+        Self.mockSignedIn = false
+        Self.sessionLock.unlock()
+    }
+
+    func bootstrap() async throws -> AppSnapshot {
+        guard isAuthenticated else { throw GolfletError.notAuthenticated }
+        let linked = isLinked
+        let rounds = linked ? try await loadRounds() : []
+        let courses = linked ? try await loadCourses() : []
+        let tees = linked ? try await loadTees() : []
+        let stats = linked ? try await loadHoleStats() : []
+        let clubs = linked ? [demoClub] : []
         let hi = rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 3.1
-        return PlayerProfile(displayName: "Jugador Demo", initials: "JD", currentHandicap: hi)
+        return AppSnapshot(
+            user: Self.mockUser,
+            profile: PlayerProfile(displayName: Self.mockUser.name, initials: initials(Self.mockUser.name), currentHandicap: hi),
+            clubs: clubs,
+            rounds: rounds,
+            courses: courses,
+            tees: tees,
+            holeStats: stats,
+            bag: DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) },
+            hiHistory: []
+        )
     }
 
-    func rounds(filter: RoundFilter) async throws -> [Round] {
+    func clubCatalogue() async throws -> [ClubCatalogEntry] {
+        [
+            ClubCatalogEntry(id: 1, name: "Jockey Club Argentino", baseURL: demoURL.absoluteString),
+            ClubCatalogEntry(id: 2, name: "AAG Scoring (Asociación Argentina de Golf)", baseURL: "https://www.aagscoring.com/golf")
+        ]
+    }
+
+    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
+        _ = clubID
+        _ = baseURL
+        _ = password
+        await emitDemoProgress(clubName: demoName, progressID: progressID)
+        Self.sessionLock.lock()
+        Self.mockLinked = true
+        Self.sessionLock.unlock()
+        try KeychainStore.save(ClubCredential(
+            clubCode: demoCode,
+            clubName: demoName,
+            baseURL: demoURL.absoluteString,
+            matricula: matricula,
+            clave: savePassword ? "saved" : ""
+        ))
+        return SyncResult(ok: true, message: "Club vinculado · datos de demostración", cardCount: 97, newCards: 97)
+    }
+
+    func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult {
+        _ = id
+        _ = password
+        _ = savePassword
+        await emitDemoProgress(clubName: demoName, progressID: progressID)
+        return SyncResult(ok: true, message: "Datos de demostración al día", cardCount: 97, newCards: 0)
+    }
+
+    func pollSyncProgress(progressID: String) async -> SyncAPIProgress? {
+        Self.sessionLock.lock()
+        defer { Self.sessionLock.unlock() }
+        return Self.progressByID[progressID]
+    }
+
+    func forgetPassword(accountId: String) async throws {
+        _ = accountId
+    }
+
+    func unlink(accountId: String) async throws {
+        _ = accountId
+        Self.sessionLock.lock()
+        Self.mockLinked = false
+        Self.sessionLock.unlock()
+        KeychainStore.delete(clubCode: demoCode)
+    }
+
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws {
+        _ = roundId
+        _ = putts
+        _ = gir
+        _ = fir
+        _ = notes
+    }
+
+    func saveBag(_ items: [BagClub]) async throws -> [BagClub] { items }
+
+    private var isLinked: Bool {
+        Self.sessionLock.lock()
+        defer { Self.sessionLock.unlock() }
+        return Self.mockLinked
+    }
+
+    private var demoClub: LinkedClub {
+        LinkedClub(
+            accountId: demoCode,
+            code: demoCode,
+            name: demoName,
+            baseURL: demoURL,
+            matricula: "94506",
+            isDemo: true,
+            passwordSaved: true,
+            lastSyncStatus: "ok",
+            lastSyncMessage: "Datos de demostración",
+            cardCount: 97
+        )
+    }
+
+    private func loadRounds() async throws -> [Round] {
         let raw: [[String: Any]] = try FixtureLoader.array("rounds")
-        let parsed = raw.compactMap(Self.parseRound)
-        return parsed.filter { round in
-            if let course = filter.course, round.course.caseInsensitiveCompare(course) != .orderedSame {
-                return false
-            }
-            if let club = filter.clubCode, round.clubCode != club { return false }
-            return true
-        }
+        return raw.compactMap(Self.parseRound)
     }
 
-    func courses() async throws -> [Course] {
+    private func loadCourses() async throws -> [Course] {
         let raw: [[String: Any]] = try FixtureLoader.array("courses")
         return raw.compactMap { item in
             guard let name = item["course"] as? String else { return nil }
@@ -100,7 +194,7 @@ struct MockAPIClient: GolfletAPI {
         }
     }
 
-    func tees() async throws -> [TeeRating] {
+    private func loadTees() async throws -> [TeeRating] {
         let raw: [[String: Any]] = try FixtureLoader.array("tees")
         return raw.compactMap { item in
             guard let course = item["course"] as? String, let tee = item["tee"] as? String else { return nil }
@@ -115,7 +209,7 @@ struct MockAPIClient: GolfletAPI {
         }
     }
 
-    func holeStats() async throws -> [CourseHoleStats] {
+    private func loadHoleStats() async throws -> [CourseHoleStats] {
         let raw: [[String: Any]] = try FixtureLoader.array("per_hole_stats")
         return raw.compactMap { item in
             guard let course = item["course"] as? String else { return nil }
@@ -162,34 +256,34 @@ struct MockAPIClient: GolfletAPI {
         }
     }
 
-    func bag() async throws -> [BagClub] {
-        DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) }
-    }
-
-    func saveBag(_ items: [BagClub]) async throws {}
-
-    private func recognizedClub(from url: URL) -> (code: String, name: String, url: URL) {
-        let host = url.host?.lowercased() ?? ""
-        if host.contains("jockey") || host.contains("e-jockeyclub") || url.absoluteString.isEmpty {
-            return (demoCode, demoName, demoURL)
+    private func emitDemoProgress(clubName: String, progressID: String) async {
+        let fast = RuntimeFlags.isUITesting
+        let pause: UInt64 = fast ? 80_000_000 : 350_000_000
+        let steps: [SyncAPIProgress] = [
+            SyncAPIProgress(club: clubName, stage: .connect),
+            SyncAPIProgress(club: clubName, stage: .list, listTotal: 97),
+            SyncAPIProgress(club: clubName, stage: .cards, done: 33, total: 97, listTotal: 97, cardsTotal: 97),
+            SyncAPIProgress(club: clubName, stage: .handicap, listTotal: 97, cardsTotal: 97),
+            SyncAPIProgress(club: clubName, stage: .save, done: 97, total: 97, listTotal: 97, cardsTotal: 97)
+        ]
+        for step in steps {
+            Self.sessionLock.lock()
+            Self.progressByID[progressID] = step
+            Self.sessionLock.unlock()
+            try? await Task.sleep(nanoseconds: pause)
         }
-        let slug = host.split(separator: ".").first.map(String.init) ?? "club"
-        return (slug, url.host ?? "Club Golfistics", url)
     }
 
-    private static let dateParser: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar.gregorian
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(secondsFromGMT: 0)
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
+    private func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        let letters = parts.prefix(2).compactMap { $0.first }.map(String.init)
+        return letters.joined().uppercased()
+    }
 
     private static func parseRound(_ item: [String: Any]) -> Round? {
         guard let id = item["round_id"] as? String,
               let dateString = item["date"] as? String,
-              let date = dateParser.date(from: dateString)
+              let date = DayStamp.parse(dateString)
         else { return nil }
 
         let counts = item["summary_counts"] as? [String: Any] ?? [:]
@@ -241,24 +335,66 @@ struct MockAPIClient: GolfletAPI {
             ),
             holes: holes,
             holesPlayed: JSONFlex.int(from: item["holes_played"]) ?? holes.count,
-            isNineHoles: item["is_9_holes"] as? Bool ?? false,
-            isValid: item["valid_card"] as? Bool ?? ((item["card_status"] as? String) == "OK"),
+            isNineHoles: JSONFlex.bool(from: item["is_9_holes"]) ?? false,
+            isValid: JSONFlex.bool(from: item["valid_card"]) ?? ((item["card_status"] as? String) == "OK"),
             differential: JSONFlex.double(from: item["differential_computed"]),
             adjustedGross: JSONFlex.int(from: item["adjusted_gross"]),
             courseHandicap: JSONFlex.int(from: item["course_handicap"]),
-            hcpAllowancePct: JSONFlex.int(from: item["hcp_allowance_pct"])
+            hcpAllowancePct: JSONFlex.int(from: item["hcp_allowance_pct"]),
+            courseKey: item["course"] as? String ?? ""
         )
     }
 }
 
 enum FixtureLoader {
     static func array(_ name: String) throws -> [[String: Any]] {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "json")
-                ?? Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "Fixtures")
-        else { throw GolfletError.fixtureMissing(name) }
-        let data = try Data(contentsOf: url)
+        let data = try data(named: name)
         let object = try JSONSerialization.jsonObject(with: data)
-        guard let array = object as? [[String: Any]] else { throw GolfletError.decoding(name) }
+        guard let array = JSONFlex.objectArray(from: object) else { throw GolfletError.decoding(name) }
         return array
     }
+
+    static func data(named name: String) throws -> Data {
+        if let embedded = EmbeddedFixtures.json(named: name) {
+            return Data(embedded.utf8)
+        }
+        if let url = url(for: name) {
+            return try Data(contentsOf: url)
+        }
+        throw GolfletError.fixtureMissing(name)
+    }
+
+    static func url(for name: String) -> URL? {
+        let bundles = [Bundle.main, Bundle(for: FixtureBundleToken.self)]
+        let subdirectories = [nil, "Fixtures"]
+        for bundle in bundles {
+            for subdirectory in subdirectories {
+                if let url = bundle.url(forResource: name, withExtension: "json", subdirectory: subdirectory) {
+                    return url
+                }
+            }
+        }
+        return nil
+    }
 }
+
+enum DayStamp {
+    static func parse(_ raw: String) -> Date? {
+        let stamp = String(raw.prefix(10))
+        let parts = stamp.split(separator: "-")
+        guard parts.count == 3,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2])
+        else { return nil }
+        return Calendar.gregorian.date(from: DateComponents(
+            calendar: Calendar.gregorian,
+            timeZone: Calendar.gregorian.timeZone,
+            year: year,
+            month: month,
+            day: day
+        ))
+    }
+}
+
+private final class FixtureBundleToken {}

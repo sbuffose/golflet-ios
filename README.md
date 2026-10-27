@@ -7,7 +7,10 @@ La UI está en español rioplatense (es-AR, voseo) y sigue el sistema de diseño
 ## Qué hay hoy
 
 - Pantallas: Inicio, Resumen, Rondas, Detalle de ronda (tarjeta + notas), Cancha, Hoyo, Mi bolsa, Clubes.
-- Cliente de API (`GolfletAPI`) con implementación mock/seed (`MockAPIClient`) lista para cambiar por el backend Next.js.
+- Cliente de API (`GolfletAPI`) con `MockAPIClient` (UI tests / Debug) y `LiveGolfletAPI` (Release) contra `https://golflet.vercel.app`.
+- Auth nativa: `POST /api/auth/sign-up|sign-in/email`, header `set-auth-token`, `Authorization: Bearer` en Keychain.
+- Vincular club (catálogo o URL + matrícula + clave, guardar clave opcional), Actualizar, notas/putts/GIR/fairways y bolsa en el servidor.
+- Mientras se vincula o se toca Actualizar, overlay placeholder con pasos reales de `GET /api/sync-progress/:id` (el cliente manda `progress_id` en el POST y poll cada 700 ms). La animación de sync se redefine; queda un placeholder hasta el spec final.
 - Fixtures anónimos (jugador **Jugador Demo**) de Jockey Club Buenos Aires.
 - Notas de ronda, putts/GIR/fairway y distancias de bolsa en SwiftData.
 - Credenciales de club solo en Keychain.
