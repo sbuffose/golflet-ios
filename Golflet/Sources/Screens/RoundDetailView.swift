@@ -11,7 +11,7 @@ struct RoundDetailView: View {
     @State private var showsGameEditor = false
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-ronda") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     header

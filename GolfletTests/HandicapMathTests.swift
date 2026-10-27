@@ -42,7 +42,7 @@ final class HandicapMathTests: XCTestCase {
 
     func testBestEightOfTwenty() {
         // 20 differentials, newest last. Best 8 = 1...8, average 4.5
-        let diffs = (20...1).map { Double($0) } // 20,19,...1 newest last so recent 20 is all
+        let diffs = Array(stride(from: 20.0, through: 1.0, by: -1.0))
         let index = HandicapMath.handicapIndex(differentialsNewestLast: diffs)
         XCTAssertEqual(index, 4.5)
     }

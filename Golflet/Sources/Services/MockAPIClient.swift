@@ -253,12 +253,27 @@ struct MockAPIClient: GolfletAPI {
 
 enum FixtureLoader {
     static func array(_ name: String) throws -> [[String: Any]] {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "json")
-                ?? Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "Fixtures")
-        else { throw GolfletError.fixtureMissing(name) }
+        guard let url = url(for: name) else { throw GolfletError.fixtureMissing(name) }
         let data = try Data(contentsOf: url)
         let object = try JSONSerialization.jsonObject(with: data)
         guard let array = object as? [[String: Any]] else { throw GolfletError.decoding(name) }
         return array
     }
+
+    private static func url(for name: String) -> URL? {
+        let bundles = [Bundle.main, Bundle(for: FixtureBundleToken.self)] + Bundle.allBundles
+        var seen = Set<ObjectIdentifier>()
+        for bundle in bundles {
+            let token = ObjectIdentifier(bundle)
+            guard seen.insert(token).inserted else { continue }
+            if let url = bundle.url(forResource: name, withExtension: "json")
+                ?? bundle.url(forResource: name, withExtension: "json", subdirectory: "Fixtures")
+                ?? bundle.url(forResource: name, withExtension: "json", subdirectory: "Golflet/Resources/Fixtures") {
+                return url
+            }
+        }
+        return nil
+    }
 }
+
+private final class FixtureBundleToken {}
