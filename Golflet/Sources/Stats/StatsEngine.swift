@@ -60,7 +60,7 @@ enum StatsEngine {
     static func home(rounds: [Round], now: Date = Date()) -> HomeSnapshot {
         let sorted = rounds.sorted { $0.date > $1.date }
         let valid18 = eighteenHoleValid(rounds)
-        let calendar = Calendar(identifier: .gregorian)
+        let calendar = Calendar.gregorian
         let year = calendar.component(.year, from: now)
         let yearRounds = valid18.filter { calendar.component(.year, from: $0.date) == year }
 

@@ -28,6 +28,8 @@ targets:
         type: group
     resources:
       - path: Golflet/Resources/Assets.xcassets
+      - path: Golflet/Resources/Fixtures
+        type: folder
       - path: Golflet/Resources/Fixtures/rounds.json
       - path: Golflet/Resources/Fixtures/courses.json
       - path: Golflet/Resources/Fixtures/tees.json
@@ -92,6 +94,8 @@ targets:
       - path: GolfletTests
         type: group
     resources:
+      - path: Golflet/Resources/Fixtures
+        type: folder
       - path: Golflet/Resources/Fixtures/rounds.json
       - path: Golflet/Resources/Fixtures/courses.json
       - path: Golflet/Resources/Fixtures/tees.json
@@ -145,7 +149,7 @@ schemes:
           value: /tmp/golflet-screenshots
       targets:
         - name: GolfletTests
-          parallelizable: true
+          parallelizable: false
         - name: GolfletUITests
           parallelizable: false
           randomExecutionOrder: false

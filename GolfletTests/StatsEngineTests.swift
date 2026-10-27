@@ -2,6 +2,13 @@ import XCTest
 @testable import Golflet
 
 final class StatsEngineTests: XCTestCase {
+    func testBundledFixturesLoad() throws {
+        XCTAssertEqual(try FixtureLoader.array("rounds").count, 97)
+        XCTAssertEqual(try FixtureLoader.array("courses").count, 2)
+        XCTAssertEqual(try FixtureLoader.array("tees").count, 14)
+        XCTAssertEqual(try FixtureLoader.array("per_hole_stats").count, 2)
+    }
+
     func testEighteenHoleAveragesMatchSeed() async throws {
         let rounds = try await MockAPIClient().bootstrap().rounds
         XCTAssertEqual(rounds.count, 97)

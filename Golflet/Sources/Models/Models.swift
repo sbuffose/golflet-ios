@@ -374,4 +374,42 @@ enum JSONFlex {
         if let s = value as? String { return Int(s) }
         return nil
     }
+
+    static func bool(from value: Any?) -> Bool? {
+        if let b = value as? Bool { return b }
+        if let i = value as? Int { return i != 0 }
+        if let d = value as? Double { return d != 0 }
+        if let s = value as? String {
+            switch s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1", "yes", "si", "sí": return true
+            case "false", "0", "no": return false
+            default: return nil
+            }
+        }
+        return nil
+    }
+
+    static func objectArray(from object: Any) -> [[String: Any]]? {
+        if let typed = object as? [[String: Any]] { return typed }
+        guard let items = object as? [Any] else { return nil }
+        var result: [[String: Any]] = []
+        result.reserveCapacity(items.count)
+        for item in items {
+            if let dict = item as? [String: Any] {
+                result.append(dict)
+                continue
+            }
+            if let dict = item as? NSDictionary {
+                var mapped: [String: Any] = [:]
+                mapped.reserveCapacity(dict.count)
+                dict.forEach { key, value in
+                    if let key = key as? String { mapped[key] = value }
+                }
+                result.append(mapped)
+                continue
+            }
+            return nil
+        }
+        return result
+    }
 }
