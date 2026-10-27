@@ -42,6 +42,21 @@ struct HomeView: View {
             HStack(alignment: .center) {
                 GOverline(text: model.clubs.first?.name ?? "Golflet")
                 Spacer()
+                if let club = model.clubs.first {
+                    Button {
+                        Task { await model.syncClub(club) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(p.ink2)
+                            .frame(width: 36, height: 36)
+                            .background(p.surface)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Actualizar")
+                    .accessibilityIdentifier("home-sync-\(club.accountId)")
+                }
                 Button { model.showsClubs = true } label: {
                     AvatarCircle(initials: model.profile.initials)
                 }
@@ -219,7 +234,7 @@ struct HomeView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("home-sync-\(club.accountId)")
+                        .accessibilityIdentifier("home-club-\(club.accountId)")
                     }
                     Button { model.showsClubs = true } label: {
                         HStack(spacing: 12) {
