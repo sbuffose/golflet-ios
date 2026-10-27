@@ -20,6 +20,8 @@
 			<array>
 				<string>AppIcon60@2x</string>
 				<string>AppIcon60@3x</string>
+				<string>Icon-60@2x</string>
+				<string>Icon-60@3x</string>
 			</array>
 		</dict>
 	</dict>
