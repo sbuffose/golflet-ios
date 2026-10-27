@@ -12,7 +12,6 @@ final class AppModel {
     var tees: [TeeRating] = []
     var holeStats: [CourseHoleStats] = []
     var bag: [BagClub] = []
-    var catalogue: [ClubCatalogEntry] = []
     var isLoaded = false
     var isBusy = false
     var errorMessage: String?
@@ -57,9 +56,6 @@ final class AppModel {
             if api.persistsLocally {
                 bag = notes.bag()
             }
-            if catalogue.isEmpty {
-                catalogue = (try? await api.clubCatalogue()) ?? []
-            }
             isLoaded = true
         } catch {
             errorMessage = error.localizedDescription
@@ -98,13 +94,9 @@ final class AppModel {
         }
     }
 
-    func addClub(clubID: Int?, urlString: String, matricula: String, clave: String, savePassword: Bool) async {
-        let name = clubID.flatMap { id in catalogue.first { $0.id == id }?.name } ?? "tu club"
-        await performClubSync(clubName: name, accountId: nil, knownCards: nil, kind: .link) { progressID in
-            let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-            return try await api.linkClub(
-                clubID: clubID,
-                baseURL: clubID == nil ? trimmed : nil,
+    func addClub(matricula: String, clave: String, savePassword: Bool) async {
+        await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
+            try await api.linkClub(
                 matricula: matricula,
                 password: clave,
                 savePassword: savePassword,
@@ -282,7 +274,13 @@ final class AppModel {
             next.cardsTotal = session.progress.cardsTotal
         }
         if next.listTotal == nil { next.listTotal = session.progress.listTotal }
-        if next.club == nil { next.club = session.clubName }
+        if next.clubIndex == nil { next.clubIndex = session.progress.clubIndex }
+        if next.clubCount == nil { next.clubCount = session.progress.clubCount }
+        if let name = next.club, !name.isEmpty {
+            session.clubName = name
+        } else if next.club == nil {
+            next.club = session.clubName
+        }
         session.progress = next
         syncSession = session
     }

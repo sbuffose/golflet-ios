@@ -5,10 +5,14 @@ struct MockAPIClient: GolfletAPI {
     private let demoCode = "118"
     private let demoName = "Jockey Club Buenos Aires"
     private let demoURL = URL(string: "https://golf.e-jockeyclub.org.ar/golf")!
+    private let mdpCode = "209"
+    private let mdpName = "Mar del Plata Golf Club"
+    private let mdpURL = URL(string: "https://golf.mardelplata.com")!
 
     private static let sessionLock = NSLock()
     private static var mockSignedIn = false
     private static var mockLinked = true
+    private static var mockPasswordSaved = true
     private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
     private static var progressByID: [String: SyncAPIProgress] = [:]
 
@@ -19,9 +23,11 @@ struct MockAPIClient: GolfletAPI {
         if autoSession {
             Self.mockSignedIn = true
             Self.mockLinked = true
+            Self.mockPasswordSaved = true
         } else {
             Self.mockSignedIn = false
             Self.mockLinked = false
+            Self.mockPasswordSaved = true
         }
         Self.sessionLock.unlock()
     }
@@ -64,7 +70,7 @@ struct MockAPIClient: GolfletAPI {
         let courses = linked ? try await loadCourses() : []
         let tees = linked ? try await loadTees() : []
         let stats = linked ? try await loadHoleStats() : []
-        let clubs = linked ? [demoClub] : []
+        let clubs = linked ? demoClubs : []
         let hi = rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 3.1
         return AppSnapshot(
             user: Self.mockUser,
@@ -86,13 +92,12 @@ struct MockAPIClient: GolfletAPI {
         ]
     }
 
-    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
-        _ = clubID
-        _ = baseURL
+    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
         _ = password
-        await emitDemoProgress(clubName: demoName, progressID: progressID)
+        await emitDemoProgress(progressID: progressID)
         Self.sessionLock.lock()
         Self.mockLinked = true
+        Self.mockPasswordSaved = savePassword
         Self.sessionLock.unlock()
         try KeychainStore.save(ClubCredential(
             clubCode: demoCode,
@@ -101,15 +106,19 @@ struct MockAPIClient: GolfletAPI {
             matricula: matricula,
             clave: savePassword ? "saved" : ""
         ))
-        return SyncResult(ok: true, message: "Club vinculado · datos de demostración", cardCount: 97, newCards: 97)
+        return demoSyncResult(message: "Golfistics App vinculada · datos de demostración", newCards: 98)
     }
 
     func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult {
         _ = id
         _ = password
-        _ = savePassword
-        await emitDemoProgress(clubName: demoName, progressID: progressID)
-        return SyncResult(ok: true, message: "Datos de demostración al día", cardCount: 97, newCards: 0)
+        if savePassword {
+            Self.sessionLock.lock()
+            Self.mockPasswordSaved = true
+            Self.sessionLock.unlock()
+        }
+        await emitDemoProgress(progressID: progressID)
+        return demoSyncResult(message: "Datos de demostración al día", newCards: 0)
     }
 
     func pollSyncProgress(progressID: String) async -> SyncAPIProgress? {
@@ -120,14 +129,19 @@ struct MockAPIClient: GolfletAPI {
 
     func forgetPassword(accountId: String) async throws {
         _ = accountId
+        Self.sessionLock.lock()
+        Self.mockPasswordSaved = false
+        Self.sessionLock.unlock()
     }
 
     func unlink(accountId: String) async throws {
         _ = accountId
         Self.sessionLock.lock()
         Self.mockLinked = false
+        Self.mockPasswordSaved = true
         Self.sessionLock.unlock()
         KeychainStore.delete(clubCode: demoCode)
+        KeychainStore.delete(clubCode: mdpCode)
     }
 
     func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws {
@@ -146,24 +160,63 @@ struct MockAPIClient: GolfletAPI {
         return Self.mockLinked
     }
 
-    private var demoClub: LinkedClub {
-        LinkedClub(
-            accountId: demoCode,
-            code: demoCode,
-            name: demoName,
-            baseURL: demoURL,
-            matricula: "94506",
-            isDemo: true,
-            passwordSaved: true,
-            lastSyncStatus: "ok",
-            lastSyncMessage: "Datos de demostración",
-            cardCount: 97
+    private var demoClubs: [LinkedClub] {
+        let saved: Bool = {
+            Self.sessionLock.lock()
+            defer { Self.sessionLock.unlock() }
+            return Self.mockPasswordSaved
+        }()
+        return [
+            LinkedClub(
+                accountId: demoCode,
+                code: demoCode,
+                name: demoName,
+                baseURL: demoURL,
+                matricula: "94506",
+                isDemo: true,
+                passwordSaved: saved,
+                lastSyncStatus: "ok",
+                lastSyncMessage: "Datos de demostración",
+                cardCount: 97,
+                source: "app",
+                roundsStored: 97,
+                roundsWithHoles: 97
+            ),
+            LinkedClub(
+                accountId: mdpCode,
+                code: mdpCode,
+                name: mdpName,
+                baseURL: mdpURL,
+                matricula: "94506",
+                isDemo: true,
+                passwordSaved: saved,
+                lastSyncStatus: "ok",
+                lastSyncMessage: "Datos de demostración",
+                cardCount: 1,
+                source: "app",
+                roundsStored: 1,
+                roundsWithHoles: 0
+            )
+        ]
+    }
+
+    private func demoSyncResult(message: String, newCards: Int) -> SyncResult {
+        SyncResult(
+            ok: true,
+            message: message,
+            cardCount: 98,
+            newCards: newCards,
+            clubs: [
+                SyncClubResult(accountId: demoCode, clubName: demoName, ok: true, newRounds: newCards > 0 ? 97 : 0, listTotal: 97),
+                SyncClubResult(accountId: mdpCode, clubName: mdpName, ok: true, newRounds: newCards > 0 ? 1 : 0, listTotal: 1)
+            ]
         )
     }
 
     private func loadRounds() async throws -> [Round] {
         let raw: [[String: Any]] = try FixtureLoader.array("rounds")
-        return raw.compactMap(Self.parseRound)
+        let extra: [[String: Any]] = (try? FixtureLoader.array("other_course")) ?? []
+        return (raw + extra).compactMap(Self.parseRound)
     }
 
     private func loadCourses() async throws -> [Course] {
@@ -256,16 +309,21 @@ struct MockAPIClient: GolfletAPI {
         }
     }
 
-    private func emitDemoProgress(clubName: String, progressID: String) async {
+    private func emitDemoProgress(progressID: String) async {
         let fast = RuntimeFlags.isUITesting
         let pause: UInt64 = fast ? 80_000_000 : 350_000_000
-        let steps: [SyncAPIProgress] = [
-            SyncAPIProgress(club: clubName, stage: .connect),
-            SyncAPIProgress(club: clubName, stage: .list, listTotal: 97),
-            SyncAPIProgress(club: clubName, stage: .cards, done: 33, total: 97, listTotal: 97, cardsTotal: 97),
-            SyncAPIProgress(club: clubName, stage: .handicap, listTotal: 97, cardsTotal: 97),
-            SyncAPIProgress(club: clubName, stage: .save, done: 97, total: 97, listTotal: 97, cardsTotal: 97)
-        ]
+        let clubs: [(String, Int, Int)] = [(demoName, 97, 97), (mdpName, 1, 1)]
+        var steps: [SyncAPIProgress] = []
+        for (index, club) in clubs.enumerated() {
+            let ordinal = index + 1
+            steps.append(contentsOf: [
+                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .connect),
+                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .list, listTotal: club.1),
+                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .cards, done: min(33, club.2), total: club.2, listTotal: club.1, cardsTotal: club.2),
+                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .handicap, listTotal: club.1, cardsTotal: club.2),
+                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .save, done: club.2, total: club.2, listTotal: club.1, cardsTotal: club.2)
+            ])
+        }
         for step in steps {
             Self.sessionLock.lock()
             Self.progressByID[progressID] = step
@@ -287,6 +345,7 @@ struct MockAPIClient: GolfletAPI {
         else { return nil }
 
         let counts = item["summary_counts"] as? [String: Any] ?? [:]
+        let otherCourse = JSONFlex.bool(from: item["other_course"]) ?? ((item["course_key"] as? String)?.hasPrefix("x:") ?? false)
         let holes = (item["holes"] as? [[String: Any]] ?? []).compactMap { hole -> HoleScore? in
             guard let number = JSONFlex.int(from: hole["hole"]) else { return nil }
             let strokes = JSONFlex.int(from: hole["strokes"])
@@ -315,7 +374,7 @@ struct MockAPIClient: GolfletAPI {
             category: item["category"] as? String,
             weather: item["weather"] as? String,
             courseRating: JSONFlex.double(from: item["course_rating"]) ?? 0,
-            slope: JSONFlex.double(from: item["slope"]) ?? 113,
+            slope: JSONFlex.double(from: item["slope"]) ?? (otherCourse ? 0 : 113),
             position: JSONFlex.int(from: item["position"]),
             fieldSize: JSONFlex.int(from: item["field_size"]),
             handicapIndex: JSONFlex.double(from: item["handicap_index"]) ?? 0,
@@ -341,7 +400,11 @@ struct MockAPIClient: GolfletAPI {
             adjustedGross: JSONFlex.int(from: item["adjusted_gross"]),
             courseHandicap: JSONFlex.int(from: item["course_handicap"]),
             hcpAllowancePct: JSONFlex.int(from: item["hcp_allowance_pct"]),
-            courseKey: item["course"] as? String ?? ""
+            courseKey: item["course_key"] as? String ?? (item["course"] as? String ?? ""),
+            otherCourse: otherCourse,
+            clubPlayed: item["club_played"] as? String,
+            sourceClubName: item["source_club_name"] as? String,
+            courseLabel: item["course_label"] as? String
         )
     }
 }

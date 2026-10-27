@@ -114,6 +114,8 @@ final class GolfletUITests: XCTestCase {
             app.buttons["avatar-button"].tap()
         }
         XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 8))
+        XCTAssertFalse(first(app, "club-picker").exists)
+        XCTAssertFalse(first(app, "club-url").exists)
         if app.textFields["club-matricula"].waitForExistence(timeout: 3) {
             type(app.textFields["club-matricula"], "94506")
         }
