@@ -37,8 +37,27 @@ targets:
       - path: Golflet/Resources/Fonts/Geist-Regular.otf
       - path: Golflet/Resources/Fonts/Geist-Medium.otf
       - path: Golflet/Resources/Fonts/Geist-SemiBold.otf
-      - path: Golflet/Resources/AppIcon60@2x.png
-      - path: Golflet/Resources/AppIcon60@3x.png
+    # AppIcon60@2x.png / @3x.png stay out of `resources`: actool swallows
+    # loose files named AppIcon* into Assets.car and deletes them from the
+    # .app root. ASC still requires a 120x120 PNG next to the binary.
+    postBuildScripts:
+      - name: Copy App Store icon PNGs
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(SRCROOT)/Golflet/Resources/AppIcon60@2x.png
+          - $(SRCROOT)/Golflet/Resources/AppIcon60@3x.png
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIcon60@2x.png
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIcon60@3x.png
+        script: |
+          set -euo pipefail
+          DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+          SRC="${SRCROOT}/Golflet/Resources"
+          mkdir -p "${DEST}"
+          cp -f "${SRC}/AppIcon60@2x.png" "${DEST}/AppIcon60@2x.png"
+          cp -f "${SRC}/AppIcon60@3x.png" "${DEST}/AppIcon60@3x.png"
+          echo "Copied App Store icons into ${DEST}"
+          ls -la "${DEST}/AppIcon60@2x.png" "${DEST}/AppIcon60@3x.png"
     info:
       path: Golflet/Resources/Info.plist
       properties:

@@ -417,6 +417,24 @@ jobs:
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
+      - name: Copy App Store icons into archive
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/Golflet.xcarchive/Products/Applications/Golflet.app"
+          SRC="$GITHUB_WORKSPACE/Golflet/Resources"
+          test -f "$SRC/AppIcon60@2x.png"
+          test -f "$SRC/AppIcon60@3x.png"
+          cp -f "$SRC/AppIcon60@2x.png" "$APP_PATH/AppIcon60@2x.png"
+          cp -f "$SRC/AppIcon60@3x.png" "$APP_PATH/AppIcon60@3x.png"
+          echo "=== App bundle after icon copy ==="
+          ls -la "$APP_PATH/AppIcon60@2x.png" "$APP_PATH/AppIcon60@3x.png"
+          file "$APP_PATH/AppIcon60@2x.png"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          codesign --force --sign "iPhone Distribution" \
+            --preserve-metadata=identifier,entitlements,flags,runtime \
+            "$APP_PATH"
+          codesign --verify --verbose=2 "$APP_PATH"
+
       - name: Validate Info.plist
         run: |
           set -euo pipefail
