@@ -9,8 +9,7 @@ struct YardageBookView: View {
     @State private var player = YardageBookPlayer()
 
     var body: some View {
-        GeometryReader { geo in
-            let size = geo.size
+        GeometryReader { _ in
             ZStack(alignment: .top) {
                 Color(hex: 0xF7F5F0)
                 scene
