@@ -194,7 +194,7 @@ struct YardageBookSyncScene: View {
                 path.move(to: CGPoint(x: poleTop.x + 0.6, y: poleTop.y + 1))
                 path.addQuadCurve(
                     to: CGPoint(x: poleTop.x + 0.6, y: poleTop.y + 13),
-                    control: CGPoint(x: poleTop.x + 16 + wave * 3.2, y: poleTop.y + 7 + wave * 0.6)
+                    control: CGPoint(x: poleTop.x + 16 + wave * CGFloat(3.2), y: poleTop.y + 7 + wave * CGFloat(0.6))
                 )
                 path.closeSubpath()
             }
