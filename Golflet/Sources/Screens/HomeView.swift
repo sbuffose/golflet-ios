@@ -44,7 +44,7 @@ struct HomeView: View {
                 Spacer()
                 if let club = model.clubs.first {
                     Button {
-                        Task { await model.syncClub(club) }
+                        model.requestSync(club)
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 14, weight: .semibold))
@@ -205,7 +205,7 @@ struct HomeView: View {
                 VStack(spacing: 14) {
                     ForEach(model.clubs) { club in
                         Button {
-                            Task { await model.syncClub(club) }
+                            model.requestSync(club)
                         } label: {
                             HStack(spacing: 12) {
                                 Text(String(club.name.prefix(1)))

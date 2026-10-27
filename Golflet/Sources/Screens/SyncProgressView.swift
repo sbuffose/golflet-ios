@@ -39,7 +39,7 @@ struct SyncProgressView: View {
         .accessibilityLabel(session?.title ?? "Leyendo tus tarjetas")
         .task(id: session?.outcome) {
             guard session?.outcome == .succeeded else { return }
-            try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 180 : 700))
+            try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 5500 : 700))
             model.finishSuccessfulSync()
         }
     }

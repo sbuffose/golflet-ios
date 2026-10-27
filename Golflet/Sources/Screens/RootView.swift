@@ -19,8 +19,10 @@ struct RootView: View {
                     .golfletChrome()
                     .environment(model)
                     .ignoresSafeArea()
+                    .transition(.identity)
             }
         }
+        .animation(nil, value: model.syncSession?.id)
         .overlay(alignment: .bottom) {
             if let toast = model.toastMessage {
                 Text(toast)
