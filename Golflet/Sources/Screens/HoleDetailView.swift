@@ -39,6 +39,7 @@ struct HoleDetailView: View {
                         .background(p.surface)
                         .clipShape(Circle())
                 }
+                .accessibilityIdentifier("close-hole")
                 Spacer()
                 HStack(spacing: 8) {
                     Button { step(-1) } label: {

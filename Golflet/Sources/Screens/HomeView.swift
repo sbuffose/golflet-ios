@@ -11,6 +11,13 @@ struct HomeView: View {
         GScreen(id: "screen-inicio") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 28) {
+                    if model.isLoaded {
+                        Text("home-ready")
+                            .font(.system(size: 1))
+                            .foregroundStyle(.clear)
+                            .frame(width: 1, height: 1)
+                            .accessibilityIdentifier("home-ready")
+                    }
                     header
                     handicapCard
                     lastRound

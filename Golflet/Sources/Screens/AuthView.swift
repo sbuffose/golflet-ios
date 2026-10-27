@@ -54,18 +54,19 @@ struct AuthView: View {
                                 .accessibilityIdentifier("auth-name")
                         }
                     }
-                    GField(label: "Email") {
-                        TextField("vos@ejemplo.com", text: $email)
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.emailAddress)
-                            .textContentType(.username)
-                            .accessibilityIdentifier("auth-email")
-                    }
-                    GField(label: "Contraseña de Golflet") {
-                        SecureField("Mínimo 8 caracteres", text: $password)
-                            .textContentType(mode == .signUp ? .newPassword : .password)
-                            .accessibilityIdentifier("auth-password")
-                    }
+                        GField(label: "Email") {
+                            TextField("vos@ejemplo.com", text: $email)
+                                .textInputAutocapitalization(.never)
+                                .keyboardType(.emailAddress)
+                                .autocorrectionDisabled()
+                                .textContentType(RuntimeFlags.isUITesting ? nil : .username)
+                                .accessibilityIdentifier("auth-email")
+                        }
+                        GField(label: "Contraseña de Golflet") {
+                            SecureField("Mínimo 8 caracteres", text: $password)
+                                .textContentType(RuntimeFlags.isUITesting ? nil : (mode == .signUp ? .newPassword : .password))
+                                .accessibilityIdentifier("auth-password")
+                        }
 
                     if let error = model.errorMessage {
                         Text(error)
