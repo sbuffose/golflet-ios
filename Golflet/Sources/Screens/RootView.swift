@@ -5,7 +5,6 @@ struct RootView: View {
     @Environment(\.palette) private var p
 
     var body: some View {
-        @Bindable var model = model
         Group {
             if !model.isAuthenticated {
                 AuthView()
@@ -25,9 +24,10 @@ struct RootView: View {
         }
     }
 
+    @ViewBuilder
     private var mainTabs: some View {
-        @Bindable var model = model
-        TabView(selection: $model.selectedTab) {
+        let bindings = Bindable(model)
+        TabView(selection: bindings.selectedTab) {
             NavigationStack { HomeView() }
                 .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
                 .tag(AppTab.inicio)
@@ -55,14 +55,14 @@ struct RootView: View {
         }
         .tint(p.primary)
         .onAppear { configureTabBar() }
-        .sheet(item: $model.presentedRound) { round in
+        .sheet(item: bindings.presentedRound) { round in
             NavigationStack {
                 RoundDetailView(round: round)
             }
             .golfletChrome()
             .environment(model)
         }
-        .sheet(isPresented: $model.showsClubs) {
+        .sheet(isPresented: bindings.showsClubs) {
             NavigationStack {
                 ClubsView()
             }
