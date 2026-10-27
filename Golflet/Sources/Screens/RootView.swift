@@ -13,14 +13,13 @@ struct RootView: View {
             }
         }
         .task { await model.load() }
-        .fullScreenCover(isPresented: Binding(
-            get: { model.syncSession != nil },
-            set: { if !$0, model.syncSession?.outcome != .running { model.syncSession = nil } }
-        )) {
-            SyncProgressView()
-                .golfletChrome()
-                .environment(model)
-                .interactiveDismissDisabled()
+        .overlay {
+            if model.syncSession != nil {
+                SyncProgressView()
+                    .golfletChrome()
+                    .environment(model)
+                    .ignoresSafeArea()
+            }
         }
         .overlay(alignment: .bottom) {
             if let toast = model.toastMessage {

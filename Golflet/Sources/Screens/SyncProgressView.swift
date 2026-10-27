@@ -35,6 +35,7 @@ struct SyncProgressView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sync-overlay")
+        .accessibilityAddTraits(.updatesFrequently)
         .accessibilityLabel(session?.title ?? "Leyendo tus tarjetas")
         .task(id: session?.outcome) {
             guard session?.outcome == .succeeded else { return }

@@ -67,8 +67,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10), "Bootstrap del mock no terminó")
         let sync = app.buttons["home-sync-118"]
         XCTAssertTrue(sync.waitForExistence(timeout: 6), "Falta el botón de actualizar el club demo")
-        app.swipeUp()
-        XCTAssertTrue(sync.waitForExistence(timeout: 2))
+        XCTAssertTrue(sync.isHittable, "Actualizar no es tappable")
         sync.tap()
 
         XCTAssertTrue(waitFor(app, "sync-overlay", timeout: 8), "El overlay de sync no apareció")
