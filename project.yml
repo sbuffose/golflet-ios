@@ -56,8 +56,10 @@ targets:
           mkdir -p "${DEST}"
           cp -f "${SRC}/AppIcon60@2x.png" "${DEST}/AppIcon60@2x.png"
           cp -f "${SRC}/AppIcon60@3x.png" "${DEST}/AppIcon60@3x.png"
+          cp -f "${SRC}/AppIcon60@2x.png" "${DEST}/Icon-60@2x.png"
+          cp -f "${SRC}/AppIcon60@3x.png" "${DEST}/Icon-60@3x.png"
           echo "Copied App Store icons into ${DEST}"
-          ls -la "${DEST}/AppIcon60@2x.png" "${DEST}/AppIcon60@3x.png"
+          ls -la "${DEST}/AppIcon60@2x.png" "${DEST}/Icon-60@2x.png"
     info:
       path: Golflet/Resources/Info.plist
       properties:
@@ -80,6 +82,8 @@ targets:
             CFBundleIconFiles:
               - AppIcon60@2x
               - AppIcon60@3x
+              - Icon-60@2x
+              - Icon-60@3x
         LSRequiresIPhoneOS: true
         UILaunchScreen:
           UIColorName: LaunchBackground
