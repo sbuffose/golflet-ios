@@ -466,6 +466,10 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/altool.log"
           STATUS=${PIPESTATUS[0]}
           set -e
+          if grep -qiE 'UPLOAD FAILED|Validation failed|Failed to upload package' "$RUNNER_TEMP/altool.log"; then
+            echo "TestFlight upload was rejected by App Store Connect."
+            exit 1
+          fi
           if [ "$STATUS" -eq 0 ]; then
             echo "TestFlight upload succeeded for com.sbuffose.golflet (app 6827662826), build ${{ needs.build.outputs.build_number }}."
             {
