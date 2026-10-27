@@ -5,7 +5,7 @@ struct CourseView: View {
     @Environment(\.palette) private var p
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-cancha") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     header

@@ -11,7 +11,7 @@ struct AuthView: View {
     enum Mode { case signIn, signUp }
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-login") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     HStack(spacing: 10) {
