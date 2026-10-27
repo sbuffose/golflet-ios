@@ -2,17 +2,29 @@ import SwiftUI
 
 struct GScreen<Content: View>: View {
     @Environment(\.palette) private var p
+    var probeID: String?
     let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(id: String? = nil, @ViewBuilder content: () -> Content) {
+        self.probeID = id
         self.content = content()
     }
 
     var body: some View {
-        content
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(p.bg.ignoresSafeArea())
-            .toolbar(.hidden, for: .navigationBar)
+        ZStack(alignment: .topLeading) {
+            if let probeID {
+                Text(probeID)
+                    .font(.system(size: 1))
+                    .foregroundStyle(.clear)
+                    .frame(width: 1, height: 1)
+                    .accessibilityIdentifier(probeID)
+            }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(p.bg.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

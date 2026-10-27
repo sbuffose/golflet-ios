@@ -28,7 +28,10 @@ targets:
         type: group
     resources:
       - path: Golflet/Resources/Assets.xcassets
-      - path: Golflet/Resources/Fixtures
+      - path: Golflet/Resources/Fixtures/rounds.json
+      - path: Golflet/Resources/Fixtures/courses.json
+      - path: Golflet/Resources/Fixtures/tees.json
+      - path: Golflet/Resources/Fixtures/per_hole_stats.json
       - path: Golflet/Resources/Fonts/Geist-Regular.otf
       - path: Golflet/Resources/Fonts/Geist-Medium.otf
       - path: Golflet/Resources/Fonts/Geist-SemiBold.otf
@@ -88,12 +91,19 @@ targets:
     sources:
       - path: GolfletTests
         type: group
+    resources:
+      - path: Golflet/Resources/Fixtures/rounds.json
+      - path: Golflet/Resources/Fixtures/courses.json
+      - path: Golflet/Resources/Fixtures/tees.json
+      - path: Golflet/Resources/Fixtures/per_hole_stats.json
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sbuffose.golflet.tests
         DEVELOPMENT_TEAM: R56Y2GZ2M9
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: "YES"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Golflet.app/Golflet"
+        BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
       - target: Golflet
 

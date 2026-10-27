@@ -6,7 +6,7 @@ struct BagView: View {
     @State private var editing: BagClub?
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-bolsa") {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     GOverline(text: "Mis distancias")
