@@ -1,15 +1,6 @@
 import Foundation
 
 enum LivePayloadMapper {
-    private static let day: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar.gregorian
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(secondsFromGMT: 0)
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
     static func snapshot(from json: [String: Any]) -> AppSnapshot {
         let userObj = json["user"] as? [String: Any]
         let user = userObj.map {
@@ -163,8 +154,8 @@ enum LivePayloadMapper {
             ),
             holes: holes,
             holesPlayed: JSONFlex.int(from: item["holes_played"]) ?? holes.count,
-            isNineHoles: item["is_9_holes"] as? Bool ?? false,
-            isValid: item["valid_card"] as? Bool ?? true,
+            isNineHoles: JSONFlex.bool(from: item["is_9_holes"]) ?? false,
+            isValid: JSONFlex.bool(from: item["valid_card"]) ?? true,
             differential: JSONFlex.double(from: item["differential_computed"]),
             adjustedGross: JSONFlex.int(from: item["adjusted_gross"]),
             courseHandicap: JSONFlex.int(from: item["course_handicap"]),
@@ -316,7 +307,7 @@ enum LivePayloadMapper {
 
     private static func parseDay(_ raw: String?) -> Date? {
         guard let raw else { return nil }
-        if let d = day.date(from: String(raw.prefix(10))) { return d }
+        if let d = DayStamp.parse(raw) { return d }
         return parseDateTime(raw)
     }
 

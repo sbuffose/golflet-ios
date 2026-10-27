@@ -14,17 +14,16 @@ struct MockAPIClient: GolfletAPI {
 
     init(autoSession: Bool = true) {
         self.autoSession = autoSession
+        Self.sessionLock.lock()
+        Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
         if autoSession {
-            Self.sessionLock.lock()
             Self.mockSignedIn = true
             Self.mockLinked = true
-            Self.sessionLock.unlock()
         } else {
-            Self.sessionLock.lock()
             Self.mockSignedIn = false
             Self.mockLinked = false
-            Self.sessionLock.unlock()
         }
+        Self.sessionLock.unlock()
     }
 
     var isAuthenticated: Bool {
@@ -281,19 +280,10 @@ struct MockAPIClient: GolfletAPI {
         return letters.joined().uppercased()
     }
 
-    private static let dateParser: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar.gregorian
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(secondsFromGMT: 0)
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
     private static func parseRound(_ item: [String: Any]) -> Round? {
         guard let id = item["round_id"] as? String,
               let dateString = item["date"] as? String,
-              let date = dateParser.date(from: dateString)
+              let date = DayStamp.parse(dateString)
         else { return nil }
 
         let counts = item["summary_counts"] as? [String: Any] ?? [:]
@@ -345,8 +335,8 @@ struct MockAPIClient: GolfletAPI {
             ),
             holes: holes,
             holesPlayed: JSONFlex.int(from: item["holes_played"]) ?? holes.count,
-            isNineHoles: item["is_9_holes"] as? Bool ?? false,
-            isValid: item["valid_card"] as? Bool ?? ((item["card_status"] as? String) == "OK"),
+            isNineHoles: JSONFlex.bool(from: item["is_9_holes"]) ?? false,
+            isValid: JSONFlex.bool(from: item["valid_card"]) ?? ((item["card_status"] as? String) == "OK"),
             differential: JSONFlex.double(from: item["differential_computed"]),
             adjustedGross: JSONFlex.int(from: item["adjusted_gross"]),
             courseHandicap: JSONFlex.int(from: item["course_handicap"]),
@@ -358,26 +348,76 @@ struct MockAPIClient: GolfletAPI {
 
 enum FixtureLoader {
     static func array(_ name: String) throws -> [[String: Any]] {
-        guard let url = url(for: name) else { throw GolfletError.fixtureMissing(name) }
-        let data = try Data(contentsOf: url)
+        let data = try data(named: name)
         let object = try JSONSerialization.jsonObject(with: data)
-        guard let array = object as? [[String: Any]] else { throw GolfletError.decoding(name) }
+        guard let array = JSONFlex.objectArray(from: object) else { throw GolfletError.decoding(name) }
         return array
     }
 
-    private static func url(for name: String) -> URL? {
-        let bundles = [Bundle.main, Bundle(for: FixtureBundleToken.self)] + Bundle.allBundles
+    static func data(named name: String) throws -> Data {
+        if let url = url(for: name) {
+            return try Data(contentsOf: url)
+        }
+        if let embedded = EmbeddedFixtures.json(named: name) {
+            return Data(embedded.utf8)
+        }
+        throw GolfletError.fixtureMissing(name)
+    }
+
+    static func url(for name: String) -> URL? {
+        let bundles = [Bundle.main, Bundle(for: FixtureBundleToken.self)] + Bundle.allBundles + Bundle.allFrameworks
         var seen = Set<ObjectIdentifier>()
+        let subdirectories = [nil, "Fixtures", "Golflet/Resources/Fixtures", "Resources/Fixtures"]
         for bundle in bundles {
             let token = ObjectIdentifier(bundle)
             guard seen.insert(token).inserted else { continue }
-            if let url = bundle.url(forResource: name, withExtension: "json")
-                ?? bundle.url(forResource: name, withExtension: "json", subdirectory: "Fixtures")
-                ?? bundle.url(forResource: name, withExtension: "json", subdirectory: "Golflet/Resources/Fixtures") {
+            for subdirectory in subdirectories {
+                if let url = bundle.url(forResource: name, withExtension: "json", subdirectory: subdirectory) {
+                    return url
+                }
+            }
+            if let matches = bundle.urls(forResourcesWithExtension: "json", subdirectory: nil),
+               let url = matches.first(where: { $0.deletingPathExtension().lastPathComponent == name }) {
+                return url
+            }
+            if let url = firstJSON(named: name, under: bundle.bundleURL) {
                 return url
             }
         }
         return nil
+    }
+
+    private static func firstJSON(named name: String, under root: URL) -> URL? {
+        let target = "\(name).json"
+        let keys: [URLResourceKey] = [.isRegularFileKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+        for case let url as URL in enumerator {
+            if url.lastPathComponent == target { return url }
+        }
+        return nil
+    }
+}
+
+enum DayStamp {
+    static func parse(_ raw: String) -> Date? {
+        let stamp = String(raw.prefix(10))
+        let parts = stamp.split(separator: "-")
+        guard parts.count == 3,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2])
+        else { return nil }
+        return Calendar.gregorian.date(from: DateComponents(
+            calendar: Calendar.gregorian,
+            timeZone: Calendar.gregorian.timeZone,
+            year: year,
+            month: month,
+            day: day
+        ))
     }
 }
 
