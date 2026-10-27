@@ -3,6 +3,9 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shownCards: Int?
+    @State private var cardsGold = false
 
     var body: some View {
         GScreen {
@@ -21,6 +24,10 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
+        .onChange(of: model.celebrateCards) { _, value in
+            guard let value else { return }
+            Task { await countUpCards(to: value) }
+        }
     }
 
     private var header: some View {
@@ -72,7 +79,7 @@ struct HomeView: View {
                 .foregroundStyle(p.onPrimary.opacity(0.7))
 
                 HStack(alignment: .top) {
-                    heroMini("Tarjetas", "\(snap.cards)")
+                    heroMini("Tarjetas", "\(shownCards ?? snap.cards)", gold: cardsGold)
                     Spacer()
                     heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
                     Spacer()
@@ -84,7 +91,7 @@ struct HomeView: View {
         .accessibilityIdentifier("handicap-card")
     }
 
-    private func heroMini(_ label: String, _ value: String) -> some View {
+    private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(GType.label)
@@ -92,8 +99,29 @@ struct HomeView: View {
             Text(value)
                 .font(GType.statM)
                 .tabular()
-                .foregroundStyle(p.onPrimary)
+                .foregroundStyle(gold ? p.accent : p.onPrimary)
         }
+    }
+
+    private func countUpCards(to target: Int) async {
+        if reduceMotion {
+            shownCards = target
+            return
+        }
+        shownCards = 0
+        cardsGold = true
+        let duration = 0.9
+        let start = Date()
+        while Date().timeIntervalSince(start) < duration {
+            let t = min(1, Date().timeIntervalSince(start) / duration)
+            let eased = 1 - pow(1 - t, 3)
+            shownCards = Int((Double(target) * eased).rounded())
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+        shownCards = target
+        try? await Task.sleep(for: .seconds(1.6))
+        cardsGold = false
+        model.celebrateCards = nil
     }
 
     private var lastRound: some View {

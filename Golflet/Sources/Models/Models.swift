@@ -205,58 +205,42 @@ struct HIPoint: Hashable, Sendable {
 struct SyncResult: Hashable, Sendable {
     var ok: Bool
     var message: String
+    var cardCount: Int? = nil
+    var newCards: Int? = nil
 }
 
-struct SyncProgress: Hashable, Sendable {
-    var phase: Phase
-    var message: String
-    var current: Int? = nil
+enum SyncStage: String, Sendable, Hashable, CaseIterable {
+    case connect, list, cards, handicap, save, done
+
+    static let visible: [SyncStage] = [.connect, .list, .cards, .handicap, .save]
+
+    static func parse(_ raw: String?) -> SyncStage? {
+        guard let raw else { return nil }
+        switch raw.lowercased() {
+        case "connect", "connecting": return .connect
+        case "list", "listing": return .list
+        case "cards", "reading": return .cards
+        case "handicap", "hi": return .handicap
+        case "save", "saving": return .save
+        case "done", "success", "ok": return .done
+        default: return nil
+        }
+    }
+}
+
+enum SyncStepState: String, Sendable, Hashable {
+    case todo, active, done, error
+}
+
+struct SyncAPIProgress: Hashable, Sendable {
+    var club: String?
+    var stage: SyncStage
+    var done: Int? = nil
     var total: Int? = nil
-
-    enum Phase: String, Sendable, Hashable {
-        case connecting
-        case reading
-        case calculating
-        case finishing
-        case success
-        case failed
-
-        static func parse(_ raw: String?) -> Phase? {
-            guard let raw else { return nil }
-            let value = raw.lowercased().replacingOccurrences(of: " ", with: "_")
-            switch value {
-            case "connecting", "connect", "login", "auth", "signing_in":
-                return .connecting
-            case "reading", "read", "cards", "fetching", "scraping", "syncing", "running":
-                return .reading
-            case "calculating", "handicap", "hi", "compute", "computing":
-                return .calculating
-            case "finishing", "ordering", "saving", "finalizing":
-                return .finishing
-            case "success", "ok", "done", "ready":
-                return .success
-            case "failed", "error", "fail":
-                return .failed
-            default:
-                return nil
-            }
-        }
-    }
-
-    var line: String {
-        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty { return trimmed }
-        switch phase {
-        case .connecting: return "Conectando"
-        case .reading:
-            if let current, let total { return "Leyendo tarjetas · \(current) de \(total)" }
-            return "Leyendo tarjetas"
-        case .calculating: return "Calculando tu hándicap"
-        case .finishing: return "Ordenando tus rondas"
-        case .success: return "Listo"
-        case .failed: return "No se pudo actualizar"
-        }
-    }
+    var listTotal: Int? = nil
+    var finished: Bool = false
+    var error: String? = nil
+    var cardsTotal: Int? = nil
 }
 
 struct SyncSession: Identifiable, Hashable, Sendable {
@@ -272,16 +256,25 @@ struct SyncSession: Identifiable, Hashable, Sendable {
     }
 
     var id: UUID
+    var progressID: String
     var kind: Kind
     var clubName: String
     var accountId: String?
     var knownCards: Int?
     var startedAt: Date
-    var progress: SyncProgress
+    var progress: SyncAPIProgress
     var outcome: Outcome
+    var resultCards: Int? = nil
+    var resultNewCards: Int? = nil
+    var errorMessage: String? = nil
 
     var title: String {
-        kind == .link ? "Vincular club" : "Actualizar"
+        if outcome == .failed { return "No se pudo actualizar" }
+        if outcome == .succeeded {
+            if let n = resultCards { return "Listo · \(n) tarjetas" }
+            return "Listo"
+        }
+        return "Leyendo tus tarjetas"
     }
 }
 
@@ -292,7 +285,6 @@ enum RuntimeFlags {
     }
 }
 
-typealias SyncProgressHandler = @Sendable (SyncProgress) -> Void
 
 struct AppSnapshot: Sendable {
     var user: GolfletUser?

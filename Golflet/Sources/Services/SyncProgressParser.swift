@@ -1,132 +1,66 @@
 import Foundation
 
 enum SyncProgressParser {
-    static func parse(_ json: [String: Any]) -> SyncProgress? {
-        let blobs: [[String: Any]] = [
-            json["progress"] as? [String: Any],
-            json["sync"] as? [String: Any],
-            json
-        ].compactMap { $0 }
-
-        for blob in blobs {
-            if let progress = fromBlob(blob) { return progress }
-        }
-        return nil
-    }
-
-    static func parseLine(_ line: String) -> SyncProgress? {
-        let trimmed = stripSSE(line)
-        guard !trimmed.isEmpty, trimmed != "[DONE]" else { return nil }
-        guard let data = trimmed.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data),
-              let json = object as? [String: Any]
-        else { return nil }
-        return parse(json)
-    }
-
-    static func parseJSONObject(_ text: String) -> [String: Any]? {
-        let trimmed = stripSSE(text)
-        guard let data = trimmed.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data)
-        else { return nil }
-        return object as? [String: Any]
-    }
-
-    static func fromClub(_ club: LinkedClub) -> SyncProgress? {
-        let status = club.lastSyncStatus?.lowercased() ?? ""
-        let message = club.lastSyncMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if status == "running" || status == "syncing" || !message.isEmpty && status != "ok" && status != "error" {
-            return SyncProgress(
-                phase: SyncProgress.Phase.parse(status) ?? inferPhase(message: message, current: nil),
-                message: message.isEmpty ? "Leyendo tarjetas" : message,
-                current: nil,
-                total: club.cardCount > 0 ? club.cardCount : nil
-            )
-        }
-        if let nested = parse(["message": message, "phase": status, "total": club.cardCount]) {
-            return nested
-        }
-        return nil
-    }
-
-    static func staged(clubName: String, elapsed: TimeInterval, knownCards: Int?, compressed: Bool) -> SyncProgress {
-        let connectEnd = compressed ? 0.12 : 6
-        let enterEnd = compressed ? 0.20 : 12
-        let readEnd = compressed ? 0.32 : 75
-        let calcEnd = compressed ? 0.42 : 95
-        let total = max(knownCards ?? 97, 1)
-
-        if elapsed < connectEnd {
-            return SyncProgress(phase: .connecting, message: "Conectando con \(clubName)")
-        }
-        if elapsed < enterEnd {
-            return SyncProgress(phase: .connecting, message: "Entrando a Golfistics")
-        }
-        if elapsed < readEnd {
-            let span = max(readEnd - enterEnd, 0.01)
-            let fraction = min(1, max(0, (elapsed - enterEnd) / span))
-            let current = min(total, max(1, Int((fraction * Double(total - 1)).rounded(.down) + 1)))
-            return SyncProgress(
-                phase: .reading,
-                message: "Leyendo tarjetas · \(current) de \(total)",
-                current: current,
-                total: total
-            )
-        }
-        if elapsed < calcEnd {
-            return SyncProgress(phase: .calculating, message: "Calculando tu hándicap")
-        }
-        return SyncProgress(phase: .finishing, message: "Ordenando tus rondas")
-    }
-
-    private static func fromBlob(_ blob: [String: Any]) -> SyncProgress? {
-        let message = firstString(blob, keys: ["message", "status_message", "last_sync_message", "detail", "text"])
-        let current = JSONFlex.int(from: blob["current"] ?? blob["n"] ?? blob["cards_read"] ?? blob["read"] ?? blob["done"] ?? blob["index"])
-        let total = JSONFlex.int(from: blob["total"] ?? blob["of"] ?? blob["cards_total"] ?? blob["count"] ?? blob["cards"])
-        let phase = SyncProgress.Phase.parse(
-            firstString(blob, keys: ["phase", "step", "status", "last_sync_status", "state"])
-        )
-
-        if message == nil && current == nil && phase == nil {
-            return nil
-        }
-        if phase == nil, current == nil, let message, blob["ok"] is Bool, blob["progress"] == nil {
-            return nil
-        }
-
-        return SyncProgress(
-            phase: phase ?? inferPhase(message: message, current: current),
-            message: message ?? "",
-            current: current,
-            total: total
+    static func parse(_ json: [String: Any]) -> SyncAPIProgress? {
+        let blob = (json["progress"] as? [String: Any]) ?? json
+        guard let stage = SyncStage.parse(blob["stage"] as? String) else { return nil }
+        return SyncAPIProgress(
+            club: blob["club"] as? String,
+            stage: stage,
+            done: JSONFlex.int(from: blob["done"]),
+            total: JSONFlex.int(from: blob["total"]),
+            listTotal: JSONFlex.int(from: blob["list_total"]),
+            finished: blob["finished"] as? Bool ?? (stage == .done),
+            error: (blob["error"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            cardsTotal: JSONFlex.int(from: blob["cards_total"] ?? blob["total"])
         )
     }
+}
 
-    static func inferPhase(message: String?, current: Int?) -> SyncProgress.Phase {
-        let text = (message ?? "").lowercased()
-        if text.contains("hándicap") || text.contains("handicap") { return .calculating }
-        if text.contains("orden") || text.contains("guardando") { return .finishing }
-        if text.contains("leyendo") || text.contains("tarjeta") || current != nil { return .reading }
-        if text.contains("conect") || text.contains("golfistics") { return .connecting }
-        if text.contains("listo") { return .success }
-        return current != nil ? .reading : .connecting
-    }
-
-    private static func firstString(_ blob: [String: Any], keys: [String]) -> String? {
-        for key in keys {
-            if let value = blob[key] as? String {
-                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty { return trimmed }
+enum SyncStepCopy {
+    static func label(stage: SyncStage, state: SyncStepState, club: String, progress: SyncAPIProgress) -> String {
+        let done = progress.done ?? 0
+        let total = progress.total ?? 0
+        switch stage {
+        case .connect:
+            return state == .done ? "Conectado con \(club)" : "Conectando con \(club)"
+        case .list:
+            if state == .done {
+                if let list = progress.listTotal { return "\(list) tarjetas en Golfistics" }
+                return "Tarjetas encontradas"
             }
+            return "Buscando tus tarjetas"
+        case .cards:
+            if state == .done {
+                let n = progress.cardsTotal ?? total
+                return n > 0 ? "\(n) tarjetas nuevas leídas" : "Sin tarjetas nuevas"
+            }
+            return total > 0 ? "Leyendo tarjetas · \(done) de \(total)" : "Buscando tarjetas nuevas"
+        case .handicap:
+            return state == .done ? "Historial de hándicap al día" : "Leyendo tu historial de hándicap"
+        case .save:
+            if state == .done { return "Rondas guardadas" }
+            return total > 0 ? "Guardando rondas · \(done) de \(total)" : "Guardando rondas"
+        case .done:
+            return "Listo"
         }
-        return nil
     }
 
-    private static func stripSSE(_ line: String) -> String {
-        var text = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.lowercased().hasPrefix("data:") {
-            text = String(text.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return text
+    static func state(for stage: SyncStage, progress: SyncAPIProgress, outcome: SyncSession.Outcome) -> SyncStepState {
+        if outcome == .failed, progress.stage == stage { return .error }
+        let current = progress.stage == .done ? SyncStage.save : progress.stage
+        guard let here = SyncStage.visible.firstIndex(of: stage),
+              let active = SyncStage.visible.firstIndex(of: current)
+        else { return .todo }
+        if outcome == .succeeded || progress.stage == .done || here < active { return .done }
+        if here == active { return .active }
+        return .todo
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

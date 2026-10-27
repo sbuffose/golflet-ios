@@ -22,6 +22,24 @@ struct RootView: View {
                 .environment(model)
                 .interactiveDismissDisabled()
         }
+        .overlay(alignment: .bottom) {
+            if let toast = model.toastMessage {
+                Text(toast)
+                    .font(GType.headline)
+                    .foregroundStyle(p.onPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(p.primary)
+                    .clipShape(Capsule())
+                    .padding(.bottom, 72)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task(id: toast) {
+                        try? await Task.sleep(for: .seconds(2.4))
+                        if model.toastMessage == toast { model.toastMessage = nil }
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: model.toastMessage)
     }
 
     @ViewBuilder

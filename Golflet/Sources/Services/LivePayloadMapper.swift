@@ -88,13 +88,15 @@ enum LivePayloadMapper {
     }
 
     static func parseSync(_ json: [String: Any]) -> SyncResult {
-        if let sync = json["sync"] as? [String: Any] {
-            return SyncResult(
-                ok: sync["ok"] as? Bool ?? true,
-                message: (sync["message"] as? String) ?? "Listo"
-            )
-        }
-        return SyncResult(ok: true, message: (json["message"] as? String) ?? "Listo")
+        let sync = json["sync"] as? [String: Any]
+        let cards = JSONFlex.int(from: sync?["rounds"] ?? sync?["cards"] ?? json["rounds"] ?? json["count"])
+        let added = JSONFlex.int(from: sync?["new"] ?? sync?["added"] ?? json["new"])
+        return SyncResult(
+            ok: (sync?["ok"] as? Bool) ?? true,
+            message: (sync?["message"] as? String) ?? (json["message"] as? String) ?? "Listo",
+            cardCount: cards,
+            newCards: added
+        )
     }
 
     static func authMessage(from json: [String: Any], fallback: String) -> String {
