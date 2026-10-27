@@ -25,6 +25,7 @@ final class AppModel {
     var syncSession: SyncSession?
     var celebrateCards: Int?
     var toastMessage: String?
+    var isSignedIn: Bool
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -33,9 +34,10 @@ final class AppModel {
     init(api: any GolfletAPI, notes: NotesStore) {
         self.api = api
         self.notes = notes
+        self.isSignedIn = api.isAuthenticated
     }
 
-    var isAuthenticated: Bool { api.isAuthenticated }
+    var isAuthenticated: Bool { isSignedIn }
     var isLive: Bool { !api.persistsLocally }
     var home: HomeSnapshot { StatsEngine.home(rounds: rounds) }
     var summary: SummarySnapshot { StatsEngine.summary(rounds: rounds, filter: courseFilter) }
@@ -68,6 +70,7 @@ final class AppModel {
     func signUp(name: String, email: String, password: String) async {
         await run {
             try await api.signUp(name: name, email: email, password: password)
+            isSignedIn = true
             await load()
         }
     }
@@ -75,6 +78,7 @@ final class AppModel {
     func signIn(email: String, password: String) async {
         await run {
             try await api.signIn(email: email, password: password)
+            isSignedIn = true
             await load()
         }
     }
@@ -82,6 +86,7 @@ final class AppModel {
     func signOut() async {
         await run {
             try await api.signOut()
+            isSignedIn = false
             user = nil
             clubs = []
             rounds = []

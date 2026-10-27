@@ -6,10 +6,10 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if !model.isAuthenticated {
-                AuthView()
-            } else {
+            if model.isSignedIn {
                 mainTabs
+            } else {
+                AuthView()
             }
         }
         .task { await model.load() }

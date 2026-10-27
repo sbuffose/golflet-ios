@@ -189,36 +189,37 @@ struct HomeView: View {
             GCard(radius: 22, padding: 16) {
                 VStack(spacing: 14) {
                     ForEach(model.clubs) { club in
-                        HStack(spacing: 12) {
-                            Text(String(club.name.prefix(1)))
-                                .font(GFont.ui(14, weight: .semibold))
-                                .foregroundStyle(p.onPrimary)
-                                .frame(width: 32, height: 32)
-                                .background(p.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(club.name)
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                HStack(spacing: 6) {
-                                    Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 6, height: 6)
-                                    Text(club.lastSyncMessage ?? "Conectado · Matrícula \(club.matricula)")
-                                        .font(GType.label)
-                                        .foregroundStyle(p.ink2)
-                                        .lineLimit(1)
+                        Button {
+                            Task { await model.syncClub(club) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(String(club.name.prefix(1)))
+                                    .font(GFont.ui(14, weight: .semibold))
+                                    .foregroundStyle(p.onPrimary)
+                                    .frame(width: 32, height: 32)
+                                    .background(p.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(club.name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    HStack(spacing: 6) {
+                                        Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 6, height: 6)
+                                        Text(club.lastSyncMessage ?? "Conectado · Matrícula \(club.matricula)")
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink2)
+                                            .lineLimit(1)
+                                    }
                                 }
-                            }
-                            Spacer()
-                            Button {
-                                Task { await model.syncClub(club) }
-                            } label: {
+                                Spacer()
                                 Image(systemName: "arrow.clockwise")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(p.ink2)
+                                    .accessibilityLabel("Actualizar")
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("home-sync-\(club.accountId)")
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-sync-\(club.accountId)")
                     }
                     Button { model.showsClubs = true } label: {
                         HStack(spacing: 12) {
