@@ -322,7 +322,18 @@ jobs:
           BUILD_NUMBER=${{ needs.build.outputs.build_number }}
           sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"$BUILD_NUMBER\"/" project.yml
           xcodegen generate
+          PLIST="Golflet/Resources/Info.plist"
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleIcons" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons dict" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon dict" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName string AppIcon" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:0 string AppIcon60@2x" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:1 string AppIcon60@3x" "$PLIST"
           echo "Project generated with build number $BUILD_NUMBER"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$PLIST"
 
       - name: Setup Keychain and Import Certificate
         env:
@@ -414,6 +425,15 @@ jobs:
           VALUE=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO_PLIST")
           echo "ITSAppUsesNonExemptEncryption: $VALUE"
           echo "Bundle id: $(plutil -extract CFBundleIdentifier raw "$INFO_PLIST")"
+          ICON_NAME=$(plutil -extract CFBundleIconName raw "$INFO_PLIST")
+          echo "CFBundleIconName: $ICON_NAME"
+          test "$ICON_NAME" = "AppIcon"
+          echo "=== App bundle icons ==="
+          ls -la "$APP_PATH"/*.png "$APP_PATH"/AppIcon* 2>/dev/null || true
+          test -f "$APP_PATH/AppIcon60@2x.png"
+          FILE_INFO=$(file "$APP_PATH/AppIcon60@2x.png")
+          echo "$FILE_INFO"
+          echo "$FILE_INFO" | grep -q "120 x 120"
 
       - name: Create ExportOptions.plist
         run: |
