@@ -40,16 +40,16 @@ final class HandicapMathTests: XCTestCase {
         XCTAssertEqual(ag, 7 + 5 + 5)
     }
 
-    func testBestEightOfTwenty() {
+    func testBestEightOfTwenty() throws {
         // 20 differentials, newest last. Best 8 = 1...8, average 4.5
         let diffs = Array(stride(from: 20.0, through: 1.0, by: -1.0))
-        let index = HandicapMath.handicapIndex(differentialsNewestLast: diffs)
+        let index = try XCTUnwrap(HandicapMath.handicapIndex(differentialsNewestLast: diffs))
         XCTAssertEqual(index, 4.5)
     }
 
-    func testShortRecordUsesOneDifferentialAndAdjustment() {
+    func testShortRecordUsesOneDifferentialAndAdjustment() throws {
         // 3 cards: use lowest 1, then −2.0
-        let index = HandicapMath.handicapIndex(differentialsNewestLast: [12.4, 8.2, 9.1])
+        let index = try XCTUnwrap(HandicapMath.handicapIndex(differentialsNewestLast: [12.4, 8.2, 9.1]))
         XCTAssertEqual(index, 6.2)
     }
 
