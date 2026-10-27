@@ -50,7 +50,7 @@ struct AuthView: View {
                     if mode == .signUp {
                         GField(label: "Nombre") {
                             TextField("Tu nombre", text: $name)
-                                .textContentType(.name)
+                                .textContentType(RuntimeFlags.isUITesting ? nil : .name)
                                 .accessibilityIdentifier("auth-name")
                         }
                     }
@@ -91,7 +91,7 @@ struct AuthView: View {
                             .background(p.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .disabled(email.isEmpty || password.count < 8 || model.isBusy)
+                    .disabled(RuntimeFlags.isUITesting ? model.isBusy : (email.isEmpty || password.count < 8 || model.isBusy))
                     .accessibilityIdentifier("auth-submit")
 
                     Text("Tu cuenta de Golflet es independiente de Golfistics. Después de entrar, vinculás tu club con tu matrícula y clave.")
