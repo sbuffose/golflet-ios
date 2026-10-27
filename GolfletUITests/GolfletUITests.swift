@@ -77,7 +77,6 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(arrived == .completed || overlay.exists || label.exists, "El overlay de sync no apareció")
         saveShot("12_sync")
 
-        let overlay = first(app, "sync-overlay")
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: overlay)
         wait(for: [gone], timeout: 12)
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 4))
