@@ -11,6 +11,7 @@ final class GolfletUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10), "Bootstrap del mock no terminó")
         XCTAssertTrue(waitFor(app, "handicap-card"))
         saveShot("01_inicio")
 
@@ -18,9 +19,7 @@ final class GolfletUITests: XCTestCase {
             first(app, "last-round-card").tap()
             XCTAssertTrue(waitFor(app, "screen-ronda", timeout: 6))
             saveShot("04_ronda")
-            if app.buttons["close-round"].waitForExistence(timeout: 2) {
-                app.buttons["close-round"].tap()
-            }
+            dismissIfPresent(app, "close-round")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
 
@@ -28,9 +27,7 @@ final class GolfletUITests: XCTestCase {
             app.buttons["add-club-home"].tap()
             XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
             saveShot("09_clubes")
-            if app.buttons["close-clubes"].waitForExistence(timeout: 2) {
-                app.buttons["close-clubes"].tap()
-            }
+            dismissIfPresent(app, "close-clubes")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
 
@@ -53,6 +50,7 @@ final class GolfletUITests: XCTestCase {
             app.buttons["hole-1"].tap()
             XCTAssertTrue(waitFor(app, "screen-hoyo", timeout: 6))
             saveShot("06_hoyo")
+            dismissIfPresent(app, "close-hole")
         }
 
         tapTab(app, "Mi bolsa")
@@ -66,8 +64,9 @@ final class GolfletUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10), "Bootstrap del mock no terminó")
         let sync = app.buttons["home-sync-118"]
-        XCTAssertTrue(sync.waitForExistence(timeout: 6))
+        XCTAssertTrue(sync.waitForExistence(timeout: 6), "Falta el botón de actualizar el club demo")
         sync.tap()
 
         XCTAssertTrue(waitFor(app, "sync-overlay", timeout: 4))
@@ -94,20 +93,18 @@ final class GolfletUITests: XCTestCase {
         }
         let name = app.textFields["auth-name"]
         if name.waitForExistence(timeout: 3) {
-            name.tap()
-            name.typeText("Jugador Demo")
+            type(name, "Jugador Demo")
         }
         let email = app.textFields["auth-email"]
         XCTAssertTrue(email.waitForExistence(timeout: 3))
-        email.tap()
-        email.typeText("demo@golflet.app")
+        type(email, "demo@golflet.app")
         let password = app.secureTextFields["auth-password"]
         XCTAssertTrue(password.waitForExistence(timeout: 3))
-        password.tap()
-        password.typeText("password1")
+        type(password, "password1")
         app.buttons["auth-submit"].tap()
 
-        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 10))
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 10), "El login demo no llegó a Inicio")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 8))
         if app.buttons["add-club-home"].waitForExistence(timeout: 6) {
             app.buttons["add-club-home"].tap()
         } else if app.buttons["avatar-button"].waitForExistence(timeout: 3) {
@@ -115,12 +112,10 @@ final class GolfletUITests: XCTestCase {
         }
         XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 8))
         if app.textFields["club-matricula"].waitForExistence(timeout: 3) {
-            app.textFields["club-matricula"].tap()
-            app.textFields["club-matricula"].typeText("94506")
+            type(app.textFields["club-matricula"], "94506")
         }
         if app.secureTextFields["club-clave"].waitForExistence(timeout: 3) {
-            app.secureTextFields["club-clave"].tap()
-            app.secureTextFields["club-clave"].typeText("clave123")
+            type(app.secureTextFields["club-clave"], "clave123")
         }
         saveShot("11_vincular")
     }
@@ -132,6 +127,30 @@ final class GolfletUITests: XCTestCase {
     @discardableResult
     private func waitFor(_ app: XCUIApplication, _ id: String, timeout: TimeInterval = 15) -> Bool {
         first(app, id).waitForExistence(timeout: timeout)
+    }
+
+    private func dismissIfPresent(_ app: XCUIApplication, _ id: String) {
+        let button = app.buttons[id]
+        if button.waitForExistence(timeout: 2) {
+            button.tap()
+            return
+        }
+        let any = first(app, id)
+        if any.waitForExistence(timeout: 1) {
+            any.tap()
+        }
+    }
+
+    private func type(_ element: XCUIElement, _ text: String) {
+        element.tap()
+        if let current = element.value as? String, !current.isEmpty, current != text {
+            let delete = String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count)
+            element.typeText(delete)
+        }
+        element.typeText(text)
+        if element.exists {
+            element.typeText("\n")
+        }
     }
 
     private func tapTab(_ app: XCUIApplication, _ name: String) {

@@ -355,48 +355,24 @@ enum FixtureLoader {
     }
 
     static func data(named name: String) throws -> Data {
-        if let url = url(for: name) {
-            return try Data(contentsOf: url)
-        }
         if let embedded = EmbeddedFixtures.json(named: name) {
             return Data(embedded.utf8)
+        }
+        if let url = url(for: name) {
+            return try Data(contentsOf: url)
         }
         throw GolfletError.fixtureMissing(name)
     }
 
     static func url(for name: String) -> URL? {
-        let bundles = [Bundle.main, Bundle(for: FixtureBundleToken.self)] + Bundle.allBundles + Bundle.allFrameworks
-        var seen = Set<ObjectIdentifier>()
-        let subdirectories = [nil, "Fixtures", "Golflet/Resources/Fixtures", "Resources/Fixtures"]
+        let bundles = [Bundle.main, Bundle(for: FixtureBundleToken.self)]
+        let subdirectories = [nil, "Fixtures"]
         for bundle in bundles {
-            let token = ObjectIdentifier(bundle)
-            guard seen.insert(token).inserted else { continue }
             for subdirectory in subdirectories {
                 if let url = bundle.url(forResource: name, withExtension: "json", subdirectory: subdirectory) {
                     return url
                 }
             }
-            if let matches = bundle.urls(forResourcesWithExtension: "json", subdirectory: nil),
-               let url = matches.first(where: { $0.deletingPathExtension().lastPathComponent == name }) {
-                return url
-            }
-            if let url = firstJSON(named: name, under: bundle.bundleURL) {
-                return url
-            }
-        }
-        return nil
-    }
-
-    private static func firstJSON(named name: String, under root: URL) -> URL? {
-        let target = "\(name).json"
-        let keys: [URLResourceKey] = [.isRegularFileKey]
-        guard let enumerator = FileManager.default.enumerator(
-            at: root,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
-        ) else { return nil }
-        for case let url as URL in enumerator {
-            if url.lastPathComponent == target { return url }
         }
         return nil
     }
