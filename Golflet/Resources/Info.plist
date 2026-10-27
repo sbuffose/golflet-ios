@@ -8,23 +8,6 @@
 	<string>Golflet</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
-	<key>CFBundleIcons</key>
-	<dict>
-		<key>CFBundlePrimaryIcon</key>
-		<dict>
-			<key>CFBundleIconName</key>
-			<string>AppIcon</string>
-			<key>CFBundleIconFiles</key>
-			<array>
-				<string>AppIcon60@2x</string>
-				<string>AppIcon60@3x</string>
-				<string>Icon-60@2x</string>
-				<string>Icon-60@3x</string>
-			</array>
-		</dict>
-	</dict>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
