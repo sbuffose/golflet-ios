@@ -7,11 +7,14 @@ struct RoundDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let round: Round
     @State private var noteText = ""
+    @State private var puttsText = ""
+    @State private var girText = ""
+    @State private var firText = ""
     @State private var extras: [Int: HoleExtra] = [:]
     @State private var showsGameEditor = false
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-ronda") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     header
@@ -27,8 +30,13 @@ struct RoundDetailView: View {
         }
         .accessibilityIdentifier("screen-ronda")
         .onAppear {
-            noteText = model.notes.note(for: round.roundId)?.text ?? ""
             extras = Dictionary(uniqueKeysWithValues: model.notes.extras(for: round.roundId).map { ($0.hole, $0) })
+            noteText = model.notes.note(for: round.roundId)?.text ?? round.notes ?? ""
+            if let putts = round.putts {
+                puttsText = String(putts)
+            }
+            girText = round.gir.map(String.init) ?? ""
+            firText = round.fir.map(String.init) ?? ""
         }
         .safeAreaInset(edge: .top) {
             HStack {
@@ -179,9 +187,9 @@ struct RoundDetailView: View {
                     .accessibilityIdentifier("edit-game")
             }
             HStack(spacing: 10) {
-                miniStat("Putts", puttTotal)
-                miniStat("Greens", girTotal)
-                miniStat("Fairways", fairwayTotal)
+                gameField("Putts", $puttsText)
+                gameField("Greens", $girText)
+                gameField("Fairways", $firText)
             }
             if showsGameEditor {
                 VStack(spacing: 8) {
@@ -193,16 +201,17 @@ struct RoundDetailView: View {
         }
     }
 
-    private func miniStat(_ label: String, _ value: String) -> some View {
+    private func gameField(_ label: String, _ text: Binding<String>) -> some View {
         GCard(radius: 16, padding: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(label)
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
-                Text(value)
+                TextField("—", text: text)
                     .font(GType.statM)
                     .tabular()
-                    .foregroundStyle(p.ink)
+                    .keyboardType(.numberPad)
+                    .onChange(of: text.wrappedValue) { _, _ in persistNotes() }
             }
         }
     }
@@ -258,13 +267,11 @@ struct RoundDetailView: View {
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 88)
                         .accessibilityIdentifier("round-notes")
-                        .onChange(of: noteText) { _, newValue in
-                            model.notes.saveNote(roundId: round.roundId, text: newValue)
-                        }
+                        .onChange(of: noteText) { _, _ in persistNotes() }
                     HStack(spacing: 6) {
                         Image(systemName: "pencil")
                             .font(.system(size: 11))
-                        Text(noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Todavía sin notas" : "Guardado en el teléfono")
+                        Text(noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Todavía sin notas" : (model.isLive ? "Guardado en tu cuenta" : "Guardado en el teléfono"))
                     }
                     .font(GType.label)
                     .foregroundStyle(p.ink3)
@@ -290,22 +297,19 @@ struct RoundDetailView: View {
         return "\(b.birdies) birdies · \(b.pars) pares · \(b.bogeys) bogeys · \(b.doubles) dobles. \(dif)"
     }
 
-    private var puttTotal: String {
-        let values = extras.values.compactMap(\.putts)
-        if values.isEmpty { return "—" }
-        return "\(values.reduce(0, +))"
-    }
-
-    private var girTotal: String {
-        let values = extras.values.compactMap(\.gir)
-        if values.isEmpty { return "—/18" }
-        return "\(values.filter { $0 }.count)/18"
-    }
-
-    private var fairwayTotal: String {
-        let values = extras.values.compactMap(\.fairway).filter { $0 != "na" && !$0.isEmpty }
-        if values.isEmpty { return "—/14" }
-        return "\(values.filter { $0 == "hit" }.count)/14"
+    private func persistNotes() {
+        model.notes.saveNote(roundId: round.roundId, text: noteText)
+        Task {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            await model.saveRoundNotes(
+                roundId: round.roundId,
+                putts: Int(puttsText),
+                gir: Int(girText),
+                fir: Int(firText),
+                text: noteText
+            )
+        }
     }
 
     private func update(hole: Int, putts: Int?, gir: Bool?, fairway: String?) {

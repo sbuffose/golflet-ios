@@ -5,8 +5,48 @@ struct RootView: View {
     @Environment(\.palette) private var p
 
     var body: some View {
-        @Bindable var model = model
-        TabView(selection: $model.selectedTab) {
+        Group {
+            if model.isSignedIn {
+                mainTabs
+            } else {
+                AuthView()
+            }
+        }
+        .task { await model.load() }
+        .overlay {
+            if model.syncSession != nil {
+                SyncProgressView()
+                    .golfletChrome()
+                    .environment(model)
+                    .ignoresSafeArea()
+                    .transition(.identity)
+            }
+        }
+        .animation(nil, value: model.syncSession?.id)
+        .overlay(alignment: .bottom) {
+            if let toast = model.toastMessage {
+                Text(toast)
+                    .font(GType.headline)
+                    .foregroundStyle(p.onPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(p.primary)
+                    .clipShape(Capsule())
+                    .padding(.bottom, 72)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task(id: toast) {
+                        try? await Task.sleep(for: .seconds(2.4))
+                        if model.toastMessage == toast { model.toastMessage = nil }
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: model.toastMessage)
+    }
+
+    @ViewBuilder
+    private var mainTabs: some View {
+        let bindings = Bindable(model)
+        TabView(selection: bindings.selectedTab) {
             NavigationStack { HomeView() }
                 .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
                 .tag(AppTab.inicio)
@@ -33,16 +73,15 @@ struct RootView: View {
                 .accessibilityIdentifier("tab-bolsa")
         }
         .tint(p.primary)
-        .task { await model.load() }
         .onAppear { configureTabBar() }
-        .sheet(item: $model.presentedRound) { round in
+        .sheet(item: bindings.presentedRound) { round in
             NavigationStack {
                 RoundDetailView(round: round)
             }
             .golfletChrome()
             .environment(model)
         }
-        .sheet(isPresented: $model.showsClubs) {
+        .sheet(isPresented: bindings.showsClubs) {
             NavigationStack {
                 ClubsView()
             }
