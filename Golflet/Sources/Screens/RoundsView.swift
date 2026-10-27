@@ -6,7 +6,7 @@ struct RoundsView: View {
     @State private var filter: CourseFilter = .all
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-rondas") {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     GOverline(text: "\(filtered.count) tarjetas · \(model.clubs.first?.name ?? "Golflet")")

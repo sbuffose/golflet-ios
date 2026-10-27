@@ -13,7 +13,7 @@ struct ClubsView: View {
     @State private var saveOnSync = false
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-clubes") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 6) {

@@ -6,7 +6,7 @@ struct SyncProgressView: View {
 
     var body: some View {
         let session = model.syncSession
-        GScreen {
+        GScreen(id: "sync-overlay") {
             VStack(alignment: .leading, spacing: 0) {
                 placeholderMark
                     .padding(.top, 28)

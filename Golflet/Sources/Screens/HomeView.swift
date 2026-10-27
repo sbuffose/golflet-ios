@@ -8,7 +8,7 @@ struct HomeView: View {
     @State private var cardsGold = false
 
     var body: some View {
-        GScreen {
+        GScreen(id: "screen-inicio") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 28) {
                     header
