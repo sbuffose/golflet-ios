@@ -1,0 +1,248 @@
+import Foundation
+
+enum HoleResult: String, Codable, Sendable {
+    case eagleOrBetter
+    case birdie
+    case par
+    case bogey
+    case doubleOrWorse
+    case unknown
+
+    init(className: String?, toPar: Int?) {
+        let raw = className?.lowercased() ?? ""
+        switch raw {
+        case "eagle", "eagle-or-better", "albatross", "hole-in-one", "hoyoenuno":
+            self = .eagleOrBetter
+        case "birdie":
+            self = .birdie
+        case "par":
+            self = .par
+        case "bogey":
+            self = .bogey
+        case "double-bogey", "double", "triple-bogey", "worse", "triple_plus":
+            self = .doubleOrWorse
+        default:
+            if let toPar {
+                if toPar <= -2 { self = .eagleOrBetter }
+                else if toPar == -1 { self = .birdie }
+                else if toPar == 0 { self = .par }
+                else if toPar == 1 { self = .bogey }
+                else if toPar >= 2 { self = .doubleOrWorse }
+                else { self = .unknown }
+            } else {
+                self = .unknown
+            }
+        }
+    }
+}
+
+struct HoleScore: Identifiable, Hashable, Sendable {
+    var id: Int { number }
+    var number: Int
+    var par: Int
+    var handicap: Int
+    var yards: Int?
+    var strokes: Int?
+    var toPar: Int?
+    var result: HoleResult
+}
+
+struct ScoreCounts: Hashable, Sendable {
+    var birdies: Int
+    var pars: Int
+    var bogeys: Int
+    var doubles: Int
+    var triples: Int
+    var worse: Int
+}
+
+struct Round: Identifiable, Hashable, Sendable {
+    var id: String { roundId }
+    var roundId: String
+    var date: Date
+    var weekday: String
+    var tournament: String
+    var clubName: String
+    var clubCode: String
+    var course: String
+    var tee: String
+    var category: String?
+    var weather: String?
+    var courseRating: Double
+    var slope: Double
+    var position: Int?
+    var fieldSize: Int?
+    var handicapIndex: Double
+    var playingHandicap: Int?
+    var outScore: Int?
+    var inScore: Int?
+    var gross: Int?
+    var net: Int?
+    var cardStatus: String
+    var counts: ScoreCounts
+    var holes: [HoleScore]
+    var holesPlayed: Int
+    var isNineHoles: Bool
+    var isValid: Bool
+    var differential: Double?
+    var adjustedGross: Int?
+    var courseHandicap: Int?
+    var hcpAllowancePct: Int?
+}
+
+struct CourseHole: Identifiable, Hashable, Sendable {
+    var id: Int { number }
+    var number: Int
+    var par: Int
+    var handicap: Int
+    var yards: [String: Int]
+}
+
+struct Course: Identifiable, Hashable, Sendable {
+    var id: String { "\(clubCode)-\(name)" }
+    var clubCode: String
+    var clubName: String
+    var name: String
+    var holes: [CourseHole]
+
+    var par: Int { holes.reduce(0) { $0 + $1.par } }
+}
+
+struct TeeRating: Identifiable, Hashable, Sendable {
+    var id: String { "\(clubCode)-\(course)-\(tee)" }
+    var clubCode: String
+    var course: String
+    var tee: String
+    var courseRating: Double
+    var slope: Int
+    var gender: String?
+}
+
+struct HoleDistribution: Hashable, Sendable {
+    var eagleOrBetter: Int
+    var birdie: Int
+    var par: Int
+    var bogey: Int
+    var double: Int
+    var triplePlus: Int
+
+    var total: Int { eagleOrBetter + birdie + par + bogey + double + triplePlus }
+
+    func percent(_ value: Int) -> Double {
+        guard total > 0 else { return 0 }
+        return Double(value) / Double(total) * 100
+    }
+}
+
+struct SiteComparison: Hashable, Sendable {
+    var key: String
+    var playerPct: Double
+    var groupPct: Double
+}
+
+struct HoleStat: Identifiable, Hashable, Sendable {
+    var id: Int { number }
+    var number: Int
+    var par: Int
+    var handicap: Int
+    var samples: Int
+    var average: Double
+    var averageToPar: Double
+    var averageLast16: Double?
+    var best: Int?
+    var worst: Int?
+    var distribution: HoleDistribution
+    var comparisons: [SiteComparison]
+}
+
+struct CourseHoleStats: Identifiable, Hashable, Sendable {
+    var id: String { "\(clubCode)-\(course)" }
+    var clubCode: String
+    var clubName: String
+    var course: String
+    var rounds: Int
+    var holes: [HoleStat]
+}
+
+struct LinkedClub: Identifiable, Hashable, Sendable {
+    var id: String { code }
+    var code: String
+    var name: String
+    var baseURL: URL
+    var matricula: String
+    var isDemo: Bool
+}
+
+struct PlayerProfile: Hashable, Sendable {
+    var displayName: String
+    var initials: String
+    var currentHandicap: Double
+}
+
+struct BagClub: Identifiable, Hashable, Sendable {
+    var id: String { name }
+    var name: String
+    var carry: Int?
+    var total: Int?
+}
+
+struct ClubCredential: Codable, Hashable, Sendable {
+    var clubCode: String
+    var clubName: String
+    var baseURL: String
+    var matricula: String
+    var clave: String
+}
+
+enum CourseFilter: String, CaseIterable, Identifiable, Sendable {
+    case all = "Todas"
+    case azul = "Azul"
+    case colorada = "Colorada"
+
+    var id: String { rawValue }
+
+    var courseName: String? {
+        switch self {
+        case .all: return nil
+        case .azul: return "Azul"
+        case .colorada: return "Colorada"
+        }
+    }
+}
+
+struct RoundFilter: Sendable {
+    var course: String?
+    var clubCode: String?
+}
+
+enum GolfletError: LocalizedError {
+    case notImplemented
+    case invalidClub
+    case fixtureMissing(String)
+    case decoding(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notImplemented: return "El API en vivo todavía no está conectado."
+        case .invalidClub: return "No reconocimos esa URL de Golfistics."
+        case .fixtureMissing(let n): return "Falta el fixture \(n)."
+        case .decoding(let n): return "No se pudo leer \(n)."
+        }
+    }
+}
+
+enum JSONFlex {
+    static func double(from value: Any?) -> Double? {
+        if let d = value as? Double { return d }
+        if let i = value as? Int { return Double(i) }
+        if let s = value as? String { return Double(s.replacingOccurrences(of: ",", with: ".")) }
+        return nil
+    }
+
+    static func int(from value: Any?) -> Int? {
+        if let i = value as? Int { return i }
+        if let d = value as? Double { return Int(d.rounded()) }
+        if let s = value as? String { return Int(s) }
+        return nil
+    }
+}

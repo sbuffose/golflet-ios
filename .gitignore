@@ -1,0 +1,36 @@
+# Xcode
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+build/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Secrets — never commit
+**/*.p12
+**/*.mobileprovision
+**/*.p8
+**/AuthKey_*.p8
+ExportOptions.local.plist
+private_keys/
+secrets/
+.env
+.env.*
+
+# Editor
+.idea/
+.vscode/

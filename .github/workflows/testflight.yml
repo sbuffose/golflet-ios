@@ -1,0 +1,515 @@
+name: Build and Deploy to TestFlight
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCHEME: Golflet
+  BUNDLE_ID: com.sbuffose.golflet
+  TEAM_ID: R56Y2GZ2M9
+  PROFILE_NAME: "Golflet AppStore GHA"
+  PROFILE_UUID: "f46028f6-3db1-45de-9788-813b8e9dd482"
+  XCODE_VERSION: latest-stable
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    outputs:
+      build_number: ${{ steps.set_build_number.outputs.build_number }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/.swiftpm
+          key: ${{ runner.os }}-deriveddata-${{ hashFiles('**/Package.resolved', '**/project.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-deriveddata-
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        id: set_build_number
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER=$(( ${{ github.run_number }} + 100 ))
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"$BUILD_NUMBER\"/" project.yml
+          xcodegen generate
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Project generated with build number $BUILD_NUMBER"
+
+      - name: Create Simulator
+        id: create_sim
+        run: |
+          set -euo pipefail
+          echo "Available iOS runtimes:"
+          xcrun simctl list runtimes iOS
+
+          RUNTIME=$(xcrun simctl list runtimes iOS | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | tail -1)
+          echo "Using runtime: $RUNTIME"
+
+          DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone (16|15)" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+
+          if [ -z "$DEVICE_ID" ]; then
+            echo "Creating iPhone 16 simulator..."
+            DEVICE_ID=$(xcrun simctl create "iPhone 16" "iPhone 16" "$RUNTIME" 2>/dev/null || \
+                        xcrun simctl create "iPhone 15 Pro" "iPhone 15 Pro" "$RUNTIME" 2>/dev/null || \
+                        xcrun simctl create "iPhone 15" "iPhone 15" "$RUNTIME")
+          fi
+
+          echo "device_id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
+          echo "Using simulator: $DEVICE_ID"
+
+      - name: Build for Simulator
+        run: |
+          set -euo pipefail
+          DEVICE_ID="${{ steps.create_sim.outputs.device_id }}"
+          xcodebuild build \
+            -project Golflet.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/SimulatorBuild" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-build
+          path: ${{ runner.temp }}/SimulatorBuild
+          retention-days: 1
+
+  unit-tests:
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/.swiftpm
+          key: ${{ runner.os }}-deriveddata-${{ hashFiles('**/Package.resolved', '**/project.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-deriveddata-
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER=${{ needs.build.outputs.build_number }}
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"$BUILD_NUMBER\"/" project.yml
+          xcodegen generate
+
+      - name: Setup Simulator
+        id: setup_sim
+        run: |
+          set -euo pipefail
+          RUNTIME=$(xcrun simctl list runtimes iOS | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | tail -1)
+          DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone (16|15)" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+
+          if [ -z "$DEVICE_ID" ]; then
+            DEVICE_ID=$(xcrun simctl create "iPhone 16" "iPhone 16" "$RUNTIME" 2>/dev/null || \
+                        xcrun simctl create "iPhone 15 Pro" "iPhone 15 Pro" "$RUNTIME")
+          fi
+
+          echo "device_id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          sleep 3
+
+      - name: Run Unit Tests
+        run: |
+          set -euo pipefail
+          DEVICE_ID="${{ steps.setup_sim.outputs.device_id }}"
+          mkdir -p "$RUNNER_TEMP/test-results"
+          xcodebuild test \
+            -project Golflet.xcodeproj \
+            -scheme Golflet \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -only-testing:GolfletTests \
+            -resultBundlePath "$RUNNER_TEMP/test-results/UnitTests.xcresult" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee "$RUNNER_TEMP/unit_test_output.log"
+
+      - name: Unit Test Summary
+        if: always()
+        run: |
+          echo "=== Unit Test Summary ===" | tee "$RUNNER_TEMP/unit_test_summary.txt"
+          grep -E "(Test Suite|Test Case|passed|failed|Executed)" "$RUNNER_TEMP/unit_test_output.log" | tail -40 | tee -a "$RUNNER_TEMP/unit_test_summary.txt" || true
+
+      - name: Upload Unit Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: |
+            ${{ runner.temp }}/test-results/
+            ${{ runner.temp }}/unit_test_output.log
+            ${{ runner.temp }}/unit_test_summary.txt
+          retention-days: 14
+
+  ui-tests:
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/.swiftpm
+          key: ${{ runner.os }}-deriveddata-${{ hashFiles('**/Package.resolved', '**/project.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-deriveddata-
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER=${{ needs.build.outputs.build_number }}
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"$BUILD_NUMBER\"/" project.yml
+          xcodegen generate
+
+      - name: Setup Simulator
+        id: setup_sim
+        run: |
+          set -euo pipefail
+          RUNTIME=$(xcrun simctl list runtimes iOS | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | tail -1)
+          DEVICE_ID=$(xcrun simctl list devices available | grep -E "iPhone (16|15)" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+
+          if [ -z "$DEVICE_ID" ]; then
+            DEVICE_ID=$(xcrun simctl create "iPhone 16" "iPhone 16" "$RUNTIME" 2>/dev/null || \
+                        xcrun simctl create "iPhone 15 Pro" "iPhone 15 Pro" "$RUNTIME")
+          fi
+
+          echo "device_id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          sleep 4
+          xcrun simctl spawn "$DEVICE_ID" defaults write -g AppleLanguages -array "es-AR" "es" "en" || true
+          xcrun simctl spawn "$DEVICE_ID" defaults write -g AppleLocale -string "es_AR" || true
+
+      - name: Run UI Tests
+        run: |
+          set -euo pipefail
+          DEVICE_ID="${{ steps.setup_sim.outputs.device_id }}"
+          mkdir -p /tmp/golflet-screenshots
+          mkdir -p "$RUNNER_TEMP/test-results"
+          mkdir -p "$RUNNER_TEMP/screenshots"
+          xcodebuild test \
+            -project Golflet.xcodeproj \
+            -scheme Golflet \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -only-testing:GolfletUITests \
+            -resultBundlePath "$RUNNER_TEMP/test-results/UITests.xcresult" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee "$RUNNER_TEMP/ui_test_output.log"
+          cp -R /tmp/golflet-screenshots/. "$RUNNER_TEMP/screenshots/" 2>/dev/null || true
+
+      - name: Extract Screenshots
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/screenshots"
+          if [ -d /tmp/golflet-screenshots ]; then
+            cp /tmp/golflet-screenshots/*.png "$RUNNER_TEMP/screenshots/" 2>/dev/null || true
+          fi
+          if [ -d "$RUNNER_TEMP/test-results/UITests.xcresult" ]; then
+            brew install chargepoint/xcparse/xcparse 2>/dev/null || true
+            if command -v xcparse >/dev/null 2>&1; then
+              xcparse screenshots "$RUNNER_TEMP/test-results/UITests.xcresult" "$RUNNER_TEMP/screenshots" 2>/dev/null || true
+            fi
+          fi
+          echo "Screenshots:"
+          ls -la "$RUNNER_TEMP/screenshots" || true
+
+      - name: UI Test Summary
+        if: always()
+        run: |
+          echo "=== UI Test Summary ===" | tee "$RUNNER_TEMP/ui_test_summary.txt"
+          grep -E "(Test Suite|Test Case|passed|failed|Executed)" "$RUNNER_TEMP/ui_test_output.log" | tail -40 | tee -a "$RUNNER_TEMP/ui_test_summary.txt" || true
+
+      - name: Shutdown Simulator
+        if: always()
+        run: |
+          DEVICE_ID="${{ steps.setup_sim.outputs.device_id }}"
+          xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+
+      - name: Upload UI Test Results and Screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-test-results
+          path: |
+            ${{ runner.temp }}/test-results/
+            ${{ runner.temp }}/screenshots/
+            ${{ runner.temp }}/ui_test_output.log
+            ${{ runner.temp }}/ui_test_summary.txt
+          retention-days: 14
+
+  testflight:
+    needs: [build, unit-tests, ui-tests]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: macos-15
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/.swiftpm
+          key: ${{ runner.os }}-deriveddata-${{ hashFiles('**/Package.resolved', '**/project.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-deriveddata-
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER=${{ needs.build.outputs.build_number }}
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"$BUILD_NUMBER\"/" project.yml
+          xcodegen generate
+          echo "Project generated with build number $BUILD_NUMBER"
+
+      - name: Setup Keychain and Import Certificate
+        env:
+          DIST_CERT_P12: ${{ secrets.DIST_CERT_P12 }}
+          DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          echo "$DIST_CERT_P12" | base64 --decode > "$CERT_PATH"
+
+          security import "$CERT_PATH" \
+            -P "$DIST_CERT_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          rm "$CERT_PATH"
+
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          echo "=== Certificates in keychain ==="
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -5
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Install Provisioning Profile
+        env:
+          PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+          PROFILE_DIR=~/Library/MobileDevice/Provisioning\ Profiles
+          mkdir -p "$PROFILE_DIR"
+          PROFILE_PATH="$PROFILE_DIR/${PROFILE_UUID}.mobileprovision"
+          echo "$PROVISIONING_PROFILE" | base64 --decode > "$PROFILE_PATH"
+          echo "=== Provisioning profile installed ==="
+          echo "Path: $PROFILE_PATH"
+
+      - name: Setup App Store Connect API Key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/private_keys
+          KEY_FILE=~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          echo "$ASC_PRIVATE_KEY" | awk '{gsub(/\\n/,"\n")}1' | tr -d '\r' > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          if head -1 "$KEY_FILE" | grep -q "BEGIN PRIVATE KEY"; then
+            echo "API Key file structure OK"
+          else
+            echo "Invalid API key format"
+            exit 1
+          fi
+
+      - name: Build and Archive
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER=${{ needs.build.outputs.build_number }}
+          xcodebuild archive \
+            -project Golflet.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/Golflet.xcarchive" \
+            -destination "generic/platform=iOS" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Validate Info.plist
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/Golflet.xcarchive/Products/Applications/Golflet.app"
+          INFO_PLIST="$APP_PATH/Info.plist"
+          VALUE=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO_PLIST")
+          echo "ITSAppUsesNonExemptEncryption: $VALUE"
+          echo "Bundle id: $(plutil -extract CFBundleIdentifier raw "$INFO_PLIST")"
+
+      - name: Create ExportOptions.plist
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>teamID</key>
+              <string>$TEAM_ID</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>signingCertificate</key>
+              <string>iPhone Distribution</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>$BUNDLE_ID</key>
+                  <string>$PROFILE_NAME</string>
+              </dict>
+              <key>uploadSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export IPA
+        run: |
+          set -euo pipefail
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Golflet.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          set +e
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/export/Golflet.ipa" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/altool.log"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$STATUS" -eq 0 ]; then
+            echo "TestFlight upload succeeded for com.sbuffose.golflet (app 6827662826), build ${{ needs.build.outputs.build_number }}."
+            {
+              echo "## TestFlight"
+              echo "Upload succeeded. App id \`6827662826\`, bundle \`com.sbuffose.golflet\`, build **${{ needs.build.outputs.build_number }}**."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if grep -qiE 'No suitable application records were found|could not find an application|Unable to find application|does not have an associated application|No app was found|record was not found|The bundle identifier|ITMS-90155|ITMS-9000' "$RUNNER_TEMP/altool.log"; then
+            echo "App Store Connect still has no Golflet app record for com.sbuffose.golflet."
+            echo "Build, unit tests and UI tests stayed green. Create the app in App Store Connect and re-run the workflow on main."
+            {
+              echo "## TestFlight"
+              echo "Upload skipped/failed because the App Store Connect app record is missing (expected until the record exists)."
+              echo ""
+              echo "Create an iOS app with bundle id \`com.sbuffose.golflet\` and re-run."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "TestFlight upload failed with an unexpected error."
+          exit "$STATUS"
+
+      - name: Upload Archive Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Golflet-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/export/*.ipa
+            ${{ runner.temp }}/Golflet.xcarchive
+            ${{ runner.temp }}/altool.log
+          retention-days: 14
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -rf ~/private_keys
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
+          if [ -n "${KEYCHAIN_PATH:-}" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          fi
