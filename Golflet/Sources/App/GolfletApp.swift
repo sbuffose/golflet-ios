@@ -8,7 +8,10 @@ struct GolfletApp: App {
 
     init() {
         let schema = Schema([RoundNote.self, HoleExtra.self, BagClubRecord.self])
-        let container = try! ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: false))
+        let uiTesting = ProcessInfo.processInfo.arguments.contains("-ui-testing")
+        let preferred = ModelConfiguration(isStoredInMemoryOnly: uiTesting)
+        let container = (try? ModelContainer(for: schema, configurations: preferred))
+            ?? (try! ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
         self.container = container
         let notes = NotesStore(container: container)
         _model = State(initialValue: AppModel(api: MockAPIClient(), notes: notes))
