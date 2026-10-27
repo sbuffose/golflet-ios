@@ -2,7 +2,7 @@ import XCTest
 @testable import Golflet
 
 final class LivePayloadMapperTests: XCTestCase {
-    func testMapsCompactLivePayload() {
+    func testMapsCompactLivePayload() throws {
         let json: [String: Any] = [
             "user": ["id": "u1", "email": "vos@ejemplo.com", "name": "Jugador Demo"],
             "player": ["name": "Jugador Demo", "handicap_index": 3.1],
@@ -73,10 +73,10 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(snap.rounds.first?.holes[1].strokes, 4)
         XCTAssertEqual(snap.rounds.first?.holes[1].result, .birdie)
         XCTAssertEqual(snap.rounds.first?.putts, 30)
-        XCTAssertEqual(snap.rounds.first?.handicapIndex, 3.1, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(snap.rounds.first?.handicapIndex), 3.1, accuracy: 0.001)
         XCTAssertEqual(snap.courses.first?.name, "Azul")
         XCTAssertEqual(snap.tees.first?.slope, 123)
-        XCTAssertEqual(snap.holeStats.first?.holes.first?.averageToPar, 0.2, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(snap.holeStats.first?.holes.first?.averageToPar), 0.2, accuracy: 0.001)
         XCTAssertEqual(snap.bag.first?.carry, 250)
     }
 
