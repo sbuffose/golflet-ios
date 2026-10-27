@@ -121,8 +121,8 @@ final class AppModel {
             kind: .refresh
         )
         Task {
-            await finishClubSync(progressID: progressID, knownCards: club.cardCount, kind: .refresh) {
-                try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword, progressID: progressID)
+            await finishClubSync(progressID: progressID, knownCards: club.cardCount, kind: .refresh) { id in
+                try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword, progressID: id)
             }
         }
     }
