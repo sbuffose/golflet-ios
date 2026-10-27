@@ -55,7 +55,7 @@ struct YardageBookLayout {
 
     func ringRadius(_ yards: Int) -> CGFloat {
         let scale = min(size.width, size.height)
-        return scale * (0.10 + CGFloat(yards) / 250.0 * 0.28)
+        return scale * (CGFloat(0.10) + CGFloat(yards) / CGFloat(250) * CGFloat(0.28))
     }
 
     static func quadPoint(t: CGFloat, p0: CGPoint, control: CGPoint, p1: CGPoint) -> CGPoint {
