@@ -50,13 +50,13 @@ struct SummaryView: View {
                         guard let net = best.net else { return nil }
                         return "\(net) neto"
                     },
-                    footnote: snap.best.map { "\(FormatAR.longDate($0.date)) · \($0.course)" }
+                    footnote: snap.best.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
                 )
                 statBlock(
                     label: "Peor (desde 2021)",
                     value: snap.worstSince2021?.gross.map(String.init) ?? "—",
                     secondary: snap.worstSince2021.flatMap { w in w.net.map { "\($0) neto" } },
-                    footnote: snap.worstSince2021.map { "\(FormatAR.longDate($0.date)) · \($0.course)" }
+                    footnote: snap.worstSince2021.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
                 )
             }
             HStack(spacing: 10) {

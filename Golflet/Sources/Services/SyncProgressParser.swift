@@ -6,6 +6,8 @@ enum SyncProgressParser {
         guard let stage = SyncStage.parse(blob["stage"] as? String) else { return nil }
         return SyncAPIProgress(
             club: blob["club"] as? String,
+            clubIndex: JSONFlex.int(from: blob["club_index"]),
+            clubCount: JSONFlex.int(from: blob["club_count"]),
             stage: stage,
             done: JSONFlex.int(from: blob["done"]),
             total: JSONFlex.int(from: blob["total"]),

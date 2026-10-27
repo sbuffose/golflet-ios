@@ -8,9 +8,53 @@ enum EmbeddedFixtures {
         case "courses": return courses
         case "tees": return tees
         case "per_hole_stats": return perHoleStats
+        case "other_course": return otherCourse
         default: return nil
         }
     }
+
+    private static let otherCourse = #"""
+[
+  {
+    "round_id": "209:100002:demo-visitante",
+    "date": "2025-06-15",
+    "weekday": "Dom",
+    "tournament": "Torneo Demo Visitante",
+    "club_name": "Club Demo Visitante",
+    "club_code": "209",
+    "club_played": "Club Demo Visitante",
+    "source_club_name": "Club Demo Golflet",
+    "course_label": "Cancha Demo",
+    "other_course": true,
+    "course": "Cancha Demo",
+    "course_key": "x:demo-visitante",
+    "tee": null,
+    "course_rating": null,
+    "slope": null,
+    "differential_computed": null,
+    "gross": 92,
+    "net": 74,
+    "out": null,
+    "in": null,
+    "card_status": "OK",
+    "valid_card": true,
+    "is_9_holes": false,
+    "holes_played": 18,
+    "holes": [],
+    "summary_counts": {
+      "birdies": 0,
+      "pars": 0,
+      "bogeys": 0,
+      "double_bogeys": 0,
+      "triple_bogeys": 0,
+      "worse": 0
+    },
+    "handicap_index": 18.0,
+    "position": null,
+    "field_size": null
+  }
+]
+"""#
 
     private static let rounds = #"""
 []

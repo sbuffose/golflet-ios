@@ -6,6 +6,8 @@ final class SyncProgressParserTests: XCTestCase {
         let json: [String: Any] = [
             "progress": [
                 "club": "Jockey Club Argentino",
+                "club_index": 2,
+                "club_count": 2,
                 "stage": "cards",
                 "done": 33,
                 "total": 97,
@@ -18,6 +20,9 @@ final class SyncProgressParserTests: XCTestCase {
         XCTAssertEqual(progress?.done, 33)
         XCTAssertEqual(progress?.total, 97)
         XCTAssertEqual(progress?.listTotal, 97)
+        XCTAssertEqual(progress?.clubIndex, 2)
+        XCTAssertEqual(progress?.clubCount, 2)
+        XCTAssertEqual(progress?.clubOrdinal, "2 de 2")
         XCTAssertEqual(
             SyncStepCopy.label(stage: .cards, state: .active, club: "Jockey Club Argentino", progress: progress!),
             "Leyendo tarjetas"
@@ -62,6 +67,18 @@ final class SyncProgressParserTests: XCTestCase {
         XCTAssertEqual(
             SyncStepCopy.label(stage: .handicap, state: .done, club: club, progress: SyncAPIProgress(stage: .save)),
             "Historial de hándicap al día"
+        )
+    }
+
+    func testStagesRestartOnNextClub() {
+        let progress = SyncAPIProgress(club: "Mar del Plata Golf Club", clubIndex: 2, clubCount: 2, stage: .connect)
+        XCTAssertEqual(SyncStepCopy.state(for: .connect, progress: progress, outcome: .running), .active)
+        XCTAssertEqual(SyncStepCopy.state(for: .list, progress: progress, outcome: .running), .todo)
+        XCTAssertEqual(SyncStepCopy.state(for: .cards, progress: progress, outcome: .running), .todo)
+        XCTAssertEqual(SyncStepCopy.state(for: .save, progress: progress, outcome: .running), .todo)
+        XCTAssertEqual(
+            SyncStepCopy.label(stage: .connect, state: .active, club: "Mar del Plata Golf Club", progress: progress),
+            "Conectando con Mar del Plata Golf Club"
         )
     }
 

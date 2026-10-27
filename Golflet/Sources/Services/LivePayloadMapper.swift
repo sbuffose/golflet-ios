@@ -54,7 +54,10 @@ enum LivePayloadMapper {
                 lastSyncStatus: item["last_sync_status"] as? String,
                 lastSyncMessage: item["last_sync_message"] as? String,
                 lastSyncAt: parseDateTime(item["last_sync_at"] as? String),
-                cardCount: JSONFlex.int(from: item["rounds"]) ?? 0
+                cardCount: JSONFlex.int(from: item["rounds"]) ?? 0,
+                source: item["source"] as? String ?? "app",
+                roundsStored: JSONFlex.int(from: item["rounds_stored"]) ?? JSONFlex.int(from: item["rounds"]) ?? 0,
+                roundsWithHoles: JSONFlex.int(from: item["rounds_with_holes"]) ?? 0
             )
         }
     }
@@ -80,14 +83,52 @@ enum LivePayloadMapper {
 
     static func parseSync(_ json: [String: Any]) -> SyncResult {
         let sync = json["sync"] as? [String: Any]
+        let clubs = parseSyncClubs(sync?["clubs"] ?? json["clubs"])
+        let listed = clubs.compactMap(\.listTotal).reduce(0, +)
+        let accountRounds = parseClubs(json["accounts"]).map(\.cardCount).reduce(0, +)
         let cards = JSONFlex.int(from: sync?["rounds"] ?? sync?["cards"] ?? json["rounds"] ?? json["count"])
-        let added = JSONFlex.int(from: sync?["new"] ?? sync?["added"] ?? json["new"])
+            ?? (listed > 0 ? listed : nil)
+            ?? (accountRounds > 0 ? accountRounds : nil)
+        let added = JSONFlex.int(from: sync?["new_rounds"] ?? sync?["new"] ?? sync?["added"] ?? json["new"])
+            ?? clubs.compactMap(\.newRounds).reduce(0, +)
         return SyncResult(
             ok: (sync?["ok"] as? Bool) ?? true,
             message: (sync?["message"] as? String) ?? (json["message"] as? String) ?? "Listo",
             cardCount: cards,
-            newCards: added
+            newCards: added,
+            clubs: clubs
         )
+    }
+
+    static func parseSyncClubs(_ raw: Any?) -> [SyncClubResult] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            let id = item["account_id"] ?? item["id"]
+            let accountId = (id as? String) ?? (JSONFlex.int(from: id).map(String.init)) ?? ""
+            guard !accountId.isEmpty else { return nil }
+            return SyncClubResult(
+                accountId: accountId,
+                clubName: item["club_name"] as? String ?? item["name"] as? String ?? "Club",
+                ok: JSONFlex.bool(from: item["ok"]) ?? true,
+                newRounds: JSONFlex.int(from: item["new_rounds"] ?? item["new"]),
+                updated: JSONFlex.int(from: item["updated"]),
+                pending: JSONFlex.int(from: item["pending"]),
+                listTotal: JSONFlex.int(from: item["list_total"] ?? item["rounds"]),
+                message: item["message"] as? String
+            )
+        }
+    }
+
+    static func accountError(status: Int, json: [String: Any] = [:]) -> GolfletError? {
+        _ = json
+        switch status {
+        case 422:
+            return .wrongGolfisticsCredentials
+        case 502:
+            return .golfisticsAppDown
+        default:
+            return nil
+        }
     }
 
     static func authMessage(from json: [String: Any], fallback: String) -> String {
@@ -120,6 +161,8 @@ enum LivePayloadMapper {
         let holes = parseHoles(item["holes"])
         let counts = item["summary_counts"] as? [String: Any] ?? [:]
         let course = item["course"] as? String ?? ""
+        let otherCourse = JSONFlex.bool(from: item["other_course"]) ?? false
+        let courseKey = item["course_key"] as? String ?? course
         let out = holes.filter { $0.number <= 9 }.compactMap(\.strokes).reduce(0, +)
         let inn = holes.filter { $0.number > 9 }.compactMap(\.strokes).reduce(0, +)
         return Round(
@@ -127,14 +170,14 @@ enum LivePayloadMapper {
             date: date,
             weekday: item["weekday"] as? String ?? "",
             tournament: item["tournament"] as? String ?? "",
-            clubName: item["club_name"] as? String ?? "",
+            clubName: item["club_name"] as? String ?? item["club_played"] as? String ?? "",
             clubCode: item["club_code"] as? String ?? "",
             course: course,
             tee: item["tee"] as? String ?? "",
             category: item["category"] as? String,
             weather: item["weather"] as? String,
             courseRating: JSONFlex.double(from: item["course_rating"]) ?? 0,
-            slope: JSONFlex.double(from: item["slope"]) ?? 113,
+            slope: JSONFlex.double(from: item["slope"]) ?? (otherCourse || courseKey.hasPrefix("x:") ? 0 : 113),
             position: JSONFlex.int(from: item["position"]),
             fieldSize: JSONFlex.int(from: item["field_size"]),
             handicapIndex: JSONFlex.double(from: item["handicap_index"]) ?? 0,
@@ -160,12 +203,16 @@ enum LivePayloadMapper {
             adjustedGross: JSONFlex.int(from: item["adjusted_gross"]),
             courseHandicap: JSONFlex.int(from: item["course_handicap"]),
             hcpAllowancePct: JSONFlex.int(from: item["hcp_allowance_pct"]),
-            courseKey: item["course_key"] as? String ?? course,
+            courseKey: courseKey,
             putts: JSONFlex.int(from: item["putts"]),
             gir: JSONFlex.int(from: item["gir"]),
             fir: JSONFlex.int(from: item["fir"]),
             notes: item["notes"] as? String,
-            notesAt: parseDateTime(item["notes_at"] as? String)
+            notesAt: parseDateTime(item["notes_at"] as? String),
+            otherCourse: otherCourse || courseKey.hasPrefix("x:"),
+            clubPlayed: item["club_played"] as? String,
+            sourceClubName: item["source_club_name"] as? String,
+            courseLabel: item["course_label"] as? String
         )
     }
 

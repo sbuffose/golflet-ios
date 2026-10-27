@@ -138,7 +138,9 @@ enum StatsEngine {
     }
 
     static func course(named name: String, rounds: [Round], courses: [Course], tees: [TeeRating]) -> CourseSnapshot {
-        let valid18 = eighteenHoleValid(rounds).filter { $0.course.caseInsensitiveCompare(name) == .orderedSame }
+        let valid18 = eighteenHoleValid(rounds).filter {
+            !$0.isOtherCourse && $0.course.caseInsensitiveCompare(name) == .orderedSame
+        }
         let start2025 = Calendar.gregorian.date(from: DateComponents(year: 2025, month: 1, day: 1)) ?? Date.distantPast
         let from2025 = valid18.filter { $0.date >= start2025 }
         let par = courses.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame })?.par ?? 72
@@ -159,7 +161,7 @@ enum StatsEngine {
         if let name = filter.courseName {
             scoped = stats.filter { $0.course.caseInsensitiveCompare(name) == .orderedSame }
         } else {
-            scoped = stats
+            scoped = stats.filter { !$0.course.hasPrefix("x:") }
         }
         var pairs: [(CourseHoleStats, HoleStat)] = []
         for course in scoped {

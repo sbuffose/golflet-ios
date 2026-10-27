@@ -4,8 +4,6 @@ struct ClubsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedClubID: Int = -1
-    @State private var url = ""
     @State private var matricula = ""
     @State private var clave = ""
     @State private var savePassword = true
@@ -17,10 +15,10 @@ struct ClubsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Golfistics")
+                        GOverline(text: "Golfistics App")
                         GTitle(text: "Clubes")
                     }
-                    Text("Golflet entra a Golfistics con tu matrícula solo para leer tus tarjetas. Nunca cambia nada en tu cuenta.")
+                    Text("Golflet entra a la App de Golfistics con tu matrícula y clave y trae todos tus clubes. Nunca cambia nada en tu cuenta.")
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
 
@@ -28,7 +26,13 @@ struct ClubsView: View {
                         clubCard(club)
                     }
 
-                    linkForm
+                    if !model.clubs.isEmpty {
+                        sharedActions
+                    }
+
+                    if model.clubs.isEmpty {
+                        linkForm
+                    }
 
                     if let error = model.errorMessage {
                         Text(error)
@@ -62,14 +66,6 @@ struct ClubsView: View {
             }
         }
         .accessibilityIdentifier("screen-clubes")
-        .task {
-            if model.catalogue.isEmpty {
-                model.catalogue = (try? await model.api.clubCatalogue()) ?? []
-            }
-            if selectedClubID == -1, let first = model.catalogue.first {
-                selectedClubID = first.id
-            }
-        }
         .safeAreaInset(edge: .top) {
             HStack {
                 Spacer()
@@ -88,6 +84,10 @@ struct ClubsView: View {
         }
     }
 
+    private var needsSyncPassword: Bool {
+        model.clubs.contains { !$0.passwordSaved }
+    }
+
     private func clubCard(_ club: LinkedClub) -> some View {
         GCard(radius: 18, padding: 14) {
             VStack(alignment: .leading, spacing: 10) {
@@ -99,25 +99,19 @@ struct ClubsView: View {
                         Text("Matrícula \(club.matricula) · \(club.cardCount) tarjetas")
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
+                        if club.roundsWithHoles > 0 || club.roundsStored > 0 {
+                            Text("\(club.roundsWithHoles) con hoyos · \(club.roundsStored) guardadas")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink3)
+                        }
                     }
                     Spacer()
                     Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 8, height: 8)
                 }
-                Text(club.passwordSaved ? "Clave guardada" : "Sin clave guardada")
-                    .font(GType.label)
-                    .foregroundStyle(club.passwordSaved ? p.positive : p.ink3)
-                if !club.passwordSaved {
-                    SecureField("Clave para actualizar", text: $syncPassword)
-                        .font(GType.body)
-                        .accessibilityIdentifier("club-sync-password")
-                    Toggle("Guardarla encriptada", isOn: $saveOnSync)
-                        .font(GType.label)
-                        .tint(p.primary)
-                }
                 Button {
                     Task { await model.syncClub(club, password: club.passwordSaved ? nil : syncPassword, savePassword: saveOnSync) }
                 } label: {
-                    Text(model.syncSession != nil ? "Actualizando…" : "Actualizar")
+                    Text(model.syncSession != nil ? "Actualizando…" : "Actualizar todos los clubes")
                         .font(GType.headline)
                         .foregroundStyle(p.onPrimary)
                         .frame(maxWidth: .infinity)
@@ -127,51 +121,54 @@ struct ClubsView: View {
                 }
                 .disabled(model.isBusy)
                 .accessibilityIdentifier("club-sync-\(club.accountId)")
-                if club.passwordSaved {
-                    Button("Olvidar la clave guardada") {
+            }
+        }
+    }
+
+    private var sharedActions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(model.clubs.first?.passwordSaved == true ? "Clave guardada para todos los clubes" : "Sin clave guardada")
+                .font(GType.label)
+                .foregroundStyle(model.clubs.first?.passwordSaved == true ? p.positive : p.ink3)
+            if needsSyncPassword {
+                SecureField("Clave para actualizar", text: $syncPassword)
+                    .font(GType.body)
+                    .accessibilityIdentifier("club-sync-password")
+                Toggle("Guardarla encriptada", isOn: $saveOnSync)
+                    .font(GType.label)
+                    .tint(p.primary)
+            }
+            if model.clubs.contains(where: \.passwordSaved) {
+                Button("Olvidar la clave de todos los clubes") {
+                    if let club = model.clubs.first {
                         Task { await model.forgetPassword(club) }
                     }
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-                }
-                Button("Desvincular club") {
-                    Task { await model.unlink(club) }
                 }
                 .font(GType.label)
-                .foregroundStyle(p.negative)
+                .foregroundStyle(p.ink2)
             }
+            Button("Desvincular todos los clubes") {
+                if let club = model.clubs.first {
+                    Task { await model.unlink(club) }
+                }
+            }
+            .font(GType.label)
+            .foregroundStyle(p.negative)
         }
     }
 
     private var linkForm: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(model.clubs.isEmpty ? "Vincular mi club" : "Sumar club")
+            Text("Vincular Golfistics App")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
-            GField(label: "Club") {
-                Picker("Club", selection: $selectedClubID) {
-                    ForEach(model.catalogue) { club in
-                        Text(club.name).tag(club.id)
-                    }
-                    Text("Otro club · pegar link de Golfistics").tag(0)
-                }
-                .accessibilityIdentifier("club-picker")
-            }
-            if selectedClubID == 0 {
-                GField(label: "Link de Golfistics") {
-                    TextField("https://…/golf/login.php", text: $url)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        .accessibilityIdentifier("club-url")
-                }
-            }
             GField(label: "Matrícula") {
                 TextField("Tu matrícula", text: $matricula)
                     .keyboardType(.numberPad)
                     .accessibilityIdentifier("club-matricula")
             }
             GField(label: "Clave de Golfistics") {
-                SecureField("La misma que usás en el sitio del club", text: $clave)
+                SecureField("La misma que usás en la App", text: $clave)
                     .accessibilityIdentifier("club-clave")
             }
             Toggle(isOn: $savePassword) {
@@ -184,8 +181,7 @@ struct ClubsView: View {
 
             Button {
                 Task {
-                    let clubID = selectedClubID == 0 ? nil : selectedClubID
-                    await model.addClub(clubID: clubID, urlString: url, matricula: matricula, clave: clave, savePassword: savePassword)
+                    await model.addClub(matricula: matricula, clave: clave, savePassword: savePassword)
                     if model.errorMessage == nil {
                         matricula = ""
                         clave = ""

@@ -94,6 +94,21 @@ struct Round: Identifiable, Hashable, Sendable {
     var fir: Int? = nil
     var notes: String? = nil
     var notesAt: Date? = nil
+    var otherCourse: Bool = false
+    var clubPlayed: String? = nil
+    var sourceClubName: String? = nil
+    var courseLabel: String? = nil
+
+    var isOtherCourse: Bool {
+        otherCourse || courseKey.hasPrefix("x:")
+    }
+
+    var displayCourse: String {
+        if let courseLabel, !courseLabel.isEmpty { return courseLabel }
+        if !course.isEmpty { return course }
+        if let clubPlayed, !clubPlayed.isEmpty { return clubPlayed }
+        return clubName
+    }
 }
 
 struct CourseHole: Identifiable, Hashable, Sendable {
@@ -183,6 +198,9 @@ struct LinkedClub: Identifiable, Hashable, Sendable {
     var lastSyncMessage: String? = nil
     var lastSyncAt: Date? = nil
     var cardCount: Int = 0
+    var source: String = "app"
+    var roundsStored: Int = 0
+    var roundsWithHoles: Int = 0
 }
 
 struct ClubCatalogEntry: Identifiable, Hashable, Sendable {
@@ -202,11 +220,23 @@ struct HIPoint: Hashable, Sendable {
     var handicap: Double
 }
 
+struct SyncClubResult: Hashable, Sendable {
+    var accountId: String
+    var clubName: String
+    var ok: Bool
+    var newRounds: Int? = nil
+    var updated: Int? = nil
+    var pending: Int? = nil
+    var listTotal: Int? = nil
+    var message: String? = nil
+}
+
 struct SyncResult: Hashable, Sendable {
     var ok: Bool
     var message: String
     var cardCount: Int? = nil
     var newCards: Int? = nil
+    var clubs: [SyncClubResult] = []
 }
 
 enum SyncStage: String, Sendable, Hashable, CaseIterable {
@@ -234,6 +264,8 @@ enum SyncStepState: String, Sendable, Hashable {
 
 struct SyncAPIProgress: Hashable, Sendable {
     var club: String?
+    var clubIndex: Int? = nil
+    var clubCount: Int? = nil
     var stage: SyncStage
     var done: Int? = nil
     var total: Int? = nil
@@ -241,6 +273,11 @@ struct SyncAPIProgress: Hashable, Sendable {
     var finished: Bool = false
     var error: String? = nil
     var cardsTotal: Int? = nil
+
+    var clubOrdinal: String? {
+        guard let clubIndex, let clubCount, clubCount > 0 else { return nil }
+        return "\(clubIndex) de \(clubCount)"
+    }
 }
 
 struct SyncSession: Identifiable, Hashable, Sendable {
@@ -340,10 +377,12 @@ struct RoundFilter: Sendable {
     var clubCode: String?
 }
 
-enum GolfletError: LocalizedError {
+enum GolfletError: LocalizedError, Equatable {
     case notImplemented
     case notAuthenticated
     case invalidClub
+    case wrongGolfisticsCredentials
+    case golfisticsAppDown
     case fixtureMissing(String)
     case decoding(String)
     case server(String)
@@ -353,6 +392,8 @@ enum GolfletError: LocalizedError {
         case .notImplemented: return "El API en vivo todavía no está conectado."
         case .notAuthenticated: return "Tenés que entrar a tu cuenta de Golflet."
         case .invalidClub: return "No reconocimos esa URL de Golfistics."
+        case .wrongGolfisticsCredentials: return "Matrícula o clave incorrecta."
+        case .golfisticsAppDown: return "La App de Golfistics no responde."
         case .fixtureMissing(let n): return "Falta el fixture \(n)."
         case .decoding(let n): return "No se pudo leer \(n)."
         case .server(let message): return message

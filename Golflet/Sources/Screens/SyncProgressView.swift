@@ -21,7 +21,7 @@ struct SyncProgressView: View {
                 .padding(.bottom, 8)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    GOverline(text: session?.clubName ?? "Golflet")
+                    GOverline(text: overline(session, progress))
                     Text(session?.title ?? "Leyendo tus tarjetas")
                         .font(GType.sheetTitle)
                         .tracking(-1.05)
@@ -44,6 +44,14 @@ struct SyncProgressView: View {
             try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 5500 : 700))
             model.finishSuccessfulSync()
         }
+    }
+
+    private func overline(_ session: SyncSession?, _ progress: SyncAPIProgress) -> String {
+        let club = progress.club ?? session?.clubName ?? "Golflet"
+        if let ordinal = progress.clubOrdinal {
+            return "\(club) · \(ordinal)"
+        }
+        return club
     }
 
     private func stepsCard(_ session: SyncSession?) -> some View {

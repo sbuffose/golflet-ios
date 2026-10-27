@@ -10,7 +10,7 @@ protocol GolfletAPI: Sendable {
 
     func bootstrap() async throws -> AppSnapshot
     func clubCatalogue() async throws -> [ClubCatalogEntry]
-    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult
+    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult
     func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult
     func forgetPassword(accountId: String) async throws
     func unlink(accountId: String) async throws
