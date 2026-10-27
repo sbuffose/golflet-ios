@@ -10,6 +10,7 @@ struct MockAPIClient: GolfletAPI {
     private static var mockSignedIn = false
     private static var mockLinked = true
     private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
+    private static var progressByID: [String: SyncAPIProgress] = [:]
 
     init(autoSession: Bool = true) {
         self.autoSession = autoSession
@@ -86,11 +87,11 @@ struct MockAPIClient: GolfletAPI {
         ]
     }
 
-    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progress: SyncProgressHandler?) async throws -> SyncResult {
+    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
         _ = clubID
         _ = baseURL
         _ = password
-        await emitDemoProgress(clubName: demoName, progress: progress)
+        await emitDemoProgress(clubName: demoName, progressID: progressID)
         Self.sessionLock.lock()
         Self.mockLinked = true
         Self.sessionLock.unlock()
@@ -101,20 +102,21 @@ struct MockAPIClient: GolfletAPI {
             matricula: matricula,
             clave: savePassword ? "saved" : ""
         ))
-        return SyncResult(ok: true, message: "Club vinculado · datos de demostración")
+        return SyncResult(ok: true, message: "Club vinculado · datos de demostración", cardCount: 97, newCards: 97)
     }
 
-    func syncAccount(id: String, password: String?, savePassword: Bool, progress: SyncProgressHandler?) async throws -> SyncResult {
+    func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult {
         _ = id
         _ = password
         _ = savePassword
-        await emitDemoProgress(clubName: demoName, progress: progress)
-        return SyncResult(ok: true, message: "Datos de demostración al día")
+        await emitDemoProgress(clubName: demoName, progressID: progressID)
+        return SyncResult(ok: true, message: "Datos de demostración al día", cardCount: 97, newCards: 0)
     }
 
-    func pollSyncProgress(accountId: String?) async -> SyncProgress? {
-        _ = accountId
-        return nil
+    func pollSyncProgress(progressID: String) async -> SyncAPIProgress? {
+        Self.sessionLock.lock()
+        defer { Self.sessionLock.unlock() }
+        return Self.progressByID[progressID]
     }
 
     func forgetPassword(accountId: String) async throws {
@@ -255,20 +257,22 @@ struct MockAPIClient: GolfletAPI {
         }
     }
 
-    private func emitDemoProgress(clubName: String, progress: SyncProgressHandler?) async {
+    private func emitDemoProgress(clubName: String, progressID: String) async {
         let fast = RuntimeFlags.isUITesting
-        let steps: [(UInt64, SyncProgress)] = [
-            (0, SyncProgress(phase: .connecting, message: "Conectando con \(clubName)")),
-            (fast ? 120_000_000 : 700_000_000, SyncProgress(phase: .reading, message: "Leyendo tarjetas · 34 de 97", current: 34, total: 97)),
-            (fast ? 120_000_000 : 700_000_000, SyncProgress(phase: .calculating, message: "Calculando tu hándicap"))
+        let pause: UInt64 = fast ? 80_000_000 : 350_000_000
+        let steps: [SyncAPIProgress] = [
+            SyncAPIProgress(club: clubName, stage: .connect),
+            SyncAPIProgress(club: clubName, stage: .list, listTotal: 97),
+            SyncAPIProgress(club: clubName, stage: .cards, done: 33, total: 97, listTotal: 97, cardsTotal: 97),
+            SyncAPIProgress(club: clubName, stage: .handicap, listTotal: 97, cardsTotal: 97),
+            SyncAPIProgress(club: clubName, stage: .save, done: 97, total: 97, listTotal: 97, cardsTotal: 97)
         ]
-        for (delay, step) in steps {
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: delay)
-            }
-            progress?(step)
+        for step in steps {
+            Self.sessionLock.lock()
+            Self.progressByID[progressID] = step
+            Self.sessionLock.unlock()
+            try? await Task.sleep(nanoseconds: pause)
         }
-        try? await Task.sleep(nanoseconds: fast ? 80_000_000 : 600_000_000)
     }
 
     private func initials(_ name: String) -> String {
