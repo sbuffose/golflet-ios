@@ -330,11 +330,11 @@ struct HoleMapView: View {
             context.fill(Path(ellipseIn: CGRect(x: centerX - 2.5, y: greenY - 2.5, width: 5, height: 5)), with: .color(p.primary))
 
             // Tees
-            let inset = 28.0
+            let inset: CGFloat = 28
             for (index, tee) in tees.enumerated() {
                 let t = 1 - CGFloat(Double(tee.1) / max(maxYards, 1))
                 let y = greenY + (teeY - greenY) * (0.72 + t * 0.22)
-                let x = inset + CGFloat(index) * 18
+                let x = inset + CGFloat(index) * CGFloat(18)
                 context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 8, height: 8)), with: .color(p.teeColor(tee.0)))
             }
         }
