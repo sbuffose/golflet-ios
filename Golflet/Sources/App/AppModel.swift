@@ -113,6 +113,20 @@ final class AppModel {
         }
     }
 
+    func requestSync(_ club: LinkedClub, password: String? = nil, savePassword: Bool = false) {
+        let progressID = beginRunningSession(
+            clubName: club.name,
+            accountId: club.accountId,
+            knownCards: club.cardCount,
+            kind: .refresh
+        )
+        Task {
+            await finishClubSync(progressID: progressID, knownCards: club.cardCount, kind: .refresh) {
+                try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword, progressID: progressID)
+            }
+        }
+    }
+
     func syncClub(_ club: LinkedClub, password: String? = nil, savePassword: Bool = false) async {
         await performClubSync(clubName: club.name, accountId: club.accountId, knownCards: club.cardCount, kind: .refresh) { progressID in
             try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword, progressID: progressID)
@@ -180,17 +194,17 @@ final class AppModel {
         presentedRound = home.lastRound
     }
 
-    private func performClubSync(
+    @discardableResult
+    private func beginRunningSession(
         clubName: String,
         accountId: String?,
         knownCards: Int?,
-        kind: SyncSession.Kind,
-        work: (String) async throws -> SyncResult
-    ) async {
+        kind: SyncSession.Kind
+    ) -> String {
         errorMessage = nil
         isBusy = true
         let progressID = UUID().uuidString
-        let session = SyncSession(
+        syncSession = SyncSession(
             id: UUID(),
             progressID: progressID,
             kind: kind,
@@ -201,10 +215,37 @@ final class AppModel {
             progress: SyncAPIProgress(club: clubName, stage: .connect),
             outcome: .running
         )
-        syncSession = session
         reopenClubsAfterFailure = showsClubs
         showsClubs = false
+        return progressID
+    }
 
+    private func performClubSync(
+        clubName: String,
+        accountId: String?,
+        knownCards: Int?,
+        kind: SyncSession.Kind,
+        work: (String) async throws -> SyncResult
+    ) async {
+        let progressID = beginRunningSession(
+            clubName: clubName,
+            accountId: accountId,
+            knownCards: knownCards,
+            kind: kind
+        )
+        await finishClubSync(progressID: progressID, knownCards: knownCards, kind: kind, work: work)
+    }
+
+    private func finishClubSync(
+        progressID: String,
+        knownCards: Int?,
+        kind: SyncSession.Kind,
+        work: (String) async throws -> SyncResult
+    ) async {
+        guard let session = syncSession, session.progressID == progressID else {
+            isBusy = false
+            return
+        }
         let poller = Task { await pollRemoteProgress(sessionID: session.id, progressID: progressID) }
         defer {
             poller.cancel()
@@ -224,14 +265,6 @@ final class AppModel {
                 toastMessage = added > 0 && (knownCards ?? 0) > 0
                     ? "\(added) tarjetas nuevas · \(cards) en total"
                     : "Al día · \(cards) tarjetas"
-                let timeout = RuntimeFlags.isUITesting ? 3.2 : 8.0
-                let deadline = Date().addingTimeInterval(timeout)
-                while syncSession?.id == session.id, Date() < deadline {
-                    try? await Task.sleep(for: .milliseconds(80))
-                }
-                if syncSession?.id == session.id {
-                    syncSession = nil
-                }
             } else {
                 await failSync(sessionID: session.id, kind: kind, message: result.message)
             }
