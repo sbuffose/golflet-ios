@@ -117,7 +117,7 @@ struct ClubsView: View {
                 Button {
                     Task { await model.syncClub(club, password: club.passwordSaved ? nil : syncPassword, savePassword: saveOnSync) }
                 } label: {
-                    Text(model.isBusy ? "Leyendo…" : "Actualizar")
+                    Text(model.syncSession != nil ? "Actualizando…" : "Actualizar")
                         .font(GType.headline)
                         .foregroundStyle(p.onPrimary)
                         .frame(maxWidth: .infinity)
@@ -192,7 +192,7 @@ struct ClubsView: View {
                     }
                 }
             } label: {
-                Text(model.isBusy ? "Leyendo tus tarjetas…" : "Vincular y traer tarjetas")
+                Text(model.syncSession != nil ? "Leyendo tus tarjetas…" : "Vincular y traer tarjetas")
                     .font(GType.headline)
                     .foregroundStyle(p.onPrimary)
                     .frame(maxWidth: .infinity)

@@ -47,7 +47,7 @@ struct LiveGolfletAPI: GolfletAPI {
         return LivePayloadMapper.parseCatalogue(json)
     }
 
-    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool) async throws -> SyncResult {
+    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progress: SyncProgressHandler?) async throws -> SyncResult {
         var body: [String: Any] = [
             "matricula": matricula,
             "password": password,
@@ -58,18 +58,38 @@ struct LiveGolfletAPI: GolfletAPI {
         } else if let baseURL, !baseURL.isEmpty {
             body["base_url"] = baseURL
         }
-        let json = try await request("POST", "/api/accounts", body: body, timeout: 180)
-        return LivePayloadMapper.parseSync(json)
+        return try await requestSync("POST", "/api/accounts", body: body, progress: progress)
     }
 
-    func syncAccount(id: String, password: String?, savePassword: Bool) async throws -> SyncResult {
+    func syncAccount(id: String, password: String?, savePassword: Bool, progress: SyncProgressHandler?) async throws -> SyncResult {
         var body: [String: Any] = [:]
         if let password, !password.isEmpty {
             body["password"] = password
             body["save_password"] = savePassword
         }
-        let json = try await request("POST", "/api/accounts/\(id)/sync", body: body, timeout: 180)
-        return LivePayloadMapper.parseSync(json)
+        return try await requestSync("POST", "/api/accounts/\(id)/sync", body: body, progress: progress)
+    }
+
+    func pollSyncProgress(accountId: String?) async -> SyncProgress? {
+        var paths: [String] = ["/api/sync/progress"]
+        if let accountId {
+            paths.insert("/api/accounts/\(accountId)/progress", at: 0)
+            paths.append("/api/accounts/\(accountId)")
+        }
+        for path in paths {
+            if let json = try? await request("GET", path), let progress = SyncProgressParser.parse(json) {
+                return progress
+            }
+        }
+        if let json = try? await request("GET", "/api/accounts") {
+            if let progress = SyncProgressParser.parse(json) { return progress }
+            let clubs = LivePayloadMapper.parseClubs(json["clubs"] ?? json["accounts"] ?? json)
+            let club = accountId.flatMap { id in clubs.first { $0.accountId == id } } ?? clubs.first
+            if let club, let progress = SyncProgressParser.fromClub(club) {
+                return progress
+            }
+        }
+        return nil
     }
 
     func forgetPassword(accountId: String) async throws {
@@ -131,7 +151,75 @@ struct LiveGolfletAPI: GolfletAPI {
         }
 
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        try throwIfFailed(status: status, json: json, authorized: authorized)
+        return json
+    }
 
+    private func requestSync(
+        _ method: String,
+        _ path: String,
+        body: [String: Any],
+        progress: SyncProgressHandler?
+    ) async throws -> SyncResult {
+        var request = try makeRequest(method, path, body: body, authorized: true, timeout: 180)
+        request.setValue("application/json, text/event-stream, application/x-ndjson", forHTTPHeaderField: "Accept")
+
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 180
+        config.timeoutIntervalForResource = 180
+        let session = URLSession(configuration: config)
+        let (bytes, response) = try await session.bytes(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        var fullText = ""
+        var lastObject: [String: Any] = [:]
+        for try await line in bytes.lines {
+            fullText += line
+            if let object = SyncProgressParser.parseJSONObject(line) {
+                lastObject = object
+                if let step = SyncProgressParser.parse(object) {
+                    progress?(step)
+                }
+            } else if let step = SyncProgressParser.parseLine(line) {
+                progress?(step)
+            }
+        }
+
+        if lastObject.isEmpty, let object = SyncProgressParser.parseJSONObject(fullText) {
+            lastObject = object
+            if let step = SyncProgressParser.parse(object) {
+                progress?(step)
+            }
+        }
+
+        try throwIfFailed(status: status, json: lastObject, authorized: true)
+        return LivePayloadMapper.parseSync(lastObject)
+    }
+
+    private func makeRequest(
+        _ method: String,
+        _ path: String,
+        body: [String: Any]?,
+        authorized: Bool,
+        timeout: TimeInterval
+    ) throws -> URLRequest {
+        guard let url = URL(string: path, relativeTo: baseURL) else { throw GolfletError.invalidClub }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = timeout
+        if authorized {
+            guard let token = KeychainStore.loadToken() else { throw GolfletError.notAuthenticated }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        if let body {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        return request
+    }
+
+    private func throwIfFailed(status: Int, json: [String: Any], authorized: Bool) throws {
         if status == 401 {
             if authorized { KeychainStore.deleteToken() }
             throw GolfletError.notAuthenticated
@@ -139,6 +227,5 @@ struct LiveGolfletAPI: GolfletAPI {
         if status >= 400 {
             throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo completar."))
         }
-        return json
     }
 }

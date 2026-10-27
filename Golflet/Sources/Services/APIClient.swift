@@ -10,12 +10,13 @@ protocol GolfletAPI: Sendable {
 
     func bootstrap() async throws -> AppSnapshot
     func clubCatalogue() async throws -> [ClubCatalogEntry]
-    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool) async throws -> SyncResult
-    func syncAccount(id: String, password: String?, savePassword: Bool) async throws -> SyncResult
+    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progress: SyncProgressHandler?) async throws -> SyncResult
+    func syncAccount(id: String, password: String?, savePassword: Bool, progress: SyncProgressHandler?) async throws -> SyncResult
     func forgetPassword(accountId: String) async throws
     func unlink(accountId: String) async throws
     func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws
     func saveBag(_ items: [BagClub]) async throws -> [BagClub]
+    func pollSyncProgress(accountId: String?) async -> SyncProgress?
 }
 
 enum APIFactory {
