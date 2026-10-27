@@ -322,20 +322,7 @@ jobs:
           BUILD_NUMBER=${{ needs.build.outputs.build_number }}
           sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"$BUILD_NUMBER\"/" project.yml
           xcodegen generate
-          PLIST="Golflet/Resources/Info.plist"
-          /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Delete :CFBundleIcons" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons dict" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon dict" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName string AppIcon" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles array" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:0 string AppIcon60@2x" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:1 string AppIcon60@3x" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:2 string Icon-60@2x" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:3 string Icon-60@3x" "$PLIST"
           echo "Project generated with build number $BUILD_NUMBER"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$PLIST"
 
       - name: Setup Keychain and Import Certificate
         env:
@@ -419,61 +406,19 @@ jobs:
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
-      - name: Copy App Store icons into archive
-        run: |
-          set -euo pipefail
-          APP_PATH="$RUNNER_TEMP/Golflet.xcarchive/Products/Applications/Golflet.app"
-          SRC="$GITHUB_WORKSPACE/Golflet/Resources"
-          test -f "$SRC/AppIcon60@2x.png"
-          test -f "$SRC/AppIcon60@3x.png"
-          cp -f "$SRC/AppIcon60@2x.png" "$APP_PATH/AppIcon60@2x.png"
-          cp -f "$SRC/AppIcon60@3x.png" "$APP_PATH/AppIcon60@3x.png"
-          cp -f "$SRC/AppIcon60@2x.png" "$APP_PATH/Icon-60@2x.png"
-          cp -f "$SRC/AppIcon60@3x.png" "$APP_PATH/Icon-60@3x.png"
-          mkdir -p "$APP_PATH/Fixtures"
-          cp -f "$SRC/Fonts/"*.otf "$APP_PATH/"
-          cp -f "$SRC/Fixtures/"*.json "$APP_PATH/Fixtures/"
-          if [ ! -f "$APP_PATH/Assets.car" ]; then
-            echo "Assets.car missing from archive; compiling asset catalog."
-            xcrun actool "$SRC/Assets.xcassets" \
-              --compile "$APP_PATH" \
-              --platform iphoneos \
-              --minimum-deployment-target 17.0 \
-              --app-icon AppIcon \
-              --output-partial-info-plist "$RUNNER_TEMP/actool-info.plist" \
-              --target-device iphone \
-              --compress-pngs \
-              --include-all-app-icons \
-              --notices --warnings
-          fi
-          echo "=== App bundle after icon copy ==="
-          ls -la "$APP_PATH/AppIcon60@2x.png" "$APP_PATH/Icon-60@2x.png" "$APP_PATH/Geist-Regular.otf" "$APP_PATH/Assets.car"
-          file "$APP_PATH/AppIcon60@2x.png"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          codesign --force --sign "iPhone Distribution" \
-            --preserve-metadata=identifier,entitlements,flags,runtime \
-            "$APP_PATH"
-          codesign --verify --verbose=2 "$APP_PATH"
-
-      - name: Validate Info.plist
+      - name: Validate archive bundle
         run: |
           set -euo pipefail
           APP_PATH="$RUNNER_TEMP/Golflet.xcarchive/Products/Applications/Golflet.app"
           INFO_PLIST="$APP_PATH/Info.plist"
+          echo "=== Archive .app ==="
+          ls -la "$APP_PATH"
           VALUE=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO_PLIST")
           echo "ITSAppUsesNonExemptEncryption: $VALUE"
           echo "Bundle id: $(plutil -extract CFBundleIdentifier raw "$INFO_PLIST")"
-          ICON_NAME=$(plutil -extract CFBundleIconName raw "$INFO_PLIST")
-          echo "CFBundleIconName: $ICON_NAME"
-          test "$ICON_NAME" = "AppIcon"
-          echo "=== App bundle icons ==="
-          ls -la "$APP_PATH"/*.png "$APP_PATH"/AppIcon* 2>/dev/null || true
-          test -f "$APP_PATH/AppIcon60@2x.png"
-          test -f "$APP_PATH/Geist-Regular.otf"
           test -f "$APP_PATH/Assets.car"
-          FILE_INFO=$(file "$APP_PATH/AppIcon60@2x.png")
-          echo "$FILE_INFO"
-          echo "$FILE_INFO" | grep -q "120 x 120"
+          test -f "$APP_PATH/Geist-Regular.otf"
+          echo "Assets.car and Geist-Regular.otf are in the archive."
 
       - name: Create ExportOptions.plist
         run: |
@@ -510,54 +455,6 @@ jobs:
             -archivePath "$RUNNER_TEMP/Golflet.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
-
-      - name: Inject 120px icons into IPA
-        run: |
-          set -euo pipefail
-          IPA="$RUNNER_TEMP/export/Golflet.ipa"
-          WORK="$RUNNER_TEMP/ipa"
-          SRC="$GITHUB_WORKSPACE/Golflet/Resources"
-          rm -rf "$WORK"
-          mkdir -p "$WORK"
-          unzip -q "$IPA" -d "$WORK"
-          APP="$WORK/Payload/Golflet.app"
-          test -d "$APP"
-          cp -f "$SRC/AppIcon60@2x.png" "$APP/AppIcon60@2x.png"
-          cp -f "$SRC/AppIcon60@3x.png" "$APP/AppIcon60@3x.png"
-          cp -f "$SRC/AppIcon60@2x.png" "$APP/Icon-60@2x.png"
-          cp -f "$SRC/AppIcon60@3x.png" "$APP/Icon-60@3x.png"
-          mkdir -p "$APP/Fixtures"
-          cp -f "$SRC/Fonts/"*.otf "$APP/"
-          cp -f "$SRC/Fixtures/"*.json "$APP/Fixtures/"
-          if [ ! -f "$APP/Assets.car" ]; then
-            xcrun actool "$SRC/Assets.xcassets" \
-              --compile "$APP" \
-              --platform iphoneos \
-              --minimum-deployment-target 17.0 \
-              --app-icon AppIcon \
-              --output-partial-info-plist "$RUNNER_TEMP/actool-ipa.plist" \
-              --target-device iphone \
-              --compress-pngs \
-              --include-all-app-icons
-          fi
-          echo "=== IPA app icons ==="
-          ls -la "$APP"/*.png "$APP"/AppIcon* "$APP"/Icon-60* "$APP"/Geist-Regular.otf "$APP"/Assets.car 2>/dev/null || true
-          FILE_INFO=$(file "$APP/AppIcon60@2x.png")
-          echo "$FILE_INFO"
-          echo "$FILE_INFO" | grep -q "120 x 120"
-          test -f "$APP/Assets.car"
-          test -f "$APP/Geist-Regular.otf"
-          echo "CFBundleIconName=$(plutil -extract CFBundleIconName raw "$APP/Info.plist")"
-          plutil -extract CFBundleIcons raw "$APP/Info.plist" || true
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          codesign --force --sign "iPhone Distribution" \
-            --preserve-metadata=identifier,entitlements,flags,runtime \
-            "$APP"
-          codesign --verify --verbose=2 "$APP"
-          rm -f "$IPA"
-          (cd "$WORK" && zip -qry "$IPA" Payload)
-          test -f "$IPA"
-          echo "Rewrote IPA with loose 120px icons."
 
       - name: Upload to TestFlight
         env:

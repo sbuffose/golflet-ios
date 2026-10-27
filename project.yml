@@ -7,9 +7,6 @@ options:
   createIntermediateGroups: true
   generateEmptyDirectories: true
   defaultConfig: Debug
-  fileTypes:
-    icon:
-      file: true
 
 settings:
   base:
@@ -29,60 +26,15 @@ targets:
     sources:
       - path: Golflet/Sources
         type: group
-      - path: Golflet/Resources/Assets.xcassets
-        buildPhase: resources
-      - path: Golflet/Resources/Fonts
-        buildPhase: resources
-      - path: Golflet/Resources/Fixtures
-        type: folder
-        buildPhase: resources
+      - path: Golflet/Resources
+        type: group
     resources:
-      - path: Golflet/Resources/AppIcon.icon
-        type: file
       - path: Golflet/Resources/Assets.xcassets
-      - path: Golflet/Resources/Fixtures
-        type: folder
       - path: Golflet/Resources/Fonts/Geist-Regular.otf
       - path: Golflet/Resources/Fonts/Geist-Medium.otf
       - path: Golflet/Resources/Fonts/Geist-SemiBold.otf
-    # Loose AppIcon*.png stay out of `resources`: actool swallows them.
-    # Copy fonts, fixtures, catalog and 120px icons after every build so
-    # the .app is complete even if XcodeGen drops Copy Bundle Resources.
-    postBuildScripts:
-      - name: Copy bundle resources and App Store icons
-        basedOnDependencyAnalysis: false
-        inputFiles:
-          - $(SRCROOT)/Golflet/Resources/AppIcon60@2x.png
-          - $(SRCROOT)/Golflet/Resources/AppIcon60@3x.png
-          - $(SRCROOT)/Golflet/Resources/Fonts/Geist-Regular.otf
-          - $(SRCROOT)/Golflet/Resources/Assets.xcassets
-        outputFiles:
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIcon60@2x.png
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Geist-Regular.otf
-        script: |
-          set -euo pipefail
-          DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
-          SRC="${SRCROOT}/Golflet/Resources"
-          mkdir -p "${DEST}/Fixtures"
-          cp -f "${SRC}/AppIcon60@2x.png" "${DEST}/AppIcon60@2x.png"
-          cp -f "${SRC}/AppIcon60@3x.png" "${DEST}/AppIcon60@3x.png"
-          cp -f "${SRC}/AppIcon60@2x.png" "${DEST}/Icon-60@2x.png"
-          cp -f "${SRC}/AppIcon60@3x.png" "${DEST}/Icon-60@3x.png"
-          cp -f "${SRC}/Fonts/"*.otf "${DEST}/"
-          cp -f "${SRC}/Fixtures/"*.json "${DEST}/Fixtures/"
-          PLATFORM="${PLATFORM_NAME:-iphoneos}"
-          xcrun actool "${SRC}/Assets.xcassets" \
-            --compile "${DEST}" \
-            --platform "${PLATFORM}" \
-            --minimum-deployment-target 17.0 \
-            --app-icon AppIcon \
-            --output-partial-info-plist "${TEMP_DIR:-/tmp}/golflet-actool.plist" \
-            --target-device iphone \
-            --compress-pngs \
-            --include-all-app-icons \
-            --notices --warnings
-          echo "Copied bundle resources into ${DEST}"
-          ls -la "${DEST}/AppIcon60@2x.png" "${DEST}/Geist-Regular.otf" "${DEST}/Assets.car"
+      - path: Golflet/Resources/Fixtures
+        type: folder
     info:
       path: Golflet/Resources/Info.plist
       properties:
@@ -98,15 +50,6 @@ targets:
         CFBundlePackageType: APPL
         CFBundleShortVersionString: "1.0.0"
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        CFBundleIconName: AppIcon
-        CFBundleIcons:
-          CFBundlePrimaryIcon:
-            CFBundleIconName: AppIcon
-            CFBundleIconFiles:
-              - AppIcon60@2x
-              - AppIcon60@3x
-              - Icon-60@2x
-              - Icon-60@3x
         LSRequiresIPhoneOS: true
         UILaunchScreen:
           UIColorName: LaunchBackground
@@ -124,12 +67,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.sbuffose.golflet
         PRODUCT_NAME: Golflet
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: "YES"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        GENERATE_INFOPLIST_FILE: "YES"
-        INFOPLIST_KEY_CFBundleDisplayName: Golflet
-        INFOPLIST_KEY_CFBundleIconName: AppIcon
-        INFOPLIST_KEY_LSRequiresIPhoneOS: "YES"
         DEVELOPMENT_TEAM: R56Y2GZ2M9
         INFOPLIST_FILE: Golflet/Resources/Info.plist
         TARGETED_DEVICE_FAMILY: "1"
@@ -156,10 +94,6 @@ targets:
     resources:
       - path: Golflet/Resources/Fixtures
         type: folder
-      - path: Golflet/Resources/Fixtures/rounds.json
-      - path: Golflet/Resources/Fixtures/courses.json
-      - path: Golflet/Resources/Fixtures/tees.json
-      - path: Golflet/Resources/Fixtures/per_hole_stats.json
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sbuffose.golflet.tests
