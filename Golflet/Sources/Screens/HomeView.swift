@@ -166,13 +166,23 @@ struct HomeView: View {
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
                                 HStack(spacing: 6) {
-                                    Circle().fill(p.positive).frame(width: 6, height: 6)
-                                    Text("Conectado · Matrícula \(club.matricula)")
+                                    Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 6, height: 6)
+                                    Text(club.lastSyncMessage ?? "Conectado · Matrícula \(club.matricula)")
                                         .font(GType.label)
                                         .foregroundStyle(p.ink2)
+                                        .lineLimit(1)
                                 }
                             }
                             Spacer()
+                            Button {
+                                Task { await model.syncClub(club) }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(p.ink2)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("home-sync-\(club.accountId)")
                         }
                     }
                     Button { model.showsClubs = true } label: {
@@ -184,7 +194,7 @@ struct HomeView: View {
                                 .background(p.surface2)
                                 .clipShape(Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Sumar otro club")
+                                Text(model.clubs.isEmpty ? "Vincular mi club" : "Sumar otro club")
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
                                 Text("Golfistics de tu club + matrícula")

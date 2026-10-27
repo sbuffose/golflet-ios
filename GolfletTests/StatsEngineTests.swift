@@ -3,7 +3,7 @@ import XCTest
 
 final class StatsEngineTests: XCTestCase {
     func testEighteenHoleAveragesMatchSeed() async throws {
-        let rounds = try await MockAPIClient().rounds(filter: RoundFilter())
+        let rounds = try await MockAPIClient().bootstrap().rounds
         XCTAssertEqual(rounds.count, 97)
 
         let valid = StatsEngine.eighteenHoleValid(rounds)
@@ -28,11 +28,12 @@ final class StatsEngineTests: XCTestCase {
         XCTAssertEqual(summary.since2025Count, 42)
         XCTAssertEqual(summary.since2025Average ?? 0, 78.7, accuracy: 0.05)
 
+        let snap = try await MockAPIClient().bootstrap()
         let colorada = StatsEngine.course(
             named: "Colorada",
             rounds: rounds,
-            courses: try await MockAPIClient().courses(),
-            tees: try await MockAPIClient().tees()
+            courses: snap.courses,
+            tees: snap.tees
         )
         XCTAssertEqual(colorada.validCount, 48)
         XCTAssertEqual(colorada.averageGross ?? 0, 80.3, accuracy: 0.05)
@@ -42,7 +43,7 @@ final class StatsEngineTests: XCTestCase {
     }
 
     func testHardestHolesColorada() async throws {
-        let stats = try await MockAPIClient().holeStats()
+        let stats = try await MockAPIClient().bootstrap().holeStats
         let hardest = StatsEngine.hardestHoles(from: stats, filter: .all)
         XCTAssertEqual(hardest.first?.1.number, 1)
         XCTAssertEqual(hardest.first?.0.course, "Colorada")
@@ -50,14 +51,14 @@ final class StatsEngineTests: XCTestCase {
     }
 
     func testCourseFilterAzul() async throws {
-        let rounds = try await MockAPIClient().rounds(filter: RoundFilter())
+        let rounds = try await MockAPIClient().bootstrap().rounds
         let summary = StatsEngine.summary(rounds: rounds, filter: .azul)
         XCTAssertTrue(summary.validRoundCount < 86)
         XCTAssertEqual(summary.best?.course, "Azul")
     }
 
     func testAnonymizedPlayerName() async throws {
-        let profile = try await MockAPIClient().profile()
+        let profile = try await MockAPIClient().bootstrap().profile
         XCTAssertEqual(profile.displayName, "Jugador Demo")
         XCTAssertFalse(profile.displayName.localizedCaseInsensitiveContains("Sebastian"))
         XCTAssertFalse(profile.displayName.localizedCaseInsensitiveContains("Sebastián"))

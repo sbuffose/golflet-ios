@@ -88,6 +88,12 @@ struct Round: Identifiable, Hashable, Sendable {
     var adjustedGross: Int?
     var courseHandicap: Int?
     var hcpAllowancePct: Int?
+    var courseKey: String = ""
+    var putts: Int? = nil
+    var gir: Int? = nil
+    var fir: Int? = nil
+    var notes: String? = nil
+    var notesAt: Date? = nil
 }
 
 struct CourseHole: Identifiable, Hashable, Sendable {
@@ -165,12 +171,52 @@ struct CourseHoleStats: Identifiable, Hashable, Sendable {
 }
 
 struct LinkedClub: Identifiable, Hashable, Sendable {
-    var id: String { code }
+    var id: String { accountId }
+    var accountId: String
     var code: String
     var name: String
     var baseURL: URL
     var matricula: String
     var isDemo: Bool
+    var passwordSaved: Bool = false
+    var lastSyncStatus: String? = nil
+    var lastSyncMessage: String? = nil
+    var lastSyncAt: Date? = nil
+    var cardCount: Int = 0
+}
+
+struct ClubCatalogEntry: Identifiable, Hashable, Sendable {
+    var id: Int
+    var name: String
+    var baseURL: String
+}
+
+struct GolfletUser: Hashable, Sendable {
+    var id: String
+    var email: String
+    var name: String
+}
+
+struct HIPoint: Hashable, Sendable {
+    var date: Date
+    var handicap: Double
+}
+
+struct SyncResult: Hashable, Sendable {
+    var ok: Bool
+    var message: String
+}
+
+struct AppSnapshot: Sendable {
+    var user: GolfletUser?
+    var profile: PlayerProfile
+    var clubs: [LinkedClub]
+    var rounds: [Round]
+    var courses: [Course]
+    var tees: [TeeRating]
+    var holeStats: [CourseHoleStats]
+    var bag: [BagClub]
+    var hiHistory: [HIPoint]
 }
 
 struct PlayerProfile: Hashable, Sendable {
@@ -217,16 +263,20 @@ struct RoundFilter: Sendable {
 
 enum GolfletError: LocalizedError {
     case notImplemented
+    case notAuthenticated
     case invalidClub
     case fixtureMissing(String)
     case decoding(String)
+    case server(String)
 
     var errorDescription: String? {
         switch self {
         case .notImplemented: return "El API en vivo todavía no está conectado."
+        case .notAuthenticated: return "Tenés que entrar a tu cuenta de Golflet."
         case .invalidClub: return "No reconocimos esa URL de Golfistics."
         case .fixtureMissing(let n): return "Falta el fixture \(n)."
         case .decoding(let n): return "No se pudo leer \(n)."
+        case .server(let message): return message
         }
     }
 }
