@@ -1,0 +1,284 @@
+import SwiftUI
+
+struct HomeView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        GScreen {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 28) {
+                    header
+                    handicapCard
+                    lastRound
+                    yearRow
+                    clubs
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("screen-inicio")
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                GOverline(text: model.clubs.first?.name ?? "Golflet")
+                Spacer()
+                Button { model.showsClubs = true } label: {
+                    AvatarCircle(initials: model.profile.initials)
+                }
+                .buttonStyle(.plain)
+            }
+            Text("Hola, \(model.profile.displayName.components(separatedBy: " ").first ?? model.profile.displayName)")
+                .font(GType.largeTitle)
+                .tracking(-1.9)
+                .foregroundStyle(p.ink)
+                .accessibilityIdentifier("home-greeting")
+        }
+    }
+
+    private var handicapCard: some View {
+        let snap = model.home
+        return GCard(fill: p.primary, radius: 28, padding: 20) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top) {
+                    GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
+                    Spacer()
+                    Text("Tendencia estimada · 40 rondas")
+                        .font(GType.label)
+                        .foregroundStyle(p.onPrimary.opacity(0.5))
+                }
+                HStack(alignment: .center, spacing: 16) {
+                    Text(FormatAR.one(snap.handicapIndex))
+                        .font(GType.statHero)
+                        .tracking(-4.4)
+                        .tabular()
+                        .foregroundStyle(p.onPrimary)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                    Sparkline(values: snap.trendValues, color: p.accent)
+                        .frame(height: 54)
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
+                        .font(GType.label)
+                }
+                .foregroundStyle(p.onPrimary.opacity(0.7))
+
+                HStack(alignment: .top) {
+                    heroMini("Tarjetas", "\(snap.cards)")
+                    Spacer()
+                    heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
+                    Spacer()
+                    heroMini("Promedio \(Calendar.gregorian.component(.year, from: Date()))", snap.yearAverage.map(FormatAR.one) ?? "—")
+                }
+                .padding(.top, 4)
+            }
+        }
+        .accessibilityIdentifier("handicap-card")
+    }
+
+    private func heroMini(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(GType.label)
+                .foregroundStyle(p.onPrimary.opacity(0.5))
+            Text(value)
+                .font(GType.statM)
+                .tabular()
+                .foregroundStyle(p.onPrimary)
+        }
+    }
+
+    private var lastRound: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Última ronda")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                Spacer()
+                Button("Ver todas") { model.selectedTab = .rondas }
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier("ver-todas")
+            }
+            if let round = model.home.lastRound {
+                Button { model.presentedRound = round } label: {
+                    RoundRow(round: round, style: .home)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("last-round-card")
+            }
+        }
+    }
+
+    private var yearRow: some View {
+        let snap = model.home
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Este año")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            HStack(spacing: 10) {
+                yearCard("Rondas", "\(snap.yearRoundCount)")
+                yearCard("Mejor", snap.yearBestGross.map(String.init) ?? "—")
+                yearCard("Birdies", "\(snap.yearBirdies)")
+            }
+        }
+    }
+
+    private func yearCard(_ label: String, _ value: String) -> some View {
+        GCard(radius: 18, padding: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(label)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                Text(value)
+                    .font(GType.statL)
+                    .tabular()
+                    .foregroundStyle(p.ink)
+            }
+        }
+    }
+
+    private var clubs: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Mis clubes")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            GCard(radius: 22, padding: 16) {
+                VStack(spacing: 14) {
+                    ForEach(model.clubs) { club in
+                        HStack(spacing: 12) {
+                            Text(String(club.name.prefix(1)))
+                                .font(GFont.ui(14, weight: .semibold))
+                                .foregroundStyle(p.onPrimary)
+                                .frame(width: 32, height: 32)
+                                .background(p.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(club.name)
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                HStack(spacing: 6) {
+                                    Circle().fill(p.positive).frame(width: 6, height: 6)
+                                    Text("Conectado · Matrícula \(club.matricula)")
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink2)
+                                }
+                            }
+                            Spacer()
+                        }
+                    }
+                    Button { model.showsClubs = true } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(p.ink3)
+                                .frame(width: 32, height: 32)
+                                .background(p.surface2)
+                                .clipShape(Circle())
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sumar otro club")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                Text("Golfistics de tu club + matrícula")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink3)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("add-club-home")
+                }
+            }
+        }
+    }
+}
+
+struct RoundRow: View {
+    @Environment(\.palette) private var p
+    let round: Round
+    var style: Style = .list
+
+    enum Style { case home, list }
+
+    var body: some View {
+        GCard(radius: 22, padding: 16) {
+            HStack(alignment: .center, spacing: 14) {
+                let dm = FormatAR.dayMonth(round.date)
+                VStack(spacing: 0) {
+                    Text(dm.day)
+                        .font(GFont.ui(22, weight: .semibold))
+                        .tabular()
+                        .foregroundStyle(p.ink)
+                    Text(dm.month)
+                        .font(GType.overline)
+                        .foregroundStyle(p.ink3)
+                }
+                .frame(width: 44)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(round.displayTitle)
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        TeeDot(name: round.tee)
+                        Text(meta)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(round.gross.map(String.init) ?? "—")
+                        .font(GType.statM)
+                        .tabular()
+                        .foregroundStyle(p.ink)
+                    Text(round.net.map(String.init) ?? "—")
+                        .font(GType.label)
+                        .tabular()
+                        .foregroundStyle(p.ink3)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(p.ink3)
+            }
+        }
+    }
+
+    private var meta: String {
+        var parts = [round.course]
+        if round.tee.caseInsensitiveCompare(round.course) != .orderedSame {
+            parts.append(round.tee)
+        }
+        if let pos = round.position, let field = round.fieldSize {
+            parts.append("\(pos)° de \(field)")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+extension Round {
+    var displayTitle: String {
+        var title = tournament
+        let junk = ["0-54", "0-36", "0-15.9", "18hmp", "36hmp", "🟦", "🟥", "Sabado", "Sábado", "Domingo", "Miercoles", "Miércoles"]
+        for token in junk {
+            title = title.replacingOccurrences(of: token, with: "")
+        }
+        title = title.replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.count > 28 {
+            let words = title.split(separator: " ").prefix(4)
+            title = words.joined(separator: " ")
+        }
+        return title
+    }
+}
