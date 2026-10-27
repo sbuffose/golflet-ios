@@ -13,6 +13,10 @@ final class LivePayloadMapperTests: XCTestCase {
                 "matricula": "94506",
                 "password_saved": true,
                 "rounds": 2,
+                "source": "app",
+                "club_code": "118",
+                "rounds_stored": 3,
+                "rounds_with_holes": 2,
                 "last_sync_status": "ok"
             ]],
             "rounds": [[
@@ -66,6 +70,10 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(snap.user?.email, "vos@ejemplo.com")
         XCTAssertEqual(snap.profile.displayName, "Jugador Demo")
         XCTAssertEqual(snap.clubs.first?.accountId, "9")
+        XCTAssertEqual(snap.clubs.first?.source, "app")
+        XCTAssertEqual(snap.clubs.first?.code, "118")
+        XCTAssertEqual(snap.clubs.first?.roundsStored, 3)
+        XCTAssertEqual(snap.clubs.first?.roundsWithHoles, 2)
         XCTAssertTrue(snap.clubs.first?.passwordSaved ?? false)
         XCTAssertEqual(snap.rounds.count, 1)
         XCTAssertEqual(snap.rounds.first?.gross, 76)
@@ -78,6 +86,82 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(snap.tees.first?.slope, 123)
         XCTAssertEqual(try XCTUnwrap(snap.holeStats.first?.holes.first?.averageToPar), 0.2, accuracy: 0.001)
         XCTAssertEqual(snap.bag.first?.carry, 250)
+    }
+
+    func testMapsOtherCourseRoundAndAppAccounts() {
+        let json: [String: Any] = [
+            "clubs": [
+                [
+                    "id": "118",
+                    "club_name": "Jockey Club Buenos Aires",
+                    "club_code": "118",
+                    "source": "app",
+                    "matricula": "94506",
+                    "rounds": 97,
+                    "rounds_stored": 97,
+                    "rounds_with_holes": 97
+                ],
+                [
+                    "id": "209",
+                    "club_name": "Mar del Plata Golf Club",
+                    "club_code": "209",
+                    "source": "app",
+                    "matricula": "94506",
+                    "rounds": 1,
+                    "rounds_stored": 1,
+                    "rounds_with_holes": 0
+                ]
+            ],
+            "rounds": [[
+                "round_id": "209:94506:x-links",
+                "date": "2024-05-12",
+                "club_name": "Links Pinamar",
+                "club_played": "Links Pinamar",
+                "source_club_name": "Mar del Plata Golf Club",
+                "course_label": "Links Pinamar",
+                "other_course": true,
+                "course_key": "x:links-pinamar",
+                "gross": 80,
+                "net": 78,
+                "valid_card": true,
+                "is_9_holes": false,
+                "holes": []
+            ]],
+            "sync": [
+                "ok": true,
+                "new_rounds": 12,
+                "message": "Listo",
+                "clubs": [
+                    ["account_id": "118", "club_name": "Jockey Club Buenos Aires", "ok": true, "new_rounds": 11, "list_total": 97],
+                    ["account_id": "209", "club_name": "Mar del Plata Golf Club", "ok": true, "new_rounds": 1, "list_total": 1]
+                ]
+            ]
+        ]
+        let snap = LivePayloadMapper.snapshot(from: json)
+        XCTAssertEqual(snap.clubs.map(\.accountId), ["118", "209"])
+        XCTAssertEqual(snap.clubs.map(\.cardCount).reduce(0, +), 98)
+        let round = snap.rounds.first
+        XCTAssertEqual(round?.clubName, "Links Pinamar")
+        XCTAssertEqual(round?.clubPlayed, "Links Pinamar")
+        XCTAssertEqual(round?.sourceClubName, "Mar del Plata Golf Club")
+        XCTAssertEqual(round?.courseLabel, "Links Pinamar")
+        XCTAssertEqual(round?.courseKey, "x:links-pinamar")
+        XCTAssertTrue(round?.isOtherCourse ?? false)
+        XCTAssertTrue(round?.holes.isEmpty ?? false)
+        XCTAssertNil(round?.differential)
+        XCTAssertEqual(round?.slope ?? -1, 0, accuracy: 0.001)
+        let sync = LivePayloadMapper.parseSync(json)
+        XCTAssertEqual(sync.clubs.count, 2)
+        XCTAssertEqual(sync.newCards, 12)
+        XCTAssertEqual(sync.cardCount, 98)
+    }
+
+    func testAccountErrorCodes() {
+        XCTAssertEqual(LivePayloadMapper.accountError(status: 422), .wrongGolfisticsCredentials)
+        XCTAssertEqual(LivePayloadMapper.accountError(status: 502), .golfisticsAppDown)
+        XCTAssertNil(LivePayloadMapper.accountError(status: 400))
+        XCTAssertEqual(GolfletError.wrongGolfisticsCredentials.errorDescription, "Matrícula o clave incorrecta.")
+        XCTAssertEqual(GolfletError.golfisticsAppDown.errorDescription, "La App de Golfistics no responde.")
     }
 
     func testAuthErrorCopy() {

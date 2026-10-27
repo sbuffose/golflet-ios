@@ -1,0 +1,40 @@
+[
+  {
+    "round_id": "209:94506:x-links-pinamar-20240512",
+    "date": "2024-05-12",
+    "weekday": "Dom",
+    "tournament": "Invitación Links Pinamar",
+    "club_name": "Links Pinamar",
+    "club_code": "209",
+    "club_played": "Links Pinamar",
+    "source_club_name": "Mar del Plata Golf Club",
+    "course_label": "Links Pinamar",
+    "other_course": true,
+    "course": "Links Pinamar",
+    "course_key": "x:links-pinamar",
+    "tee": null,
+    "course_rating": null,
+    "slope": null,
+    "differential_computed": null,
+    "gross": 80,
+    "net": 78,
+    "out": null,
+    "in": null,
+    "card_status": "OK",
+    "valid_card": true,
+    "is_9_holes": false,
+    "holes_played": 18,
+    "holes": [],
+    "summary_counts": {
+      "birdies": 0,
+      "pars": 0,
+      "bogeys": 0,
+      "double_bogeys": 0,
+      "triple_bogeys": 0,
+      "worse": 0
+    },
+    "handicap_index": 4.2,
+    "position": null,
+    "field_size": null
+  }
+]

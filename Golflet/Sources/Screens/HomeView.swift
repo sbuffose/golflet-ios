@@ -245,10 +245,10 @@ struct HomeView: View {
                                 .background(p.surface2)
                                 .clipShape(Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(model.clubs.isEmpty ? "Vincular mi club" : "Sumar otro club")
+                                Text(model.clubs.isEmpty ? "Vincular Golfistics App" : "Tu cuenta de Golfistics")
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
-                                Text("Golfistics de tu club + matrícula")
+                                Text(model.clubs.isEmpty ? "Matrícula y clave de la App" : "Actualizar trae todos tus clubes")
                                     .font(GType.label)
                                     .foregroundStyle(p.ink3)
                             }
@@ -290,7 +290,9 @@ struct RoundRow: View {
                         .foregroundStyle(p.ink)
                         .lineLimit(1)
                     HStack(spacing: 6) {
-                        TeeDot(name: round.tee)
+                        if !round.isOtherCourse, !round.tee.isEmpty {
+                            TeeDot(name: round.tee)
+                        }
                         Text(meta)
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
@@ -316,8 +318,15 @@ struct RoundRow: View {
     }
 
     private var meta: String {
-        var parts = [round.course]
-        if round.tee.caseInsensitiveCompare(round.course) != .orderedSame {
+        if round.isOtherCourse {
+            var parts = [round.clubName]
+            if round.displayCourse.caseInsensitiveCompare(round.clubName) != .orderedSame {
+                parts.append(round.displayCourse)
+            }
+            return parts.joined(separator: " · ")
+        }
+        var parts = [round.displayCourse]
+        if !round.tee.isEmpty, round.tee.caseInsensitiveCompare(round.course) != .orderedSame {
             parts.append(round.tee)
         }
         if let pos = round.position, let field = round.fieldSize {

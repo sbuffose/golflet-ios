@@ -19,8 +19,12 @@ struct RoundDetailView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
                     scoreHero
-                    scorecard
-                    gameStats
+                    if round.isOtherCourse || round.holes.isEmpty {
+                        otherCourseNotice
+                    } else {
+                        scorecard
+                        gameStats
+                    }
                     notes
                 }
                 .padding(.horizontal, 20)
@@ -71,12 +75,37 @@ struct RoundDetailView: View {
                 Text(round.clubName)
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
-                TeeDot(name: round.tee)
-                Text("\(round.course) · Tee \(round.tee) · \(FormatAR.one(round.courseRating)) / \(Int(round.slope))")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
+                if !round.isOtherCourse, !round.tee.isEmpty {
+                    TeeDot(name: round.tee)
+                    Text("\(round.displayCourse) · Tee \(round.tee) · \(FormatAR.one(round.courseRating)) / \(Int(round.slope))")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                } else {
+                    Text(round.displayCourse)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                }
             }
         }
+    }
+
+    private var otherCourseNotice: some View {
+        GCard(radius: 18, padding: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Otra cancha")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Text("Esta tarjeta se jugó en \(round.displayCourse). Golfistics no trae el detalle por hoyo.")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+                if let source = round.sourceClubName, !source.isEmpty {
+                    Text("La listó \(source).")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
+                }
+            }
+        }
+        .accessibilityIdentifier("other-course-notice")
     }
 
     private var scoreHero: some View {

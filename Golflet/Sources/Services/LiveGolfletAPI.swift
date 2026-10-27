@@ -47,18 +47,13 @@ struct LiveGolfletAPI: GolfletAPI {
         return LivePayloadMapper.parseCatalogue(json)
     }
 
-    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
-        var body: [String: Any] = [
+    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
+        let body: [String: Any] = [
             "matricula": matricula,
             "password": password,
             "save_password": savePassword,
             "progress_id": progressID
         ]
-        if let clubID {
-            body["club_id"] = clubID
-        } else if let baseURL, !baseURL.isEmpty {
-            body["base_url"] = baseURL
-        }
         let json = try await request("POST", "/api/accounts", body: body, timeout: 180)
         return LivePayloadMapper.parseSync(json)
     }
@@ -137,14 +132,17 @@ struct LiveGolfletAPI: GolfletAPI {
         }
 
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-        try throwIfFailed(status: status, json: json, authorized: authorized)
+        try throwIfFailed(status: status, json: json, authorized: authorized, path: path)
         return json
     }
 
-    private func throwIfFailed(status: Int, json: [String: Any], authorized: Bool) throws {
+    private func throwIfFailed(status: Int, json: [String: Any], authorized: Bool, path: String) throws {
         if status == 401 {
             if authorized { KeychainStore.deleteToken() }
             throw GolfletError.notAuthenticated
+        }
+        if path.hasPrefix("/api/accounts"), let error = LivePayloadMapper.accountError(status: status, json: json) {
+            throw error
         }
         if status >= 400 {
             throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo completar."))
