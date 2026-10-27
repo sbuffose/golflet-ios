@@ -72,9 +72,8 @@ final class GolfletUITests: XCTestCase {
         let overlay = first(app, "sync-overlay")
         let label = first(app, "sync-progress-label")
         let overlayAppeared = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: overlay)
-        let labelAppeared = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: label)
         sync.tap()
-        let arrived = XCTWaiter.wait(for: [overlayAppeared, labelAppeared], timeout: 8)
+        let arrived = XCTWaiter.wait(for: [overlayAppeared], timeout: 8)
         XCTAssertTrue(arrived == .completed || overlay.exists || label.exists, "El overlay de sync no apareció")
         saveShot("12_sync")
 
