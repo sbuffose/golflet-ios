@@ -6,6 +6,18 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var model = model
+        Group {
+            if !model.isAuthenticated {
+                AuthView()
+            } else {
+                mainTabs
+            }
+        }
+        .task { await model.load() }
+    }
+
+    private var mainTabs: some View {
+        @Bindable var model = model
         TabView(selection: $model.selectedTab) {
             NavigationStack { HomeView() }
                 .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
@@ -33,7 +45,6 @@ struct RootView: View {
                 .accessibilityIdentifier("tab-bolsa")
         }
         .tint(p.primary)
-        .task { await model.load() }
         .onAppear { configureTabBar() }
         .sheet(item: $model.presentedRound) { round in
             NavigationStack {

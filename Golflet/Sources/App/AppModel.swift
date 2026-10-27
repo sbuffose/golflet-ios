@@ -4,6 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
+    var user: GolfletUser?
     var profile = PlayerProfile(displayName: "Jugador Demo", initials: "JD", currentHandicap: 3.1)
     var clubs: [LinkedClub] = []
     var rounds: [Round] = []
@@ -11,7 +12,9 @@ final class AppModel {
     var tees: [TeeRating] = []
     var holeStats: [CourseHoleStats] = []
     var bag: [BagClub] = []
+    var catalogue: [ClubCatalogEntry] = []
     var isLoaded = false
+    var isBusy = false
     var errorMessage: String?
     var selectedTab: AppTab = .inicio
     var courseFilter: CourseFilter = .all
@@ -28,6 +31,8 @@ final class AppModel {
         self.notes = notes
     }
 
+    var isAuthenticated: Bool { api.isAuthenticated }
+    var isLive: Bool { !api.persistsLocally }
     var home: HomeSnapshot { StatsEngine.home(rounds: rounds) }
     var summary: SummarySnapshot { StatsEngine.summary(rounds: rounds, filter: courseFilter) }
 
@@ -36,23 +41,18 @@ final class AppModel {
     }
 
     func load() async {
-        errorMessage = nil
+        guard isAuthenticated else {
+            isLoaded = true
+            return
+        }
         do {
-            async let clubsTask = api.linkedClubs()
-            async let profileTask = api.profile()
-            async let roundsTask = api.rounds(filter: RoundFilter())
-            async let coursesTask = api.courses()
-            async let teesTask = api.tees()
-            async let statsTask = api.holeStats()
-            clubs = try await clubsTask
-            profile = try await profileTask
-            rounds = try await roundsTask
-            courses = try await coursesTask
-            tees = try await teesTask
-            holeStats = try await statsTask
-            bag = notes.bag()
-            if let last = rounds.sorted(by: { $0.date > $1.date }).first {
-                selectedCourseName = last.course == "Azul" || last.course == "Colorada" ? last.course : "Colorada"
+            let snap = try await api.bootstrap()
+            apply(snap)
+            if api.persistsLocally {
+                bag = notes.bag()
+            }
+            if catalogue.isEmpty {
+                catalogue = (try? await api.clubCatalogue()) ?? []
             }
             isLoaded = true
         } catch {
@@ -61,21 +61,88 @@ final class AppModel {
         }
     }
 
-    func addClub(urlString: String, matricula: String, clave: String) async {
-        errorMessage = nil
-        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolved = trimmed.isEmpty ? "https://golf.e-jockeyclub.org.ar/golf" : trimmed
-        guard let url = URL(string: resolved) else {
-            errorMessage = "La URL no es válida."
-            return
+    func signUp(name: String, email: String, password: String) async {
+        await run {
+            try await api.signUp(name: name, email: email, password: password)
+            await load()
+        }
+    }
+
+    func signIn(email: String, password: String) async {
+        await run {
+            try await api.signIn(email: email, password: password)
+            await load()
+        }
+    }
+
+    func signOut() async {
+        await run {
+            try await api.signOut()
+            user = nil
+            clubs = []
+            rounds = []
+            courses = []
+            tees = []
+            holeStats = []
+            bag = []
+            isLoaded = true
+        }
+    }
+
+    func addClub(clubID: Int?, urlString: String, matricula: String, clave: String, savePassword: Bool) async {
+        await run {
+            let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+            let result = try await api.linkClub(
+                clubID: clubID,
+                baseURL: clubID == nil ? trimmed : nil,
+                matricula: matricula,
+                password: clave,
+                savePassword: savePassword
+            )
+            errorMessage = result.ok ? nil : result.message
+            await load()
+        }
+    }
+
+    func syncClub(_ club: LinkedClub, password: String? = nil, savePassword: Bool = false) async {
+        await run {
+            let result = try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword)
+            errorMessage = result.ok ? nil : result.message
+            await load()
+        }
+    }
+
+    func forgetPassword(_ club: LinkedClub) async {
+        await run {
+            try await api.forgetPassword(accountId: club.accountId)
+            await load()
+        }
+    }
+
+    func unlink(_ club: LinkedClub) async {
+        await run {
+            try await api.unlink(accountId: club.accountId)
+            await load()
+        }
+    }
+
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, text: String) async {
+        notes.saveNote(roundId: roundId, text: text)
+        if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
+            rounds[index].putts = putts
+            rounds[index].gir = gir
+            rounds[index].fir = fir
+            rounds[index].notes = text
+            rounds[index].notesAt = Date()
+        }
+        if presentedRound?.roundId == roundId {
+            presentedRound?.putts = putts
+            presentedRound?.gir = gir
+            presentedRound?.fir = fir
+            presentedRound?.notes = text
         }
         do {
-            let club = try await api.login(clubURL: url, matricula: matricula, clave: clave)
-            if !clubs.contains(where: { $0.code == club.code }) {
-                clubs.append(club)
-            } else {
-                clubs = clubs.map { $0.code == club.code ? club : $0 }
-            }
+            try await api.saveRoundNotes(roundId: roundId, putts: putts, gir: gir, fir: fir, notes: text)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -87,10 +154,39 @@ final class AppModel {
             return BagClub(name: name, carry: carry, total: total)
         }
         notes.saveBag(bag)
+        Task { [bag] in
+            do {
+                self.bag = try await api.saveBag(bag)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     func openLastRound() {
         presentedRound = home.lastRound
+    }
+
+    private func apply(_ snap: AppSnapshot) {
+        user = snap.user
+        profile = snap.profile
+        clubs = snap.clubs
+        rounds = snap.rounds
+        courses = snap.courses
+        tees = snap.tees
+        holeStats = snap.holeStats
+        bag = snap.bag
+        if let last = snap.rounds.sorted(by: { $0.date > $1.date }).first,
+           last.course == "Azul" || last.course == "Colorada" {
+            selectedCourseName = last.course
+        }
+    }
+
+    private func run(_ work: () async throws -> Void) async {
+        errorMessage = nil
+        isBusy = true
+        defer { isBusy = false }
+        do { try await work() } catch { errorMessage = error.localizedDescription }
     }
 }
 

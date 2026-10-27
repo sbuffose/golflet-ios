@@ -11,7 +11,7 @@ struct GolfletApp: App {
         let container = try! ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: false))
         self.container = container
         let notes = NotesStore(container: container)
-        _model = State(initialValue: AppModel(api: MockAPIClient(), notes: notes))
+        _model = State(initialValue: AppModel(api: APIFactory.make(), notes: notes))
     }
 
     var body: some Scene {

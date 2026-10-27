@@ -60,6 +60,50 @@ final class GolfletUITests: XCTestCase {
         saveShot("08_bolsa")
     }
 
+    func testLoginAndLinkingScreens() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-auth"]
+        app.launch()
+
+        XCTAssertTrue(app.otherElements["screen-login"].waitForExistence(timeout: 10))
+        saveShot("10_login")
+
+        if app.buttons["auth-tab-up"].waitForExistence(timeout: 2) {
+            app.buttons["auth-tab-up"].tap()
+        }
+        let name = app.textFields["auth-name"]
+        if name.waitForExistence(timeout: 3) {
+            name.tap()
+            name.typeText("Jugador Demo")
+        }
+        let email = app.textFields["auth-email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 3))
+        email.tap()
+        email.typeText("demo@golflet.app")
+        let password = app.secureTextFields["auth-password"]
+        XCTAssertTrue(password.waitForExistence(timeout: 3))
+        password.tap()
+        password.typeText("password1")
+        app.buttons["auth-submit"].tap()
+
+        XCTAssertTrue(app.otherElements["screen-inicio"].waitForExistence(timeout: 10))
+        if app.buttons["add-club-home"].waitForExistence(timeout: 6) {
+            app.buttons["add-club-home"].tap()
+        } else if app.buttons["avatar-button"].waitForExistence(timeout: 3) {
+            app.buttons["avatar-button"].tap()
+        }
+        XCTAssertTrue(app.otherElements["screen-clubes"].waitForExistence(timeout: 8))
+        if app.textFields["club-matricula"].waitForExistence(timeout: 3) {
+            app.textFields["club-matricula"].tap()
+            app.textFields["club-matricula"].typeText("94506")
+        }
+        if app.secureTextFields["club-clave"].waitForExistence(timeout: 3) {
+            app.secureTextFields["club-clave"].tap()
+            app.secureTextFields["club-clave"].typeText("clave123")
+        }
+        saveShot("11_vincular")
+    }
+
     private func tapTab(_ app: XCUIApplication, _ name: String) {
         let tab = app.tabBars.buttons[name]
         XCTAssertTrue(tab.waitForExistence(timeout: 5), "Missing tab \(name)")
