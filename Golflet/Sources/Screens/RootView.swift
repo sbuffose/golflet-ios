@@ -14,6 +14,15 @@ struct RootView: View {
             }
         }
         .task { await model.load() }
+        .fullScreenCover(isPresented: Binding(
+            get: { model.syncSession != nil },
+            set: { if !$0, model.syncSession?.outcome != .running { model.syncSession = nil } }
+        )) {
+            SyncProgressView()
+                .golfletChrome()
+                .environment(model)
+                .interactiveDismissDisabled()
+        }
     }
 
     private var mainTabs: some View {

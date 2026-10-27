@@ -86,10 +86,11 @@ struct MockAPIClient: GolfletAPI {
         ]
     }
 
-    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool) async throws -> SyncResult {
+    func linkClub(clubID: Int?, baseURL: String?, matricula: String, password: String, savePassword: Bool, progress: SyncProgressHandler?) async throws -> SyncResult {
         _ = clubID
         _ = baseURL
         _ = password
+        await emitDemoProgress(clubName: demoName, progress: progress)
         Self.sessionLock.lock()
         Self.mockLinked = true
         Self.sessionLock.unlock()
@@ -103,11 +104,17 @@ struct MockAPIClient: GolfletAPI {
         return SyncResult(ok: true, message: "Club vinculado · datos de demostración")
     }
 
-    func syncAccount(id: String, password: String?, savePassword: Bool) async throws -> SyncResult {
+    func syncAccount(id: String, password: String?, savePassword: Bool, progress: SyncProgressHandler?) async throws -> SyncResult {
         _ = id
         _ = password
         _ = savePassword
+        await emitDemoProgress(clubName: demoName, progress: progress)
         return SyncResult(ok: true, message: "Datos de demostración al día")
+    }
+
+    func pollSyncProgress(accountId: String?) async -> SyncProgress? {
+        _ = accountId
+        return nil
     }
 
     func forgetPassword(accountId: String) async throws {
@@ -246,6 +253,22 @@ struct MockAPIClient: GolfletAPI {
                 holes: holes
             )
         }
+    }
+
+    private func emitDemoProgress(clubName: String, progress: SyncProgressHandler?) async {
+        let fast = RuntimeFlags.isUITesting
+        let steps: [(UInt64, SyncProgress)] = [
+            (0, SyncProgress(phase: .connecting, message: "Conectando con \(clubName)")),
+            (fast ? 120_000_000 : 700_000_000, SyncProgress(phase: .reading, message: "Leyendo tarjetas · 34 de 97", current: 34, total: 97)),
+            (fast ? 120_000_000 : 700_000_000, SyncProgress(phase: .calculating, message: "Calculando tu hándicap"))
+        ]
+        for (delay, step) in steps {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            progress?(step)
+        }
+        try? await Task.sleep(nanoseconds: fast ? 80_000_000 : 600_000_000)
     }
 
     private func initials(_ name: String) -> String {

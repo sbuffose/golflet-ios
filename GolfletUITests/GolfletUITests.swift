@@ -60,6 +60,27 @@ final class GolfletUITests: XCTestCase {
         saveShot("08_bolsa")
     }
 
+    func testSyncOverlayThenInicio() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(app.otherElements["screen-inicio"].waitForExistence(timeout: 12))
+        let sync = app.buttons["home-sync-118"]
+        XCTAssertTrue(sync.waitForExistence(timeout: 6))
+        sync.tap()
+
+        let overlay = app.otherElements["sync-overlay"]
+        XCTAssertTrue(overlay.waitForExistence(timeout: 4))
+        XCTAssertTrue(app.descendants(matching: .any)["sync-progress-label"].waitForExistence(timeout: 3))
+        saveShot("12_sync")
+
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: overlay)
+        wait(for: [gone], timeout: 12)
+        XCTAssertTrue(app.otherElements["screen-inicio"].waitForExistence(timeout: 4))
+        saveShot("13_inicio_despues_sync")
+    }
+
     func testLoginAndLinkingScreens() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-auth"]

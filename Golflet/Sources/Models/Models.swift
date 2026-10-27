@@ -207,6 +207,93 @@ struct SyncResult: Hashable, Sendable {
     var message: String
 }
 
+struct SyncProgress: Hashable, Sendable {
+    var phase: Phase
+    var message: String
+    var current: Int? = nil
+    var total: Int? = nil
+
+    enum Phase: String, Sendable, Hashable {
+        case connecting
+        case reading
+        case calculating
+        case finishing
+        case success
+        case failed
+
+        static func parse(_ raw: String?) -> Phase? {
+            guard let raw else { return nil }
+            let value = raw.lowercased().replacingOccurrences(of: " ", with: "_")
+            switch value {
+            case "connecting", "connect", "login", "auth", "signing_in":
+                return .connecting
+            case "reading", "read", "cards", "fetching", "scraping", "syncing", "running":
+                return .reading
+            case "calculating", "handicap", "hi", "compute", "computing":
+                return .calculating
+            case "finishing", "ordering", "saving", "finalizing":
+                return .finishing
+            case "success", "ok", "done", "ready":
+                return .success
+            case "failed", "error", "fail":
+                return .failed
+            default:
+                return nil
+            }
+        }
+    }
+
+    var line: String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        switch phase {
+        case .connecting: return "Conectando"
+        case .reading:
+            if let current, let total { return "Leyendo tarjetas · \(current) de \(total)" }
+            return "Leyendo tarjetas"
+        case .calculating: return "Calculando tu hándicap"
+        case .finishing: return "Ordenando tus rondas"
+        case .success: return "Listo"
+        case .failed: return "No se pudo actualizar"
+        }
+    }
+}
+
+struct SyncSession: Identifiable, Hashable, Sendable {
+    enum Kind: String, Sendable, Hashable {
+        case link
+        case refresh
+    }
+
+    enum Outcome: String, Sendable, Hashable {
+        case running
+        case succeeded
+        case failed
+    }
+
+    var id: UUID
+    var kind: Kind
+    var clubName: String
+    var accountId: String?
+    var knownCards: Int?
+    var startedAt: Date
+    var progress: SyncProgress
+    var outcome: Outcome
+
+    var title: String {
+        kind == .link ? "Vincular club" : "Actualizar"
+    }
+}
+
+enum RuntimeFlags {
+    static var isUITesting: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-ui-testing") || args.contains("-ui-testing-auth")
+    }
+}
+
+typealias SyncProgressHandler = @Sendable (SyncProgress) -> Void
+
 struct AppSnapshot: Sendable {
     var user: GolfletUser?
     var profile: PlayerProfile

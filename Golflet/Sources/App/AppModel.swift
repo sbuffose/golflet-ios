@@ -22,9 +22,12 @@ final class AppModel {
     var presentedRound: Round?
     var presentedHole: Int?
     var showsClubs = false
+    var syncSession: SyncSession?
 
     let api: any GolfletAPI
     let notes: NotesStore
+    private var lastRemoteProgressAt = Date.distantPast
+    private var reopenClubsAfterFailure = false
 
     init(api: any GolfletAPI, notes: NotesStore) {
         self.api = api
@@ -90,26 +93,30 @@ final class AppModel {
     }
 
     func addClub(clubID: Int?, urlString: String, matricula: String, clave: String, savePassword: Bool) async {
-        await run {
+        let name = clubID.flatMap { id in catalogue.first { $0.id == id }?.name } ?? "tu club"
+        await performClubSync(clubName: name, accountId: nil, knownCards: nil, kind: .link) { handler in
             let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-            let result = try await api.linkClub(
+            return try await api.linkClub(
                 clubID: clubID,
                 baseURL: clubID == nil ? trimmed : nil,
                 matricula: matricula,
                 password: clave,
-                savePassword: savePassword
+                savePassword: savePassword,
+                progress: handler
             )
-            errorMessage = result.ok ? nil : result.message
-            await load()
         }
     }
 
     func syncClub(_ club: LinkedClub, password: String? = nil, savePassword: Bool = false) async {
-        await run {
-            let result = try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword)
-            errorMessage = result.ok ? nil : result.message
-            await load()
+        await performClubSync(clubName: club.name, accountId: club.accountId, knownCards: club.cardCount, kind: .refresh) { handler in
+            try await api.syncAccount(id: club.accountId, password: password, savePassword: savePassword, progress: handler)
         }
+    }
+
+    func finishSuccessfulSync() {
+        selectedTab = .inicio
+        showsClubs = false
+        syncSession = nil
     }
 
     func forgetPassword(_ club: LinkedClub) async {
@@ -165,6 +172,113 @@ final class AppModel {
 
     func openLastRound() {
         presentedRound = home.lastRound
+    }
+
+    private func performClubSync(
+        clubName: String,
+        accountId: String?,
+        knownCards: Int?,
+        kind: SyncSession.Kind,
+        work: (@escaping SyncProgressHandler) async throws -> SyncResult
+    ) async {
+        errorMessage = nil
+        isBusy = true
+        let session = SyncSession(
+            id: UUID(),
+            kind: kind,
+            clubName: clubName,
+            accountId: accountId,
+            knownCards: knownCards,
+            startedAt: Date(),
+            progress: SyncProgress(phase: .connecting, message: "Conectando con \(clubName)"),
+            outcome: .running
+        )
+        syncSession = session
+        lastRemoteProgressAt = .distantPast
+        reopenClubsAfterFailure = showsClubs
+        showsClubs = false
+
+        let ticker = Task { await tickStagedProgress(sessionID: session.id, clubName: clubName, knownCards: knownCards) }
+        let poller = Task { await pollRemoteProgress(sessionID: session.id, accountId: accountId) }
+        defer {
+            ticker.cancel()
+            poller.cancel()
+            isBusy = false
+        }
+
+        do {
+            let result = try await work { [weak self] progress in
+                Task { @MainActor in
+                    self?.applyRemoteProgress(progress, sessionID: session.id)
+                }
+            }
+            if result.ok {
+                await load()
+                selectedTab = .inicio
+                showsClubs = false
+                markSyncSucceeded(sessionID: session.id)
+                let timeout = RuntimeFlags.isUITesting ? 2.4 : 4.0
+                let deadline = Date().addingTimeInterval(timeout)
+                while syncSession?.id == session.id, Date() < deadline {
+                    try? await Task.sleep(for: .milliseconds(80))
+                }
+                if syncSession?.id == session.id {
+                    syncSession = nil
+                }
+            } else {
+                errorMessage = result.message
+                syncSession = nil
+                if reopenClubsAfterFailure { showsClubs = true }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            syncSession = nil
+            if reopenClubsAfterFailure { showsClubs = true }
+        }
+    }
+
+    private func applyRemoteProgress(_ progress: SyncProgress, sessionID: UUID) {
+        guard var session = syncSession, session.id == sessionID, session.outcome == .running else { return }
+        session.progress = progress
+        syncSession = session
+        lastRemoteProgressAt = Date()
+    }
+
+    private func applyStagedProgress(_ progress: SyncProgress, sessionID: UUID) {
+        guard var session = syncSession, session.id == sessionID, session.outcome == .running else { return }
+        session.progress = progress
+        syncSession = session
+    }
+
+    private func markSyncSucceeded(sessionID: UUID) {
+        guard var session = syncSession, session.id == sessionID else { return }
+        session.outcome = .succeeded
+        session.progress = SyncProgress(phase: .success, message: "Listo")
+        syncSession = session
+    }
+
+    private func tickStagedProgress(sessionID: UUID, clubName: String, knownCards: Int?) async {
+        while !Task.isCancelled, syncSession?.id == sessionID, syncSession?.outcome == .running {
+            if Date().timeIntervalSince(lastRemoteProgressAt) > 1.05, let started = syncSession?.startedAt {
+                let staged = SyncProgressParser.staged(
+                    clubName: clubName,
+                    elapsed: Date().timeIntervalSince(started),
+                    knownCards: knownCards,
+                    compressed: RuntimeFlags.isUITesting || api.persistsLocally
+                )
+                applyStagedProgress(staged, sessionID: sessionID)
+            }
+            try? await Task.sleep(for: .milliseconds(280))
+        }
+    }
+
+    private func pollRemoteProgress(sessionID: UUID, accountId: String?) async {
+        while !Task.isCancelled, syncSession?.id == sessionID, syncSession?.outcome == .running {
+            if let progress = await api.pollSyncProgress(accountId: accountId) {
+                applyRemoteProgress(progress, sessionID: sessionID)
+            }
+            try? await Task.sleep(for: .seconds(RuntimeFlags.isUITesting ? 0.4 : 2.0))
+        }
     }
 
     private func apply(_ snap: AppSnapshot) {
