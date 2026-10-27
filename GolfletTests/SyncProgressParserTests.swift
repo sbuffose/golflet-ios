@@ -20,8 +20,17 @@ final class SyncProgressParserTests: XCTestCase {
         XCTAssertEqual(progress?.listTotal, 97)
         XCTAssertEqual(
             SyncStepCopy.label(stage: .cards, state: .active, club: "Jockey Club Argentino", progress: progress!),
-            "Leyendo tarjetas · 33 de 97"
+            "Leyendo tarjetas"
         )
+        XCTAssertEqual(
+            SyncStepCopy.counter(stage: .cards, state: .active, progress: progress!),
+            "33 / 97"
+        )
+        XCTAssertEqual(
+            YardageBookCopy.caption(stage: .cards, outcome: .running),
+            "Leyendo tarjetas"
+        )
+        XCTAssertEqual(YardageBookCopy.count(progress!, outcome: .running), "33 / 97")
     }
 
     func testStepLabels() {

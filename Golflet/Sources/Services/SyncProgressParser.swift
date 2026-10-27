@@ -19,7 +19,6 @@ enum SyncProgressParser {
 
 enum SyncStepCopy {
     static func label(stage: SyncStage, state: SyncStepState, club: String, progress: SyncAPIProgress) -> String {
-        let done = progress.done ?? 0
         let total = progress.total ?? 0
         switch stage {
         case .connect:
@@ -35,15 +34,22 @@ enum SyncStepCopy {
                 let n = progress.cardsTotal ?? total
                 return n > 0 ? "\(n) tarjetas nuevas leídas" : "Sin tarjetas nuevas"
             }
-            return total > 0 ? "Leyendo tarjetas · \(done) de \(total)" : "Buscando tarjetas nuevas"
+            return total > 0 ? "Leyendo tarjetas" : "Buscando tarjetas nuevas"
         case .handicap:
             return state == .done ? "Historial de hándicap al día" : "Leyendo tu historial de hándicap"
         case .save:
             if state == .done { return "Rondas guardadas" }
-            return total > 0 ? "Guardando rondas · \(done) de \(total)" : "Guardando rondas"
+            return "Guardando rondas"
         case .done:
             return "Listo"
         }
+    }
+
+    static func counter(stage: SyncStage, state: SyncStepState, progress: SyncAPIProgress) -> String? {
+        guard state == .active, stage == .cards || stage == .save, let total = progress.total, total > 0 else {
+            return nil
+        }
+        return "\(progress.done ?? 0) / \(total)"
     }
 
     static func state(for stage: SyncStage, progress: SyncAPIProgress, outcome: SyncSession.Outcome) -> SyncStepState {
