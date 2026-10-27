@@ -3,14 +3,22 @@ import SwiftUI
 struct SyncProgressView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let session = model.syncSession
+        let progress = session?.progress ?? SyncAPIProgress(stage: .connect)
         GScreen(id: "sync-overlay") {
             VStack(alignment: .leading, spacing: 0) {
-                placeholderMark
-                    .padding(.top, 28)
-                    .padding(.bottom, 22)
+                YardageBookView(
+                    finish: session?.outcome == .succeeded,
+                    caption: YardageBookCopy.caption(stage: progress.stage, outcome: session?.outcome ?? .running),
+                    count: YardageBookCopy.count(progress, outcome: session?.outcome ?? .running),
+                    reduceMotion: reduceMotion
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: 360)
+                .padding(.bottom, 8)
 
                 VStack(alignment: .leading, spacing: 4) {
                     GOverline(text: session?.clubName ?? "Golflet")
@@ -24,14 +32,8 @@ struct SyncProgressView: View {
 
                 stepsCard(session)
 
-                Text("Esto puede tardar un rato.")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
-                    .padding(.top, 16)
-
-                Spacer()
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 20)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sync-overlay")
@@ -44,22 +46,6 @@ struct SyncProgressView: View {
         }
     }
 
-    private var placeholderMark: some View {
-        HStack {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(p.primary)
-                    .frame(width: 56, height: 56)
-                Image(systemName: "flag.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(p.accent)
-            }
-            Spacer()
-        }
-        .accessibilityHidden(true)
-    }
-
     private func stepsCard(_ session: SyncSession?) -> some View {
         let progress = session?.progress ?? SyncAPIProgress(stage: .connect)
         let club = session?.clubName ?? progress.club ?? "tu club"
@@ -69,15 +55,24 @@ struct SyncProgressView: View {
                 let label = state == .error
                     ? (session?.errorMessage ?? progress.error ?? "No se pudo actualizar")
                     : SyncStepCopy.label(stage: stage, state: state, club: club, progress: progress)
+                let counter = SyncStepCopy.counter(stage: stage, state: state, progress: progress)
                 VStack(spacing: 0) {
                     if index > 0 { p.hairline.frame(height: 1) }
                     HStack(alignment: .center, spacing: 12) {
                         stepIcon(state)
                         Text(label)
-                            .font(GFont.ui(15, weight: .medium))
+                            .font(GFont.ui(13, weight: .medium))
+                            .tracking(0.4)
+                            .textCase(.uppercase)
                             .foregroundStyle(stepColor(state))
-                            .tabular()
                             .frame(maxWidth: .infinity, alignment: .leading)
+                        if let counter {
+                            Text(counter)
+                                .font(GFont.ui(13, weight: .semibold))
+                                .foregroundStyle(p.ink)
+                                .tabular()
+                                .accessibilityIdentifier("sync-progress-count")
+                        }
                     }
                     .padding(.vertical, 12)
                 }
@@ -89,6 +84,7 @@ struct SyncProgressView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
         .shadow(color: Color.black.opacity(0.06), radius: 12, y: 8)
+        .padding(.horizontal, 20)
     }
 
     private func stepIcon(_ state: SyncStepState) -> some View {
