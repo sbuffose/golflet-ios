@@ -164,10 +164,10 @@ struct PlayHoleView: View {
     @ViewBuilder
     private var compactStrategy: some View {
         if let hole = strategy?.hole(hole) {
-            GCard(radius: 22, padding: 16) {
-                VStack(alignment: .leading, spacing: 12) {
-                    StrategyHoleCard(hole: hole, courseKey: course.courseKey, compact: true)
-                    Button { showsStrategy = true } label: {
+            Button { showsStrategy = true } label: {
+                GCard(radius: 22, padding: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        StrategyHoleCard(hole: hole, courseKey: course.courseKey, compact: true)
                         Text("Ver plan")
                             .font(GType.headline)
                             .foregroundStyle(p.onPrimary)
@@ -176,10 +176,9 @@ struct PlayHoleView: View {
                             .background(p.primary)
                             .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("strategy-expand")
                 }
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("strategy-compact")
         }
     }

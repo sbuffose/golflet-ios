@@ -121,13 +121,12 @@ final class GolfletUITests: XCTestCase {
                 first(app, "pick-hole-7").tap()
             }
         }
-        if first(app, "strategy-compact").waitForExistence(timeout: 5) {
-            saveShot("22_play_strategy")
-            first(app, "strategy-expand").tap()
-            XCTAssertTrue(waitFor(app, "screen-strategy-hole", timeout: 6))
-            saveShot("23_play_strategy_full")
-            dismissIfPresent(app, "close-strategy")
-        }
+        XCTAssertTrue(first(app, "strategy-compact").waitForExistence(timeout: 6), "Falta el plan compacto en el hoyo 7")
+        saveShot("22_play_strategy")
+        first(app, "strategy-compact").tap()
+        XCTAssertTrue(waitFor(app, "screen-strategy-hole", timeout: 6))
+        saveShot("23_play_strategy_full")
+        dismissIfPresent(app, "close-strategy")
         first(app, "play-hit").tap()
         XCTAssertTrue(first(app, "club-Dr").waitForExistence(timeout: 4))
         first(app, "club-Dr").tap()
