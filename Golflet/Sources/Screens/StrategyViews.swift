@@ -451,18 +451,24 @@ struct StrategyHoleCard: View {
         }
     }
 
+    @ViewBuilder
     private func clubChip(_ name: String) -> some View {
-        NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: name))) {
-            Text(name)
-                .font(GType.headline)
-                .foregroundStyle(p.onPrimary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(p.primary)
-                .clipShape(Capsule())
+        let label = Text(name)
+            .font(GType.headline)
+            .foregroundStyle(p.onPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(p.primary)
+            .clipShape(Capsule())
+        if compact {
+            label
+        } else {
+            NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: name))) {
+                label
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("strategy-club")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("strategy-club")
     }
 
     private var availableLevels: [StrategyLevel] {
