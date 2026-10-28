@@ -315,7 +315,8 @@ struct RecapView: View {
                 ))
             }
         } catch {
-            message = error.localizedDescription
+            queueRecap(audio: audio, transcript: transcript, summary: summary)
+            message = "Sin red. El recap quedó en cola y se manda al volver."
         }
     }
 
@@ -330,8 +331,23 @@ struct RecapView: View {
             }
             showsTranscript = false
         } catch {
-            message = error.localizedDescription
+            queueRecap(audio: nil, transcript: transcript, summary: summary)
+            message = "Sin red. El recap quedó en cola y se manda al volver."
         }
+    }
+
+    private func queueRecap(audio: Data?, transcript: String, summary: String) {
+        RecapQueue.enqueue(RecapQueued(
+            clientId: String(UUID().uuidString.prefix(32)),
+            roundId: roundId,
+            liveRoundId: liveRoundId,
+            transcript: transcript,
+            summary: summary.isEmpty ? nil : summary,
+            source: "ios_on_device",
+            model: "apple-speech-es-AR + apple-fm",
+            durationS: recorder.elapsed,
+            audio: audio
+        ))
     }
 
     private func retry() async {
