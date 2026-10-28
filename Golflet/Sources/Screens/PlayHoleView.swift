@@ -53,7 +53,7 @@ struct PlayHoleView: View {
         .task {
             UIApplication.shared.isIdleTimerDisabled = true
             location.start()
-            model.rememberPlay(course: course, liveRound: liveRound)
+            model.rememberPlay(course: course, round: liveRound)
             if let here = location.coordinate {
                 OfflinePlay.saveLastGPS(here, accuracy: location.accuracyM)
             }
