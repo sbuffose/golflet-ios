@@ -10,8 +10,10 @@ struct HoleDetailView: View {
     @Environment(\.palette) private var p
     let courseName: String
     let holeNumber: Int
+    @State private var strategy: CourseStrategy?
 
     private var currentHole: Int { model.presentedHole ?? holeNumber }
+    private var courseKey: String { CourseIdentity.key(for: courseName) }
 
     var body: some View {
         GScreen(id: "screen-hoyo") {
@@ -21,6 +23,7 @@ struct HoleDetailView: View {
                     map
                     yardages
                     history
+                    strategyCard
                     placeholders
                 }
                 .padding(.horizontal, 20)
@@ -29,6 +32,11 @@ struct HoleDetailView: View {
             }
         }
         .accessibilityIdentifier("screen-hoyo")
+        .metricDestinations()
+        .task { strategy = try? await model.api.courseStrategy(courseKey: courseKey, courseId: nil) }
+        .onChange(of: currentHole) { _, _ in
+            Task { strategy = try? await model.api.courseStrategy(courseKey: courseKey, courseId: nil) }
+        }
         .safeAreaInset(edge: .top) {
             HStack {
                 Button { model.presentedHole = nil } label: {
@@ -226,10 +234,25 @@ struct HoleDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder
+    private var strategyCard: some View {
+        if let hole = strategy?.hole(currentHole) {
+            StrategyHoleCard(
+                hole: hole,
+                courseKey: courseKey,
+                warning: StrategyCopy.siteWarning(courseKey: courseKey, hole: currentHole)
+            )
+        }
+    }
+
     private var placeholders: some View {
-        HStack(spacing: 10) {
-            placeholder("Lectura de green", "Pendientes y profundidad del green, todavía sin relevar.")
-            placeholder("Tiro recomendado", "Cargá distancias en Mi bolsa.")
+        Group {
+            if strategy?.hole(currentHole) == nil {
+                HStack(spacing: 10) {
+                    placeholder("Lectura de green", "Pendientes y profundidad del green, todavía sin relevar.")
+                    placeholder("Tiro recomendado", "Todavía sin plan para este hoyo.")
+                }
+            }
         }
     }
 

@@ -187,6 +187,8 @@ extension View {
                 RecurringErrorsView()
             case .clubStats(let code):
                 ClubStatsView(code: code)
+            case .strategy(let courseKey, let courseName):
+                StrategyCourseView(courseKey: courseKey, courseName: courseName)
             }
         }
     }

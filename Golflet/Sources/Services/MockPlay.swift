@@ -30,6 +30,7 @@ extension MockAPIClient {
             clubCode: summary.clubCode,
             clubName: summary.clubName,
             course: summary.course,
+            courseKey: summary.courseKey,
             par: 72,
             holeCount: 18,
             holes: Self.demoHoles(for: summary.courseId),
@@ -155,16 +156,14 @@ extension MockAPIClient {
 
     func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?, draft: RecapDraft?) async throws -> Recap {
         _ = audio
-        var recap = Self.seedRecap(roundId: roundId, liveRoundId: liveRoundId, status: "ready")
-        if let draft { recap = apply(draft, to: recap) }
-        return storeRecap(recap)
+        if let draft {
+            return storeRecap(apply(draft, to: Self.seedRecap(roundId: roundId, liveRoundId: liveRoundId, status: "ready")))
+        }
+        return storeRecap(Self.seedRecap(roundId: roundId, liveRoundId: liveRoundId, status: "pending_ai"))
     }
 
     func typedRecap(roundId: String?, liveRoundId: String?, draft: RecapDraft) async throws -> Recap {
-        var recap = Self.seedRecap(roundId: roundId, liveRoundId: liveRoundId, status: "ready")
-        recap = apply(draft, to: recap)
-        recap.source = draft.structuredOnDevice ? "manual" : "rules"
-        return storeRecap(recap)
+        storeRecap(apply(draft, to: Self.seedRecap(roundId: roundId, liveRoundId: liveRoundId, status: "ready")))
     }
 
     private func apply(_ draft: RecapDraft, to recap: Recap) -> Recap {
@@ -173,6 +172,8 @@ extension MockAPIClient {
         if let summary = draft.summary { next.summary = summary }
         if !draft.mistakes.isEmpty { next.mistakes = draft.mistakes }
         if !draft.positives.isEmpty { next.positives = draft.positives }
+        next.source = draft.source ?? "rules"
+        next.durationS = draft.durationS ?? next.durationS
         next.status = "ready"
         next.error = nil
         return next
@@ -197,16 +198,13 @@ extension MockAPIClient {
                 return RecapPositive(hole: JSONFlex.int(from: item["hole"]), text: text)
             }
         }
-        recap.source = "manual"
-        recap.status = "ready"
-        return storeRecap(recap)
-    }
-
-    func retryRecap(id: String) async throws -> Recap {
-        Self.playLock.lock()
-        var recap = Self.recapsByID[id] ?? Self.seedRecap(roundId: nil, liveRoundId: nil)
-        Self.playLock.unlock()
-        recap.id = id
+        if body["source"] as? String == "ios_on_device" {
+            recap.source = "ios_on_device"
+        } else if JSONFlex.bool(from: body["restructure"]) == true {
+            recap.source = "rules"
+        } else {
+            recap.source = "manual"
+        }
         recap.status = "ready"
         recap.error = nil
         return storeRecap(recap)
@@ -245,6 +243,23 @@ extension MockAPIClient {
 
     func clubStats(code: String) async throws -> ClubStatsDetail {
         if code == "7i" { return Self.hierro7 }
+        if code == "Hy" || code == "3W" {
+            return ClubStatsDetail(
+                club: ClubStats(
+                    club: code,
+                    label: ClubCode.label(for: code),
+                    shots: 10,
+                    distance: ClubDistanceBlock(n: 10, avgM: 196, medianM: 194, maxM: 214, avgYd: 214, medianYd: 212, maxYd: 234, rangeYd: [200, 224], spreadYd: 14),
+                    direction: ClubSplit(left: 20, center: 50, right: 30, n: 10),
+                    lengthOnApproach: nil,
+                    greensHit: nil,
+                    fairwaysHit: ClubRate(pct: 70, hit: 7, of: 10),
+                    mishit: ClubRate(pct: 0, hit: 0, of: 10),
+                    tendency: "Con el \(ClubCode.label(for: code)) te vas al centro (50%)."
+                ),
+                recent: []
+            )
+        }
         if code == "Dr" {
             return ClubStatsDetail(
                 club: ClubStats(
@@ -448,10 +463,130 @@ extension MockAPIClient {
                 RecapPositive(hole: nil, text: "Jugué bastante bien, 79."),
                 RecapPositive(hole: 11, text: "Embocé un birdie en el hoyo 11.")
             ],
-            source: "ai",
+            source: status == "pending_ai" ? nil : "ios_on_device",
             durationS: 74
         )
     }
+
+    func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy {
+        let key = courseKey ?? Self.demoCourses.first { $0.courseId == courseId }?.courseKey ?? "1:Azul"
+        let summary = Self.demoCourses.first { $0.courseKey == key } ?? Self.demoCourses[0]
+        if key == "1:Azul" {
+            return CourseStrategy(
+                courseId: summary.courseId,
+                courseKey: key,
+                overview: "Cancha corta y técnica. El rough castiga y varios greens caen hacia adelante. Pensá el palo de salida hoyo por hoyo.",
+                overviewPublishedAt: "2026-10-28T12:00:00Z",
+                publishedHoles: [7, 8],
+                holes: [Self.azul7, Self.azul8]
+            )
+        }
+        return CourseStrategy(
+            courseId: summary.courseId,
+            courseKey: key,
+            overview: nil,
+            overviewPublishedAt: nil,
+            publishedHoles: [],
+            holes: []
+        )
+    }
+
+    private static let azul7 = HoleStrategy(
+        hole: 7,
+        planTitle: "Híbrido al centro y wedge al green",
+        planText: "Salida con híbrido buscando el centro del fairway, corto del bunker de la derecha. Queda un segundo de 120–140 yd del green abierto.",
+        teeClub: "Híbrido",
+        teeTarget: "Centro del fairway, apuntando al árbol solo del fondo",
+        target: GPSCoord(lat: -34.4866, lng: -58.5296),
+        hazards: [
+            StrategyHazard(
+                id: "h7-left",
+                type: "bunker",
+                typeLabel: "Bunker",
+                side: "izquierda",
+                sideLabel: "Izquierda",
+                fromYd: 131,
+                carryYd: 151,
+                fromM: 120,
+                carryM: 138,
+                note: "Bunker de fairway a la izquierda: agarra el gancho corto.",
+                at: nil
+            ),
+            StrategyHazard(
+                id: "h7-right",
+                type: "bunker",
+                typeLabel: "Bunker",
+                side: "derecha",
+                sideLabel: "Derecha",
+                fromYd: 293,
+                carryYd: 325,
+                fromM: 268,
+                carryM: 297,
+                note: "Bunker a la derecha: empieza a 293 yd de la salida, carry 325 yd.",
+                at: nil
+            ),
+            StrategyHazard(
+                id: "h7-front",
+                type: "bunker",
+                typeLabel: "Bunker",
+                side: "frente_green",
+                sideLabel: "Frente al green",
+                fromYd: 332,
+                carryYd: 359,
+                fromM: 304,
+                carryM: 328,
+                note: "Bunker frente al green: empieza a 332 yd de la salida, carry 359 yd.",
+                at: nil
+            )
+        ],
+        why: "El bunker de la derecha agarra todos los drives de 290 a 325 yd y el de la izquierda castiga el gancho corto. Con híbrido quedás antes de los dos y el approach entra con más spin a un green que cae hacia adelante.",
+        missSide: "izquierda",
+        missNote: "Si errás, que sea a la izquierda, corto del bunker.",
+        greenSlope: "Cae de atrás hacia adelante",
+        greenLeave: "Abajo del hoyo, nunca pasada",
+        greenNotes: "Green que cae hacia adelante: quedate corto y abajo.",
+        variants: [
+            .scratch: StrategyVariant(teeClub: "Madera 3", plan: "Madera 3 al centro, corto del bunker de la derecha. Queda un wedge corto."),
+            .medio: StrategyVariant(teeClub: "Híbrido", plan: "Híbrido al centro. El segundo queda 120–140 yd con wedge."),
+            .alto: StrategyVariant(teeClub: "Híbrido", plan: "Híbrido al centro, sin forzar. El segundo es un hierro o híbrido al green.")
+        ],
+        publishedAt: "2026-10-28T12:00:00Z"
+    )
+
+    private static let azul8 = HoleStrategy(
+        hole: 8,
+        planTitle: "Hierro largo al centro",
+        planText: "Salida con hierro 4 o 5 al centro del fairway. El green está protegido adelante: mejor quedar corto que largo.",
+        teeClub: "Hierro 4",
+        teeTarget: "Centro del fairway",
+        target: nil,
+        hazards: [
+            StrategyHazard(
+                id: "h8-front",
+                type: "bunker",
+                typeLabel: "Bunker",
+                side: "frente_green",
+                sideLabel: "Frente al green",
+                fromYd: 310,
+                carryYd: 335,
+                fromM: 283,
+                carryM: 306,
+                note: "Bunker frente al green: no lo desafíes con la salida.",
+                at: nil
+            )
+        ],
+        why: "El green es chico y cae hacia atrás. Un hierro te deja un approach cómodo y saca de juego el bunker de adelante.",
+        missSide: "corto",
+        missNote: "Si errás, que sea corto. Largo no tiene recovery.",
+        greenSlope: "Cae de adelante hacia atrás",
+        greenLeave: "Abajo, corto del hoyo",
+        greenNotes: "No pases el hoyo.",
+        variants: [
+            .scratch: StrategyVariant(teeClub: "Hierro 3", plan: "Hierro 3 al centro. Approach corto con mucho spin."),
+            .alto: StrategyVariant(teeClub: "Híbrido", plan: "Híbrido al centro. El segundo puede ser un pitch.")
+        ],
+        publishedAt: "2026-10-28T12:00:00Z"
+    )
 
     private static let hierro7 = ClubStatsDetail(
         club: ClubStats(

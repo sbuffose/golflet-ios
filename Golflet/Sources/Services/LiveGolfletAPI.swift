@@ -187,12 +187,6 @@ struct LiveGolfletAPI: GolfletAPI {
         return recap
     }
 
-    func retryRecap(id: String) async throws -> Recap {
-        let json = try await request("POST", "/api/recaps/\(id)/retry", body: [:], timeout: 120)
-        guard let recap = PlayParser.recap(json["recap"] ?? json) else { throw GolfletError.decoding("recap") }
-        return recap
-    }
-
     func recurringMistakes() async throws -> RecurringReport {
         PlayParser.recurring(try await request("GET", "/api/recaps/recurring?last=10"))
     }
@@ -207,6 +201,27 @@ struct LiveGolfletAPI: GolfletAPI {
         let path = "/api/metrics/\(metric)?scope=\(scope)&year=\(year)&course=\(course)&sort=\(sort)&order=\(order)"
         return PlayParser.metric(try await request("GET", path))
     }
+
+    func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy {
+        var query: [String] = []
+        if let courseKey {
+            let encoded = courseKey.addingPercentEncoding(withAllowedCharacters: Self.queryAllowed) ?? courseKey
+            query.append("course_key=\(encoded)")
+        }
+        if let courseId {
+            let encoded = courseId.addingPercentEncoding(withAllowedCharacters: Self.queryAllowed) ?? courseId
+            query.append("course_id=\(encoded)")
+        }
+        let suffix = query.isEmpty ? "" : "?\(query.joined(separator: "&"))"
+        let json = try await request("GET", "/api/strategy\(suffix)", authorized: false)
+        return PlayParser.strategy(json)
+    }
+
+    private static let queryAllowed: CharacterSet = {
+        var set = CharacterSet.alphanumerics
+        set.insert(charactersIn: "-_.")
+        return set
+    }()
 
     private func request(
         _ method: String,
@@ -291,6 +306,9 @@ struct LiveGolfletAPI: GolfletAPI {
         if let liveRoundId { field("live_round_id", liveRoundId) }
         if let draft {
             field("transcript", draft.transcript)
+            if let source = draft.source { field("source", source) }
+            if let model = draft.resolvedModel { field("model", model) }
+            if let duration = draft.durationS { field("duration_s", "\(Int(duration.rounded()))") }
             if let summary = draft.summary { field("summary", summary) }
             if let data = try? JSONSerialization.data(withJSONObject: draft.jsonBody["mistakes"] ?? []),
                let text = String(data: data, encoding: .utf8) {

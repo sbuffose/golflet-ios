@@ -12,7 +12,12 @@ enum RecapOnDevice {
         if let structured = await structure(transcript: transcript) {
             return structured
         }
-        return RecapDraft(transcript: transcript, structuredOnDevice: false)
+        return RecapDraft(
+            transcript: transcript,
+            structuredOnDevice: false,
+            fromSpeech: true,
+            model: "apple-speech-es-AR"
+        )
     }
 
     static func structure(transcript: String) async -> RecapDraft? {
@@ -36,7 +41,9 @@ enum RecapOnDevice {
             positives: [
                 RecapPositive(hole: nil, text: "Jugué bastante bien, 79.")
             ],
-            structuredOnDevice: true
+            structuredOnDevice: true,
+            fromSpeech: true,
+            model: "apple-speech-es-AR + apple-fm"
         )
     }
 
@@ -74,7 +81,9 @@ enum RecapOnDevice {
                     guard !text.isEmpty else { return nil }
                     return RecapPositive(hole: (1...18).contains(item.hole) ? item.hole : nil, text: text)
                 },
-                structuredOnDevice: true
+                structuredOnDevice: true,
+                fromSpeech: true,
+                model: "apple-speech-es-AR + apple-fm"
             )
         } catch {
             return nil
