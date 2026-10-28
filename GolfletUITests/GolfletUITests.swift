@@ -256,6 +256,28 @@ final class GolfletUITests: XCTestCase {
         saveShot("27_login_429")
     }
 
+    func testGPSHoleAdvanceAsksConfirmation() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-next-tee"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
+        first(app, "play-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
+        XCTAssertTrue(first(app, "course-118-jockey-azul").waitForExistence(timeout: 4))
+        first(app, "course-118-jockey-azul").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        first(app, "play-hit").tap()
+        XCTAssertTrue(
+            app.alerts.buttons["Pasar al hoyo"].waitForExistence(timeout: 6)
+                || first(app, "play-advance-confirm").waitForExistence(timeout: 2),
+            "El GPS no pidió confirmación para pasar de hoyo"
+        )
+        saveShot("28_play_advance")
+    }
+
     func testGolfisticsFirstSync() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-auth", "-ui-testing-first-sync"]

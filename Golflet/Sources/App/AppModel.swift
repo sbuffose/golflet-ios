@@ -29,6 +29,9 @@ final class AppModel {
     var showsPlay = false
     var presentedRecap: RecapTarget?
     var recurring: RecurringReport?
+    var pendingCourseHint: String?
+    var activeLiveRound: LiveRound?
+    var activeCourse: GPSCourseDetail?
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -60,9 +63,14 @@ final class AppModel {
             if api.persistsLocally {
                 bag = notes.bag()
             }
-            await flushShotQueue()
+            await flushOffline()
             recurring = try? await api.recurringMistakes()
+            if let courses = try? await api.gpsCourses(lat: nil, lng: nil) {
+                CourseCache.saveList(courses)
+            }
+            publishWidgetSnapshot()
             isLoaded = true
+            await consumeIntent()
         } catch {
             errorMessage = error.localizedDescription
             isLoaded = true
@@ -197,6 +205,10 @@ final class AppModel {
 
     func endPlay(recapLiveRoundId: String?) {
         showsPlay = false
+        activeLiveRound = nil
+        activeCourse = nil
+        OfflinePlay.clearActive()
+        RoundLiveActivity.end()
         guard let recapLiveRoundId else { return }
         Task {
             try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 80 : 450))
@@ -208,14 +220,115 @@ final class AppModel {
         presentedRecap = RecapTarget(roundId: roundId, liveRoundId: liveRoundId)
     }
 
+    func handleURL(_ url: URL) {
+        if let action = GolfletURL.parse(url) {
+            if case .recordShot(let club) = action {
+                _ = ActivePlayIntents.enqueueShot(club: club)
+            }
+            IntentRouter.shared.post(action)
+            Task { await consumeIntent() }
+        }
+    }
+
+    func consumeIntent() async {
+        guard let action = IntentRouter.shared.take() else { return }
+        switch action {
+        case .startRound(let hint):
+            pendingCourseHint = hint
+            showsPlay = true
+        case .recordShot:
+            if activeLiveRound == nil {
+                pendingCourseHint = OfflinePlay.loadActive()?.courseName ?? ""
+                showsPlay = true
+            }
+            await flushOffline()
+        case .recordRecap:
+            if let live = activeLiveRound?.id {
+                presentedRecap = RecapTarget(liveRoundId: live)
+            } else {
+                presentedRecap = RecapTarget(roundId: home.lastRound?.roundId, liveRoundId: OfflinePlay.loadActive()?.roundId)
+            }
+        case .openRound(let id):
+            presentedRound = rounds.first { $0.roundId == id } ?? home.lastRound
+        }
+    }
+
+    func publishWidgetSnapshot(next: NextRoundHint? = nil) {
+        WidgetSnapshotStore.save(WidgetSnapshot.make(home: home, next: next))
+    }
+
+    func rememberPlay(course: GPSCourseDetail, round: LiveRound) {
+        activeCourse = course
+        activeLiveRound = round
+        OfflinePlay.saveActive(roundId: round.id, courseId: course.courseId, hole: round.currentHole, courseName: course.course)
+    }
+
+    func flushOffline() async {
+        await flushShotQueue()
+        await flushRecapQueue()
+    }
+
     func flushShotQueue() async {
         let pending = ShotQueue.all()
         guard !pending.isEmpty else { return }
         let groups = Dictionary(grouping: pending, by: \.liveRoundId)
         for (liveId, drafts) in groups {
+            var target = liveId
+            if OfflinePlay.isLocal(liveId) {
+                guard let local = OfflinePlay.lookup(liveId) else { continue }
+                do {
+                    let created = try await api.createLiveRound(courseId: local.courseId, tee: local.tee)
+                    target = created.id
+                    OfflinePlay.remove(liveId)
+                    if activeLiveRound?.id == liveId {
+                        activeLiveRound = created
+                    }
+                } catch {
+                    break
+                }
+            }
             do {
-                let posted = try await api.postShots(liveRoundId: liveId, drafts: Array(drafts.prefix(200)))
+                let mapped = OfflinePlay.remap(Array(drafts.prefix(200)), to: target)
+                let posted = try await api.postShots(liveRoundId: target, drafts: mapped)
                 ShotQueue.remove(clientIds: Set(posted.compactMap(\.clientId)))
+            } catch {
+                break
+            }
+        }
+    }
+
+    func flushRecapQueue() async {
+        for item in RecapQueue.all() {
+            do {
+                if let audio = item.audio, audio.count >= 1_024 {
+                    _ = try await api.uploadRecap(
+                        audio: audio,
+                        roundId: item.roundId,
+                        liveRoundId: item.liveRoundId,
+                        draft: RecapDraft(
+                            transcript: item.transcript,
+                            summary: item.summary,
+                            structuredOnDevice: item.source == "ios_on_device",
+                            fromSpeech: true,
+                            model: item.model,
+                            durationS: item.durationS
+                        )
+                    )
+                } else {
+                    _ = try await api.typedRecap(
+                        roundId: item.roundId,
+                        liveRoundId: item.liveRoundId,
+                        draft: RecapDraft(
+                            transcript: item.transcript,
+                            summary: item.summary,
+                            structuredOnDevice: item.source == "ios_on_device",
+                            fromSpeech: item.source != nil,
+                            model: item.model,
+                            durationS: item.durationS
+                        )
+                    )
+                }
+                RecapQueue.remove(clientIds: [item.clientId])
             } catch {
                 break
             }
