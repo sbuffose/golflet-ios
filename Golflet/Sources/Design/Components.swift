@@ -127,6 +127,67 @@ struct FilterPills: View {
     }
 }
 
+struct ScrollFilterPills: View {
+    let options: [String]
+    @Binding var selection: String
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            FilterPills(options: options, selection: $selection)
+        }
+    }
+}
+
+struct MetricChevron: View {
+    var color: Color
+
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(color)
+            .accessibilityHidden(true)
+    }
+}
+
+struct MetricBackBar: View {
+    @Environment(\.palette) private var p
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(p.ink2)
+                    .frame(width: 32, height: 32)
+                    .background(p.surface)
+                    .clipShape(Circle())
+            }
+            .accessibilityLabel("Volver")
+            .accessibilityIdentifier("metric-back")
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 6)
+        .background(p.bg)
+    }
+}
+
+extension View {
+    func metricDestinations() -> some View {
+        navigationDestination(for: MetricRoute.self) { route in
+            switch route {
+            case .roundList(let query):
+                MetricRoundsView(query: query)
+            case .scoreKind(let kind, let query):
+                ScoreKindDetailView(kind: kind, query: query)
+            case .handicap:
+                HandicapHistoryView()
+            }
+        }
+    }
+}
+
 struct ScoreMark: View {
     @Environment(\.palette) private var p
     let strokes: Int?
