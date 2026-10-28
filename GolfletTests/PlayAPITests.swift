@@ -169,6 +169,32 @@ final class PlayAPITests: XCTestCase {
         XCTAssertEqual(recap?.status, "ready")
         XCTAssertFalse(recap?.mistakes.isEmpty ?? true)
 
+        let draft = RecapDraft(
+            transcript: "En el 7 la salida se fue OB.",
+            summary: "Salida OB en el 7.",
+            mistakes: [RecapMistake(category: "salida", hole: 7, text: "Driver OB")],
+            positives: [],
+            structuredOnDevice: true
+        )
+        let typed = try await api.typedRecap(roundId: "r-on-device", liveRoundId: nil, draft: draft)
+        XCTAssertEqual(typed.transcript, "En el 7 la salida se fue OB.")
+        XCTAssertEqual(typed.mistakes.first?.category, "salida")
+        XCTAssertTrue(draft.patchBody["restructure"] == nil)
+        XCTAssertEqual(RecapDraft(transcript: "solo texto", structuredOnDevice: false).patchBody["restructure"] as? Bool, true)
+
+        XCTAssertEqual(
+            RecapSpeech.pickLocale(from: [
+                Locale(identifier: "en-US"),
+                Locale(identifier: "es-MX"),
+                Locale(identifier: "es-AR")
+            ])?.identifier.replacingOccurrences(of: "_", with: "-"),
+            "es-AR"
+        )
+        XCTAssertEqual(
+            RecapSpeech.pickLocale(from: [Locale(identifier: "es-ES"), Locale(identifier: "fr-FR")])?.identifier.replacingOccurrences(of: "_", with: "-"),
+            "es-ES"
+        )
+
         let metrics = try await api.metricDrilldown(
             metric: "birdies",
             scope: "year",

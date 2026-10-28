@@ -26,8 +26,8 @@ protocol GolfletAPI: Sendable {
     func postShots(liveRoundId: String, drafts: [ShotDraft]) async throws -> [Shot]
     func patchShot(id: String, body: [String: Any]) async throws -> Shot
     func recap(roundId: String?, liveRoundId: String?) async throws -> Recap?
-    func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?) async throws -> Recap
-    func typedRecap(roundId: String?, liveRoundId: String?, transcript: String) async throws -> Recap
+    func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?, draft: RecapDraft?) async throws -> Recap
+    func typedRecap(roundId: String?, liveRoundId: String?, draft: RecapDraft) async throws -> Recap
     func patchRecap(id: String, body: [String: Any]) async throws -> Recap
     func retryRecap(id: String) async throws -> Recap
     func recurringMistakes() async throws -> RecurringReport

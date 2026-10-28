@@ -166,14 +166,14 @@ struct LiveGolfletAPI: GolfletAPI {
         return PlayParser.recap(json["recap"])
     }
 
-    func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?) async throws -> Recap {
-        let json = try await upload("/api/recaps", audio: audio, roundId: roundId, liveRoundId: liveRoundId)
+    func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?, draft: RecapDraft?) async throws -> Recap {
+        let json = try await upload("/api/recaps", audio: audio, roundId: roundId, liveRoundId: liveRoundId, draft: draft)
         guard let recap = PlayParser.recap(json["recap"] ?? json) else { throw GolfletError.decoding("recap") }
         return recap
     }
 
-    func typedRecap(roundId: String?, liveRoundId: String?, transcript: String) async throws -> Recap {
-        var body: [String: Any] = ["transcript": transcript]
+    func typedRecap(roundId: String?, liveRoundId: String?, draft: RecapDraft) async throws -> Recap {
+        var body = draft.jsonBody
         if let roundId { body["round_id"] = roundId }
         if let liveRoundId { body["live_round_id"] = liveRoundId }
         let json = try await request("POST", "/api/recaps", body: body, timeout: 120)
@@ -266,7 +266,8 @@ struct LiveGolfletAPI: GolfletAPI {
         _ path: String,
         audio: Data,
         roundId: String?,
-        liveRoundId: String?
+        liveRoundId: String?,
+        draft: RecapDraft? = nil
     ) async throws -> [String: Any] {
         guard audio.count >= 1_024 else { throw GolfletError.server("El audio es demasiado corto.") }
         guard audio.count <= 4_000_000 else { throw GolfletError.server("El audio no puede pasar de 4 MB.") }
@@ -288,6 +289,18 @@ struct LiveGolfletAPI: GolfletAPI {
         }
         if let roundId { field("round_id", roundId) }
         if let liveRoundId { field("live_round_id", liveRoundId) }
+        if let draft {
+            field("transcript", draft.transcript)
+            if let summary = draft.summary { field("summary", summary) }
+            if let data = try? JSONSerialization.data(withJSONObject: draft.jsonBody["mistakes"] ?? []),
+               let text = String(data: data, encoding: .utf8) {
+                field("mistakes", text)
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: draft.jsonBody["positives"] ?? []),
+               let text = String(data: data, encoding: .utf8) {
+                field("positives", text)
+            }
+        }
         body.append(Data("--\(boundary)\r\n".utf8))
         body.append(Data("Content-Disposition: form-data; name=\"audio\"; filename=\"recap.m4a\"\r\n".utf8))
         body.append(Data("Content-Type: audio/mp4\r\n\r\n".utf8))

@@ -153,16 +153,29 @@ extension MockAPIClient {
         return nil
     }
 
-    func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?) async throws -> Recap {
+    func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?, draft: RecapDraft?) async throws -> Recap {
         _ = audio
-        return storeRecap(Self.seedRecap(roundId: roundId, liveRoundId: liveRoundId, status: "ready"))
+        var recap = Self.seedRecap(roundId: roundId, liveRoundId: liveRoundId, status: "ready")
+        if let draft { recap = apply(draft, to: recap) }
+        return storeRecap(recap)
     }
 
-    func typedRecap(roundId: String?, liveRoundId: String?, transcript: String) async throws -> Recap {
+    func typedRecap(roundId: String?, liveRoundId: String?, draft: RecapDraft) async throws -> Recap {
         var recap = Self.seedRecap(roundId: roundId, liveRoundId: liveRoundId, status: "ready")
-        recap.transcript = transcript
-        recap.source = "manual"
+        recap = apply(draft, to: recap)
+        recap.source = draft.structuredOnDevice ? "manual" : "rules"
         return storeRecap(recap)
+    }
+
+    private func apply(_ draft: RecapDraft, to recap: Recap) -> Recap {
+        var next = recap
+        next.transcript = draft.transcript
+        if let summary = draft.summary { next.summary = summary }
+        if !draft.mistakes.isEmpty { next.mistakes = draft.mistakes }
+        if !draft.positives.isEmpty { next.positives = draft.positives }
+        next.status = "ready"
+        next.error = nil
+        return next
     }
 
     func patchRecap(id: String, body: [String: Any]) async throws -> Recap {
