@@ -48,6 +48,7 @@ struct PlayCourseView: View {
         .task {
             location.start()
             await loadCourses()
+            await startPendingHint()
         }
         .onChange(of: location.coordinate?.lat) { _, _ in
             Task { await loadCourses() }
@@ -116,20 +117,50 @@ struct PlayCourseView: View {
 
     private func loadCourses() async {
         do {
-            list = try await model.api.gpsCourses(lat: location.coordinate?.lat, lng: location.coordinate?.lng)
+            let remote = try await model.api.gpsCourses(lat: location.coordinate?.lat, lng: location.coordinate?.lng)
+            list = remote
+            CourseCache.saveList(remote)
         } catch {
-            message = error.localizedDescription
+            if let cached = CourseCache.loadList() {
+                list = cached
+                message = "Sin red. Mostramos las canchas que ya tenías cacheadas."
+            } else {
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    private func startPendingHint() async {
+        guard let hint = model.pendingCourseHint, !hint.isEmpty else { return }
+        model.pendingCourseHint = nil
+        let pool = (list?.nearby ?? []) + (list?.courses ?? [])
+        if let match = pool.first(where: { $0.courseId == hint })
+            ?? pool.first(where: {
+                ClubPhrase.matchesCourse(hint, name: $0.course, club: $0.clubName, courseId: $0.courseId)
+                    || ClubPhrase.matchesCourse(hint, name: $0.label, club: $0.clubName, courseId: $0.courseId)
+            }) {
+            await start(match)
         }
     }
 
     private func start(_ summary: GPSCourseSummary) async {
         do {
             let detail = try await model.api.gpsCourse(id: summary.courseId, lat: location.coordinate?.lat, lng: location.coordinate?.lng)
+            CourseCache.save(detail: detail, strategy: try? await model.api.courseStrategy(courseKey: detail.courseKey, courseId: detail.courseId))
             let round = try await model.api.createLiveRound(courseId: summary.courseId, tee: summary.course)
+            model.rememberPlay(course: detail, round: round)
             live = round
             selected = detail
         } catch {
-            message = error.localizedDescription
+            if let cached = CourseCache.load(courseId: summary.courseId) {
+                let round = OfflinePlay.begin(course: cached.detail, tee: summary.course)
+                model.rememberPlay(course: cached.detail, round: round)
+                live = round
+                selected = cached.detail
+                message = "Sin red. Jugás con la cancha cacheada; los golpes se encolan."
+            } else {
+                message = error.localizedDescription
+            }
         }
     }
 }
