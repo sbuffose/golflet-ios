@@ -17,8 +17,9 @@ env:
   SCHEME: Golflet
   BUNDLE_ID: com.sbuffose.golflet
   TEAM_ID: R56Y2GZ2M9
-  PROFILE_NAME: "Golflet AppStore GHA"
-  PROFILE_UUID: "f46028f6-3db1-45de-9788-813b8e9dd482"
+  PROFILE_NAME: "Golflet AppStore GHA v2"
+  WIDGET_PROFILE_NAME: "Golflet Widgets AppStore GHA"
+  WIDGET_BUNDLE_ID: com.sbuffose.golflet.widgets
   XCODE_VERSION: latest-stable
 
 jobs:
@@ -360,17 +361,34 @@ jobs:
           echo "::add-mask::$KEYCHAIN_PASSWORD"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Install Provisioning Profile
+      - name: Install Provisioning Profiles
         env:
           PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+          PROVISIONING_PROFILE_WIDGETS: ${{ secrets.PROVISIONING_PROFILE_WIDGETS }}
         run: |
           set -euo pipefail
-          PROFILE_DIR=~/Library/MobileDevice/Provisioning\ Profiles
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$PROFILE_DIR"
-          PROFILE_PATH="$PROFILE_DIR/${PROFILE_UUID}.mobileprovision"
-          echo "$PROVISIONING_PROFILE" | base64 --decode > "$PROFILE_PATH"
-          echo "=== Provisioning profile installed ==="
-          echo "Path: $PROFILE_PATH"
+
+          install_profile() {
+            local encoded="$1"
+            local label="$2"
+            local tmp="$RUNNER_TEMP/${label}.mobileprovision"
+            local decoded="$RUNNER_TEMP/${label}.plist"
+            echo "$encoded" | base64 --decode > "$tmp"
+            security cms -D -i "$tmp" > "$decoded"
+            local uuid
+            uuid=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$decoded")
+            local name
+            name=$(/usr/libexec/PlistBuddy -c 'Print Name' "$decoded")
+            local dest="$PROFILE_DIR/${uuid}.mobileprovision"
+            mv "$tmp" "$dest"
+            echo "${label}_UUID=$uuid" >> "$GITHUB_ENV"
+            echo "Installed $name ($uuid) at $dest"
+          }
+
+          install_profile "$PROVISIONING_PROFILE" "APP_PROFILE"
+          install_profile "$PROVISIONING_PROFILE_WIDGETS" "WIDGET_PROFILE"
 
       - name: Setup App Store Connect API Key
         env:
@@ -402,7 +420,6 @@ jobs:
             -destination "generic/platform=iOS" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="iPhone Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
@@ -418,7 +435,8 @@ jobs:
           echo "Bundle id: $(plutil -extract CFBundleIdentifier raw "$INFO_PLIST")"
           test -f "$APP_PATH/Assets.car"
           test -f "$APP_PATH/Geist-Regular.otf"
-          echo "Assets.car and Geist-Regular.otf are in the archive."
+          test -d "$APP_PATH/PlugIns/GolfletWidgets.appex"
+          echo "Assets.car, Geist-Regular.otf and GolfletWidgets.appex are in the archive."
 
       - name: Create ExportOptions.plist
         run: |
@@ -440,6 +458,8 @@ jobs:
               <dict>
                   <key>$BUNDLE_ID</key>
                   <string>$PROFILE_NAME</string>
+                  <key>$WIDGET_BUNDLE_ID</key>
+                  <string>$WIDGET_PROFILE_NAME</string>
               </dict>
               <key>uploadSymbols</key>
               <true/>
@@ -512,7 +532,12 @@ jobs:
         if: always()
         run: |
           rm -rf ~/private_keys
-          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
+          if [ -n "${APP_PROFILE_UUID:-}" ]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${APP_PROFILE_UUID}.mobileprovision"
+          fi
+          if [ -n "${WIDGET_PROFILE_UUID:-}" ]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${WIDGET_PROFILE_UUID}.mobileprovision"
+          fi
           if [ -n "${KEYCHAIN_PATH:-}" ]; then
             security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
           fi

@@ -1,34 +1,4 @@
 import Foundation
-import ActivityKit
-
-struct RoundActivityAttributes: ActivityAttributes {
-    struct ContentState: Codable, Hashable {
-        var hole: Int
-        var par: Int
-        var frontYd: Int?
-        var centerYd: Int?
-        var backYd: Int?
-        var strokes: Int
-        var toPar: Int?
-        var course: String
-
-        var holeLine: String { "Hoyo \(hole) · Par \(par)" }
-
-        var scoreLine: String {
-            if let toPar { return "\(strokes) · \(FormatAR.signedInt(toPar))" }
-            return "\(strokes) golpes"
-        }
-
-        var centerLine: String {
-            guard let centerYd else { return "—" }
-            return "\(centerYd)"
-        }
-    }
-
-    var courseName: String
-    var clubName: String
-    var liveRoundId: String
-}
 
 enum LiveRoundState {
     static func make(
