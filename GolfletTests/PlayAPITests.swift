@@ -230,8 +230,8 @@ final class PlayAPITests: XCTestCase {
         XCTAssertEqual(azul.publishedHoles, [7, 8])
         XCTAssertEqual(azul.hole(7)?.teeClub, "Híbrido")
         XCTAssertEqual(azul.hole(7)?.hazards.count, 3)
-        let empty = try await api.courseStrategy(courseKey: "1:Colorada", courseId: nil)
-        XCTAssertTrue(empty.holes.isEmpty)
+        let colorada = try await api.courseStrategy(courseKey: "1:Colorada", courseId: nil)
+        XCTAssertTrue(colorada.holes.isEmpty)
 
         XCTAssertEqual(
             RecapSpeech.pickLocale(from: [
