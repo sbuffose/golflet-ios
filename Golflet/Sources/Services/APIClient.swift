@@ -4,8 +4,8 @@ protocol GolfletAPI: Sendable {
     var isAuthenticated: Bool { get }
     var persistsLocally: Bool { get }
 
-    func signUp(name: String, email: String, password: String) async throws
-    func signIn(email: String, password: String) async throws
+    func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async throws -> GolfisticsSession
+    func startFirstSync(progressID: String) async throws -> SyncResult
     func signOut() async throws
 
     func bootstrap() async throws -> AppSnapshot
