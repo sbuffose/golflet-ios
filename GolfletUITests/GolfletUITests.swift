@@ -31,6 +31,14 @@ final class GolfletUITests: XCTestCase {
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
 
+        if first(app, "metric-tarjetas").waitForExistence(timeout: 3) {
+            first(app, "metric-tarjetas").tap()
+            XCTAssertTrue(waitFor(app, "screen-metric-rounds", timeout: 6), "El detalle de tarjetas no se abrió")
+            saveShot("14_metric_rondas")
+            dismissIfPresent(app, "metric-back")
+            XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+        }
+
         tapTab(app, "Resumen")
         XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
         saveShot("02_resumen")

@@ -20,6 +20,7 @@ struct CourseView: View {
             }
         }
         .accessibilityIdentifier("screen-cancha")
+        .metricDestinations()
     }
 
     private var header: some View {
@@ -44,24 +45,43 @@ struct CourseView: View {
         return GCard(fill: p.primary, radius: 28, padding: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 GOverline(text: "Cancha \(snap.course) · Par \(snap.par)", color: p.onPrimary.opacity(0.55))
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(snap.averageGross.map(FormatAR.one) ?? "—")
-                        .font(GType.statHero)
-                        .tracking(-4.4)
-                        .tabular()
-                        .foregroundStyle(p.onPrimary)
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
-                    Text("gross promedio\nen \(snap.validCount) tarjetas")
-                        .font(GType.label)
-                        .foregroundStyle(p.onPrimary.opacity(0.6))
+                NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "Promedio \(snap.course)", sort: .gross))) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(snap.averageGross.map(FormatAR.one) ?? "—")
+                            .font(GType.statHero)
+                            .tracking(-4.4)
+                            .tabular()
+                            .foregroundStyle(p.onPrimary)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                        Text("gross promedio\nen \(snap.validCount) tarjetas")
+                            .font(GType.label)
+                            .foregroundStyle(p.onPrimary.opacity(0.6))
+                        Spacer(minLength: 4)
+                        MetricChevron(color: p.onPrimary.opacity(0.4))
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-course-average")
                 HStack {
-                    mini("Mejor", snap.bestGross.map(String.init) ?? "—")
+                    NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "Mejor \(snap.course)", sort: .gross))) {
+                        mini("Mejor", snap.bestGross.map(String.init) ?? "—")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("metric-course-best")
                     Spacer()
-                    mini("Neto prom.", snap.averageNet.map(FormatAR.one) ?? "—")
+                    NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "Neto \(snap.course)", sort: .net))) {
+                        mini("Neto prom.", snap.averageNet.map(FormatAR.one) ?? "—")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("metric-course-net")
                     Spacer()
-                    mini("Desde 2025", snap.since2025Average.map(FormatAR.one) ?? "—")
+                    NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "\(snap.course) desde 2025", sinceYear: 2025, sort: .gross))) {
+                        mini("Desde 2025", snap.since2025Average.map(FormatAR.one) ?? "—")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("metric-course-2025")
                 }
                 .padding(.top, 8)
             }
@@ -70,14 +90,18 @@ struct CourseView: View {
 
     private func mini(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(GType.label)
-                .foregroundStyle(p.onPrimary.opacity(0.5))
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(GType.label)
+                    .foregroundStyle(p.onPrimary.opacity(0.5))
+                MetricChevron(color: p.onPrimary.opacity(0.35))
+            }
             Text(value)
                 .font(GType.statM)
                 .tabular()
                 .foregroundStyle(p.onPrimary)
         }
+        .contentShape(Rectangle())
     }
 
     private var tees: some View {

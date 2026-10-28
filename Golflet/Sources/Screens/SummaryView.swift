@@ -20,6 +20,7 @@ struct SummaryView: View {
             }
         }
         .accessibilityIdentifier("screen-resumen")
+        .metricDestinations()
     }
 
     private var header: some View {
@@ -41,49 +42,124 @@ struct SummaryView: View {
 
     private var grid: some View {
         let snap = model.summary
+        let course = model.courseFilter.courseName
         return VStack(spacing: 10) {
             HStack(spacing: 10) {
-                statBlock(
-                    label: "Mejor ronda",
-                    value: snap.best?.gross.map(String.init) ?? "—",
-                    secondary: snap.best.flatMap { best in
-                        guard let net = best.net else { return nil }
-                        return "\(net) neto"
-                    },
-                    footnote: snap.best.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
-                )
-                statBlock(
-                    label: "Peor (desde 2021)",
-                    value: snap.worstSince2021?.gross.map(String.init) ?? "—",
-                    secondary: snap.worstSince2021.flatMap { w in w.net.map { "\($0) neto" } },
-                    footnote: snap.worstSince2021.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
-                )
+                NavigationLink(value: MetricRoute.roundList(.summaryBest(course: course))) {
+                    statBlock(
+                        label: "Mejor ronda",
+                        value: snap.best?.gross.map(String.init) ?? "—",
+                        secondary: snap.best.flatMap { best in
+                            guard let net = best.net else { return nil }
+                            return "\(net) neto"
+                        },
+                        footnote: snap.best.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-summary-best")
+                NavigationLink(value: MetricRoute.roundList(.summaryWorst(course: course))) {
+                    statBlock(
+                        label: "Peor (desde 2021)",
+                        value: snap.worstSince2021?.gross.map(String.init) ?? "—",
+                        secondary: snap.worstSince2021.flatMap { w in w.net.map { "\($0) neto" } },
+                        footnote: snap.worstSince2021.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-summary-worst")
             }
             HStack(spacing: 10) {
-                statBlock(
-                    label: "Promedio gross",
-                    value: snap.averageGross.map(FormatAR.one) ?? "—",
-                    secondary: snap.averageToPar.map { "neto · \(FormatAR.signedOne($0))" },
-                    footnote: "\(snap.validRoundCount) rondas · \(snap.averageToPar.map { FormatAR.signedOne($0) } ?? "—")"
-                )
-                statBlock(
-                    label: "Desde 2025",
-                    value: snap.since2025Average.map(FormatAR.one) ?? "—",
-                    secondary: nil,
-                    footnote: "\(snap.since2025Count) rondas · mejor dif. \(snap.since2025BestDifferential.map(FormatAR.one) ?? "—")"
-                )
+                NavigationLink(value: MetricRoute.roundList(.average(yearOnly: false).locking(course: course))) {
+                    statBlock(
+                        label: "Promedio gross",
+                        value: snap.averageGross.map(FormatAR.one) ?? "—",
+                        secondary: snap.averageToPar.map { "neto · \(FormatAR.signedOne($0))" },
+                        footnote: "\(snap.validRoundCount) rondas · \(snap.averageToPar.map { FormatAR.signedOne($0) } ?? "—")"
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-summary-average")
+                NavigationLink(value: MetricRoute.roundList(.since2025(course: course))) {
+                    statBlock(
+                        label: "Desde 2025",
+                        value: snap.since2025Average.map(FormatAR.one) ?? "—",
+                        secondary: nil,
+                        footnote: "\(snap.since2025Count) rondas · mejor dif. \(snap.since2025BestDifferential.map(FormatAR.one) ?? "—")"
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-summary-2025")
+            }
+            scoreMix
+        }
+    }
+
+    private var scoreMix: some View {
+        let scoped = StatsEngine.apply(StatsEngine.eighteenHoleValid(model.rounds), filter: model.courseFilter)
+        let totals = StatsEngine.scoreTotals(scoped)
+        let query = RoundListQuery(
+            title: "Resumen",
+            periodDefault: .all,
+            showCourseFilter: model.courseFilter.courseName == nil,
+            valid18Only: true,
+            courseName: model.courseFilter.courseName
+        )
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Resultados")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    ForEach([ScoreKind.eagle, .birdie], id: \.self) { kind in
+                        scoreTile(kind, total: totals[kind] ?? 0, query: query)
+                    }
+                }
+                HStack(spacing: 10) {
+                    ForEach([ScoreKind.par, .bogey], id: \.self) { kind in
+                        scoreTile(kind, total: totals[kind] ?? 0, query: query)
+                    }
+                }
             }
         }
+    }
+
+    private func scoreTile(_ kind: ScoreKind, total: Int, query: RoundListQuery) -> some View {
+        NavigationLink(value: MetricRoute.scoreKind(kind, query)) {
+            GCard(radius: 16, padding: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(kind.title)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Spacer(minLength: 0)
+                        MetricChevron(color: p.ink3)
+                    }
+                    Text("\(total)")
+                        .font(GType.statM)
+                        .tabular()
+                        .foregroundStyle(p.ink)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("metric-summary-\(kind.rawValue)")
     }
 
     private func statBlock(label: String, value: String, secondary: String?, footnote: String?) -> some View {
         GCard(radius: 18, padding: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(label)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(label)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    MetricChevron(color: p.ink3)
+                }
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(value)
                         .font(GType.statL)
@@ -116,20 +192,29 @@ struct SummaryView: View {
                     .font(GType.label)
                     .foregroundStyle(p.ink3)
             }
-            GCard(radius: 22, padding: 16) {
-                TrendChart(points: model.summary.trend, current: model.home.handicapIndex)
-                    .frame(height: 180)
-                HStack(spacing: 16) {
-                    legendDot(p.teeColor("azul"), "Azul")
-                    legendDot(p.teeColor("rojo"), "Colorada")
-                    legendDot(p.ink, "Índice")
+            NavigationLink(value: MetricRoute.handicap) {
+                GCard(radius: 22, padding: 16) {
+                    TrendChart(points: model.summary.trend, current: model.home.handicapIndex)
+                        .frame(height: 180)
+                    HStack(spacing: 16) {
+                        legendDot(p.teeColor("azul"), "Azul")
+                        legendDot(p.teeColor("rojo"), "Colorada")
+                        legendDot(p.ink, "Índice")
+                    }
+                    .padding(.top, 8)
+                    Text("Cada punto es el diferencial calculado por Golflet (Golfistics no publica el HCP Index oficial de las últimas 26 semanas).")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
+                        .padding(.top, 6)
+                    HStack {
+                        Spacer()
+                        MetricChevron(color: p.ink3)
+                    }
+                    .padding(.top, 4)
                 }
-                .padding(.top, 8)
-                Text("Cada punto es el diferencial calculado por Golflet (Golfistics no publica el HCP Index oficial de las últimas 26 semanas).")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
-                    .padding(.top, 6)
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("metric-summary-trend")
         }
     }
 

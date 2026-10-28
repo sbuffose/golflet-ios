@@ -94,7 +94,7 @@ enum StatsEngine {
             yearAverage: average(yearRounds.compactMap(\.gross)),
             yearRoundCount: yearRounds.count,
             yearBestGross: yearRounds.compactMap(\.gross).min(),
-            yearBirdies: yearRounds.map(\.counts.birdies).reduce(0, +),
+            yearBirdies: yearRounds.reduce(0) { $0 + count(.birdie, in: $1).count },
             lastRound: sorted.first
         )
     }
@@ -193,6 +193,130 @@ enum StatsEngine {
     static func average(_ values: [Double]) -> Double? {
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
+    }
+
+    static func filter(
+        _ rounds: [Round],
+        query: RoundListQuery,
+        period: MetricPeriod,
+        course: MetricCourseBucket,
+        now: Date = Date()
+    ) -> [Round] {
+        let year = Calendar.gregorian.component(.year, from: now)
+        return rounds.filter { round in
+            if let club = query.clubCode, round.clubCode != club { return false }
+            if let name = query.courseName {
+                let named = round.course.caseInsensitiveCompare(name) == .orderedSame
+                    || round.displayCourse.caseInsensitiveCompare(name) == .orderedSame
+                if !named { return false }
+            }
+            if query.valid18Only, !(round.isValid && !round.isNineHoles && round.gross != nil) {
+                return false
+            }
+            if let since = query.sinceYear,
+               Calendar.gregorian.component(.year, from: round.date) < since {
+                return false
+            }
+            if period == .year, Calendar.gregorian.component(.year, from: round.date) != year {
+                return false
+            }
+            if !course.matches(round) { return false }
+            return true
+        }
+    }
+
+    static func sorted(
+        _ rounds: [Round],
+        field: MetricSortField,
+        order: MetricSortOrder
+    ) -> [Round] {
+        rounds.sorted { lhs, rhs in
+            switch field {
+            case .date:
+                return order == .bestFirst ? lhs.date > rhs.date : lhs.date < rhs.date
+            case .gross:
+                let left = lhs.gross ?? (order == .bestFirst ? 9999 : -9999)
+                let right = rhs.gross ?? (order == .bestFirst ? 9999 : -9999)
+                if left != right {
+                    return order == .bestFirst ? left < right : left > right
+                }
+                return lhs.date > rhs.date
+            case .net:
+                let left = lhs.net ?? (order == .bestFirst ? 9999 : -9999)
+                let right = rhs.net ?? (order == .bestFirst ? 9999 : -9999)
+                if left != right {
+                    return order == .bestFirst ? left < right : left > right
+                }
+                return lhs.date > rhs.date
+            }
+        }
+    }
+
+    static func holes(_ kind: ScoreKind, in round: Round) -> [HoleScore] {
+        round.holes.filter { $0.result == kind.holeResult }
+    }
+
+    static func count(_ kind: ScoreKind, in round: Round) -> (count: Int, fromHoles: Bool) {
+        if !round.holes.isEmpty {
+            return (holes(kind, in: round).count, true)
+        }
+        switch kind {
+        case .eagle:
+            return (0, false)
+        case .birdie:
+            return (round.counts.birdies, false)
+        case .par:
+            return (round.counts.pars, false)
+        case .bogey:
+            return (round.counts.bogeys, false)
+        }
+    }
+
+    static func scoreKind(
+        _ kind: ScoreKind,
+        rounds: [Round],
+        query: RoundListQuery,
+        period: MetricPeriod,
+        course: MetricCourseBucket,
+        now: Date = Date()
+    ) -> ScoreKindSnapshot {
+        let scoped = filter(rounds, query: query, period: period, course: course, now: now)
+        var items: [ScoreKindRound] = []
+        var tallyMap: [String: HoleTally] = [:]
+        var missing = 0
+        var total = 0
+        for round in scoped {
+            let scored = count(kind, in: round)
+            if scored.count == 0 { continue }
+            total += scored.count
+            let holeList = holes(kind, in: round)
+            if !scored.fromHoles { missing += 1 }
+            items.append(ScoreKindRound(round: round, count: scored.count, holes: holeList, usedHoleDetail: scored.fromHoles))
+            for hole in holeList {
+                let key = "\(round.displayCourse)-\(hole.number)"
+                var entry = tallyMap[key] ?? HoleTally(course: round.displayCourse, hole: hole.number, count: 0)
+                entry.count += 1
+                tallyMap[key] = entry
+            }
+        }
+        let tally = tallyMap.values.sorted { lhs, rhs in
+            if lhs.count != rhs.count { return lhs.count > rhs.count }
+            if lhs.course != rhs.course { return lhs.course < rhs.course }
+            return lhs.hole < rhs.hole
+        }
+        let orderedRounds = items.sorted { lhs, rhs in
+            if lhs.count != rhs.count { return lhs.count > rhs.count }
+            return lhs.round.date > rhs.round.date
+        }
+        return ScoreKindSnapshot(total: total, rounds: orderedRounds, tally: tally, roundsMissingHoles: missing)
+    }
+
+    static func scoreTotals(_ rounds: [Round]) -> [ScoreKind: Int] {
+        var totals: [ScoreKind: Int] = [:]
+        for kind in ScoreKind.allCases {
+            totals[kind] = rounds.reduce(0) { $0 + count(kind, in: $1).count }
+        }
+        return totals
     }
 }
 
