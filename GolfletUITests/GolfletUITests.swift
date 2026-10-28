@@ -61,6 +61,31 @@ final class GolfletUITests: XCTestCase {
             dismissIfPresent(app, "close-hole")
         }
 
+        if first(app, "filter-azul").waitForExistence(timeout: 3) {
+            first(app, "filter-azul").tap()
+        }
+        if first(app, "course-strategy").waitForExistence(timeout: 4) {
+            first(app, "course-strategy").tap()
+            XCTAssertTrue(waitFor(app, "screen-strategy", timeout: 6), "No se abrió Cómo jugar la cancha")
+            saveShot("20_strategy")
+            XCTAssertTrue(first(app, "strategy-hole-7").waitForExistence(timeout: 4))
+            first(app, "strategy-hole-7").tap()
+            XCTAssertTrue(waitFor(app, "screen-strategy-hole", timeout: 6))
+            XCTAssertTrue(waitFor(app, "strategy-plan-title", timeout: 4))
+            saveShot("21_strategy_hoyo7")
+            if first(app, "strategy-hazard-0").waitForExistence(timeout: 2) {
+                first(app, "strategy-hazard-0").tap()
+            }
+            if first(app, "strategy-club").waitForExistence(timeout: 3) {
+                first(app, "strategy-club").tap()
+                XCTAssertTrue(waitFor(app, "screen-club-stats", timeout: 6), "El palo de la estrategia no abrió stats")
+                dismissIfPresent(app, "metric-back")
+            }
+            dismissIfPresent(app, "metric-back")
+            dismissIfPresent(app, "metric-back")
+            XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 5))
+        }
+
         tapTab(app, "Mi bolsa")
         XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
         saveShot("08_bolsa")
@@ -90,6 +115,19 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8), "No se abrió el hoyo GPS")
         XCTAssertTrue(waitFor(app, "distance-center", timeout: 4))
         saveShot("17_play_hoyo")
+        if first(app, "play-hole-picker").waitForExistence(timeout: 3) {
+            first(app, "play-hole-picker").tap()
+            if first(app, "pick-hole-7").waitForExistence(timeout: 4) {
+                first(app, "pick-hole-7").tap()
+            }
+        }
+        if first(app, "strategy-compact").waitForExistence(timeout: 5) {
+            saveShot("22_play_strategy")
+            first(app, "strategy-expand").tap()
+            XCTAssertTrue(waitFor(app, "screen-strategy-hole", timeout: 6))
+            saveShot("23_play_strategy_full")
+            dismissIfPresent(app, "close-strategy")
+        }
         first(app, "play-hit").tap()
         XCTAssertTrue(first(app, "club-Dr").waitForExistence(timeout: 4))
         first(app, "club-Dr").tap()

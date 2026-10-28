@@ -14,12 +14,14 @@ final class PlayAPITests: XCTestCase {
     func testClubCodeRoundTrip() {
         XCTAssertEqual(ClubCode.code(for: "Hierro 7"), "7i")
         XCTAssertEqual(ClubCode.code(for: "Driver"), "Dr")
+        XCTAssertEqual(ClubCode.code(for: "Híbrido"), "Hy")
+        XCTAssertEqual(ClubCode.code(for: "Wedge"), "PW")
         XCTAssertEqual(ClubCode.label(for: "7i"), "Hierro 7")
         XCTAssertEqual(ClubCode.label(for: "Pt"), "Putter")
     }
 
     func testRecapPendingCopy() {
-        XCTAssertEqual(RecapCopy.pendingAI, "La transcripción automática se activa pronto")
+        XCTAssertEqual(RecapCopy.pendingAI, "Audio guardado. La transcripción se hace en la app de iPhone…")
         XCTAssertEqual(RecapCopy.category("estrategia"), "Estrategia / mental")
         XCTAssertEqual(RecapCopy.direction("right"), "Derecha")
         XCTAssertEqual(RecapCopy.length("short"), "Corto")
@@ -180,7 +182,56 @@ final class PlayAPITests: XCTestCase {
         XCTAssertEqual(typed.transcript, "En el 7 la salida se fue OB.")
         XCTAssertEqual(typed.mistakes.first?.category, "salida")
         XCTAssertTrue(draft.patchBody["restructure"] == nil)
+        XCTAssertEqual(draft.jsonBody["source"] as? String, "ios_on_device")
+        XCTAssertEqual(draft.jsonBody["model"] as? String, "apple-speech-es-AR + apple-fm")
+        XCTAssertNil(RecapDraft(transcript: "solo texto", structuredOnDevice: false).jsonBody["source"])
         XCTAssertEqual(RecapDraft(transcript: "solo texto", structuredOnDevice: false).patchBody["restructure"] as? Bool, true)
+        XCTAssertEqual(typed.source, "ios_on_device")
+
+        XCTAssertEqual(CourseIdentity.key(for: "Azul"), "1:Azul")
+        XCTAssertEqual(CourseIdentity.id(for: "Colorada"), "118-jockey-colorada")
+        XCTAssertEqual(StrategyLevel.from(handicap: 3.1), .scratch)
+        XCTAssertEqual(StrategyLevel.from(handicap: 12), .medio)
+        XCTAssertEqual(StrategyLevel.from(handicap: 22), .alto)
+
+        let parsed = PlayParser.strategy([
+            "course_id": "118-jockey-azul",
+            "course_key": "1:Azul",
+            "overview": "Cancha corta y técnica.",
+            "published_holes": [7],
+            "holes": [[
+                "hole": 7,
+                "plan_title": "Híbrido al centro y wedge al green",
+                "plan_text": "Salida con híbrido.",
+                "tee_club": "Híbrido",
+                "tee_target": "Centro del fairway",
+                "why": "El bunker de la derecha agarra los drives.",
+                "miss_side": "izquierda",
+                "hazards": [[
+                    "id": "h1",
+                    "type": "bunker",
+                    "type_label": "Bunker",
+                    "side": "derecha",
+                    "side_label": "Derecha",
+                    "from_yd": 293,
+                    "carry_yd": 325,
+                    "from_m": 268,
+                    "carry_m": 297,
+                    "note": "Bunker a la derecha."
+                ]],
+                "variants": ["scratch": ["tee_club": "Madera 3", "plan": "Madera 3 al centro."]]
+            ]]
+        ])
+        XCTAssertEqual(parsed.holes.first?.planTitle, "Híbrido al centro y wedge al green")
+        XCTAssertEqual(parsed.holes.first?.hazards.first?.carryYd, 325)
+        XCTAssertEqual(parsed.holes.first?.variants[.scratch]?.teeClub, "Madera 3")
+
+        let azul = try await api.courseStrategy(courseKey: "1:Azul", courseId: nil)
+        XCTAssertEqual(azul.publishedHoles, [7, 8])
+        XCTAssertEqual(azul.hole(7)?.teeClub, "Híbrido")
+        XCTAssertEqual(azul.hole(7)?.hazards.count, 3)
+        let empty = try await api.courseStrategy(courseKey: "1:Colorada", courseId: nil)
+        XCTAssertTrue(empty.holes.isEmpty)
 
         XCTAssertEqual(
             RecapSpeech.pickLocale(from: [

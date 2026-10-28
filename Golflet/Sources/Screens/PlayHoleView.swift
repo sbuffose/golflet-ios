@@ -16,6 +16,8 @@ struct PlayHoleView: View {
     @State private var lastShot: Shot?
     @State private var message: String?
     @State private var showsHoles = false
+    @State private var showsStrategy = false
+    @State private var strategy: CourseStrategy?
     @State private var lastManualChange = Date.distantPast
 
     enum Phase { case ready, pickClub, pickResult }
@@ -32,6 +34,7 @@ struct PlayHoleView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     header
                     distances
+                    compactStrategy
                     accuracy
                     hitButton
                     if phase != .ready { clubGrid }
@@ -50,6 +53,7 @@ struct PlayHoleView: View {
             UIApplication.shared.isIdleTimerDisabled = true
             location.start()
             await refresh()
+            strategy = try? await model.api.courseStrategy(courseKey: course.courseKey, courseId: course.courseId)
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
@@ -59,6 +63,7 @@ struct PlayHoleView: View {
             maybeAdvance()
         }
         .sheet(isPresented: $showsHoles) { holePicker }
+        .sheet(isPresented: $showsStrategy) { strategySheet }
     }
 
     private var current: GPSHole? {
@@ -154,6 +159,69 @@ struct PlayHoleView: View {
                 .foregroundStyle(p.ink2)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var compactStrategy: some View {
+        if let hole = strategy?.hole(hole) {
+            GCard(radius: 22, padding: 16) {
+                VStack(alignment: .leading, spacing: 12) {
+                    StrategyHoleCard(hole: hole, courseKey: course.courseKey, compact: true)
+                    Button { showsStrategy = true } label: {
+                        Text("Ver plan")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(p.primary)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("strategy-expand")
+                }
+            }
+            .accessibilityIdentifier("strategy-compact")
+        }
+    }
+
+    private var strategySheet: some View {
+        NavigationStack {
+            GScreen(id: "screen-strategy-hole") {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let holePlan = strategy?.hole(hole) {
+                            StrategyHoleCard(
+                                hole: holePlan,
+                                courseKey: course.courseKey,
+                                warning: StrategyCopy.siteWarning(courseKey: course.courseKey, hole: hole)
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 28)
+                }
+            }
+            .safeAreaInset(edge: .top) {
+                HStack {
+                    Spacer()
+                    Button { showsStrategy = false } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(p.ink2)
+                            .frame(width: 32, height: 32)
+                            .background(p.surface)
+                            .clipShape(Circle())
+                    }
+                    .accessibilityIdentifier("close-strategy")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+            }
+            .metricDestinations()
+        }
+        .golfletChrome()
+        .environment(model)
     }
 
     private var accuracy: some View {

@@ -45,6 +45,7 @@ struct GPSCourseDetail: Hashable, Sendable, Identifiable {
     var clubCode: String
     var clubName: String
     var course: String
+    var courseKey: String
     var par: Int
     var holeCount: Int
     var holes: [GPSHole]
@@ -130,9 +131,28 @@ struct RecapDraft: Hashable, Sendable {
     var mistakes: [RecapMistake] = []
     var positives: [RecapPositive] = []
     var structuredOnDevice = false
+    var fromSpeech = false
+    var model: String?
+    var durationS: Double?
 
-    var patchBody: [String: Any] {
+    var source: String? {
+        structuredOnDevice ? "ios_on_device" : nil
+    }
+
+    var resolvedModel: String? {
+        if let model {
+            return String(model.prefix(80))
+        }
+        if structuredOnDevice { return "apple-speech-es-AR + apple-fm" }
+        if fromSpeech { return "apple-speech-es-AR" }
+        return nil
+    }
+
+    var jsonBody: [String: Any] {
         var body: [String: Any] = ["transcript": transcript]
+        if let source { body["source"] = source }
+        if let resolvedModel { body["model"] = resolvedModel }
+        if let durationS { body["duration_s"] = Int(durationS.rounded()) }
         if structuredOnDevice {
             if let summary { body["summary"] = summary }
             body["mistakes"] = mistakes.map {
@@ -145,15 +165,15 @@ struct RecapDraft: Hashable, Sendable {
                 if let hole = $0.hole { item["hole"] = hole }
                 return item
             }
-        } else {
-            body["restructure"] = true
         }
         return body
     }
 
-    var jsonBody: [String: Any] {
-        var body = patchBody
-        body.removeValue(forKey: "restructure")
+    var patchBody: [String: Any] {
+        var body = jsonBody
+        if !structuredOnDevice {
+            body["restructure"] = true
+        }
         return body
     }
 }
@@ -361,7 +381,7 @@ enum RecapCopy {
         }
     }
 
-    static let pendingAI = "La transcripción automática se activa pronto"
+    static let pendingAI = "Audio guardado. La transcripción se hace en la app de iPhone…"
 
     static func direction(_ raw: String?) -> String {
         switch raw {
@@ -381,6 +401,7 @@ enum ClubCode {
         case "madera 3", "3w", "3 wood": return "3W"
         case "madera 5", "5w": return "5W"
         case "hibrido", "hy", "hybrid": return "Hy"
+        case "wedge", "w": return "PW"
         case "hierro 4", "4i": return "4i"
         case "hierro 5", "5i": return "5i"
         case "hierro 6", "6i": return "6i"
@@ -417,6 +438,151 @@ enum ClubCode {
         case "Pt": return "Putter"
         default: return code
         }
+    }
+}
+
+enum CourseIdentity {
+    static func key(for name: String) -> String {
+        switch name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased() {
+        case "azul": return "1:Azul"
+        case "colorada": return "1:Colorada"
+        case "cancha nueva": return "7:Cancha Nueva"
+        case "cancha vieja": return "7:Cancha Vieja"
+        default: return name
+        }
+    }
+
+    static func id(for name: String) -> String {
+        switch name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased() {
+        case "azul": return "118-jockey-azul"
+        case "colorada": return "118-jockey-colorada"
+        case "cancha nueva": return "209-mdp-nueva"
+        case "cancha vieja": return "209-mdp-vieja"
+        default: return name
+        }
+    }
+}
+
+enum StrategyLevel: String, Hashable, CaseIterable, Sendable {
+    case general
+    case scratch
+    case medio
+    case alto
+
+    var chip: String {
+        switch self {
+        case .general: return "General"
+        case .scratch: return "Scratch"
+        case .medio: return "Hándicap medio"
+        case .alto: return "Hándicap alto"
+        }
+    }
+
+    static func from(handicap: Double) -> StrategyLevel {
+        if handicap <= 5 { return .scratch }
+        if handicap <= 18 { return .medio }
+        return .alto
+    }
+}
+
+struct StrategyVariant: Hashable, Sendable {
+    var teeClub: String?
+    var plan: String?
+}
+
+struct StrategyHazard: Hashable, Sendable, Identifiable {
+    var id: String
+    var type: String
+    var typeLabel: String
+    var side: String?
+    var sideLabel: String?
+    var fromYd: Int?
+    var carryYd: Int?
+    var fromM: Int?
+    var carryM: Int?
+    var note: String?
+    var at: GPSCoord?
+
+    var title: String {
+        let side = sideLabel ?? StrategyCopy.side(self.side)
+        if side.isEmpty { return typeLabel }
+        return "\(typeLabel) · \(side)"
+    }
+
+    var rangeLabel: String? {
+        switch (fromYd, carryYd) {
+        case let (from?, carry?): return "\(from)–\(carry) yd"
+        case let (from?, nil): return "\(from) yd"
+        case let (nil, carry?): return "\(carry) yd"
+        default: return nil
+        }
+    }
+}
+
+struct HoleStrategy: Hashable, Sendable, Identifiable {
+    var id: Int { hole }
+    var hole: Int
+    var planTitle: String?
+    var planText: String?
+    var teeClub: String?
+    var teeTarget: String?
+    var target: GPSCoord?
+    var hazards: [StrategyHazard]
+    var why: String?
+    var missSide: String?
+    var missNote: String?
+    var greenSlope: String?
+    var greenLeave: String?
+    var greenNotes: String?
+    var variants: [StrategyLevel: StrategyVariant]
+    var publishedAt: String?
+
+    func variant(_ level: StrategyLevel) -> StrategyVariant? {
+        variants[level]
+    }
+
+    func resolvedClub(level: StrategyLevel) -> String? {
+        if level != .general, let club = variants[level]?.teeClub, !club.isEmpty { return club }
+        return teeClub
+    }
+
+    func resolvedPlan(level: StrategyLevel) -> String? {
+        if level != .general, let plan = variants[level]?.plan, !plan.isEmpty { return plan }
+        return planText
+    }
+}
+
+struct CourseStrategy: Hashable, Sendable {
+    var courseId: String
+    var courseKey: String
+    var overview: String?
+    var overviewPublishedAt: String?
+    var publishedHoles: [Int]
+    var holes: [HoleStrategy]
+
+    func hole(_ number: Int) -> HoleStrategy? {
+        holes.first { $0.hole == number }
+    }
+}
+
+enum StrategyCopy {
+    static func side(_ raw: String?) -> String {
+        switch raw {
+        case "izquierda": return "Izquierda"
+        case "derecha": return "Derecha"
+        case "centro": return "Centro"
+        case "ambos_lados": return "Ambos lados"
+        case "frente_green": return "Frente al green"
+        case "detras_green": return "Detrás del green"
+        case "corto": return "Corto"
+        case "largo": return "Largo"
+        default: return ""
+        }
+    }
+
+    static func siteWarning(courseKey: String, hole: Int) -> String? {
+        guard courseKey == "1:Azul", hole == 7 else { return nil }
+        return "Dato del sitio a revisar: la yarda y el par de este hoyo no parecen coincidir."
     }
 }
 
