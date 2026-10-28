@@ -31,7 +31,7 @@ final class AuthAPITests: XCTestCase {
     func testGolfisticsUnavailable() async {
         let api = MockAPIClient(autoSession: false)
         do {
-            _ = try await api.signInGolfistics(matricula: "down", clave: "x", savePassword: false)
+            _ = try await api.signInGolfistics(matricula: "503", clave: "x", savePassword: false)
             XCTFail("Tenía que avisar la caída")
         } catch let error as GolfletError {
             XCTAssertEqual(error.authFailure?.code, "GOLFISTICS_UNAVAILABLE")

@@ -147,7 +147,8 @@ struct AuthView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(p.negative.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityIdentifier(failure.cardID)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(failure.bannerID)
     }
 
     private func openGolfistics(_ url: URL) {
