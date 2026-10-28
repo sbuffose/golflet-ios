@@ -45,9 +45,11 @@ struct ClubsView: View {
                             Text("Tu cuenta")
                                 .font(GType.section)
                                 .foregroundStyle(p.ink)
-                            Text(user.email)
-                                .font(GType.label)
-                                .foregroundStyle(p.ink2)
+                            if let email = user.visibleEmail {
+                                Text(email)
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink2)
+                            }
                             Button("Salir") {
                                 Task {
                                     await model.signOut()

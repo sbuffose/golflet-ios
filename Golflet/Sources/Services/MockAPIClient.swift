@@ -40,21 +40,46 @@ struct MockAPIClient: GolfletAPI {
 
     var persistsLocally: Bool { true }
 
-    func signUp(name: String, email: String, password: String) async throws {
-        _ = password
+    func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async throws -> GolfisticsSession {
+        _ = savePassword
+        let trimmed = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !clave.isEmpty else {
+            throw GolfletError.auth(AuthFailure(
+                code: "BAD_INPUT",
+                message: "Escribí tu matrícula y tu clave de Golfistics.",
+                hint: nil,
+                golfisticsURL: nil,
+                retryAfterS: nil
+            ))
+        }
+        switch trimmed {
+        case "0000000", "0":
+            throw GolfletError.auth(AuthCopy.rejected)
+        case "down", "503":
+            throw GolfletError.auth(AuthCopy.unavailable)
+        case "429":
+            throw GolfletError.auth(AuthCopy.rateLimited())
+        default:
+            break
+        }
+        let first = trimmed == "first" || ProcessInfo.processInfo.arguments.contains("-ui-testing-first-sync")
         Self.sessionLock.lock()
-        Self.mockUser = GolfletUser(id: "demo", email: email, name: name.isEmpty ? "Jugador Demo" : name)
+        Self.mockUser = GolfletUser(id: "demo", email: "matricula-\(trimmed)@golfistics.invalid", name: "Jugador Demo")
         Self.mockSignedIn = true
-        Self.mockLinked = false
+        Self.mockLinked = !first
+        Self.mockPasswordSaved = savePassword
         Self.sessionLock.unlock()
+        return GolfisticsSession(needsFirstSync: first, newAccount: first, userName: "Jugador Demo")
     }
 
-    func signIn(email: String, password: String) async throws {
-        guard password.count >= 8 else { throw GolfletError.server("La contraseña tiene que tener al menos 8 caracteres.") }
+    func startFirstSync(progressID: String) async throws -> SyncResult {
+        if RuntimeFlags.isUITesting {
+            await emitDemoProgress(progressID: progressID)
+        }
         Self.sessionLock.lock()
-        Self.mockUser = GolfletUser(id: "demo", email: email, name: "Jugador Demo")
-        Self.mockSignedIn = true
+        Self.mockLinked = true
         Self.sessionLock.unlock()
+        return demoSyncResult(message: "Golfistics App vinculada · datos de demostración", newCards: 98)
     }
 
     func signOut() async throws {

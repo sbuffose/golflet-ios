@@ -187,21 +187,13 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-login", timeout: 10))
         saveShot("10_login")
+        XCTAssertTrue(first(app, "auth-matricula").waitForExistence(timeout: 3))
+        XCTAssertFalse(first(app, "auth-email").exists)
+        XCTAssertFalse(first(app, "auth-tab-up").exists)
 
-        let email = app.textFields["auth-email"]
-        XCTAssertTrue(email.waitForExistence(timeout: 3))
-        type(email, "demo@golflet.app")
-        let password = app.secureTextFields["auth-password"]
-        XCTAssertTrue(password.waitForExistence(timeout: 3))
-        type(password, "password1")
-        if app.keyboards.buttons["Return"].waitForExistence(timeout: 1) {
-            app.keyboards.buttons["Return"].tap()
-        } else if app.keyboards.buttons["Intro"].waitForExistence(timeout: 1) {
-            app.keyboards.buttons["Intro"].tap()
-        }
-        let submit = app.buttons["auth-submit"]
-        XCTAssertTrue(submit.waitForExistence(timeout: 3))
-        submit.tap()
+        type(app.textFields["auth-matricula"], "94506")
+        type(app.secureTextFields["auth-clave"], "clave123")
+        submitLogin(app)
 
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 12), "El login demo no llegó a Inicio")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 8))
@@ -220,6 +212,79 @@ final class GolfletUITests: XCTestCase {
             type(app.secureTextFields["club-clave"], "clave123")
         }
         saveShot("11_vincular")
+    }
+
+    func testGolfisticsLoginRejected() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-auth"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-login", timeout: 10))
+        type(app.textFields["auth-matricula"], "0000000")
+        type(app.secureTextFields["auth-clave"], "mala")
+        submitLogin(app)
+        XCTAssertTrue(waitFor(app, "auth-rejected", timeout: 6), "Falta el rechazo de Golfistics")
+        XCTAssertTrue(first(app, "auth-golfistics-open").waitForExistence(timeout: 3))
+        saveShot("24_login_rechazada")
+    }
+
+    func testGolfisticsLoginUnavailable() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-auth"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-login", timeout: 10))
+        type(app.textFields["auth-matricula"], "503")
+        type(app.secureTextFields["auth-clave"], "x")
+        submitLogin(app)
+        XCTAssertTrue(waitFor(app, "auth-unavailable", timeout: 6), "Falta el aviso de que Golfistics no responde")
+        XCTAssertFalse(first(app, "auth-golfistics-open").exists)
+        saveShot("26_login_caida")
+    }
+
+    func testGolfisticsLoginRateLimited() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-auth"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-login", timeout: 10))
+        type(app.textFields["auth-matricula"], "429")
+        type(app.secureTextFields["auth-clave"], "x")
+        submitLogin(app)
+        XCTAssertTrue(waitFor(app, "auth-rate-limit", timeout: 6), "Falta el aviso de demasiados intentos")
+        XCTAssertTrue(first(app, "auth-golfistics-open").waitForExistence(timeout: 3))
+        saveShot("27_login_429")
+    }
+
+    func testGolfisticsFirstSync() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-auth", "-ui-testing-first-sync"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-login", timeout: 10))
+        type(app.textFields["auth-matricula"], "94506")
+        type(app.secureTextFields["auth-clave"], "clave123")
+        submitLogin(app)
+        let overlay = first(app, "sync-overlay")
+        let label = first(app, "sync-progress-label")
+        XCTAssertTrue(
+            overlay.waitForExistence(timeout: 8) || label.waitForExistence(timeout: 2),
+            "El primer sync no abrió el overlay"
+        )
+        saveShot("25_login_first_sync")
+    }
+
+    private func submitLogin(_ app: XCUIApplication) {
+        if app.keyboards.element.exists {
+            app.swipeDown()
+        }
+        let submit = app.buttons["auth-submit"]
+        XCTAssertTrue(submit.waitForExistence(timeout: 3))
+        if submit.isHittable {
+            submit.tap()
+        } else {
+            first(app, "auth-submit").tap()
+        }
     }
 
     private func first(_ app: XCUIApplication, _ id: String) -> XCUIElement {
@@ -245,7 +310,14 @@ final class GolfletUITests: XCTestCase {
 
     private func type(_ element: XCUIElement, _ text: String) {
         element.tap()
-        let placeholders = ["Tu nombre", "vos@ejemplo.com", "Mínimo 8 caracteres", "Tu matrícula"]
+        let placeholders = [
+            "Tu nombre",
+            "vos@ejemplo.com",
+            "Mínimo 8 caracteres",
+            "Tu matrícula",
+            "Tu número de matrícula",
+            "La misma que usás en Golfistics"
+        ]
         if let current = element.value as? String,
            !current.isEmpty,
            current != text,

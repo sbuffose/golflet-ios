@@ -139,6 +139,46 @@ enum LivePayloadMapper {
         return (json["message"] as? String) ?? (json["error"] as? String) ?? fallback
     }
 
+    static func golfisticsSession(from json: [String: Any]) -> GolfisticsSession {
+        let player = json["player"] as? [String: Any]
+        let user = json["user"] as? [String: Any]
+        return GolfisticsSession(
+            needsFirstSync: JSONFlex.bool(from: json["needs_first_sync"]) ?? false,
+            newAccount: JSONFlex.bool(from: json["new_account"]) ?? false,
+            userName: (player?["name"] as? String) ?? (user?["name"] as? String)
+        )
+    }
+
+    static func authFailure(status: Int, json: [String: Any]) -> AuthFailure {
+        let code = (json["code"] as? String) ?? defaultAuthCode(status)
+        let url = (json["golfistics_url"] as? String).flatMap(URL.init(string:))
+        return AuthFailure(
+            code: code,
+            message: (json["message"] as? String) ?? fallbackMessage(for: code),
+            hint: json["hint"] as? String,
+            golfisticsURL: url,
+            retryAfterS: JSONFlex.int(from: json["retry_after_s"])
+        )
+    }
+
+    private static func fallbackMessage(for code: String) -> String {
+        switch code {
+        case "GOLFISTICS_UNAVAILABLE": return AuthCopy.unavailable.message
+        case "TOO_MANY_ATTEMPTS": return AuthCopy.rateLimited().message
+        case "BAD_INPUT": return "Escribí tu matrícula y tu clave de Golfistics."
+        default: return AuthCopy.rejected.message
+        }
+    }
+
+    private static func defaultAuthCode(_ status: Int) -> String {
+        switch status {
+        case 401: return "GOLFISTICS_REJECTED"
+        case 429: return "TOO_MANY_ATTEMPTS"
+        case 503: return "GOLFISTICS_UNAVAILABLE"
+        default: return "BAD_INPUT"
+        }
+    }
+
     private static func parseHI(_ raw: Any?) -> [HIPoint] {
         guard let items = raw as? [[String: Any]] else { return [] }
         return items.compactMap { item in
