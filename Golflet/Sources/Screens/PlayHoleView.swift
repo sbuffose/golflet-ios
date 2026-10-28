@@ -19,6 +19,7 @@ struct PlayHoleView: View {
     @State private var showsStrategy = false
     @State private var strategy: CourseStrategy?
     @State private var lastManualChange = Date.distantPast
+    @State private var pendingAdvance: Int?
 
     enum Phase { case ready, pickClub, pickResult }
 
@@ -52,15 +53,52 @@ struct PlayHoleView: View {
         .task {
             UIApplication.shared.isIdleTimerDisabled = true
             location.start()
+            model.rememberPlay(course: course, liveRound: liveRound)
+            if let here = location.coordinate {
+                OfflinePlay.saveLastGPS(here, accuracy: location.accuracyM)
+            }
             await refresh()
-            strategy = try? await model.api.courseStrategy(courseKey: course.courseKey, courseId: course.courseId)
+            if let cached = CourseCache.load(courseId: course.courseId)?.strategy {
+                strategy = cached
+            }
+            if let remote = try? await model.api.courseStrategy(courseKey: course.courseKey, courseId: course.courseId) {
+                strategy = remote
+                CourseCache.save(detail: course, strategy: remote)
+            }
+            RoundLiveActivity.start(course: course, liveRound: liveRound, here: location.coordinate, shots: shots)
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             location.stop()
         }
         .onChange(of: location.coordinate?.lat) { _, _ in
+            if let here = location.coordinate {
+                OfflinePlay.saveLastGPS(here, accuracy: location.accuracyM)
+            }
+            refreshLiveActivity()
             maybeAdvance()
+        }
+        .alert(
+            "¿Pasamos al hoyo \(pendingAdvance ?? (hole + 1))?",
+            isPresented: Binding(
+                get: { pendingAdvance != nil },
+                set: { if !$0 { pendingAdvance = nil } }
+            )
+        ) {
+            Button("Pasar al hoyo") {
+                if let next = pendingAdvance {
+                    changeHole(next)
+                }
+                pendingAdvance = nil
+            }
+            .accessibilityIdentifier("play-advance-confirm")
+            Button("Seguir acá", role: .cancel) {
+                lastManualChange = Date()
+                pendingAdvance = nil
+            }
+            .accessibilityIdentifier("play-advance-stay")
+        } message: {
+            Text("El GPS te ubica en el tee siguiente. Confirmá para cambiar de hoyo.")
         }
         .sheet(isPresented: $showsHoles) { holePicker }
         .sheet(isPresented: $showsStrategy) { strategySheet }
@@ -78,6 +116,8 @@ struct PlayHoleView: View {
                     .font(GType.sheetTitle)
                     .tracking(-1.2)
                     .foregroundStyle(p.ink)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
                 Text("\(FormatAR.longDate(Date())) · \(course.clubName)")
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
@@ -453,20 +493,29 @@ struct PlayHoleView: View {
         hole = clamped
         lastManualChange = Date()
         phase = .ready
+        PlayHaptics.holeChange()
+        OfflinePlay.saveActive(roundId: liveRound.id, courseId: course.courseId, hole: clamped, courseName: course.course)
+        refreshLiveActivity()
         Task {
             _ = try? await model.api.patchLiveRound(id: liveRound.id, body: ["current_hole": clamped])
         }
     }
 
     private func maybeAdvance() {
-        guard Date().timeIntervalSince(lastManualChange) > 8 else { return }
-        guard shots.contains(where: { $0.hole == hole }) else { return }
-        guard let here = location.coordinate else { return }
-        let next = course.holes.first { $0.number == hole + 1 }
-        guard let tee = next?.tee else { return }
-        if PlayMath.meters(from: here, to: tee) <= 25 {
-            changeHole(hole + 1)
-        }
+        let nextNumber = HoleAdvance.nextHole(after: hole, holeCount: course.holes.count)
+        let next = course.holes.first { $0.number == nextNumber }
+        guard HoleAdvance.shouldOffer(
+            lastManual: lastManualChange,
+            currentHole: hole,
+            shotHoles: Set(shots.map(\.hole)),
+            here: location.coordinate,
+            nextTee: next?.tee
+        ) else { return }
+        pendingAdvance = nextNumber
+    }
+
+    private func refreshLiveActivity() {
+        RoundLiveActivity.update(course: course, hole: hole, here: location.coordinate, shots: shots)
     }
 
     private func hit() async {
@@ -488,6 +537,7 @@ struct PlayHoleView: View {
         )
         lastDraft = draft
         ShotQueue.enqueue(draft)
+        PlayHaptics.shot()
         do {
             let posted = try await model.api.postShots(liveRoundId: liveRound.id, drafts: [draft])
             ShotQueue.remove(clientIds: [draft.clientId])
@@ -496,7 +546,32 @@ struct PlayHoleView: View {
             phase = .pickClub
         } catch {
             message = "Sin red. El golpe quedó en cola."
+            shots.append(Shot(
+                id: draft.clientId,
+                clientId: draft.clientId,
+                hole: draft.hole,
+                shotNumber: shots.filter { $0.hole == hole }.count + 1,
+                lat: draft.lat,
+                lng: draft.lng,
+                accuracyM: draft.accuracyM,
+                takenAt: draft.takenAt,
+                club: draft.club,
+                lie: draft.lie,
+                result: draft.result,
+                direction: draft.direction,
+                length: draft.length,
+                mishit: draft.mishit,
+                distanceM: nil,
+                distanceYd: nil,
+                toGreenYd: nil
+            ))
             phase = .pickClub
+        }
+        refreshLiveActivity()
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-next-tee") {
+            location.coordinate = GPSCoord(lat: -34.485427 + 0.00055, lng: -58.532351 + 0.00042)
+            location.accuracyM = 4
+            maybeAdvance()
         }
     }
 

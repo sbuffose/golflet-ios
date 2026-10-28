@@ -12,7 +12,13 @@ struct RootView: View {
                 AuthView()
             }
         }
-        .task { await model.load() }
+        .task {
+            await model.load()
+            await model.consumeIntent()
+        }
+        .onChange(of: IntentRouter.shared.pending) { _, _ in
+            Task { await model.consumeIntent() }
+        }
         .overlay {
             if model.syncSession != nil {
                 SyncProgressView()
