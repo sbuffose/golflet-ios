@@ -78,19 +78,44 @@ struct RegistrarGolpeIntent: AppIntent {
     }
 }
 
+enum GolfletCourseChoice: String, AppEnum {
+    case jockey
+    case azul
+    case colorada
+    case marDelPlata
+
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Cancha")
+
+    static var caseDisplayRepresentations: [GolfletCourseChoice: DisplayRepresentation] = [
+        .jockey: "Jockey",
+        .azul: "Azul",
+        .colorada: "Colorada",
+        .marDelPlata: "Mar del Plata"
+    ]
+
+    var hint: String {
+        switch self {
+        case .jockey: return "Jockey"
+        case .azul: return "Azul"
+        case .colorada: return "Colorada"
+        case .marDelPlata: return "Mar del Plata"
+        }
+    }
+}
+
 struct EmpezarRondaIntent: AppIntent {
     static var title: LocalizedStringResource = "Empezar ronda"
     static var description = IntentDescription("Abre Golflet para empezar una ronda GPS.")
     static var openAppWhenRun = true
 
-    @Parameter(title: "Cancha", default: "Jockey")
-    var course: String
+    @Parameter(title: "Cancha", default: .jockey)
+    var course: GolfletCourseChoice
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await MainActor.run {
-            IntentRouter.shared.post(.startRound(hint: course))
+            IntentRouter.shared.post(.startRound(hint: course.hint))
         }
-        return .result(dialog: "Vamos a empezar en \(course).")
+        return .result(dialog: "Vamos a empezar en \(course.hint).")
     }
 }
 
