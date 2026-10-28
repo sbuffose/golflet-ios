@@ -312,17 +312,48 @@ struct MockAPIClient: GolfletAPI {
     private func emitDemoProgress(progressID: String) async {
         let fast = RuntimeFlags.isUITesting
         let pause: UInt64 = fast ? 80_000_000 : 350_000_000
-        let clubs: [(String, Int, Int)] = [(demoName, 97, 97), (mdpName, 1, 1)]
-        var steps: [SyncAPIProgress] = []
+        let clubs: [(name: String, code: String, logo: String?, initials: String, listed: Int, cards: Int)] = [
+            (demoName, demoCode, "/clubs/118@2x.png", "JC", 97, 97),
+            (mdpName, mdpCode, "/clubs/209@2x.png", "MD", 1, 1)
+        ]
+        var steps: [SyncAPIProgress] = [
+            SyncAPIProgress(club: "Golfistics App", clubIndex: 1, clubCount: clubs.count, clubInitials: "G", stage: .connect)
+        ]
+        var stats = Self.seedStats(rounds: 0)
         for (index, club) in clubs.enumerated() {
             let ordinal = index + 1
-            steps.append(contentsOf: [
-                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .connect),
-                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .list, listTotal: club.1),
-                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .cards, done: min(33, club.2), total: club.2, listTotal: club.1, cardsTotal: club.2),
-                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .handicap, listTotal: club.1, cardsTotal: club.2),
-                SyncAPIProgress(club: club.0, clubIndex: ordinal, clubCount: clubs.count, stage: .save, done: club.2, total: club.2, listTotal: club.1, cardsTotal: club.2)
-            ])
+            steps.append(SyncAPIProgress(
+                club: club.name, clubIndex: ordinal, clubCount: clubs.count,
+                clubCode: club.code, clubLogo: club.logo, clubInitials: club.initials,
+                stage: .connect, stats: stats.hasRounds ? stats : nil
+            ))
+            stats.rounds = (stats.rounds ?? 0) + max(1, club.listed / 5)
+            stats.days = stats.rounds
+            steps.append(SyncAPIProgress(
+                club: club.name, clubIndex: ordinal, clubCount: clubs.count,
+                clubCode: club.code, clubLogo: club.logo, clubInitials: club.initials,
+                stage: .list, listTotal: club.listed, stats: stats
+            ))
+            stats = Self.growStats(stats, toward: index == 0 ? Self.jockeyLive : Self.combinedLive)
+            stats.lastCard = index == 0 ? Self.coloradaCard : Self.otherCourseCard
+            steps.append(SyncAPIProgress(
+                club: club.name, clubIndex: ordinal, clubCount: clubs.count,
+                clubCode: club.code, clubLogo: club.logo, clubInitials: club.initials,
+                stage: .cards, done: min(33, club.cards), total: club.cards,
+                listTotal: club.listed, cardsTotal: club.cards, stats: stats
+            ))
+            steps.append(SyncAPIProgress(
+                club: club.name, clubIndex: ordinal, clubCount: clubs.count,
+                clubCode: club.code, clubLogo: club.logo, clubInitials: club.initials,
+                stage: .handicap, listTotal: club.listed, cardsTotal: club.cards, stats: stats
+            ))
+            if index == clubs.count - 1 { stats = Self.combinedLive }
+            steps.append(SyncAPIProgress(
+                club: club.name, clubIndex: ordinal, clubCount: clubs.count,
+                clubCode: club.code, clubLogo: club.logo, clubInitials: club.initials,
+                stage: .save, done: club.cards, total: club.cards,
+                listTotal: club.listed, cardsTotal: club.cards, stats: stats
+            ))
         }
         for step in steps {
             Self.sessionLock.lock()
@@ -330,6 +361,121 @@ struct MockAPIClient: GolfletAPI {
             Self.sessionLock.unlock()
             try? await Task.sleep(nanoseconds: pause)
         }
+    }
+
+    private static let jockeyLive = seedStats(
+        rounds: 75,
+        holes: 16, eagles: 3, birdies: 16, pars: 40, bogeys: 28, doubles: 8,
+        days: 69, best: 71, bestDate: "2025-03-30", bestCourse: "Colorada",
+        last: coloradaCard
+    )
+
+    private static let combinedLive = seedStats(
+        rounds: 98,
+        holes: 16, eagles: 5, birdies: 29, pars: 83, bogeys: 63, doubles: 16,
+        days: 90, best: 71, bestDate: "2025-03-30", bestCourse: "Colorada",
+        last: otherCourseCard
+    )
+
+    private static let coloradaCard = SyncLastCard(
+        date: DayStamp.parse("2025-11-01"),
+        course: "Colorada",
+        club: "Jockey Club Buenos Aires",
+        otherCourse: false,
+        gross: 79,
+        par: 72,
+        holes: [
+            SyncLastHole(number: 1, par: 4, strokes: 5),
+            SyncLastHole(number: 2, par: 4, strokes: 4),
+            SyncLastHole(number: 3, par: 3, strokes: 3),
+            SyncLastHole(number: 4, par: 4, strokes: 4),
+            SyncLastHole(number: 5, par: 4, strokes: 4),
+            SyncLastHole(number: 6, par: 4, strokes: 4),
+            SyncLastHole(number: 7, par: 4, strokes: 4),
+            SyncLastHole(number: 8, par: 4, strokes: 4),
+            SyncLastHole(number: 9, par: 4, strokes: 4),
+            SyncLastHole(number: 10, par: 5, strokes: 6),
+            SyncLastHole(number: 11, par: 5, strokes: 6),
+            SyncLastHole(number: 12, par: 3, strokes: 3),
+            SyncLastHole(number: 13, par: 4, strokes: 5),
+            SyncLastHole(number: 14, par: 4, strokes: 5),
+            SyncLastHole(number: 15, par: 4, strokes: 4),
+            SyncLastHole(number: 16, par: 4, strokes: 5),
+            SyncLastHole(number: 17, par: 4, strokes: 4),
+            SyncLastHole(number: 18, par: 4, strokes: 5)
+        ]
+    )
+
+    private static let otherCourseCard = SyncLastCard(
+        date: DayStamp.parse("2025-02-16"),
+        course: "Cancha Vieja",
+        club: "Mar del Plata Golf Club",
+        otherCourse: true,
+        gross: 84,
+        par: nil,
+        holes: []
+    )
+
+    private static func seedStats(
+        rounds: Int,
+        holes: Int = 0,
+        eagles: Int = 0,
+        birdies: Int = 0,
+        pars: Int = 0,
+        bogeys: Int = 0,
+        doubles: Int = 0,
+        days: Int = 0,
+        best: Int? = nil,
+        bestDate: String? = nil,
+        bestCourse: String? = nil,
+        last: SyncLastCard? = nil
+    ) -> SyncLiveStats {
+        SyncLiveStats(
+            rounds: rounds,
+            roundsWithHoles: max(0, rounds - 1),
+            holes: holes,
+            eagles: eagles,
+            birdies: birdies,
+            pars: pars,
+            bogeys: bogeys,
+            doublesPlus: doubles,
+            days: days,
+            bestGross: best,
+            bestGrossDate: bestDate.flatMap(DayStamp.parse),
+            bestGrossCourse: bestCourse,
+            months: demoMonths,
+            lastCard: last
+        )
+    }
+
+    private static let demoMonths: [SyncMonthPoint] = {
+        let values = [2, 4, 6, 3, 8, 5, 7, 9, 4, 6, 8, 3]
+        return values.enumerated().map { index, rounds in
+            SyncMonthPoint(month: String(format: "2025-%02d", index + 1), rounds: rounds)
+        }
+    }()
+
+    private static func growStats(_ current: SyncLiveStats, toward target: SyncLiveStats) -> SyncLiveStats {
+        var next = current
+        next.rounds = midway(current.rounds, target.rounds)
+        next.eagles = midway(current.eagles, target.eagles)
+        next.birdies = midway(current.birdies, target.birdies)
+        next.pars = midway(current.pars, target.pars)
+        next.bogeys = midway(current.bogeys, target.bogeys)
+        next.doublesPlus = midway(current.doublesPlus, target.doublesPlus)
+        next.days = midway(current.days, target.days)
+        next.bestGross = target.bestGross ?? current.bestGross
+        next.bestGrossDate = target.bestGrossDate ?? current.bestGrossDate
+        next.bestGrossCourse = target.bestGrossCourse ?? current.bestGrossCourse
+        next.months = target.months.isEmpty ? current.months : target.months
+        next.lastCard = target.lastCard ?? current.lastCard
+        return next
+    }
+
+    private static func midway(_ current: Int?, _ target: Int?) -> Int {
+        let a = current ?? 0
+        let b = target ?? a
+        return a + max(0, (b - a) / 2)
     }
 
     private func initials(_ name: String) -> String {
