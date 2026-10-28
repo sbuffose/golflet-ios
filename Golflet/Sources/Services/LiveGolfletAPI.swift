@@ -6,30 +6,32 @@ struct LiveGolfletAPI: GolfletAPI {
     var isAuthenticated: Bool { KeychainStore.loadToken() != nil }
     var persistsLocally: Bool { false }
 
-    func signUp(name: String, email: String, password: String) async throws {
+    func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async throws -> GolfisticsSession {
         let json = try await request(
             "POST",
-            "/api/auth/sign-up/email",
-            body: ["name": name, "email": email, "password": password],
-            authorized: false,
-            captureToken: true
-        )
-        if KeychainStore.loadToken() == nil {
-            throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo crear la cuenta."))
-        }
-    }
-
-    func signIn(email: String, password: String) async throws {
-        let json = try await request(
-            "POST",
-            "/api/auth/sign-in/email",
-            body: ["email": email, "password": password],
+            "/api/auth/golfistics",
+            body: [
+                "matricula": matricula,
+                "clave": clave,
+                "save_password": savePassword
+            ],
             authorized: false,
             captureToken: true
         )
         if KeychainStore.loadToken() == nil {
             throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo entrar."))
         }
+        return LivePayloadMapper.golfisticsSession(from: json)
+    }
+
+    func startFirstSync(progressID: String) async throws -> SyncResult {
+        let json = try await request(
+            "POST",
+            "/api/accounts/first-sync",
+            body: ["progress_id": progressID],
+            timeout: 180
+        )
+        return LivePayloadMapper.parseSync(json)
     }
 
     func signOut() async throws {
@@ -253,18 +255,22 @@ struct LiveGolfletAPI: GolfletAPI {
         let http = response as? HTTPURLResponse
         let status = http?.statusCode ?? 0
 
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         if captureToken {
             if let token = http?.value(forHTTPHeaderField: "set-auth-token"), !token.isEmpty {
                 try KeychainStore.saveToken(token)
+            } else if let token = json["token"] as? String, !token.isEmpty {
+                try KeychainStore.saveToken(token)
             }
         }
-
-        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         try throwIfFailed(status: status, json: json, authorized: authorized, path: path)
         return json
     }
 
     private func throwIfFailed(status: Int, json: [String: Any], authorized: Bool, path: String) throws {
+        if path.hasPrefix("/api/auth/golfistics"), status >= 400 {
+            throw GolfletError.auth(LivePayloadMapper.authFailure(status: status, json: json))
+        }
         if status == 401 {
             if authorized { KeychainStore.deleteToken() }
             throw GolfletError.notAuthenticated

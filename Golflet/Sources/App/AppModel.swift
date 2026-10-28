@@ -15,6 +15,7 @@ final class AppModel {
     var isLoaded = false
     var isBusy = false
     var errorMessage: String?
+    var authFailure: AuthFailure?
     var selectedTab: AppTab = .inicio
     var courseFilter: CourseFilter = .all
     var selectedCourseName = "Colorada"
@@ -68,19 +69,21 @@ final class AppModel {
         }
     }
 
-    func signUp(name: String, email: String, password: String) async {
+    func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async {
         await run {
-            try await api.signUp(name: name, email: email, password: password)
+            let session = try await api.signInGolfistics(
+                matricula: matricula.trimmingCharacters(in: .whitespacesAndNewlines),
+                clave: clave,
+                savePassword: savePassword
+            )
             isSignedIn = true
-            await load()
-        }
-    }
-
-    func signIn(email: String, password: String) async {
-        await run {
-            try await api.signIn(email: email, password: password)
-            isSignedIn = true
-            await load()
+            if session.needsFirstSync {
+                await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
+                    try await api.startFirstSync(progressID: progressID)
+                }
+            } else {
+                await load()
+            }
         }
     }
 
@@ -365,9 +368,19 @@ final class AppModel {
 
     private func run(_ work: () async throws -> Void) async {
         errorMessage = nil
+        authFailure = nil
         isBusy = true
         defer { isBusy = false }
-        do { try await work() } catch { errorMessage = error.localizedDescription }
+        do {
+            try await work()
+        } catch {
+            if let golf = error as? GolfletError, let failure = golf.authFailure {
+                authFailure = failure
+                errorMessage = failure.message
+            } else {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 }
 

@@ -215,6 +215,71 @@ struct GolfletUser: Hashable, Sendable {
     var id: String
     var email: String
     var name: String
+
+    var visibleEmail: String? {
+        if email.isEmpty || email.contains("@golfistics.invalid") { return nil }
+        return email
+    }
+}
+
+struct GolfisticsSession: Hashable, Sendable {
+    var needsFirstSync: Bool
+    var newAccount: Bool
+    var userName: String?
+}
+
+struct AuthFailure: Hashable, Sendable {
+    var code: String
+    var message: String
+    var hint: String?
+    var golfisticsURL: URL?
+    var retryAfterS: Int?
+
+    var showsGolfisticsButton: Bool {
+        code == "GOLFISTICS_REJECTED" || code == "TOO_MANY_ATTEMPTS"
+    }
+
+    var isUnavailable: Bool { code == "GOLFISTICS_UNAVAILABLE" }
+
+    var bannerID: String {
+        switch code {
+        case "GOLFISTICS_UNAVAILABLE": return "auth-unavailable"
+        case "TOO_MANY_ATTEMPTS": return "auth-rate-limit"
+        default: return "auth-rejected"
+        }
+    }
+
+    var cardID: String { "\(bannerID)-card" }
+}
+
+enum AuthCopy {
+    static let golfisticsURL = URL(string: "https://app.golfistics.com/golf/golfisticsapp_login.php")!
+
+    static let rejected = AuthFailure(
+        code: "GOLFISTICS_REJECTED",
+        message: "No pudimos entrar a Golfistics con esa matrícula y clave.",
+        hint: "Si todavía no configuraste tu clave de Golfistics o no la recordás, andá a Golfistics a configurarla (se recupera desde el sitio de tu club) y volvé a intentar.",
+        golfisticsURL: golfisticsURL,
+        retryAfterS: nil
+    )
+
+    static let unavailable = AuthFailure(
+        code: "GOLFISTICS_UNAVAILABLE",
+        message: "Golfistics no responde en este momento. Probá de nuevo en unos minutos.",
+        hint: nil,
+        golfisticsURL: nil,
+        retryAfterS: nil
+    )
+
+    static func rateLimited(seconds: Int = 900) -> AuthFailure {
+        AuthFailure(
+            code: "TOO_MANY_ATTEMPTS",
+            message: "Demasiados intentos. Esperá un rato y volvé a probar.",
+            hint: "Golfistics bloquea un rato si fallás varias veces seguidas. Configurá o recuperá la clave en Golfistics si no la recordás.",
+            golfisticsURL: golfisticsURL,
+            retryAfterS: seconds
+        )
+    }
 }
 
 struct HIPoint: Hashable, Sendable {
@@ -484,6 +549,7 @@ enum GolfletError: LocalizedError, Equatable {
     case invalidClub
     case wrongGolfisticsCredentials
     case golfisticsAppDown
+    case auth(AuthFailure)
     case fixtureMissing(String)
     case decoding(String)
     case server(String)
@@ -495,10 +561,16 @@ enum GolfletError: LocalizedError, Equatable {
         case .invalidClub: return "No reconocimos esa URL de Golfistics."
         case .wrongGolfisticsCredentials: return "Matrícula o clave incorrecta."
         case .golfisticsAppDown: return "La App de Golfistics no responde."
+        case .auth(let failure): return failure.message
         case .fixtureMissing(let n): return "Falta el fixture \(n)."
         case .decoding(let n): return "No se pudo leer \(n)."
         case .server(let message): return message
         }
+    }
+
+    var authFailure: AuthFailure? {
+        if case .auth(let failure) = self { return failure }
+        return nil
     }
 }
 

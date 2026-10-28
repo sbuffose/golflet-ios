@@ -3,12 +3,10 @@ import SwiftUI
 struct AuthView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
-    @State private var mode = Mode.signIn
-    @State private var name = ""
-    @State private var email = ""
-    @State private var password = ""
-
-    enum Mode { case signIn, signUp }
+    @Environment(\.openURL) private var openURL
+    @State private var matricula = ""
+    @State private var clave = ""
+    @State private var savePassword = true
 
     var body: some View {
         GScreen(id: "screen-login") {
@@ -38,52 +36,52 @@ struct AuthView: View {
                             .foregroundStyle(p.accent)
                     }
 
-                    HStack(spacing: 0) {
-                        modeButton("Entrar", .signIn)
-                        modeButton("Crear cuenta", .signUp)
-                    }
-                    .padding(4)
-                    .background(p.surface2)
-                    .clipShape(Capsule())
-                    .accessibilityIdentifier("auth-mode")
+                    Text("Entrá con tu matrícula y tu clave de Golfistics.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
 
-                    if mode == .signUp {
-                        GField(label: "Nombre") {
-                            TextField("Tu nombre", text: $name)
-                                .textContentType(RuntimeFlags.isUITesting ? nil : .name)
-                                .accessibilityIdentifier("auth-name")
-                        }
+                    GField(label: "Matrícula") {
+                        TextField("Tu número de matrícula", text: $matricula)
+                            .keyboardType(.numberPad)
+                            .textContentType(RuntimeFlags.isUITesting ? nil : .username)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .tabular()
+                            .accessibilityIdentifier("auth-matricula")
                     }
-                        GField(label: "Email") {
-                            TextField("vos@ejemplo.com", text: $email)
-                                .textInputAutocapitalization(.never)
-                                .keyboardType(.emailAddress)
-                                .autocorrectionDisabled()
-                                .textContentType(RuntimeFlags.isUITesting ? nil : .username)
-                                .accessibilityIdentifier("auth-email")
-                        }
-                        GField(label: "Contraseña de Golflet") {
-                            SecureField("Mínimo 8 caracteres", text: $password)
-                                .textContentType(RuntimeFlags.isUITesting ? nil : (mode == .signUp ? .newPassword : .password))
-                                .accessibilityIdentifier("auth-password")
-                        }
+                    GField(label: "Clave de Golfistics") {
+                        SecureField("La misma que usás en Golfistics", text: $clave)
+                            .textContentType(RuntimeFlags.isUITesting ? nil : .password)
+                            .accessibilityIdentifier("auth-clave")
+                    }
 
-                    if let error = model.errorMessage {
+                    Toggle(isOn: $savePassword) {
+                        Text("Guardar mi clave (cifrada) para traer mis tarjetas nuevas todos los días")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink)
+                    }
+                    .tint(p.primary)
+                    .accessibilityIdentifier("auth-save-password")
+
+                    if let failure = model.authFailure {
+                        failureCard(failure)
+                    } else if let error = model.errorMessage {
                         Text(error)
                             .font(GType.label)
                             .foregroundStyle(p.negative)
+                            .accessibilityIdentifier("auth-error")
                     }
 
                     Button {
                         Task {
-                            if mode == .signUp {
-                                await model.signUp(name: name, email: email, password: password)
-                            } else {
-                                await model.signIn(email: email, password: password)
-                            }
+                            await model.signInGolfistics(
+                                matricula: matricula,
+                                clave: clave,
+                                savePassword: savePassword
+                            )
                         }
                     } label: {
-                        Text(model.isBusy ? "Un segundo…" : (mode == .signUp ? "Crear cuenta" : "Entrar"))
+                        Text(model.isBusy ? "Un segundo…" : "Entrar")
                             .font(GType.headline)
                             .foregroundStyle(p.onPrimary)
                             .frame(maxWidth: .infinity)
@@ -91,10 +89,21 @@ struct AuthView: View {
                             .background(p.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .disabled(RuntimeFlags.isUITesting ? model.isBusy : (email.isEmpty || password.count < 8 || model.isBusy))
+                    .disabled(RuntimeFlags.isUITesting ? model.isBusy : (matricula.isEmpty || clave.isEmpty || model.isBusy))
                     .accessibilityIdentifier("auth-submit")
 
-                    Text("Tu cuenta de Golflet es independiente de Golfistics. Después de entrar, vinculás tu club con tu matrícula y clave.")
+                    Button {
+                        openGolfistics(AuthCopy.golfisticsURL)
+                    } label: {
+                        Text("¿No tenés clave o te la olvidaste? Configurala en Golfistics (se recupera desde el sitio de tu club) y volvé.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("auth-forgot")
+
+                    Text("Golflet verifica tu matrícula y clave directamente con Golfistics y solo lee tus datos: no cambia nada en Golfistics.")
                         .font(GType.label)
                         .foregroundStyle(p.ink3)
                 }
@@ -105,19 +114,44 @@ struct AuthView: View {
         .accessibilityIdentifier("screen-login")
     }
 
-    private func modeButton(_ title: String, _ value: Mode) -> some View {
-        Button {
-            mode = value
-        } label: {
-            Text(title)
-                .font(GType.headline)
-                .foregroundStyle(mode == value ? p.ink : p.ink2)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(mode == value ? p.surface : Color.clear)
-                .clipShape(Capsule())
+    @ViewBuilder
+    private func failureCard(_ failure: AuthFailure) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(failure.message)
+                .font(GType.body)
+                .foregroundStyle(p.negative)
+                .accessibilityIdentifier(failure.bannerID)
+            if let hint = failure.hint, !hint.isEmpty {
+                Text(hint)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier("auth-rejected-hint")
+            }
+            if failure.showsGolfisticsButton {
+                Button {
+                    openGolfistics(failure.golfisticsURL ?? AuthCopy.golfisticsURL)
+                } label: {
+                    Text("Ir a Golfistics a configurar mi clave")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(p.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("auth-golfistics-open")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(value == .signIn ? "auth-tab-in" : "auth-tab-up")
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(p.negative.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(failure.bannerID)
+    }
+
+    private func openGolfistics(_ url: URL) {
+        openURL(url)
     }
 }
