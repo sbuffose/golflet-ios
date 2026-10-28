@@ -124,6 +124,40 @@ struct RecapPositive: Hashable, Sendable, Identifiable {
     var text: String
 }
 
+struct RecapDraft: Hashable, Sendable {
+    var transcript: String
+    var summary: String?
+    var mistakes: [RecapMistake] = []
+    var positives: [RecapPositive] = []
+    var structuredOnDevice = false
+
+    var patchBody: [String: Any] {
+        var body: [String: Any] = ["transcript": transcript]
+        if structuredOnDevice {
+            if let summary { body["summary"] = summary }
+            body["mistakes"] = mistakes.map {
+                var item: [String: Any] = ["category": $0.category, "text": $0.text]
+                if let hole = $0.hole { item["hole"] = hole }
+                return item
+            }
+            body["positives"] = positives.map {
+                var item: [String: Any] = ["text": $0.text]
+                if let hole = $0.hole { item["hole"] = hole }
+                return item
+            }
+        } else {
+            body["restructure"] = true
+        }
+        return body
+    }
+
+    var jsonBody: [String: Any] {
+        var body = patchBody
+        body.removeValue(forKey: "restructure")
+        return body
+    }
+}
+
 struct Recap: Hashable, Sendable, Identifiable {
     var id: String
     var roundId: String?

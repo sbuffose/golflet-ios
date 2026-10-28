@@ -20,6 +20,7 @@ struct RecapView: View {
     @State private var summary = ""
     @State private var message: String?
     @State private var isSaving = false
+    @State private var isTranscribing = false
     @State private var showsTranscript = false
 
     var body: some View {
@@ -64,7 +65,10 @@ struct RecapView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
         }
-        .task { await load() }
+        .task {
+            _ = await RecapSpeech.requestAuthorization()
+            await load()
+        }
     }
 
     private var header: some View {
@@ -89,7 +93,9 @@ struct RecapView: View {
     private var recordCard: some View {
         GCard(radius: 22, padding: 16) {
             VStack(alignment: .leading, spacing: 12) {
-                Text(recorder.isRecording ? "Grabando…" : "Grabá hasta 4 minutos. Después lo transcribimos.")
+                Text(recorder.isRecording
+                     ? "Grabando…"
+                     : (isTranscribing ? "Transcribiendo en el iPhone…" : "Grabá hasta 4 minutos. Lo transcribimos en el iPhone."))
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                 HStack {
@@ -110,6 +116,7 @@ struct RecapView: View {
                             .clipShape(Capsule())
                     }
                     .accessibilityIdentifier("recap-record")
+                    .disabled(isTranscribing || isSaving)
                 }
                 HStack(spacing: 10) {
                     Button {
@@ -262,7 +269,7 @@ struct RecapView: View {
     private func toggleRecord() {
         if recorder.isRecording {
             if let data = recorder.stop() {
-                Task { await upload(data) }
+                Task { await finishRecording(audio: data) }
             }
         } else {
             do {
@@ -283,11 +290,25 @@ struct RecapView: View {
         }
     }
 
-    private func upload(_ data: Data) async {
+    private func finishRecording(audio: Data) async {
+        isTranscribing = true
         isSaving = true
-        defer { isSaving = false }
+        message = nil
+        defer {
+            isTranscribing = false
+            isSaving = false
+        }
         do {
-            apply(try await model.api.uploadRecap(audio: data, roundId: roundId, liveRoundId: liveRoundId))
+            let draft = try await RecapOnDevice.process(url: recorder.lastURL)
+            transcript = draft.transcript
+            summary = draft.summary ?? ""
+            let stored = try await model.api.uploadRecap(
+                audio: audio,
+                roundId: roundId,
+                liveRoundId: liveRoundId,
+                draft: draft
+            )
+            apply(try await model.api.patchRecap(id: stored.id, body: draft.patchBody))
         } catch {
             message = error.localizedDescription
         }
@@ -295,7 +316,12 @@ struct RecapView: View {
 
     private func saveTyped() async {
         do {
-            apply(try await model.api.typedRecap(roundId: roundId, liveRoundId: liveRoundId, transcript: transcript))
+            let draft = await RecapOnDevice.structure(transcript: transcript)
+                ?? RecapDraft(transcript: transcript, structuredOnDevice: false)
+            apply(try await model.api.typedRecap(roundId: roundId, liveRoundId: liveRoundId, draft: draft))
+            if !draft.structuredOnDevice, let id = recap?.id {
+                apply(try await model.api.patchRecap(id: id, body: draft.patchBody))
+            }
             showsTranscript = false
         } catch {
             message = error.localizedDescription
@@ -303,9 +329,24 @@ struct RecapView: View {
     }
 
     private func retry() async {
-        guard let id = recap?.id else { return }
+        isTranscribing = true
+        defer { isTranscribing = false }
         do {
-            apply(try await model.api.retryRecap(id: id))
+            if recorder.lastURL != nil || RuntimeFlags.isUITesting {
+                let draft = try await RecapOnDevice.process(url: recorder.lastURL)
+                transcript = draft.transcript
+                summary = draft.summary ?? ""
+                if let id = recap?.id {
+                    apply(try await model.api.patchRecap(id: id, body: draft.patchBody))
+                } else {
+                    apply(try await model.api.typedRecap(roundId: roundId, liveRoundId: liveRoundId, draft: draft))
+                }
+            } else if let id = recap?.id {
+                apply(try await model.api.patchRecap(id: id, body: [
+                    "transcript": transcript,
+                    "restructure": true
+                ]))
+            }
         } catch {
             message = error.localizedDescription
         }

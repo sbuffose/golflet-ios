@@ -64,6 +64,7 @@ targets:
           - Geist-SemiBold.otf
         NSLocationWhenInUseUsageDescription: Golflet usa tu ubicación mientras jugás para calcular la distancia al green y guardar el punto de cada golpe.
         NSMicrophoneUsageDescription: Golflet usa el micrófono para grabar el recap de la ronda y transcribir cómo te fue.
+        NSSpeechRecognitionUsageDescription: Golflet transcribe en el iPhone lo que contás de la ronda para armar el recap, sin mandar el audio a un servicio de transcripción.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sbuffose.golflet
