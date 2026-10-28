@@ -262,10 +262,66 @@ enum SyncStepState: String, Sendable, Hashable {
     case todo, active, done, error
 }
 
+struct SyncLastHole: Hashable, Sendable, Identifiable {
+    var id: Int { number }
+    var number: Int
+    var par: Int? = nil
+    var strokes: Int? = nil
+
+    var toPar: Int? {
+        guard let strokes, let par else { return nil }
+        return strokes - par
+    }
+}
+
+struct SyncLastCard: Hashable, Sendable {
+    var date: Date? = nil
+    var course: String? = nil
+    var club: String? = nil
+    var otherCourse: Bool = false
+    var gross: Int? = nil
+    var par: Int? = nil
+    var holes: [SyncLastHole] = []
+
+    var toPar: Int? {
+        if let gross, let par { return gross - par }
+        let scored = holes.compactMap(\.toPar)
+        return scored.isEmpty ? nil : scored.reduce(0, +)
+    }
+}
+
+struct SyncMonthPoint: Hashable, Sendable, Identifiable {
+    var id: String { month }
+    var month: String
+    var rounds: Int
+}
+
+struct SyncLiveStats: Hashable, Sendable {
+    var rounds: Int? = nil
+    var roundsWithHoles: Int? = nil
+    var holes: Int? = nil
+    var eagles: Int? = nil
+    var birdies: Int? = nil
+    var pars: Int? = nil
+    var bogeys: Int? = nil
+    var doublesPlus: Int? = nil
+    var days: Int? = nil
+    var bestGross: Int? = nil
+    var bestGrossDate: Date? = nil
+    var bestGrossCourse: String? = nil
+    var months: [SyncMonthPoint] = []
+    var lastCard: SyncLastCard? = nil
+
+    var hasRounds: Bool { (rounds ?? 0) > 0 }
+}
+
 struct SyncAPIProgress: Hashable, Sendable {
-    var club: String?
+    var club: String? = nil
     var clubIndex: Int? = nil
     var clubCount: Int? = nil
+    var clubCode: String? = nil
+    var clubLogo: String? = nil
+    var clubInitials: String? = nil
     var stage: SyncStage
     var done: Int? = nil
     var total: Int? = nil
@@ -273,10 +329,53 @@ struct SyncAPIProgress: Hashable, Sendable {
     var finished: Bool = false
     var error: String? = nil
     var cardsTotal: Int? = nil
+    var stats: SyncLiveStats? = nil
 
     var clubOrdinal: String? {
         guard let clubIndex, let clubCount, clubCount > 0 else { return nil }
         return "\(clubIndex) de \(clubCount)"
+    }
+
+    /// Fills omitted optional fields from the previous poll. Club identity
+    /// (code / logo / initials) is kept only while the club is the same so a
+    /// later club with `club_logo: null` still gets a monogram.
+    func merging(onto previous: SyncAPIProgress) -> SyncAPIProgress {
+        var next = self
+        if next.stage == .cards, let total = next.total {
+            next.cardsTotal = total
+        } else if next.cardsTotal == nil {
+            next.cardsTotal = previous.cardsTotal
+        }
+        if next.listTotal == nil { next.listTotal = previous.listTotal }
+        if next.clubIndex == nil { next.clubIndex = previous.clubIndex }
+        if next.clubCount == nil { next.clubCount = previous.clubCount }
+
+        let sameClub: Bool = {
+            if let incoming = next.clubCode, let prior = previous.clubCode {
+                return incoming == prior
+            }
+            if let incoming = next.club, let prior = previous.club {
+                return incoming == prior
+            }
+            return next.clubCode == nil && next.club == nil
+        }()
+        if sameClub {
+            if next.clubCode == nil { next.clubCode = previous.clubCode }
+            if next.clubLogo == nil { next.clubLogo = previous.clubLogo }
+            if next.clubInitials == nil { next.clubInitials = previous.clubInitials }
+        }
+
+        if next.stats == nil {
+            next.stats = previous.stats
+        } else if var stats = next.stats {
+            if stats.lastCard == nil { stats.lastCard = previous.stats?.lastCard }
+            if stats.months.isEmpty { stats.months = previous.stats?.months ?? [] }
+            next.stats = stats
+        }
+        if next.club == nil {
+            next.club = previous.club
+        }
+        return next
     }
 }
 
