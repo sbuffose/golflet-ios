@@ -196,6 +196,52 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertEqual(GolfletClubChoice.hierro7.code, "7i")
     }
 
+    func testCourseEntityQueryUsesPlayerCatalog() async throws {
+        let extras = (1...12).map { index in
+            GPSCourseSummary(
+                courseId: "club-\(index)-cancha",
+                clubCode: "\(100 + index)",
+                clubName: "Club \(index)",
+                course: "Cancha \(index)",
+                label: "Cancha \(index)",
+                courseKey: "\(index):Cancha",
+                holesCached: 18,
+                mine: true,
+                distanceKm: nil
+            )
+        }
+        let jockey = GPSCourseSummary(
+            courseId: "118-jockey-azul",
+            clubCode: "118",
+            clubName: "Jockey Club Argentino",
+            course: "Azul",
+            label: "Azul",
+            courseKey: "1:Azul",
+            holesCached: 18,
+            mine: true,
+            distanceKm: nil
+        )
+        CourseCache.saveList(GPSCourseList(courses: extras + [jockey], nearby: [jockey]))
+        let merged = CourseCatalog.merge(CourseCache.loadList())
+        XCTAssertEqual(merged.count, 13)
+        XCTAssertEqual(Set(merged.map(\.courseId)).count, 13)
+
+        let entities = extras.map(GolfletCourseEntity.init(summary:)) + [GolfletCourseEntity(summary: jockey)]
+        let hits = CourseCatalog.matching("Jockey", in: entities)
+        XCTAssertEqual(hits.map(\.id), ["118-jockey-azul"])
+        XCTAssertTrue(CourseCatalog.matching("Cancha 12", in: entities).contains(where: { $0.id == "club-12-cancha" }))
+
+        CourseCatalog.sourceOverride = { CourseCatalog.merge(CourseCache.loadList()) }
+        defer { CourseCatalog.sourceOverride = nil }
+        let query = GolfletCourseEntityQuery()
+        let suggested = try await query.suggestedEntities()
+        XCTAssertEqual(suggested.count, 13)
+        let found = try await query.entities(matching: "Jockey")
+        XCTAssertEqual(found.map(\.id), ["118-jockey-azul"])
+        let byID = try await query.entities(for: ["club-3-cancha", "118-jockey-azul"])
+        XCTAssertEqual(Set(byID.map(\.id)), ["club-3-cancha", "118-jockey-azul"])
+    }
+
     func testRecapStaysOnDeviceCopy() {
         XCTAssertTrue(RecapCopy.pendingAI.contains("iPhone"))
         XCTAssertEqual(RecapDraft(transcript: "x", structuredOnDevice: true).source, "ios_on_device")

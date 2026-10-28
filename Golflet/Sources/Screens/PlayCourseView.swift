@@ -134,10 +134,11 @@ struct PlayCourseView: View {
         guard let hint = model.pendingCourseHint, !hint.isEmpty else { return }
         model.pendingCourseHint = nil
         let pool = (list?.nearby ?? []) + (list?.courses ?? [])
-        if let match = pool.first(where: {
-            ClubPhrase.matchesCourse(hint, name: $0.course, club: $0.clubName, courseId: $0.courseId)
-                || ClubPhrase.matchesCourse(hint, name: $0.label, club: $0.clubName, courseId: $0.courseId)
-        }) {
+        if let match = pool.first(where: { $0.courseId == hint })
+            ?? pool.first(where: {
+                ClubPhrase.matchesCourse(hint, name: $0.course, club: $0.clubName, courseId: $0.courseId)
+                    || ClubPhrase.matchesCourse(hint, name: $0.label, club: $0.clubName, courseId: $0.courseId)
+            }) {
             await start(match)
         }
     }
