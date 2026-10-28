@@ -55,7 +55,7 @@ struct MockAPIClient: GolfletAPI {
         switch trimmed {
         case "0000000", "0":
             throw GolfletError.auth(AuthCopy.rejected)
-        case "down":
+        case "down", "503":
             throw GolfletError.auth(AuthCopy.unavailable)
         case "429":
             throw GolfletError.auth(AuthCopy.rateLimited())
