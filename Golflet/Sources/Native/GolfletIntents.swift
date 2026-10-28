@@ -78,28 +78,53 @@ struct RegistrarGolpeIntent: AppIntent {
     }
 }
 
-enum GolfletCourseChoice: String, AppEnum {
-    case jockey
-    case azul
-    case colorada
-    case marDelPlata
-
+struct GolfletCourseEntity: AppEntity, Identifiable, Hashable {
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Cancha")
+    static var defaultQuery = GolfletCourseEntityQuery()
 
-    static var caseDisplayRepresentations: [GolfletCourseChoice: DisplayRepresentation] = [
-        .jockey: "Jockey",
-        .azul: "Azul",
-        .colorada: "Colorada",
-        .marDelPlata: "Mar del Plata"
-    ]
+    var id: String
+    var label: String
+    var clubName: String
+    var courseName: String
 
-    var hint: String {
-        switch self {
-        case .jockey: return "Jockey"
-        case .azul: return "Azul"
-        case .colorada: return "Colorada"
-        case .marDelPlata: return "Mar del Plata"
-        }
+    init(id: String, label: String, clubName: String, courseName: String) {
+        self.id = id
+        self.label = label
+        self.clubName = clubName
+        self.courseName = courseName
+    }
+
+    init(summary: GPSCourseSummary) {
+        self.init(
+            id: summary.courseId,
+            label: summary.label.isEmpty ? summary.course : summary.label,
+            clubName: summary.clubName,
+            courseName: summary.course
+        )
+    }
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(
+            title: LocalizedStringResource(stringLiteral: label),
+            subtitle: LocalizedStringResource(stringLiteral: clubName)
+        )
+    }
+}
+
+struct GolfletCourseEntityQuery: EntityQuery {
+    func entities(for identifiers: [GolfletCourseEntity.ID]) async throws -> [GolfletCourseEntity] {
+        let wanted = Set(identifiers)
+        return await CourseCatalog.entities().filter { wanted.contains($0.id) }
+    }
+
+    func suggestedEntities() async throws -> [GolfletCourseEntity] {
+        await CourseCatalog.entities()
+    }
+}
+
+extension GolfletCourseEntityQuery: EntityStringQuery {
+    func entities(matching string: String) async throws -> [GolfletCourseEntity] {
+        CourseCatalog.matching(string, in: await CourseCatalog.entities())
     }
 }
 
@@ -108,14 +133,14 @@ struct EmpezarRondaIntent: AppIntent {
     static var description = IntentDescription("Abre Golflet para empezar una ronda GPS.")
     static var openAppWhenRun = true
 
-    @Parameter(title: "Cancha", default: .jockey)
-    var course: GolfletCourseChoice
+    @Parameter(title: "Cancha")
+    var course: GolfletCourseEntity
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await MainActor.run {
-            IntentRouter.shared.post(.startRound(hint: course.hint))
+            IntentRouter.shared.post(.startRound(hint: course.id))
         }
-        return .result(dialog: "Vamos a empezar en \(course.hint).")
+        return .result(dialog: "Vamos a empezar en \(course.label).")
     }
 }
 
@@ -147,7 +172,7 @@ struct GolfletShortcuts: AppShortcutsProvider {
             intent: EmpezarRondaIntent(),
             phrases: [
                 "Empezar ronda en \(\.$course) con \(.applicationName)",
-                "Empezar ronda en el Jockey con \(.applicationName)"
+                "Empezar ronda en \(.applicationName)"
             ],
             shortTitle: "Empezar ronda",
             systemImageName: "location"

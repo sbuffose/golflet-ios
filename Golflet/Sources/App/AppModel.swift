@@ -65,6 +65,9 @@ final class AppModel {
             }
             await flushOffline()
             recurring = try? await api.recurringMistakes()
+            if let courses = try? await api.gpsCourses(lat: nil, lng: nil) {
+                CourseCache.saveList(courses)
+            }
             publishWidgetSnapshot()
             isLoaded = true
             await consumeIntent()
