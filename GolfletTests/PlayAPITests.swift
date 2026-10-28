@@ -6,8 +6,8 @@ final class PlayAPITests: XCTestCase {
         let tee = GPSCoord(lat: -34.485427, lng: -58.532351)
         let center = GPSCoord(lat: -34.48305197, lng: -58.52881)
         let meters = PlayMath.meters(from: tee, to: center)
-        XCTAssertGreaterThan(meters, 300)
-        XCTAssertLessThan(meters, 400)
+        XCTAssertGreaterThan(meters, 400)
+        XCTAssertLessThan(meters, 450)
         XCTAssertEqual(PlayMath.yards(334), 365)
     }
 
