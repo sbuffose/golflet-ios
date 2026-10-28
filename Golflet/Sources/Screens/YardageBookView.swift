@@ -5,6 +5,7 @@ struct YardageBookView: View {
     var caption: String
     var count: String?
     var reduceMotion: Bool
+    var compact = false
 
     @State private var player = YardageBookPlayer()
 
@@ -14,7 +15,7 @@ struct YardageBookView: View {
                 Color(hex: 0xF7F5F0)
                 scene
                 header
-                footer
+                if !compact { footer }
             }
         }
         .clipped()
