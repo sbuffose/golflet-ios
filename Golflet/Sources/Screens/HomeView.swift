@@ -31,6 +31,7 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
+        .metricDestinations()
         .onChange(of: model.celebrateCards) { _, value in
             guard let value else { return }
             Task { await countUpCards(to: value) }
@@ -74,38 +75,58 @@ struct HomeView: View {
         let snap = model.home
         return GCard(fill: p.primary, radius: 28, padding: 20) {
             VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top) {
-                    GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
-                    Spacer()
-                    Text("Tendencia estimada · 40 rondas")
-                        .font(GType.label)
-                        .foregroundStyle(p.onPrimary.opacity(0.5))
+                NavigationLink(value: MetricRoute.handicap) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .top) {
+                            GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
+                            Spacer()
+                            Text("Tendencia estimada · 40 rondas")
+                                .font(GType.label)
+                                .foregroundStyle(p.onPrimary.opacity(0.5))
+                            MetricChevron(color: p.onPrimary.opacity(0.4))
+                        }
+                        HStack(alignment: .center, spacing: 16) {
+                            Text(FormatAR.one(snap.handicapIndex))
+                                .font(GType.statHero)
+                                .tracking(-4.4)
+                                .tabular()
+                                .foregroundStyle(p.onPrimary)
+                                .minimumScaleFactor(0.6)
+                                .lineLimit(1)
+                            Sparkline(values: snap.trendValues, color: p.accent)
+                                .frame(height: 54)
+                        }
+                        HStack(spacing: 6) {
+                            Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
+                                .font(GType.label)
+                        }
+                        .foregroundStyle(p.onPrimary.opacity(0.7))
+                    }
+                    .contentShape(Rectangle())
                 }
-                HStack(alignment: .center, spacing: 16) {
-                    Text(FormatAR.one(snap.handicapIndex))
-                        .font(GType.statHero)
-                        .tracking(-4.4)
-                        .tabular()
-                        .foregroundStyle(p.onPrimary)
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                    Sparkline(values: snap.trendValues, color: p.accent)
-                        .frame(height: 54)
-                }
-                HStack(spacing: 6) {
-                    Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
-                        .font(GType.label)
-                }
-                .foregroundStyle(p.onPrimary.opacity(0.7))
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-handicap")
 
                 HStack(alignment: .top) {
-                    heroMini("Tarjetas", "\(shownCards ?? snap.cards)", gold: cardsGold)
+                    NavigationLink(value: MetricRoute.roundList(.allCards)) {
+                        heroMini("Tarjetas", "\(shownCards ?? snap.cards)", gold: cardsGold)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("metric-tarjetas")
                     Spacer()
-                    heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
+                    NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: false))) {
+                        heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("metric-best-gross")
                     Spacer()
-                    heroMini("Promedio \(Calendar.gregorian.component(.year, from: Date()))", snap.yearAverage.map(FormatAR.one) ?? "—")
+                    NavigationLink(value: MetricRoute.roundList(.average(yearOnly: true))) {
+                        heroMini("Promedio \(Calendar.gregorian.component(.year, from: Date()))", snap.yearAverage.map(FormatAR.one) ?? "—")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("metric-average")
                 }
                 .padding(.top, 4)
             }
@@ -115,14 +136,18 @@ struct HomeView: View {
 
     private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(GType.label)
-                .foregroundStyle(p.onPrimary.opacity(0.5))
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(GType.label)
+                    .foregroundStyle(p.onPrimary.opacity(0.5))
+                MetricChevron(color: p.onPrimary.opacity(0.35))
+            }
             Text(value)
                 .font(GType.statM)
                 .tabular()
                 .foregroundStyle(gold ? p.accent : p.onPrimary)
         }
+        .contentShape(Rectangle())
     }
 
     private func countUpCards(to target: Int) async {
@@ -175,9 +200,21 @@ struct HomeView: View {
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             HStack(spacing: 10) {
-                yearCard("Rondas", "\(snap.yearRoundCount)")
-                yearCard("Mejor", snap.yearBestGross.map(String.init) ?? "—")
-                yearCard("Birdies", "\(snap.yearBirdies)")
+                NavigationLink(value: MetricRoute.roundList(.yearRounds)) {
+                    yearCard("Rondas", "\(snap.yearRoundCount)")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-year-rounds")
+                NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: true))) {
+                    yearCard("Mejor", snap.yearBestGross.map(String.init) ?? "—")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-year-best")
+                NavigationLink(value: MetricRoute.scoreKind(.birdie, .yearRounds)) {
+                    yearCard("Birdies", "\(snap.yearBirdies)")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("metric-year-birdies")
             }
         }
     }
@@ -185,9 +222,13 @@ struct HomeView: View {
     private func yearCard(_ label: String, _ value: String) -> some View {
         GCard(radius: 18, padding: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(label)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
+                HStack {
+                    Text(label)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                    Spacer()
+                    MetricChevron(color: p.ink3)
+                }
                 Text(value)
                     .font(GType.statL)
                     .tabular()
@@ -204,37 +245,46 @@ struct HomeView: View {
             GCard(radius: 22, padding: 16) {
                 VStack(spacing: 14) {
                     ForEach(model.clubs) { club in
-                        Button {
-                            model.requestSync(club)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Text(String(club.name.prefix(1)))
-                                    .font(GFont.ui(14, weight: .semibold))
-                                    .foregroundStyle(p.onPrimary)
-                                    .frame(width: 32, height: 32)
-                                    .background(p.primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(club.name)
-                                        .font(GType.headline)
-                                        .foregroundStyle(p.ink)
-                                    HStack(spacing: 6) {
-                                        Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 6, height: 6)
-                                        Text(club.lastSyncMessage ?? "Conectado · Matrícula \(club.matricula)")
-                                            .font(GType.label)
-                                            .foregroundStyle(p.ink2)
-                                            .lineLimit(1)
+                        HStack(spacing: 10) {
+                            NavigationLink(value: MetricRoute.roundList(.club(club))) {
+                                HStack(spacing: 12) {
+                                    Text(String(club.name.prefix(1)))
+                                        .font(GFont.ui(14, weight: .semibold))
+                                        .foregroundStyle(p.onPrimary)
+                                        .frame(width: 32, height: 32)
+                                        .background(p.primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(club.name)
+                                            .font(GType.headline)
+                                            .foregroundStyle(p.ink)
+                                        HStack(spacing: 6) {
+                                            Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 6, height: 6)
+                                            Text(clubCountLine(club))
+                                                .font(GType.label)
+                                                .foregroundStyle(p.ink2)
+                                                .lineLimit(1)
+                                        }
                                     }
+                                    Spacer(minLength: 4)
+                                    MetricChevron(color: p.ink3)
                                 }
-                                Spacer()
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("metric-club-\(club.accountId)")
+                            Button {
+                                model.requestSync(club)
+                            } label: {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(p.ink2)
-                                    .accessibilityLabel("Actualizar")
+                                    .frame(width: 32, height: 32)
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Actualizar")
+                            .accessibilityIdentifier("home-club-\(club.accountId)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("home-club-\(club.accountId)")
                     }
                     Button { model.showsClubs = true } label: {
                         HStack(spacing: 12) {
@@ -260,6 +310,13 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private func clubCountLine(_ club: LinkedClub) -> String {
+        let n = model.rounds.filter { $0.clubCode == club.code }.count
+        let cards = n > 0 ? n : club.cardCount
+        if cards > 0 { return "\(cards) tarjetas" }
+        return club.lastSyncMessage ?? "Sin tarjetas"
     }
 }
 
