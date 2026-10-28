@@ -183,6 +183,10 @@ extension View {
                 ScoreKindDetailView(kind: kind, query: query)
             case .handicap:
                 HandicapHistoryView()
+            case .recurring:
+                RecurringErrorsView()
+            case .clubStats(let code):
+                ClubStatsView(code: code)
             }
         }
     }

@@ -62,6 +62,8 @@ targets:
           - Geist-Regular.otf
           - Geist-Medium.otf
           - Geist-SemiBold.otf
+        NSLocationWhenInUseUsageDescription: Golflet usa tu ubicación mientras jugás para calcular la distancia al green y guardar el punto de cada golpe.
+        NSMicrophoneUsageDescription: Golflet usa el micrófono para grabar el recap de la ronda y transcribir cómo te fue.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sbuffose.golflet

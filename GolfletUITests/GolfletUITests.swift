@@ -64,6 +64,58 @@ final class GolfletUITests: XCTestCase {
         tapTab(app, "Mi bolsa")
         XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
         saveShot("08_bolsa")
+
+        if first(app, "bag-Driver").waitForExistence(timeout: 3) {
+            first(app, "bag-Driver").tap()
+            XCTAssertTrue(waitFor(app, "screen-club-stats", timeout: 6), "El detalle del palo no se abrió")
+            saveShot("15_club_stats")
+            dismissIfPresent(app, "metric-back")
+        }
+    }
+
+    func testPlayRecapAndRecurring() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+
+        XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
+        first(app, "play-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6), "No se abrió la lista de canchas")
+        saveShot("16_play_canchas")
+        XCTAssertTrue(first(app, "course-118-jockey-azul").waitForExistence(timeout: 4))
+        first(app, "course-118-jockey-azul").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8), "No se abrió el hoyo GPS")
+        XCTAssertTrue(waitFor(app, "distance-center", timeout: 4))
+        saveShot("17_play_hoyo")
+        first(app, "play-hit").tap()
+        XCTAssertTrue(first(app, "club-Dr").waitForExistence(timeout: 4))
+        first(app, "club-Dr").tap()
+        XCTAssertTrue(first(app, "result-fairway").waitForExistence(timeout: 4))
+        first(app, "result-fairway").tap()
+        dismissIfPresent(app, "play-close")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+
+        if first(app, "home-recurring").waitForExistence(timeout: 4) {
+            first(app, "home-recurring").tap()
+            XCTAssertTrue(waitFor(app, "screen-recurring", timeout: 6))
+            saveShot("18_recurring")
+            dismissIfPresent(app, "metric-back")
+            XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+        }
+
+        if waitFor(app, "last-round-card", timeout: 4) {
+            first(app, "last-round-card").tap()
+            XCTAssertTrue(waitFor(app, "screen-ronda", timeout: 6))
+            XCTAssertTrue(first(app, "recap-start").waitForExistence(timeout: 3))
+            first(app, "recap-start").tap()
+            XCTAssertTrue(waitFor(app, "screen-recap", timeout: 6))
+            saveShot("19_recap")
+            dismissIfPresent(app, "close-recap")
+            dismissIfPresent(app, "close-round")
+        }
     }
 
     func testSyncOverlayThenInicio() throws {

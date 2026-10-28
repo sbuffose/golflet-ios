@@ -4,8 +4,10 @@ struct HandicapHistoryView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
 
+    @State private var apiPoints: [TrendPoint]?
+
     var body: some View {
-        let points = StatsEngine.handicapSeries(model.rounds)
+        let points = apiPoints ?? StatsEngine.handicapSeries(model.rounds)
         let home = model.home
         GScreen(id: "screen-metric-handicap") {
             ScrollView(showsIndicators: false) {
@@ -82,5 +84,20 @@ struct HandicapHistoryView: View {
         }
         .accessibilityIdentifier("screen-metric-handicap")
         .safeAreaInset(edge: .top) { MetricBackBar() }
+        .task {
+            if let drill = try? await model.api.metricDrilldown(
+                metric: "handicap",
+                scope: "all",
+                year: Calendar.gregorian.component(.year, from: Date()),
+                course: "all",
+                sort: "date",
+                order: "desc"
+            ), !drill.history.isEmpty {
+                apiPoints = drill.history.compactMap { item in
+                    guard let date = item.date else { return nil }
+                    return TrendPoint(date: date, handicap: item.hi, course: item.club ?? "")
+                }.reversed()
+            }
+        }
     }
 }
