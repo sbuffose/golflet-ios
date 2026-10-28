@@ -11,6 +11,7 @@ struct MetricRoundsView: View {
     @State private var course: MetricCourseBucket
     @State private var sort: MetricSortField
     @State private var order: MetricSortOrder
+    @State private var apiRounds: [Round]?
 
     init(query: RoundListQuery, showsBack: Bool = true, screenID: String = "screen-metric-rounds") {
         self.query = query
@@ -74,6 +75,9 @@ struct MetricRoundsView: View {
         .safeAreaInset(edge: .top) {
             if showsBack { MetricBackBar() }
         }
+        .task(id: "\(period.rawValue)-\(course.rawValue)-\(sort.rawValue)-\(order.rawValue)") {
+            await loadAPI()
+        }
     }
 
     private var header: some View {
@@ -124,7 +128,26 @@ struct MetricRoundsView: View {
     }
 
     private var rows: [Round] {
+        if let apiRounds, !apiRounds.isEmpty { return apiRounds }
         let filtered = StatsEngine.filter(model.rounds, query: query, period: period, course: course)
         return StatsEngine.sorted(filtered, field: sort, order: order)
+    }
+
+    private func loadAPI() async {
+        let (scope, year) = MetricAPIMap.scope(period, sinceYear: query.sinceYear)
+        guard let drill = try? await model.api.metricDrilldown(
+            metric: MetricAPIMap.name(for: query),
+            scope: scope,
+            year: year,
+            course: MetricAPIMap.course(course),
+            sort: MetricAPIMap.sortKey(sort),
+            order: MetricAPIMap.orderKey(sort, order)
+        ), !drill.rounds.isEmpty else {
+            apiRounds = nil
+            return
+        }
+        apiRounds = drill.rounds.map { item in
+            model.rounds.first { $0.roundId == item.roundId } ?? item.asRound()
+        }
     }
 }

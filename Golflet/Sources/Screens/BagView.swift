@@ -3,8 +3,6 @@ import SwiftUI
 struct BagView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
-    @State private var editing: BagClub?
-
     var body: some View {
         GScreen(id: "screen-bolsa") {
             VStack(alignment: .leading, spacing: 16) {
@@ -17,7 +15,7 @@ struct BagView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
                         ForEach(model.bag) { club in
-                            Button { editing = club } label: {
+                            NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: club.name))) {
                                 HStack {
                                     Text(club.name)
                                         .font(GType.headline)
@@ -25,8 +23,10 @@ struct BagView: View {
                                     Spacer()
                                     cell(club.carry)
                                     cell(club.total)
+                                    MetricChevron(color: p.ink3)
                                 }
                                 .padding(.vertical, 16)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("bag-\(club.name)")
@@ -39,14 +39,7 @@ struct BagView: View {
             .padding(.top, 8)
         }
         .accessibilityIdentifier("screen-bolsa")
-        .sheet(item: $editing) { club in
-            BagEditSheet(club: club) { carry, total in
-                model.updateBagClub(name: club.name, carry: carry, total: total)
-                editing = nil
-            }
-            .golfletChrome()
-            .presentationDetents([.medium])
-        }
+        .metricDestinations()
     }
 
     private var filled: Int {

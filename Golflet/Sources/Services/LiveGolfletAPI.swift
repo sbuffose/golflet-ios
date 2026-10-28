@@ -95,6 +95,119 @@ struct LiveGolfletAPI: GolfletAPI {
         return LivePayloadMapper.parseBag(json["bag"])
     }
 
+    func gpsCourses(lat: Double?, lng: Double?) async throws -> GPSCourseList {
+        var query: [String] = []
+        if let lat, let lng {
+            query.append("lat=\(lat)")
+            query.append("lng=\(lng)")
+        }
+        let suffix = query.isEmpty ? "" : "?\(query.joined(separator: "&"))"
+        return PlayParser.courses(try await request("GET", "/api/gps/courses\(suffix)"))
+    }
+
+    func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail {
+        var query: [String] = []
+        if let lat, let lng {
+            query.append("lat=\(lat)")
+            query.append("lng=\(lng)")
+        }
+        let suffix = query.isEmpty ? "" : "?\(query.joined(separator: "&"))"
+        guard let detail = PlayParser.courseDetail(try await request("GET", "/api/gps/courses/\(id)\(suffix)")) else {
+            throw GolfletError.decoding("course")
+        }
+        return detail
+    }
+
+    func createLiveRound(courseId: String?, tee: String?) async throws -> LiveRound {
+        var body: [String: Any] = [:]
+        if let courseId { body["course_id"] = courseId }
+        if let tee { body["tee"] = tee }
+        let json = try await request("POST", "/api/live-rounds", body: body)
+        guard let round = PlayParser.liveRound(json["live_round"] ?? json) else { throw GolfletError.decoding("live_round") }
+        return round
+    }
+
+    func liveRound(id: String) async throws -> LiveRoundDetail {
+        let json = try await request("GET", "/api/live-rounds/\(id)")
+        guard let round = PlayParser.liveRound(json["live_round"]) else { throw GolfletError.decoding("live_round") }
+        let shots = (json["shots"] as? [Any] ?? []).compactMap(PlayParser.shot)
+        return LiveRoundDetail(liveRound: round, shots: shots, recap: PlayParser.recap(json["recap"]))
+    }
+
+    func patchLiveRound(id: String, body: [String: Any]) async throws -> LiveRound {
+        let json = try await request("PATCH", "/api/live-rounds/\(id)", body: body)
+        guard let round = PlayParser.liveRound(json["live_round"] ?? json) else { throw GolfletError.decoding("live_round") }
+        return round
+    }
+
+    func postShots(liveRoundId: String, drafts: [ShotDraft]) async throws -> [Shot] {
+        let payload: [String: Any]
+        if drafts.count == 1, let first = drafts.first {
+            payload = ShotQueue.payload(first)
+        } else {
+            payload = ["shots": drafts.prefix(200).map(ShotQueue.payload)]
+        }
+        let json = try await request("POST", "/api/live-rounds/\(liveRoundId)/shots", body: payload)
+        return (json["shots"] as? [Any] ?? []).compactMap(PlayParser.shot)
+    }
+
+    func patchShot(id: String, body: [String: Any]) async throws -> Shot {
+        let json = try await request("PATCH", "/api/shots/\(id)", body: body)
+        guard let shot = PlayParser.shot(json["shot"] ?? json) else { throw GolfletError.decoding("shot") }
+        return shot
+    }
+
+    func recap(roundId: String?, liveRoundId: String?) async throws -> Recap? {
+        var query: [String] = []
+        if let roundId { query.append("round_id=\(roundId)") }
+        if let liveRoundId { query.append("live_round_id=\(liveRoundId)") }
+        let suffix = query.isEmpty ? "" : "?\(query.joined(separator: "&"))"
+        let json = try await request("GET", "/api/recaps\(suffix)")
+        return PlayParser.recap(json["recap"])
+    }
+
+    func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?, draft: RecapDraft?) async throws -> Recap {
+        let json = try await upload("/api/recaps", audio: audio, roundId: roundId, liveRoundId: liveRoundId, draft: draft)
+        guard let recap = PlayParser.recap(json["recap"] ?? json) else { throw GolfletError.decoding("recap") }
+        return recap
+    }
+
+    func typedRecap(roundId: String?, liveRoundId: String?, draft: RecapDraft) async throws -> Recap {
+        var body = draft.jsonBody
+        if let roundId { body["round_id"] = roundId }
+        if let liveRoundId { body["live_round_id"] = liveRoundId }
+        let json = try await request("POST", "/api/recaps", body: body, timeout: 120)
+        guard let recap = PlayParser.recap(json["recap"] ?? json) else { throw GolfletError.decoding("recap") }
+        return recap
+    }
+
+    func patchRecap(id: String, body: [String: Any]) async throws -> Recap {
+        let json = try await request("PATCH", "/api/recaps/\(id)", body: body, timeout: 120)
+        guard let recap = PlayParser.recap(json["recap"] ?? json) else { throw GolfletError.decoding("recap") }
+        return recap
+    }
+
+    func retryRecap(id: String) async throws -> Recap {
+        let json = try await request("POST", "/api/recaps/\(id)/retry", body: [:], timeout: 120)
+        guard let recap = PlayParser.recap(json["recap"] ?? json) else { throw GolfletError.decoding("recap") }
+        return recap
+    }
+
+    func recurringMistakes() async throws -> RecurringReport {
+        PlayParser.recurring(try await request("GET", "/api/recaps/recurring?last=10"))
+    }
+
+    func clubStats(code: String) async throws -> ClubStatsDetail {
+        let json = try await request("GET", "/api/club-stats/\(code)")
+        guard let detail = PlayParser.clubDetail(json) else { throw GolfletError.decoding("club-stats") }
+        return detail
+    }
+
+    func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String) async throws -> MetricDrilldown? {
+        let path = "/api/metrics/\(metric)?scope=\(scope)&year=\(year)&course=\(course)&sort=\(sort)&order=\(order)"
+        return PlayParser.metric(try await request("GET", path))
+    }
+
     private func request(
         _ method: String,
         _ path: String,
@@ -147,5 +260,61 @@ struct LiveGolfletAPI: GolfletAPI {
         if status >= 400 {
             throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo completar."))
         }
+    }
+
+    private func upload(
+        _ path: String,
+        audio: Data,
+        roundId: String?,
+        liveRoundId: String?,
+        draft: RecapDraft? = nil
+    ) async throws -> [String: Any] {
+        guard audio.count >= 1_024 else { throw GolfletError.server("El audio es demasiado corto.") }
+        guard audio.count <= 4_000_000 else { throw GolfletError.server("El audio no puede pasar de 4 MB.") }
+        guard let url = URL(string: path, relativeTo: baseURL) else { throw GolfletError.invalidClub }
+        let boundary = "Golflet\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
+        guard let token = KeychainStore.loadToken() else { throw GolfletError.notAuthenticated }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        var body = Data()
+        func field(_ name: String, _ value: String) {
+            body.append(Data("--\(boundary)\r\n".utf8))
+            body.append(Data("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".utf8))
+            body.append(Data("\(value)\r\n".utf8))
+        }
+        if let roundId { field("round_id", roundId) }
+        if let liveRoundId { field("live_round_id", liveRoundId) }
+        if let draft {
+            field("transcript", draft.transcript)
+            if let summary = draft.summary { field("summary", summary) }
+            if let data = try? JSONSerialization.data(withJSONObject: draft.jsonBody["mistakes"] ?? []),
+               let text = String(data: data, encoding: .utf8) {
+                field("mistakes", text)
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: draft.jsonBody["positives"] ?? []),
+               let text = String(data: data, encoding: .utf8) {
+                field("positives", text)
+            }
+        }
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"audio\"; filename=\"recap.m4a\"\r\n".utf8))
+        body.append(Data("Content-Type: audio/mp4\r\n\r\n".utf8))
+        body.append(audio)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        request.httpBody = body
+
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 120
+        config.timeoutIntervalForResource = 120
+        let (data, response) = try await URLSession(configuration: config).data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        try throwIfFailed(status: status, json: json, authorized: true, path: path)
+        return json
     }
 }
