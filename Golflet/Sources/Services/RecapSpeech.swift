@@ -65,7 +65,7 @@ enum RecapSpeech {
         let collector = Task { () -> String in
             var parts: [String] = []
             for try await result in transcriber.results {
-                let piece = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
+                let piece = String(result.text.characters).trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                 guard !piece.isEmpty else { continue }
                 if !result.isFinal { continue }
                 parts.append(piece)

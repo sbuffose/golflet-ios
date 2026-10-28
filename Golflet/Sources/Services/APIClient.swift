@@ -29,10 +29,10 @@ protocol GolfletAPI: Sendable {
     func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?, draft: RecapDraft?) async throws -> Recap
     func typedRecap(roundId: String?, liveRoundId: String?, draft: RecapDraft) async throws -> Recap
     func patchRecap(id: String, body: [String: Any]) async throws -> Recap
-    func retryRecap(id: String) async throws -> Recap
     func recurringMistakes() async throws -> RecurringReport
     func clubStats(code: String) async throws -> ClubStatsDetail
     func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String) async throws -> MetricDrilldown?
+    func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy
 }
 
 enum APIFactory {

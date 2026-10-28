@@ -17,6 +17,7 @@ enum PlayParser {
             clubCode: blob["club_code"] as? String ?? "",
             clubName: blob["club_name"] as? String ?? "",
             course: blob["course"] as? String ?? blob["label"] as? String ?? "",
+            courseKey: blob["course_key"] as? String ?? CourseIdentity.key(for: blob["course"] as? String ?? ""),
             par: JSONFlex.int(from: blob["par"]) ?? 72,
             holeCount: JSONFlex.int(from: blob["hole_count"]) ?? holes.count,
             holes: holes,
@@ -87,8 +88,72 @@ enum PlayParser {
                 return RecapPositive(hole: JSONFlex.int(from: item["hole"]), text: text)
             },
             source: blob["source"] as? String,
-            durationS: JSONFlex.double(from: audio?["duration_s"])
+            durationS: JSONFlex.double(from: blob["duration_s"]) ?? JSONFlex.double(from: audio?["duration_s"])
         )
+    }
+
+    static func strategy(_ json: [String: Any]) -> CourseStrategy {
+        let holes = (json["holes"] as? [[String: Any]] ?? []).compactMap(holeStrategy)
+        let published = (json["published_holes"] as? [Any])?.compactMap { JSONFlex.int(from: $0) } ?? holes.map(\.hole)
+        return CourseStrategy(
+            courseId: json["course_id"] as? String ?? "",
+            courseKey: json["course_key"] as? String ?? "",
+            overview: json["overview"] as? String,
+            overviewPublishedAt: json["overview_published_at"] as? String,
+            publishedHoles: published,
+            holes: holes
+        )
+    }
+
+    static func holeStrategy(_ blob: [String: Any]) -> HoleStrategy? {
+        guard let hole = JSONFlex.int(from: blob["hole"]) else { return nil }
+        let variants = blob["variants"] as? [String: Any] ?? [:]
+        return HoleStrategy(
+            hole: hole,
+            planTitle: blob["plan_title"] as? String,
+            planText: blob["plan_text"] as? String,
+            teeClub: blob["tee_club"] as? String,
+            teeTarget: blob["tee_target"] as? String,
+            target: coord(blob["target"]),
+            hazards: (blob["hazards"] as? [[String: Any]] ?? []).compactMap(hazard),
+            why: blob["why"] as? String,
+            missSide: blob["miss_side"] as? String,
+            missNote: blob["miss_note"] as? String,
+            greenSlope: blob["green_slope"] as? String,
+            greenLeave: blob["green_leave"] as? String,
+            greenNotes: blob["green_notes"] as? String,
+            variants: [
+                .scratch: variant(variants["scratch"]),
+                .medio: variant(variants["medio"]),
+                .alto: variant(variants["alto"])
+            ].compactMapValues { $0 },
+            publishedAt: blob["published_at"] as? String
+        )
+    }
+
+    private static func hazard(_ blob: [String: Any]) -> StrategyHazard? {
+        let type = blob["type"] as? String ?? "otro"
+        return StrategyHazard(
+            id: blob["id"] as? String ?? UUID().uuidString,
+            type: type,
+            typeLabel: blob["type_label"] as? String ?? type.capitalized,
+            side: blob["side"] as? String,
+            sideLabel: blob["side_label"] as? String,
+            fromYd: JSONFlex.int(from: blob["from_yd"]),
+            carryYd: JSONFlex.int(from: blob["carry_yd"]),
+            fromM: JSONFlex.int(from: blob["from_m"]),
+            carryM: JSONFlex.int(from: blob["carry_m"]),
+            note: blob["note"] as? String,
+            at: coord(blob["at"])
+        )
+    }
+
+    private static func variant(_ raw: Any?) -> StrategyVariant? {
+        guard let blob = raw as? [String: Any] else { return nil }
+        let club = blob["tee_club"] as? String
+        let plan = blob["plan"] as? String
+        if (club ?? "").isEmpty, (plan ?? "").isEmpty { return nil }
+        return StrategyVariant(teeClub: club, plan: plan)
     }
 
     static func recurring(_ json: [String: Any]) -> RecurringReport {

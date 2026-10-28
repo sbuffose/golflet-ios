@@ -98,6 +98,7 @@ struct RecapView: View {
                      : (isTranscribing ? "Transcribiendo en el iPhone…" : "Grabá hasta 4 minutos. Lo transcribimos en el iPhone."))
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier(isTranscribing ? "recap-transcribing" : "recap-record-hint")
                 HStack {
                     Text(timeLabel)
                         .font(GType.headline)
@@ -299,16 +300,20 @@ struct RecapView: View {
             isSaving = false
         }
         do {
-            let draft = try await RecapOnDevice.process(url: recorder.lastURL)
+            var draft = try await RecapOnDevice.process(url: recorder.lastURL)
+            draft.durationS = recorder.elapsed
             transcript = draft.transcript
             summary = draft.summary ?? ""
-            let stored = try await model.api.uploadRecap(
-                audio: audio,
-                roundId: roundId,
-                liveRoundId: liveRoundId,
-                draft: draft
-            )
-            apply(try await model.api.patchRecap(id: stored.id, body: draft.patchBody))
+            if let pending = recap, pending.status == "pending_ai" || pending.status == "processing" {
+                apply(try await model.api.patchRecap(id: pending.id, body: draft.patchBody))
+            } else {
+                apply(try await model.api.uploadRecap(
+                    audio: audio,
+                    roundId: roundId,
+                    liveRoundId: liveRoundId,
+                    draft: draft
+                ))
+            }
         } catch {
             message = error.localizedDescription
         }
@@ -318,9 +323,10 @@ struct RecapView: View {
         do {
             let draft = await RecapOnDevice.structure(transcript: transcript)
                 ?? RecapDraft(transcript: transcript, structuredOnDevice: false)
-            apply(try await model.api.typedRecap(roundId: roundId, liveRoundId: liveRoundId, draft: draft))
-            if !draft.structuredOnDevice, let id = recap?.id {
-                apply(try await model.api.patchRecap(id: id, body: draft.patchBody))
+            if let pending = recap, pending.status == "pending_ai" || pending.status == "processing" {
+                apply(try await model.api.patchRecap(id: pending.id, body: draft.patchBody))
+            } else {
+                apply(try await model.api.typedRecap(roundId: roundId, liveRoundId: liveRoundId, draft: draft))
             }
             showsTranscript = false
         } catch {
@@ -333,7 +339,8 @@ struct RecapView: View {
         defer { isTranscribing = false }
         do {
             if recorder.lastURL != nil || RuntimeFlags.isUITesting {
-                let draft = try await RecapOnDevice.process(url: recorder.lastURL)
+                var draft = try await RecapOnDevice.process(url: recorder.lastURL)
+                draft.durationS = recorder.elapsed
                 transcript = draft.transcript
                 summary = draft.summary ?? ""
                 if let id = recap?.id {
@@ -341,11 +348,8 @@ struct RecapView: View {
                 } else {
                     apply(try await model.api.typedRecap(roundId: roundId, liveRoundId: liveRoundId, draft: draft))
                 }
-            } else if let id = recap?.id {
-                apply(try await model.api.patchRecap(id: id, body: [
-                    "transcript": transcript,
-                    "restructure": true
-                ]))
+            } else {
+                message = RecapCopy.pendingAI
             }
         } catch {
             message = error.localizedDescription
