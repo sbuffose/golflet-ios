@@ -98,6 +98,8 @@ struct Round: Identifiable, Hashable, Sendable {
     var clubPlayed: String? = nil
     var sourceClubName: String? = nil
     var courseLabel: String? = nil
+    var recapId: String? = nil
+    var gpsShots: Int = 0
 
     var isOtherCourse: Bool {
         otherCourse || courseKey.hasPrefix("x:")

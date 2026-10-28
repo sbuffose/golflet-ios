@@ -8,6 +8,7 @@ struct ScoreKindDetailView: View {
 
     @State private var period: MetricPeriod
     @State private var course: MetricCourseBucket
+    @State private var apiSnapshot: ScoreKindSnapshot?
 
     init(kind: ScoreKind, query: RoundListQuery) {
         self.kind = kind
@@ -50,10 +51,57 @@ struct ScoreKindDetailView: View {
         }
         .accessibilityIdentifier("screen-metric-scores")
         .safeAreaInset(edge: .top) { MetricBackBar() }
+        .task(id: "\(period.rawValue)-\(course.rawValue)") {
+            await loadAPI()
+        }
     }
 
     private var snapshot: ScoreKindSnapshot {
-        StatsEngine.scoreKind(kind, rounds: model.rounds, query: query, period: period, course: course)
+        if let apiSnapshot, apiSnapshot.total > 0 || !apiSnapshot.rounds.isEmpty { return apiSnapshot }
+        return StatsEngine.scoreKind(kind, rounds: model.rounds, query: query, period: period, course: course)
+    }
+
+    private func loadAPI() async {
+        let (scope, year) = MetricAPIMap.scope(period, sinceYear: query.sinceYear)
+        guard let drill = try? await model.api.metricDrilldown(
+            metric: MetricAPIMap.score(kind),
+            scope: scope,
+            year: year,
+            course: MetricAPIMap.course(course),
+            sort: "count",
+            order: "desc"
+        ), drill.total != nil || !drill.rounds.isEmpty else {
+            apiSnapshot = nil
+            return
+        }
+        let rows = drill.rounds.map { item -> ScoreKindRound in
+            let local = model.rounds.first { $0.roundId == item.roundId }
+            let round = local ?? item.asRound()
+            let holes = item.holes.map { number in
+                local?.holes.first { $0.number == number } ?? HoleScore(
+                    number: number,
+                    par: 4,
+                    handicap: number,
+                    yards: nil,
+                    strokes: nil,
+                    toPar: nil,
+                    result: kind.holeResult
+                )
+            }
+            return ScoreKindRound(
+                round: round,
+                count: item.count ?? holes.count,
+                holes: holes,
+                usedHoleDetail: item.holesKnown && !item.holes.isEmpty
+            )
+        }
+        apiSnapshot = ScoreKindSnapshot(
+            total: drill.total ?? rows.reduce(0) { $0 + $1.count },
+            rounds: rows,
+            tally: drill.perHole.map { HoleTally(course: $0.courseLabel, hole: $0.hole, count: $0.count) }
+                .sorted { $0.count > $1.count },
+            roundsMissingHoles: rows.filter { !$0.usedHoleDetail }.count
+        )
     }
 
     private func header(_ snap: ScoreKindSnapshot) -> some View {

@@ -88,6 +88,20 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
+        .fullScreenCover(isPresented: bindings.showsPlay) {
+            NavigationStack {
+                PlayCourseView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(item: bindings.presentedRecap) { target in
+            NavigationStack {
+                RecapView(roundId: target.roundId, liveRoundId: target.liveRoundId)
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .sheet(item: Binding(
             get: { model.presentedHole.map { HoleRef(number: $0) } },
             set: { model.presentedHole = $0?.number }
