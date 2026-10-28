@@ -12,6 +12,7 @@ struct RoundDetailView: View {
     @State private var firText = ""
     @State private var extras: [Int: HoleExtra] = [:]
     @State private var showsGameEditor = false
+    @State private var showsRecap = false
 
     var body: some View {
         GScreen(id: "screen-ronda") {
@@ -19,6 +20,7 @@ struct RoundDetailView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
                     scoreHero
+                    recapButton
                     if round.isOtherCourse || round.holes.isEmpty {
                         otherCourseNotice
                     } else {
@@ -33,6 +35,13 @@ struct RoundDetailView: View {
             }
         }
         .accessibilityIdentifier("screen-ronda")
+        .sheet(isPresented: $showsRecap) {
+            NavigationStack {
+                RecapView(roundId: round.roundId)
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .onAppear {
             extras = Dictionary(uniqueKeysWithValues: model.notes.extras(for: round.roundId).map { ($0.hole, $0) })
             noteText = model.notes.note(for: round.roundId)?.text ?? round.notes ?? ""
@@ -279,6 +288,30 @@ struct RoundDetailView: View {
             }
         }
         .font(GType.label)
+    }
+
+    private var recapButton: some View {
+        Button {
+            showsRecap = true
+        } label: {
+            GCard(fill: p.primary, radius: 22, padding: 16) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Contá cómo te fue")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                        Text(round.recapId == nil ? "Grabá un audio de la ronda" : "Ver o editar el recap")
+                            .font(GType.label)
+                            .foregroundStyle(p.onPrimary.opacity(0.7))
+                    }
+                    Spacer()
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(p.accent)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("recap-start")
     }
 
     private var notes: some View {

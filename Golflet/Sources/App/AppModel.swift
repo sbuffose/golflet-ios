@@ -25,6 +25,9 @@ final class AppModel {
     var celebrateCards: Int?
     var toastMessage: String?
     var isSignedIn: Bool
+    var showsPlay = false
+    var presentedRecap: RecapTarget?
+    var recurring: RecurringReport?
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -56,6 +59,8 @@ final class AppModel {
             if api.persistsLocally {
                 bag = notes.bag()
             }
+            await flushShotQueue()
+            recurring = try? await api.recurringMistakes()
             isLoaded = true
         } catch {
             errorMessage = error.localizedDescription
@@ -90,6 +95,7 @@ final class AppModel {
             tees = []
             holeStats = []
             bag = []
+            recurring = nil
             isLoaded = true
         }
     }
@@ -184,6 +190,33 @@ final class AppModel {
 
     func openLastRound() {
         presentedRound = home.lastRound
+    }
+
+    func endPlay(recapLiveRoundId: String?) {
+        showsPlay = false
+        guard let recapLiveRoundId else { return }
+        Task {
+            try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 80 : 450))
+            presentedRecap = RecapTarget(liveRoundId: recapLiveRoundId)
+        }
+    }
+
+    func openRecap(roundId: String?, liveRoundId: String? = nil) {
+        presentedRecap = RecapTarget(roundId: roundId, liveRoundId: liveRoundId)
+    }
+
+    func flushShotQueue() async {
+        let pending = ShotQueue.all()
+        guard !pending.isEmpty else { return }
+        let groups = Dictionary(grouping: pending, by: \.liveRoundId)
+        for (liveId, drafts) in groups {
+            do {
+                let posted = try await api.postShots(liveRoundId: liveId, drafts: Array(drafts.prefix(200)))
+                ShotQueue.remove(clientIds: Set(posted.compactMap(\.clientId)))
+            } catch {
+                break
+            }
+        }
     }
 
     @discardableResult

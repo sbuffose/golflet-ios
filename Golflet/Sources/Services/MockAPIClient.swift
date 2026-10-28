@@ -550,7 +550,9 @@ struct MockAPIClient: GolfletAPI {
             otherCourse: otherCourse,
             clubPlayed: item["club_played"] as? String,
             sourceClubName: item["source_club_name"] as? String,
-            courseLabel: item["course_label"] as? String
+            courseLabel: item["course_label"] as? String,
+            recapId: item["recap_id"] as? String,
+            gpsShots: JSONFlex.int(from: item["gps_shots"]) ?? 0
         )
     }
 }

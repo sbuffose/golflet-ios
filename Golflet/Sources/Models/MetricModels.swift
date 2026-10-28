@@ -234,6 +234,8 @@ enum MetricRoute: Hashable, Sendable {
     case roundList(RoundListQuery)
     case scoreKind(ScoreKind, RoundListQuery)
     case handicap
+    case recurring
+    case clubStats(String)
 }
 
 struct HoleTally: Hashable, Sendable, Identifiable {

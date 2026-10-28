@@ -22,6 +22,7 @@ struct HomeView: View {
                     handicapCard
                     lastRound
                     yearRow
+                    recurring
                     clubs
                 }
                 .padding(.horizontal, 20)
@@ -68,6 +69,27 @@ struct HomeView: View {
                 .tracking(-1.9)
                 .foregroundStyle(p.ink)
                 .accessibilityIdentifier("home-greeting")
+            Button { model.showsPlay = true } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Jugar")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                        Text("Ronda con GPS")
+                            .font(GType.label)
+                            .foregroundStyle(p.onPrimary.opacity(0.65))
+                    }
+                    Spacer()
+                    Image(systemName: "location.fill")
+                        .foregroundStyle(p.accent)
+                }
+                .padding(16)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-start")
+            .padding(.top, 6)
         }
     }
 
@@ -233,6 +255,39 @@ struct HomeView: View {
                     .font(GType.statL)
                     .tabular()
                     .foregroundStyle(p.ink)
+            }
+        }
+    }
+
+    private var recurring: some View {
+        Group {
+            if let report = model.recurring, let first = report.items.first {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Después de la ronda")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    NavigationLink(value: MetricRoute.recurring) {
+                        GCard(radius: 22, padding: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Errores que se repiten")
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    Spacer()
+                                    MetricChevron(color: p.ink3)
+                                }
+                                Text(first.text)
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink2)
+                                Text("En \(report.roundsConsidered) de las últimas \(report.lastN) rondas")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink3)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home-recurring")
+                }
             }
         }
     }

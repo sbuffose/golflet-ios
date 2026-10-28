@@ -43,5 +43,11 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Golflet usa tu ubicación mientras jugás para calcular la distancia al green y guardar el punto de cada golpe.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Golflet usa el micrófono para grabar el recap de la ronda y transcribir cómo te fue.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Golflet transcribe en el iPhone lo que contás de la ronda para armar el recap, sin mandar el audio a un servicio de transcripción.</string>
 </dict>
 </plist>
