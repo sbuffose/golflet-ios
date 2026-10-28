@@ -48,7 +48,7 @@ enum RecapSpeech {
         var locale = pickLocale(from: supported)
         if locale == nil {
             for id in preferredIdentifiers {
-                if let match = SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: id)) {
+                if let match = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: id)) {
                     locale = match
                     break
                 }
@@ -56,7 +56,7 @@ enum RecapSpeech {
         }
         guard let locale else { return nil }
 
-        let transcriber = SpeechTranscriber(locale: locale, preset: .offlineTranscription)
+        let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             try await request.downloadAndInstall()
         }
@@ -79,7 +79,7 @@ enum RecapSpeech {
         } else {
             await analyzer.cancelAndFinishNow()
         }
-        let text = try await collector.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = try await collector.value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         return text.isEmpty ? nil : text
     }
 
