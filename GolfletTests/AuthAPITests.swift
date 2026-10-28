@@ -67,7 +67,7 @@ final class AuthAPITests: XCTestCase {
         XCTAssertTrue(result.ok)
         let snap = try await api.bootstrap()
         XCTAssertFalse(snap.clubs.isEmpty)
-        XCTAssertNil(snap.user.visibleEmail)
+        XCTAssertNil(snap.user?.visibleEmail)
     }
 
     func testParsesAuthFailureAndSession() {
