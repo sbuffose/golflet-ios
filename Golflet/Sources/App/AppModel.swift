@@ -267,15 +267,7 @@ final class AppModel {
 
     private func applyRemoteProgress(_ progress: SyncAPIProgress, sessionID: UUID) {
         guard var session = syncSession, session.id == sessionID, session.outcome == .running else { return }
-        var next = progress
-        if next.stage == .cards, let total = next.total {
-            next.cardsTotal = total
-        } else if next.cardsTotal == nil {
-            next.cardsTotal = session.progress.cardsTotal
-        }
-        if next.listTotal == nil { next.listTotal = session.progress.listTotal }
-        if next.clubIndex == nil { next.clubIndex = session.progress.clubIndex }
-        if next.clubCount == nil { next.clubCount = session.progress.clubCount }
+        var next = progress.merging(onto: session.progress)
         if let name = next.club, !name.isEmpty {
             session.clubName = name
         } else if next.club == nil {

@@ -193,6 +193,19 @@ enum FormatAR {
         f.dateFormat = "d MMMM yyyy"
         return f.string(from: date)
     }
+
+    static func syncDay(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_AR")
+        f.dateFormat = "d MMM yyyy"
+        return f.string(from: date).replacingOccurrences(of: ".", with: "")
+    }
+
+    static func signedInt(_ value: Int) -> String {
+        if value > 0 { return "+\(value)" }
+        if value < 0 { return "−\(-value)" }
+        return "E"
+    }
 }
 
 struct PaletteInjector: ViewModifier {

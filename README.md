@@ -10,7 +10,7 @@ La UI está en español rioplatense (es-AR, voseo) y sigue el sistema de diseño
 - Cliente de API (`GolfletAPI`) con `MockAPIClient` (UI tests / Debug) y `LiveGolfletAPI` (Release) contra `https://golflet.vercel.app`.
 - Auth nativa: `POST /api/auth/sign-up|sign-in/email`, header `set-auth-token`, `Authorization: Bearer` en Keychain.
 - Vincular Golfistics App (matrícula + clave, guardar clave opcional). Un login trae todos los clubes. Actualizar, olvidar clave y desvincular aplican a todos. Notas/putts/GIR/fairways y bolsa en el servidor.
-- Mientras se vincula o se toca Actualizar, overlay con el yardage book y pasos reales de `GET /api/sync-progress/:id` (`club`, `club_index`, `club_count`; el cliente manda `progress_id` y poll cada 700 ms). Las etapas se reinician en cada club; `done` llega al final.
+- Mientras se vincula o se toca Actualizar, overlay v3: yardage book, escudo o monograma, contadores en vivo y la última tarjeta. `GET /api/sync-progress/:id` manda `club_code`, `club_logo`, `club_initials` y `stats` (opcionales). Las etapas se reinician en cada club; `done` llega al final.
 - Fixtures anónimos (jugador **Jugador Demo**) de Jockey Club Buenos Aires (118) y Mar del Plata (209), más una ronda de otra cancha.
 - Notas de ronda, putts/GIR/fairway y distancias de bolsa en SwiftData.
 - Credenciales de club solo en Keychain.
