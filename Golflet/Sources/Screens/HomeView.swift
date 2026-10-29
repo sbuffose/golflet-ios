@@ -953,13 +953,14 @@ struct HomeHcpAvatar: View {
             .overlay(Circle().stroke(ring, lineWidth: 2))
 
             if verified {
+                let badge: CGFloat = size <= 28 ? 13 : 14
                 ZStack {
                     Circle().fill(Color(hex: 0x1D9BF0))
                     Image(systemName: "checkmark")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.system(size: size <= 28 ? 6.5 : 7, weight: .bold))
                         .foregroundStyle(.white)
                 }
-                .frame(width: 14, height: 14)
+                .frame(width: badge, height: badge)
                 .overlay(Circle().stroke(Color(hex: 0x0F3D2E), lineWidth: 1.5))
                 .offset(x: 2, y: 2)
                 .accessibilityLabel("Verificado")
