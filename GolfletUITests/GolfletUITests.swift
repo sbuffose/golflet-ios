@@ -19,7 +19,7 @@ final class GolfletUITests: XCTestCase {
             first(app, "last-round-card").tap()
             XCTAssertTrue(waitFor(app, "screen-ronda", timeout: 6))
             saveShot("04_ronda")
-            dismissIfPresent(app, "close-round")
+            dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
 
@@ -405,7 +405,12 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "invite-accept").waitForExistence(timeout: 3))
         XCTAssertTrue(first(app, "invite-decline").waitForExistence(timeout: 2))
         saveShot("34_invitacion")
-        first(app, "invite-accept").tap()
+        let accept = app.buttons["invite-accept"].exists ? app.buttons["invite-accept"] : first(app, "invite-accept")
+        if accept.isHittable {
+            accept.tap()
+        } else {
+            accept.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "Aceptar no abrió el grupo")
         saveShot("35_grupo_aceptado")
     }
@@ -494,6 +499,61 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "perfil-notificaciones").waitForExistence(timeout: 3), "Falta la fila de Notificaciones")
         first(app, "perfil-notificaciones").tap()
         XCTAssertTrue(waitFor(app, "screen-notificaciones", timeout: 6))
+        saveShot("38_notificaciones_perfil")
+    }
+
+    func testTextPrefsLivePreview() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(openClubsSheet(app), "No abrió el perfil")
+        XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
+        reveal(app, first(app, "perfil-texto"))
+        XCTAssertTrue(first(app, "perfil-texto").waitForExistence(timeout: 4), "Falta Tamaño y grosor del texto")
+        first(app, "perfil-texto").tap()
+        XCTAssertTrue(waitFor(app, "screen-texto", timeout: 6))
+        XCTAssertTrue(first(app, "text-preview").waitForExistence(timeout: 3))
+        first(app, "text-size-xl").tap()
+        first(app, "text-weight-marked").tap()
+        XCTAssertTrue(first(app, "text-preview-hero").waitForExistence(timeout: 3))
+        saveShot("46_texto_prefs")
+        dismissIfPresent(app, "close-texto")
+    }
+
+    func testMainScreensAtLargestBoldStayOnScreen() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-text-xl-bold"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        assertFits(app, "home-greeting")
+        assertFits(app, "metric-handicap")
+        assertFits(app, "metric-tarjetas")
+        assertFits(app, "metric-best-gross")
+        saveShot("47_texto_xl_inicio")
+
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        assertFits(app, "range-count")
+        assertFits(app, "metric-summary-best")
+        saveShot("48_texto_xl_resumen")
+
+        tapTab(app, "Rondas")
+        XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6))
+        saveShot("49_texto_xl_rondas")
+
+        tapTab(app, "Cancha")
+        XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
+        assertFits(app, "metric-course-average")
+        saveShot("50_texto_xl_cancha")
+
+        tapTab(app, "Mi bolsa")
+        XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
+        saveShot("51_texto_xl_bolsa")
     }
 
     private func submitLogin(_ app: XCUIApplication) {
@@ -546,6 +606,16 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    private func dismissSheet(_ app: XCUIApplication, closeID: String, screenID: String) {
+        dismissIfPresent(app, closeID)
+        if first(app, screenID).waitForNonExistence(timeout: 3) { return }
+        dismissIfPresent(app, closeID)
+        if first(app, screenID).exists {
+            app.swipeDown()
+        }
+        _ = first(app, screenID).waitForNonExistence(timeout: 3)
+    }
+
     private func type(_ element: XCUIElement, _ text: String) {
         element.tap()
         let placeholders = [
@@ -569,20 +639,24 @@ final class GolfletUITests: XCTestCase {
 
     @discardableResult
     private func openClubsSheet(_ app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
-        let addClub = app.buttons["add-club-home"]
-        if addClub.waitForExistence(timeout: timeout) {
-            revealHittable(app, addClub)
-            if addClub.isHittable {
-                addClub.tap()
-                return true
+        if first(app, "screen-ronda").exists {
+            dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
+        }
+        let avatar = app.buttons["avatar-button"].exists ? app.buttons["avatar-button"] : first(app, "avatar-button")
+        if avatar.waitForExistence(timeout: timeout) {
+            if avatar.isHittable {
+                avatar.tap()
+            } else {
+                avatar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             }
+            if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
+                first(app, "notifications-cuenta").tap()
+            }
+            return true
         }
-        let avatar = first(app, "avatar-button")
-        guard avatar.waitForExistence(timeout: 3) else { return false }
-        avatar.tap()
-        if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
-            first(app, "notifications-cuenta").tap()
-        }
+        let addClub = app.buttons["add-club-home"]
+        guard addClub.waitForExistence(timeout: 2), addClub.isHittable else { return false }
+        addClub.tap()
         return true
     }
 
@@ -642,6 +716,17 @@ final class GolfletUITests: XCTestCase {
             app.swipeUp()
             attempts += 1
         }
+    }
+
+    private func assertFits(_ app: XCUIApplication, _ id: String) {
+        XCTAssertTrue(first(app, id).waitForExistence(timeout: 5), "Falta \(id)")
+        let element = largest(app, id)
+        reveal(app, element)
+        let screen = app.frame
+        XCTAssertGreaterThan(element.frame.width, 8, "\(id) no tiene ancho")
+        XCTAssertLessThanOrEqual(element.frame.maxX, screen.maxX + 2, "\(id) se sale a la derecha: \(element.frame) vs \(screen)")
+        XCTAssertGreaterThanOrEqual(element.frame.minX, screen.minX - 2, "\(id) se sale a la izquierda: \(element.frame)")
+        XCTAssertFalse(element.label.hasSuffix("…") || element.label.hasSuffix("..."), "\(id) truncado: \(element.label)")
     }
 
     private func tapTab(_ app: XCUIApplication, _ name: String) {

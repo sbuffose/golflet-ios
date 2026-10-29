@@ -58,6 +58,8 @@ protocol GolfletAPI: Sendable {
     func unreadNotifications() async throws -> UnreadNotifications
     func notification(id: String) async throws -> InboxNotification
     func markNotificationsRead(ids: [String], all: Bool) async throws
+    func userSettings() async throws -> TextPrefs
+    func saveUserSettings(_ prefs: TextPrefs) async throws -> TextPrefs
 }
 
 enum APIFactory {

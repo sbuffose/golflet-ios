@@ -87,6 +87,8 @@ struct HomeView: View {
                 .font(GType.largeTitle)
                 .tracking(-1.9)
                 .foregroundStyle(p.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .accessibilityIdentifier("home-greeting")
             Button { model.showsPlay = true } label: {
                 HStack {
@@ -132,7 +134,7 @@ struct HomeView: View {
                                 .tracking(-4.4)
                                 .tabular()
                                 .foregroundStyle(p.onPrimary)
-                                .minimumScaleFactor(0.6)
+                                .minimumScaleFactor(0.5)
                                 .lineLimit(1)
                             Sparkline(values: snap.trendValues, color: p.accent)
                                 .frame(height: 54)
@@ -149,6 +151,8 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-handicap")
+                .accessibilityElement(children: .contain)
+                .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
 
                 HStack(alignment: .top) {
                     NavigationLink(value: MetricRoute.roundList(.allCards)) {
@@ -156,23 +160,30 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-tarjetas")
+                    .accessibilityElement(children: .contain)
+                    .overlay { GProbe(id: "metric-tarjetas", label: "Tarjetas") }
                     Spacer()
                     NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: false))) {
                         heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-best-gross")
+                    .accessibilityElement(children: .contain)
+                    .overlay { GProbe(id: "metric-best-gross", label: "Mejor gross") }
                     Spacer()
                     NavigationLink(value: MetricRoute.roundList(.average(yearOnly: true))) {
                         heroMini("Promedio \(Calendar.gregorian.component(.year, from: Date()))", snap.yearAverage.map(FormatAR.one) ?? "—")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-average")
+                    .accessibilityElement(children: .contain)
+                    .overlay { GProbe(id: "metric-average", label: "Promedio") }
                 }
                 .padding(.top, 4)
             }
         }
         .accessibilityIdentifier("handicap-card")
+        .accessibilityElement(children: .contain)
     }
 
     private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
@@ -188,6 +199,7 @@ struct HomeView: View {
                 .font(GType.statM)
                 .tabular()
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .foregroundStyle(gold ? p.accent : p.onPrimary)
         }
         .contentShape(Rectangle())

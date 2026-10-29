@@ -32,6 +32,7 @@ struct MockAPIClient: GolfletAPI {
         Self.sessionLock.unlock()
         Self.resetGroups()
         Self.resetNotifications()
+        Self.resetTextPrefs()
     }
 
     var isAuthenticated: Bool {
