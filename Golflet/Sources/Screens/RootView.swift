@@ -3,8 +3,11 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    @Environment(\.golfletTypeToken) private var typeToken
 
     var body: some View {
+        let _ = typeToken
+        let _ = model.textPrefs
         Group {
             if model.isSignedIn {
                 mainTabs

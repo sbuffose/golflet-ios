@@ -92,6 +92,8 @@ struct GTitle: View {
             .font(GFont.ui(size, weight: .semibold))
             .tracking(size >= 36 ? -1.9 : -1.2)
             .foregroundStyle(p.ink)
+            .lineLimit(2)
+            .minimumScaleFactor(0.72)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

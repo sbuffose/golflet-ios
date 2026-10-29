@@ -9,6 +9,7 @@ struct ClubsView: View {
     @State private var savePassword = true
     @State private var syncPassword = ""
     @State private var saveOnSync = false
+    @State private var showsTextPrefs = false
 
     var body: some View {
         GScreen(id: "screen-clubes") {
@@ -25,6 +26,7 @@ struct ClubsView: View {
                     notificationsRow
                     groupsSection
                     shareSection
+                    accessibilitySection
 
                     ForEach(model.clubs) { club in
                         clubCard(club)
@@ -72,6 +74,13 @@ struct ClubsView: View {
             }
         }
         .accessibilityIdentifier("screen-clubes")
+        .sheet(isPresented: $showsTextPrefs) {
+            NavigationStack {
+                TextPrefsView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .safeAreaInset(edge: .top) {
             HStack {
                 Spacer()
@@ -220,6 +229,43 @@ struct ClubsView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("perfil-que-comparto")
         }
+    }
+
+    private var accessibilitySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Accesibilidad")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            Button { showsTextPrefs = true } label: {
+                GCard(radius: 16, padding: 14) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Tamaño y grosor del texto")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text(textPrefsSummary)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(p.ink3)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("perfil-texto")
+        }
+    }
+
+    private var textPrefsSummary: String {
+        let size = model.textPrefs.size.title
+        let weight = model.textPrefs.weight.title
+        if model.textPrefs.weight == .normal {
+            return size
+        }
+        return "\(size) · \(weight)"
     }
 
     private var needsSyncPassword: Bool {

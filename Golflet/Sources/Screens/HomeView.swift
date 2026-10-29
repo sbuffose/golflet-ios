@@ -87,6 +87,8 @@ struct HomeView: View {
                 .font(GType.largeTitle)
                 .tracking(-1.9)
                 .foregroundStyle(p.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .accessibilityIdentifier("home-greeting")
             Button { model.showsPlay = true } label: {
                 HStack {
@@ -132,7 +134,7 @@ struct HomeView: View {
                                 .tracking(-4.4)
                                 .tabular()
                                 .foregroundStyle(p.onPrimary)
-                                .minimumScaleFactor(0.6)
+                                .minimumScaleFactor(0.5)
                                 .lineLimit(1)
                             Sparkline(values: snap.trendValues, color: p.accent)
                                 .frame(height: 54)
@@ -188,6 +190,7 @@ struct HomeView: View {
                 .font(GType.statM)
                 .tabular()
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .foregroundStyle(gold ? p.accent : p.onPrimary)
         }
         .contentShape(Rectangle())
