@@ -337,6 +337,16 @@ struct MetricMonthlyPoint: Hashable, Sendable, Identifiable {
     var rounds: Int
 }
 
+struct MonthlyScoreBar: Hashable, Sendable, Identifiable {
+    var id: String { month }
+    var month: String
+    var date: Date
+    var birdies: Int
+    var pars: Int
+
+    var hasBars: Bool { birdies > 0 || pars > 0 }
+}
+
 struct PerRoundAverage: Hashable, Sendable {
     var mean: Double?
     var median: Double?
@@ -418,6 +428,9 @@ struct MetricDrilldown: Hashable, Sendable {
     var roundsInRange: Int?
     var since: Date?
     var rangeLabel: String?
+    var start: Date? = nil
+    var recordsTotal: Int? = nil
+    var monthlyScores: [MonthlyScoreBar] = []
 
     func chartPoints(preferMonthly: Bool) -> [MetricPoint] {
         if preferMonthly, !monthly.isEmpty {

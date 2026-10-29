@@ -15,21 +15,23 @@ final class HomeGreetingLayoutTests: XCTestCase {
                 .sideBySide,
                 "\(name) entra a tamaño completo; no achicar"
             )
-            XCTAssertLessThanOrEqual(greeting + HomeGreetingLayout.spacing + tab, phone)
+            XCTAssertLessThanOrEqual(greeting + HomeGreetingLayout.reservedTabWidth(tab), phone)
         }
     }
 
     func testAgustinShrinksBesideTeeTabOnStandardPhone() {
         let tab = HomeGreetingLayout.tabWidth(chipWhen: chip)
         let phone = HomeGreetingLayout.availableWidth(screenWidth: HomeGreetingLayout.standardWidth, hasTab: true)
+        let reserved = HomeGreetingLayout.reservedTabWidth(tab)
         let agustin = HomeGreetingLayout.greetingWidth(HomeGreetingLayout.text("Agustin"))
         XCTAssertEqual(
             HomeGreetingLayout.place(availableWidth: phone, greetingIdealWidth: agustin, tabWidth: tab),
             .sideBySideShrunk,
-            "Hola, Agustin a 42 pt no entra al lado del tab; se achica, no baja"
+            "Hola, Agustin a 42 pt no entra al lado del tab; se achica hasta 28 pt"
         )
-        XCTAssertGreaterThan(agustin + HomeGreetingLayout.spacing + tab, phone)
-        XCTAssertLessThanOrEqual(agustin * HomeGreetingLayout.compactScale + HomeGreetingLayout.spacing + tab, phone)
+        XCTAssertGreaterThan(agustin + reserved, phone)
+        XCTAssertLessThanOrEqual(agustin * HomeGreetingLayout.minScale + reserved, phone)
+        XCTAssertEqual(HomeGreetingLayout.minSize, 28)
     }
 
     func testLongNamesShrinkOrStack() {
@@ -58,9 +60,10 @@ final class HomeGreetingLayoutTests: XCTestCase {
                     greetingIdealWidth: ideal,
                     tabWidth: tab
                 )
-                if ideal + HomeGreetingLayout.spacing + tab <= withTab {
+                let reserved = HomeGreetingLayout.reservedTabWidth(tab)
+                if ideal + reserved <= withTab {
                     XCTAssertEqual(placement, .sideBySide, "\(name) entra entero en \(device)")
-                } else if ideal * HomeGreetingLayout.compactScale + HomeGreetingLayout.spacing + tab <= withTab {
+                } else if ideal * HomeGreetingLayout.minScale + reserved <= withTab {
                     XCTAssertEqual(placement, .sideBySideShrunk, "\(name) se achica en \(device)")
                 } else {
                     XCTAssertEqual(placement, .stacked, "\(name) baja el tab en \(device)")

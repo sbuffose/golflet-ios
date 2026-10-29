@@ -329,9 +329,25 @@ extension MockAPIClient {
         }()
         let rows = StatsEngine.sorted(filtered, field: field, order: sortOrder)
         if metric == "handicap" {
-            let history = StatsEngine.handicapSeries(snap.rounds).reversed().map {
-                MetricAPIHistory(date: $0.date, hi: $0.handicap, club: $0.course)
+            let start = DayStamp.parse("2023-01-02") ?? Date(timeIntervalSince1970: 1_672_617_600)
+            var hi = 4.8
+            var history: [MetricAPIHistory] = []
+            history.reserveCapacity(157)
+            for week in 0..<157 {
+                let date = Calendar.gregorian.date(byAdding: .weekOfYear, value: week, to: start) ?? start
+                hi = max(2.4, min(6.2, hi - 0.008 + Double((week % 9) - 4) * 0.015))
+                history.append(MetricAPIHistory(date: date, hi: hi, club: week % 11 == 0 ? "Azul" : nil))
             }
+            let monthlyScores = (0..<12).compactMap { offset -> MonthlyScoreBar? in
+                guard let date = Calendar.gregorian.date(byAdding: .month, value: -offset, to: Date()) else { return nil }
+                let month = DayStamp.formatMonth(date)
+                return MonthlyScoreBar(
+                    month: month,
+                    date: date,
+                    birdies: 6 + (offset % 4),
+                    pars: 18 + (offset % 5)
+                )
+            }.reversed()
             return attachSeries(
                 MetricDrilldown(
                     metric: metric,
@@ -340,10 +356,13 @@ extension MockAPIClient {
                     change: nil,
                     rounds: [],
                     perHole: [],
-                    history: Array(history),
+                    history: history.reversed(),
                     summaryRounds: rows.count,
                     averageGross: nil,
-                    bestGross: nil
+                    bestGross: nil,
+                    start: start,
+                    recordsTotal: 157,
+                    monthlyScores: Array(monthlyScores)
                 ),
                 rounds: filtered,
                 metric: metric

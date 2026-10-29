@@ -40,7 +40,8 @@ final class LivePayloadMapperTests: XCTestCase {
                 "putts": 30,
                 "gir": 10,
                 "fir": 8,
-                "notes": "Arranqué flojo"
+                "notes": "Arranqué flojo",
+                "is_competition": true
             ]],
             "courses": [[
                 "key": "118:Azul",
@@ -81,6 +82,7 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(snap.rounds.first?.holes[1].strokes, 4)
         XCTAssertEqual(snap.rounds.first?.holes[1].result, .birdie)
         XCTAssertEqual(snap.rounds.first?.putts, 30)
+        XCTAssertTrue(snap.rounds.first?.isCompetition == true)
         XCTAssertEqual(try XCTUnwrap(snap.rounds.first?.handicapIndex), 3.1, accuracy: 0.001)
         XCTAssertEqual(snap.courses.first?.name, "Azul")
         XCTAssertEqual(snap.tees.first?.slope, 123)
@@ -222,6 +224,28 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(summary.hcpImpact?.counting.count, 1)
         XCTAssertEqual(summary.hcpImpact?.dropped.count, 1)
         XCTAssertEqual(summary.courseGroups.first?.title, "Jockey Club")
+    }
+
+    func testParsesHandicapHistoryFields() {
+        let drill = PlayParser.metric([
+            "metric": "handicap",
+            "start": "2023-01-02",
+            "records_total": 157,
+            "history": [
+                ["date": "2026-03-01", "hi": 3.1],
+                ["date": "2023-01-02", "hi": 4.8]
+            ],
+            "monthly_scores": [
+                ["month": "2026-03", "birdies": 8, "pars": 22]
+            ]
+        ])
+        XCTAssertEqual(drill.start, DayStamp.parse("2023-01-02"))
+        XCTAssertEqual(drill.recordsTotal, 157)
+        XCTAssertEqual(drill.history.count, 2)
+        XCTAssertEqual(drill.monthlyScores.count, 1)
+        XCTAssertEqual(drill.monthlyScores.first?.birdies, 8)
+        XCTAssertTrue(drill.monthlyScores.contains(where: \.hasBars))
+        XCTAssertFalse(PlayParser.metric(["metric": "handicap"]).monthlyScores.contains(where: \.hasBars))
     }
 
     func testAuthErrorCopy() {

@@ -294,7 +294,10 @@ enum PlayParser {
             monthly: monthly(from: json["monthly"]),
             roundsInRange: JSONFlex.int(from: json["rounds_in_range"]),
             since: (json["since"] as? String).flatMap(DayStamp.parse),
-            rangeLabel: json["range_label"] as? String
+            rangeLabel: json["range_label"] as? String,
+            start: parseDate(json["start"] ?? json["since"] ?? (json["history"] as? [[String: Any]])?.last?["date"]),
+            recordsTotal: JSONFlex.int(from: json["records_total"] ?? json["history_count"] ?? json["total_records"]),
+            monthlyScores: monthlyScores(from: json["monthly_scores"] ?? json["monthlyScores"])
         )
     }
 
@@ -384,6 +387,22 @@ enum PlayParser {
                 date: date,
                 value: value,
                 course: string(item["course"] ?? item["course_label"])
+            )
+        }
+    }
+
+    private static func monthlyScores(from raw: Any?) -> [MonthlyScoreBar] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            let month = string(item["month"] ?? item["x"] ?? item["date"])
+            guard !month.isEmpty,
+                  let date = DayStamp.parseMonth(month) ?? DayStamp.parse(month) ?? parseDate(item["date"])
+            else { return nil }
+            return MonthlyScoreBar(
+                month: month,
+                date: date,
+                birdies: JSONFlex.int(from: item["birdies"] ?? item["birdie"]) ?? 0,
+                pars: JSONFlex.int(from: item["pars"] ?? item["par"]) ?? 0
             )
         }
     }

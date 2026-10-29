@@ -9,9 +9,11 @@ enum HomeGreetingPlacement: String, Equatable, Sendable {
 
 enum HomeGreetingLayout {
     static let fullSize: CGFloat = 42
-    static let compactScale: CGFloat = 0.72
-    static let minScale: CGFloat = 0.62
+    static let minSize: CGFloat = 28
+    static let compactScale: CGFloat = minSize / fullSize
+    static let minScale: CGFloat = minSize / fullSize
     static let spacing: CGFloat = 8
+    static let tabReserve: CGFloat = 12
     static let screenGutter: CGFloat = 20
     static let tabHang: CGFloat = 20
     static let seWidth: CGFloat = 320
@@ -22,17 +24,21 @@ enum HomeGreetingLayout {
         "Hola, \(name)"
     }
 
+    static func reservedTabWidth(_ tabWidth: CGFloat) -> CGFloat {
+        tabWidth + tabReserve
+    }
+
     static func place(
         availableWidth: CGFloat,
         greetingIdealWidth: CGFloat,
         tabWidth: CGFloat?
     ) -> HomeGreetingPlacement {
         guard let tabWidth, tabWidth > 0 else { return .sideBySide }
-        if greetingIdealWidth + spacing + tabWidth <= availableWidth {
+        let reserved = reservedTabWidth(tabWidth)
+        if greetingIdealWidth + reserved <= availableWidth {
             return .sideBySide
         }
-        let compact = greetingIdealWidth * compactScale
-        if compact + spacing + tabWidth <= availableWidth {
+        if greetingIdealWidth * minScale + reserved <= availableWidth {
             return .sideBySideShrunk
         }
         return .stacked
@@ -83,7 +89,7 @@ struct HomeGreetingSplit: Layout {
         case .sideBySide:
             return CGSize(width: available.isFinite ? available : ideal.width + spacing + tab.width, height: max(ideal.height, tab.height))
         case .sideBySideShrunk:
-            let greetingWidth = max(available - tab.width - spacing, 0)
+            let greetingWidth = max(available - HomeGreetingLayout.reservedTabWidth(tab.width), 0)
             let fitted = greeting.sizeThatFits(ProposedViewSize(width: greetingWidth, height: nil))
             return CGSize(width: available.isFinite ? available : greetingWidth + spacing + tab.width, height: max(fitted.height, tab.height))
         case .stacked:
@@ -112,7 +118,7 @@ struct HomeGreetingSplit: Layout {
                 proposal: ProposedViewSize(width: tab.width, height: tab.height)
             )
         case .sideBySideShrunk:
-            let greetingWidth = max(bounds.width - tab.width - spacing, 0)
+            let greetingWidth = max(bounds.width - HomeGreetingLayout.reservedTabWidth(tab.width), 0)
             let fitted = greeting.sizeThatFits(ProposedViewSize(width: greetingWidth, height: nil))
             greeting.place(
                 at: CGPoint(x: bounds.minX, y: bounds.midY - fitted.height / 2),
@@ -185,7 +191,7 @@ struct HomeGreetingHeader: View {
                 .font(GFont.ui(HomeGreetingLayout.fullSize, weight: .semibold))
                 .tracking(-1.9)
             Text(label)
-                .font(GFont.ui(HomeGreetingLayout.fullSize * HomeGreetingLayout.compactScale, weight: .semibold))
+                .font(GFont.ui(HomeGreetingLayout.minSize, weight: .semibold))
                 .tracking(-1.2)
         }
         .foregroundStyle(p.ink)

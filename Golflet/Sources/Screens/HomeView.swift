@@ -702,10 +702,18 @@ struct RoundRow: View {
                 }
                 .frame(width: 44)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(round.displayTitle)
-                        .font(GType.headline)
-                        .foregroundStyle(p.ink)
-                        .lineLimit(2)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        if round.isCompetition {
+                            Image(systemName: "trophy.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color(hex: 0x86672F))
+                                .accessibilityIdentifier("round-trophy")
+                        }
+                        Text(round.displayTitle)
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                            .lineLimit(2)
+                    }
                     HStack(spacing: 6) {
                         if !round.isOtherCourse, !round.tee.isEmpty {
                             TeeDot(name: round.tee)
