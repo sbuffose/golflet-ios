@@ -419,6 +419,9 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         if first(app, "avatar-button").waitForExistence(timeout: 4) {
             first(app, "avatar-button").tap()
+            if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
+                first(app, "notifications-cuenta").tap()
+            }
         } else {
             first(app, "add-club-home").tap()
         }
@@ -453,6 +456,44 @@ final class GolfletUITests: XCTestCase {
         let hidden = first(app, "compare-handicap-ana").label
         XCTAssertTrue(hidden.contains("No compartido") || (first(app, "compare-handicap-ana").value as? String)?.contains("No compartido") == true)
         saveShot("37_grupo_comparacion")
+    }
+
+    func testNotificationsBadgeAndInbox() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "avatar-badge").waitForExistence(timeout: 4), "Falta el badge de no leídas")
+        let badge = first(app, "avatar-badge")
+        let badgeText = [badge.label, badge.value as? String].compactMap { $0 }.joined()
+        XCTAssertTrue(badgeText.contains("2"), "El badge tenía que mostrar 2: \(badgeText)")
+
+        first(app, "avatar-button").tap()
+        XCTAssertTrue(waitFor(app, "screen-notificaciones", timeout: 6), "No se abrió Notificaciones")
+        XCTAssertTrue(first(app, "notification-n-invite-mdp").waitForExistence(timeout: 4))
+        XCTAssertTrue(first(app, "notification-n-club-jockey").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "notification-accept-n-invite-mdp").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "notification-decline-n-invite-mdp").waitForExistence(timeout: 2))
+        saveShot("38_notificaciones")
+
+        first(app, "notification-decline-n-invite-mdp").tap()
+        XCTAssertTrue(
+            first(app, "notification-n-invite-mdp").waitForNonExistence(timeout: 4),
+            "Rechazar tenía que sacar la invitación"
+        )
+        XCTAssertTrue(first(app, "notification-n-club-jockey").waitForExistence(timeout: 2))
+
+        dismissIfPresent(app, "close-notificaciones")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+        XCTAssertFalse(first(app, "avatar-badge").waitForExistence(timeout: 2), "El badge tenía que ocultarse al abrir")
+
+        first(app, "avatar-button").tap()
+        XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6), "Sin no leídas el avatar abre la cuenta")
+        XCTAssertTrue(first(app, "perfil-notificaciones").waitForExistence(timeout: 3), "Falta la fila de Notificaciones")
+        first(app, "perfil-notificaciones").tap()
+        XCTAssertTrue(waitFor(app, "screen-notificaciones", timeout: 6))
     }
 
     private func submitLogin(_ app: XCUIApplication) {
@@ -539,6 +580,9 @@ final class GolfletUITests: XCTestCase {
         let avatar = first(app, "avatar-button")
         guard avatar.waitForExistence(timeout: 3) else { return false }
         avatar.tap()
+        if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
+            first(app, "notifications-cuenta").tap()
+        }
         return true
     }
 

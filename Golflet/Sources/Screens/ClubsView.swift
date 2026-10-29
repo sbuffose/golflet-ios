@@ -22,6 +22,7 @@ struct ClubsView: View {
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
 
+                    notificationsRow
                     groupsSection
                     shareSection
 
@@ -87,6 +88,45 @@ struct ClubsView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
         }
+    }
+
+    private var notificationsRow: some View {
+        Button { model.presentNotifications() } label: {
+            GCard(radius: 16, padding: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: "bell")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(p.primary)
+                        .frame(width: 36, height: 36)
+                        .background(p.surface2)
+                        .clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Notificaciones")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        Text(model.unreadBadgeText == nil ? "Invitaciones y mensajes de club" : "Tenés novedades")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    Spacer()
+                    if let badge = model.unreadBadgeText {
+                        Text(badge)
+                            .font(GFont.ui(11, weight: .semibold))
+                            .foregroundStyle(Color(hex: 0xF7F5F0))
+                            .padding(.horizontal, badge.count > 1 ? 5 : 0)
+                            .frame(minWidth: 18, minHeight: 18)
+                            .background(Color(hex: 0xB4553F))
+                            .clipShape(Capsule())
+                            .accessibilityIdentifier("perfil-notificaciones-badge")
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(p.ink3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("perfil-notificaciones")
     }
 
     private var groupsSection: some View {
