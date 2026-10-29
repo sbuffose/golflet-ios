@@ -98,54 +98,34 @@ struct PlayCourseView: View {
                 clubCard(group, showsChevron: true)
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("course-\(course.courseId)")
             .accessibilityLabel(group.clubName)
         } else {
-            GCard(radius: 18, padding: 14) {
-                VStack(alignment: .leading, spacing: 12) {
-                    clubHeader(group, showsChevron: false)
-                    if group.courses.count <= 3 {
-                        HStack(spacing: 8) {
-                            ForEach(group.courses) { course in
-                                Button {
-                                    Task { await start(course) }
-                                } label: {
-                                    Text(CourseDisplay.courseTitle(course))
-                                        .font(GType.headline)
-                                        .foregroundStyle(p.ink)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 8)
-                                        .frame(maxWidth: .infinity)
-                                        .background(p.surface2)
-                                        .clipShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("course-\(course.courseId)")
-                                .accessibilityLabel(CourseDisplay.fullName(course))
-                            }
-                        }
-                    } else {
-                        VStack(spacing: 8) {
-                            ForEach(group.courses) { course in
-                                Button {
-                                    Task { await start(course) }
-                                } label: {
-                                    HStack {
-                                        Text(CourseDisplay.courseTitle(course))
-                                            .font(GType.headline)
-                                            .foregroundStyle(p.ink)
-                                        Spacer()
-                                        MetricChevron(color: p.ink3)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("course-\(course.courseId)")
+            VStack(alignment: .leading, spacing: 8) {
+                clubCard(group, showsChevron: false)
+                    .accessibilityIdentifier("club-\(group.clubCode.isEmpty ? group.groupingKey : group.clubCode)")
+                ForEach(group.courses) { course in
+                    Button {
+                        Task { await start(course) }
+                    } label: {
+                        GCard(radius: 16, padding: 12) {
+                            HStack {
+                                Text(CourseDisplay.courseTitle(course))
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                    .accessibilityIdentifier("course-\(course.courseId)")
+                                Spacer()
+                                MetricChevron(color: p.ink3)
                             }
                         }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("course-\(course.courseId)")
+                    .accessibilityLabel(CourseDisplay.fullName(course))
                 }
             }
-            .accessibilityIdentifier("club-\(group.clubCode.isEmpty ? group.groupingKey : group.clubCode)")
         }
     }
 
