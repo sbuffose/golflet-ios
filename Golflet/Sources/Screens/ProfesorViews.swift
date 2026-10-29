@@ -17,13 +17,16 @@ struct HomeProfesoresSheet: View {
 
                     VStack(spacing: 0) {
                         ForEach(model.profesores) { profesor in
-                            ProfesorAccountRow(
-                                profesor: profesor,
-                                id: "home-profesor-\(profesor.id)"
-                            ) {
-                                dismiss()
-                                onSelect(profesor)
+                            NavigationLink {
+                                ProfesorDetailView(profesor: profesor)
+                                    .golfletChrome()
+                            } label: {
+                                ProfesorAccountRow(
+                                    profesor: profesor,
+                                    id: "home-profesor-\(profesor.id)"
+                                )
                             }
+                            .buttonStyle(.plain)
                         }
 
                         NavigationLink {
@@ -752,39 +755,36 @@ private struct ProfesorAccountRow: View {
     @Environment(\.palette) private var p
     let profesor: Profesor
     let id: String
-    var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                HomeHcpAvatar(
-                    url: profesor.photoURL,
-                    initials: profesor.initials,
-                    size: 44,
-                    fill: p.primary,
-                    ink: p.onPrimary,
-                    ring: Color(hex: HomeHcpPeopleLayout.celeste),
-                    verified: profesor.verified
-                )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(profesor.name)
-                        .font(GType.headline)
-                        .foregroundStyle(p.ink)
-                    Text(profesor.locationsLine ?? (profesor.pending ? "Todavía no activó su cuenta" : "Profesor"))
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                }
-                Spacer()
-                if profesor.newContent > 0 {
-                    Text(profesor.newContent == 1 ? "1 nuevo" : "\(profesor.newContent) nuevos")
-                        .font(GType.label)
-                        .foregroundStyle(p.primary)
-                }
-                MetricChevron(color: p.ink3)
+        HStack(spacing: 12) {
+            HomeHcpAvatar(
+                url: profesor.photoURL,
+                initials: profesor.initials,
+                size: 44,
+                fill: p.primary,
+                ink: p.onPrimary,
+                ring: Color(hex: HomeHcpPeopleLayout.celeste),
+                verified: profesor.verified
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(profesor.name)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Text(profesor.locationsLine ?? (profesor.pending ? "Todavía no activó su cuenta" : "Profesor"))
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
             }
-            .padding(14)
+            Spacer()
+            if profesor.newContent > 0 {
+                Text(profesor.newContent == 1 ? "1 nuevo" : "\(profesor.newContent) nuevos")
+                    .font(GType.label)
+                    .foregroundStyle(p.primary)
+            }
+            MetricChevron(color: p.ink3)
         }
-        .buttonStyle(.plain)
+        .padding(14)
+        .contentShape(Rectangle())
         .accessibilityIdentifier(id)
     }
 }

@@ -862,13 +862,33 @@ struct HomeHcpPeople: View {
     }
 
     private var profesorAvatarButton: some View {
-        Button {
+        Group {
             if profesores.count == 1, let first = profesores.first {
-                onProfesor(first)
+                NavigationLink {
+                    ProfesorDetailView(profesor: first)
+                        .golfletChrome()
+                } label: {
+                    profesorAvatarLabel
+                }
             } else {
-                onProfesores()
+                Button(action: onProfesores) {
+                    profesorAvatarLabel
+                }
             }
-        } label: {
+        }
+        .buttonStyle(.plain)
+        .padding(8)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("home-hcp-profesor")
+        .accessibilityLabel(profesorLabel)
+        .overlay {
+            GProbe(id: "home-hcp-profesor", label: profesorLabel)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var profesorAvatarLabel: some View {
+        Group {
             if let caption = HomeHcpPeopleLayout.profesorCaption(profesores.count) {
                 VStack(alignment: .trailing, spacing: 6) {
                     profesorStack
@@ -881,15 +901,6 @@ struct HomeHcpPeople: View {
             } else {
                 profesorStack
             }
-        }
-        .buttonStyle(.plain)
-        .padding(8)
-        .contentShape(Rectangle())
-        .accessibilityIdentifier("home-hcp-profesor")
-        .accessibilityLabel(profesorLabel)
-        .overlay {
-            GProbe(id: "home-hcp-profesor", label: profesorLabel)
-                .allowsHitTesting(false)
         }
     }
 
