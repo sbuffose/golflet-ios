@@ -423,6 +423,14 @@ jobs:
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
+      - name: Keep empty App Groups entitlement
+        run: |
+          set -euo pipefail
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          chmod +x .github/scripts/keep-empty-app-groups.sh
+          .github/scripts/keep-empty-app-groups.sh \
+            "$RUNNER_TEMP/Golflet.xcarchive/Products/Applications/Golflet.app"
+
       - name: Validate archive bundle
         run: |
           set -euo pipefail
@@ -444,10 +452,12 @@ jobs:
           codesign -d --entitlements :- "$APP_PATH"
           echo "=== Widget entitlements ==="
           codesign -d --entitlements :- "$APP_PATH/PlugIns/GolfletWidgets.appex"
-          for target in "$APP_PATH" "$APP_PATH/PlugIns/GolfletWidgets.appex"; do
-            ENT=$(codesign -d --entitlements :- "$target" 2>/dev/null || true)
+          APP_ENT=$(codesign -d --entitlements :- "$APP_PATH" 2>/dev/null || true)
+          WIDGET_ENT=$(codesign -d --entitlements :- "$APP_PATH/PlugIns/GolfletWidgets.appex" 2>/dev/null || true)
+          for target_label in app widget; do
+            if [ "$target_label" = "app" ]; then ENT="$APP_ENT"; else ENT="$WIDGET_ENT"; fi
             if ! printf '%s' "$ENT" | grep -q 'com.apple.security.application-groups'; then
-              echo "Signed entitlements for $target are missing application-groups."
+              echo "Signed entitlements for $target_label are missing application-groups."
               echo "Golflet AppStore GHA v2 includes that key (empty until group.com.sbuffose.golflet exists)."
               exit 1
             fi
@@ -456,6 +466,15 @@ jobs:
               exit 1
             fi
           done
+          if ! printf '%s' "$APP_ENT" | grep -q 'applinks:golflet.vercel.app'; then
+            echo "App entitlements are missing applinks:golflet.vercel.app."
+            echo "Golflet AppStore GHA v2 includes Associated Domains. Keep it when re-signing."
+            exit 1
+          fi
+          if printf '%s' "$WIDGET_ENT" | grep -q 'com.apple.developer.associated-domains'; then
+            echo "Widget must not claim associated-domains. Only the app opens /g/<token>."
+            exit 1
+          fi
 
       - name: Create ExportOptions.plist
         run: |
@@ -494,6 +513,21 @@ jobs:
             -archivePath "$RUNNER_TEMP/Golflet.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Keep empty App Groups entitlement in IPA
+        run: |
+          set -euo pipefail
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          IPA="$RUNNER_TEMP/export/Golflet.ipa"
+          WORK="$RUNNER_TEMP/ipa-keep-groups"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          unzip -q "$IPA" -d "$WORK"
+          chmod +x .github/scripts/keep-empty-app-groups.sh
+          .github/scripts/keep-empty-app-groups.sh "$WORK"
+          rm -f "$IPA"
+          (cd "$WORK" && zip -qr "$IPA" Payload)
+          echo "Re-packed $IPA with empty application-groups and app associated-domains."
 
       - name: Validate IPA with App Store Connect
         env:

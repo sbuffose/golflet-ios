@@ -8,6 +8,7 @@ final class NativeCapabilitiesTests: XCTestCase {
         CourseCache.reset()
         OfflinePlay.reset()
         UserDefaults.standard.removeObject(forKey: WidgetSnapshotStore.key)
+        PendingInviteStore.clear()
         super.tearDown()
     }
 
@@ -194,6 +195,28 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertEqual(GolfletURL.parse(URL(string: "golflet://round/r88")!), .openRound(id: "r88"))
         XCTAssertEqual(GolfletURL.parse(URL(string: "golflet://shot?club=7i")!), .recordShot(club: "7i"))
         XCTAssertEqual(GolfletClubChoice.hierro7.code, "7i")
+
+        XCTAssertEqual(
+            GolfletURL.parse(URL(string: "https://golflet.vercel.app/g/invite-mdp")!),
+            .openInvite(token: "invite-mdp")
+        )
+        XCTAssertEqual(
+            GolfletURL.parse(URL(string: "https://www.golflet.vercel.app/g/abc-123")!),
+            .openInvite(token: "abc-123")
+        )
+        XCTAssertEqual(
+            GolfletURL.parse(URL(string: "golflet://g/invite-mdp")!),
+            .openInvite(token: "invite-mdp")
+        )
+        XCTAssertEqual(GolfletURL.inviteURL(token: "invite-mdp").absoluteString, "https://golflet.vercel.app/g/invite-mdp")
+        XCTAssertEqual(AssociatedDomains.applinks, "applinks:golflet.vercel.app")
+        XCTAssertNil(GolfletURL.inviteToken(from: URL(string: "https://example.com/g/nope")!))
+
+        PendingInviteStore.clear()
+        PendingInviteStore.save("invite-mdp")
+        XCTAssertEqual(PendingInviteStore.load(), "invite-mdp")
+        PendingInviteStore.clear()
+        XCTAssertNil(PendingInviteStore.load())
     }
 
     func testCourseEntityQueryUsesPlayerCatalog() async throws {
