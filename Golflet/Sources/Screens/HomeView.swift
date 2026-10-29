@@ -61,12 +61,12 @@ struct HomeView: View {
                     .accessibilityIdentifier("home-sync-\(club.accountId)")
                 }
                 ZStack(alignment: .topTrailing) {
-                    Button { model.presentNotifications() } label: {
+                    Button { model.openAvatar() } label: {
                         AvatarCircle(initials: model.profile.initials)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("avatar-button")
-                    .accessibilityLabel(model.unreadBadgeText.map { "Notificaciones, \($0) sin leer" } ?? "Notificaciones")
+                    .accessibilityLabel(model.unreadBadgeText.map { "Notificaciones, \($0) sin leer" } ?? "Tu cuenta")
                     if let badge = model.unreadBadgeText {
                         Text(badge)
                             .font(GFont.ui(10, weight: .semibold))

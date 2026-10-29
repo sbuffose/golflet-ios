@@ -43,12 +43,24 @@ struct InboxNotification: Identifiable, Hashable, Sendable {
 
 struct NotificationsInbox: Hashable, Sendable {
     var unreadCount: Int
+    var badge: String?
     var items: [InboxNotification]
 
-    static let empty = NotificationsInbox(unreadCount: 0, items: [])
+    static let empty = NotificationsInbox(unreadCount: 0, badge: nil, items: [])
 
     var badgeText: String? {
-        NotificationBadge.text(unreadCount)
+        NotificationBadge.display(count: unreadCount, badge: badge)
+    }
+}
+
+struct UnreadNotifications: Hashable, Sendable {
+    var unreadCount: Int
+    var badge: String?
+
+    static let empty = UnreadNotifications(unreadCount: 0, badge: nil)
+
+    var badgeText: String? {
+        NotificationBadge.display(count: unreadCount, badge: badge)
     }
 }
 
@@ -56,5 +68,14 @@ enum NotificationBadge {
     static func text(_ count: Int) -> String? {
         guard count > 0 else { return nil }
         return count > 9 ? "9+" : "\(count)"
+    }
+
+    static func display(count: Int, badge: String?) -> String? {
+        if let badge {
+            let trimmed = badge.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty || trimmed == "0" { return nil }
+            return trimmed
+        }
+        return text(count)
     }
 }

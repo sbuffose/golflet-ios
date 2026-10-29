@@ -149,6 +149,10 @@ struct NotificationsView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(item.isUnread ? p.accent.opacity(0.35) : Color.clear, lineWidth: 1)
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            Task { await model.openNotification(item) }
+        }
         .accessibilityIdentifier("notification-\(item.id)")
         .accessibilityLabel(item.isUnread ? "Sin leer, \(item.title)" : item.title)
     }

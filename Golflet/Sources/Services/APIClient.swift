@@ -55,7 +55,9 @@ protocol GolfletAPI: Sendable {
     func groupComparison(groupID: String, config: GroupViewConfig) async throws -> GroupComparison
 
     func notifications() async throws -> NotificationsInbox
-    func markNotificationsRead(ids: [String]) async throws
+    func unreadNotifications() async throws -> UnreadNotifications
+    func notification(id: String) async throws -> InboxNotification
+    func markNotificationsRead(ids: [String], all: Bool) async throws
 }
 
 enum APIFactory {
