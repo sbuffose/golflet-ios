@@ -101,6 +101,7 @@ struct FilterPills: View {
     @Environment(\.palette) private var p
     let options: [String]
     @Binding var selection: String
+    var leadingDot: ((String) -> Color?)? = nil
 
     var body: some View {
         HStack(spacing: 8) {
@@ -108,14 +109,27 @@ struct FilterPills: View {
                 Button {
                     selection = option
                 } label: {
-                    Text(option)
-                        .font(GType.headline)
-                        .foregroundStyle(selection == option ? p.ink : p.ink2)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(selection == option ? p.surface : Color.clear)
-                        .clipShape(Capsule())
-                        .shadow(color: selection == option ? Color.black.opacity(0.06) : .clear, radius: 8, y: 2)
+                    HStack(spacing: 7) {
+                        if let color = leadingDot?(option) {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 8, height: 8)
+                                .overlay {
+                                    if option.localizedCaseInsensitiveContains("blanco") {
+                                        Circle().stroke(p.hairline, lineWidth: 0.8)
+                                    }
+                                }
+                                .accessibilityHidden(true)
+                        }
+                        Text(option)
+                            .font(GType.headline)
+                            .foregroundStyle(selection == option ? p.ink : p.ink2)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(selection == option ? p.surface : Color.clear)
+                    .clipShape(Capsule())
+                    .shadow(color: selection == option ? Color.black.opacity(0.06) : .clear, radius: 8, y: 2)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("filter-\(option.lowercased())")
@@ -130,11 +144,141 @@ struct FilterPills: View {
 struct ScrollFilterPills: View {
     let options: [String]
     @Binding var selection: String
+    var leadingDot: ((String) -> Color?)? = nil
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            FilterPills(options: options, selection: $selection)
+            FilterPills(options: options, selection: $selection, leadingDot: leadingDot)
         }
+    }
+}
+
+enum StatTint: Equatable {
+    case primary
+    case gold
+    case danger
+
+    func ink(_ p: Palette) -> Color {
+        switch self {
+        case .primary: return p.primary
+        case .gold: return p.accent
+        case .danger: return p.negative
+        }
+    }
+
+    func wash(_ p: Palette) -> Color {
+        switch self {
+        case .primary: return p.turf
+        case .gold: return p.accentSoft
+        case .danger: return p.dangerSoft
+        }
+    }
+}
+
+extension ScoreKind {
+    var symbolName: String {
+        switch self {
+        case .eagle: return "star.fill"
+        case .birdie: return "bird.fill"
+        case .par: return "equal.circle.fill"
+        case .bogey: return "minus.circle.fill"
+        }
+    }
+
+    var statTint: StatTint {
+        switch self {
+        case .eagle, .birdie: return .gold
+        case .par: return .primary
+        case .bogey: return .danger
+        }
+    }
+}
+
+struct AccentStatCard: View {
+    @Environment(\.palette) private var p
+    var tint: StatTint
+    var icon: String
+    var title: String
+    var value: String
+    var secondary: String? = nil
+    var footnote: String? = nil
+    var share: Double? = nil
+    var shareNoun: String = "los hoyos"
+    var sparkline: [Double]? = nil
+    var compact: Bool = false
+
+    var body: some View {
+        GCard(fill: tint.wash(p), radius: compact ? 16 : 18, padding: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                tint.ink(p).frame(width: 4)
+                VStack(alignment: .leading, spacing: compact ? 6 : 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: icon)
+                            .font(.system(size: compact ? 12 : 13, weight: .semibold))
+                            .foregroundStyle(tint.ink(p))
+                            .accessibilityHidden(true)
+                        Text(title)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                        Spacer(minLength: 4)
+                        MetricChevron(color: p.ink3)
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(value)
+                            .font(compact ? GType.statM : GType.statL)
+                            .tabular()
+                            .foregroundStyle(p.ink)
+                            .minimumScaleFactor(0.55)
+                            .lineLimit(1)
+                        if let secondary {
+                            Text(secondary)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                                .lineLimit(1)
+                        }
+                    }
+                    if let footnote {
+                        Text(footnote)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .lineLimit(2)
+                    }
+                    if let sparkline, sparkline.count > 1 {
+                        Sparkline(values: sparkline, color: p.primary)
+                            .frame(height: 26)
+                            .accessibilityHidden(true)
+                    }
+                    if let share {
+                        ProportionBar(fraction: share, color: tint.ink(p), of: shareNoun)
+                    }
+                }
+                .padding(compact ? 11 : 14)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct ProportionBar: View {
+    @Environment(\.palette) private var p
+    var fraction: Double
+    var color: Color
+    var of: String = "los hoyos"
+
+    var body: some View {
+        let clamped = min(max(fraction, 0), 1)
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(p.hairline)
+                Capsule()
+                    .fill(color)
+                    .frame(width: max(3, geo.size.width * CGFloat(clamped)))
+            }
+        }
+        .frame(height: 4)
+        .accessibilityLabel("\(Int((clamped * 100).rounded())) por ciento de \(of)")
     }
 }
 

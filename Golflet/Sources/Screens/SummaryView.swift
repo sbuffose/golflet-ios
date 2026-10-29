@@ -36,18 +36,29 @@ struct SummaryView: View {
             selection: Binding(
                 get: { model.courseFilter.rawValue },
                 set: { model.courseFilter = CourseFilter(rawValue: $0) ?? .all }
-            )
+            ),
+            leadingDot: { option in
+                switch CourseFilter(rawValue: option) {
+                case .azul: return p.teeColor("azul")
+                case .colorada: return p.teeColor("colorada")
+                default: return nil
+                }
+            }
         )
     }
 
     private var grid: some View {
         let snap = model.summary
         let course = model.courseFilter.courseName
+        let scoped = StatsEngine.apply(StatsEngine.eighteenHoleValid(model.rounds), filter: model.courseFilter)
+        let start2025 = Calendar.gregorian.date(from: DateComponents(year: 2025, month: 1, day: 1)) ?? Date.distantPast
         return VStack(spacing: 10) {
             HStack(spacing: 10) {
                 NavigationLink(value: MetricRoute.roundList(.summaryBest(course: course))) {
-                    statBlock(
-                        label: "Mejor ronda",
+                    AccentStatCard(
+                        tint: .primary,
+                        icon: "trophy.fill",
+                        title: "Mejor ronda",
                         value: snap.best?.gross.map(String.init) ?? "—",
                         secondary: snap.best.flatMap { best in
                             guard let net = best.net else { return nil }
@@ -59,8 +70,10 @@ struct SummaryView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-best")
                 NavigationLink(value: MetricRoute.roundList(.summaryWorst(course: course))) {
-                    statBlock(
-                        label: "Peor (desde 2021)",
+                    AccentStatCard(
+                        tint: .danger,
+                        icon: "arrow.down.right",
+                        title: "Peor (desde 2021)",
                         value: snap.worstSince2021?.gross.map(String.init) ?? "—",
                         secondary: snap.worstSince2021.flatMap { w in w.net.map { "\($0) neto" } },
                         footnote: snap.worstSince2021.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
@@ -71,21 +84,26 @@ struct SummaryView: View {
             }
             HStack(spacing: 10) {
                 NavigationLink(value: MetricRoute.roundList(.average(yearOnly: false).locking(course: course))) {
-                    statBlock(
-                        label: "Promedio gross",
+                    AccentStatCard(
+                        tint: .primary,
+                        icon: "chart.xyaxis.line",
+                        title: "Promedio gross",
                         value: snap.averageGross.map(FormatAR.one) ?? "—",
                         secondary: snap.averageToPar.map { "neto · \(FormatAR.signedOne($0))" },
-                        footnote: "\(snap.validRoundCount) rondas · \(snap.averageToPar.map { FormatAR.signedOne($0) } ?? "—")"
+                        footnote: "\(snap.validRoundCount) rondas · \(snap.averageToPar.map { FormatAR.signedOne($0) } ?? "—")",
+                        sparkline: StatsEngine.recentGross(scoped)
                     )
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-average")
                 NavigationLink(value: MetricRoute.roundList(.since2025(course: course))) {
-                    statBlock(
-                        label: "Desde 2025",
+                    AccentStatCard(
+                        tint: .primary,
+                        icon: "calendar",
+                        title: "Desde 2025",
                         value: snap.since2025Average.map(FormatAR.one) ?? "—",
-                        secondary: nil,
-                        footnote: "\(snap.since2025Count) rondas · mejor dif. \(snap.since2025BestDifferential.map(FormatAR.one) ?? "—")"
+                        footnote: "\(snap.since2025Count) rondas · mejor dif. \(snap.since2025BestDifferential.map(FormatAR.one) ?? "—")",
+                        sparkline: StatsEngine.recentGross(scoped.filter { $0.date >= start2025 })
                     )
                 }
                 .buttonStyle(.plain)
@@ -125,60 +143,19 @@ struct SummaryView: View {
     }
 
     private func scoreTile(_ kind: ScoreKind, total: Int, query: RoundListQuery) -> some View {
-        NavigationLink(value: MetricRoute.scoreKind(kind, query)) {
-            GCard(radius: 16, padding: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(kind.title)
-                            .font(GType.label)
-                            .foregroundStyle(p.ink2)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Spacer(minLength: 0)
-                        MetricChevron(color: p.ink3)
-                    }
-                    Text("\(total)")
-                        .font(GType.statM)
-                        .tabular()
-                        .foregroundStyle(p.ink)
-                }
-            }
+        let scoped = StatsEngine.apply(StatsEngine.eighteenHoleValid(model.rounds), filter: model.courseFilter)
+        return NavigationLink(value: MetricRoute.scoreKind(kind, query)) {
+            AccentStatCard(
+                tint: kind.statTint,
+                icon: kind.symbolName,
+                title: kind.title,
+                value: "\(total)",
+                share: StatsEngine.holeShare(kind, in: scoped),
+                compact: true
+            )
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("metric-summary-\(kind.rawValue)")
-    }
-
-    private func statBlock(label: String, value: String, secondary: String?, footnote: String?) -> some View {
-        GCard(radius: 18, padding: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(label)
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    Spacer(minLength: 4)
-                    MetricChevron(color: p.ink3)
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(value)
-                        .font(GType.statL)
-                        .tabular()
-                        .foregroundStyle(p.ink)
-                    if let secondary {
-                        Text(secondary)
-                            .font(GType.label)
-                            .foregroundStyle(p.ink3)
-                    }
-                }
-                if let footnote {
-                    Text(footnote)
-                        .font(GType.label)
-                        .foregroundStyle(p.ink3)
-                        .lineLimit(2)
-                }
-            }
-        }
     }
 
     private var trend: some View {

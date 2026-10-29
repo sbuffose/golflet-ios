@@ -218,44 +218,51 @@ struct HomeView: View {
 
     private var yearRow: some View {
         let snap = model.home
+        let year = Calendar.gregorian.component(.year, from: Date())
+        let valid = StatsEngine.eighteenHoleValid(model.rounds)
+        let yearRounds = valid.filter { Calendar.gregorian.component(.year, from: $0.date) == year }
+        let yearShare = valid.isEmpty ? 0 : Double(yearRounds.count) / Double(valid.count)
         return VStack(alignment: .leading, spacing: 12) {
             Text("Este año")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             HStack(spacing: 10) {
                 NavigationLink(value: MetricRoute.roundList(.yearRounds)) {
-                    yearCard("Rondas", "\(snap.yearRoundCount)")
+                    AccentStatCard(
+                        tint: .primary,
+                        icon: "flag.fill",
+                        title: "Rondas",
+                        value: "\(snap.yearRoundCount)",
+                        share: yearShare,
+                        shareNoun: "las rondas",
+                        compact: true
+                    )
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-year-rounds")
                 NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: true))) {
-                    yearCard("Mejor", snap.yearBestGross.map(String.init) ?? "—")
+                    AccentStatCard(
+                        tint: .primary,
+                        icon: "trophy.fill",
+                        title: "Mejor",
+                        value: snap.yearBestGross.map(String.init) ?? "—",
+                        compact: true
+                    )
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-year-best")
                 NavigationLink(value: MetricRoute.scoreKind(.birdie, .yearRounds)) {
-                    yearCard("Birdies", "\(snap.yearBirdies)")
+                    AccentStatCard(
+                        tint: .gold,
+                        icon: ScoreKind.birdie.symbolName,
+                        title: "Birdies",
+                        value: "\(snap.yearBirdies)",
+                        share: StatsEngine.holeShare(.birdie, in: yearRounds),
+                        compact: true
+                    )
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-year-birdies")
-            }
-        }
-    }
-
-    private func yearCard(_ label: String, _ value: String) -> some View {
-        GCard(radius: 18, padding: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(label)
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                    Spacer()
-                    MetricChevron(color: p.ink3)
-                }
-                Text(value)
-                    .font(GType.statL)
-                    .tabular()
-                    .foregroundStyle(p.ink)
             }
         }
     }
