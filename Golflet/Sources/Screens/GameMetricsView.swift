@@ -421,29 +421,38 @@ struct GameMetricsView: View {
     }
 
     private func shotList<T: Identifiable>(_ rows: [T], _ fields: (T) -> (String, String, String, String?)) -> some View {
-        GCard(radius: 18, padding: 14) {
+        let items = rows.enumerated().map { index, row -> GameMetricsShotRow in
+            let item = fields(row)
+            return GameMetricsShotRow(
+                id: "\(index)-\(String(describing: row.id))",
+                title: item.0,
+                subtitle: item.1,
+                value: item.2,
+                extra: item.3
+            )
+        }
+        return GCard(radius: 18, padding: 14) {
             VStack(spacing: 10) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    let item = fields(row)
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     HStack(alignment: .top, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(item.0)
+                            Text(item.title)
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Text(item.1)
+                            Text(item.subtitle)
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 6)
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(item.2)
+                            Text(item.value)
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
-                            if let extra = item.3 {
+                            if let extra = item.extra {
                                 Text(extra)
                                     .font(GType.label)
                                     .foregroundStyle(p.ink2)
@@ -452,7 +461,7 @@ struct GameMetricsView: View {
                             }
                         }
                     }
-                    if index < rows.count - 1 { Hairline() }
+                    if index < items.count - 1 { Hairline() }
                 }
             }
         }
@@ -509,6 +518,14 @@ struct GameMetricsView: View {
         }
         return FormatAR.one(value)
     }
+}
+
+private struct GameMetricsShotRow: Identifiable {
+    var id: String
+    var title: String
+    var subtitle: String
+    var value: String
+    var extra: String?
 }
 
 struct GameMetricsEmptyCard: View {
