@@ -96,6 +96,20 @@ enum ShareCategory: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    var apiKey: String {
+        switch self {
+        case .scoring: return "scores"
+        case .handicap: return "handicap"
+        case .birdiesPars: return "score_types"
+        case .holeHeatmap: return "holes"
+        case .girFairways: return "gir_fir"
+        case .putting: return "putting"
+        case .gpsDistances: return "gps"
+        case .bag: return "bag"
+        case .ball: return "ball"
+        }
+    }
+
     var footnote: String {
         switch self {
         case .scoring: return "Gross, neto y resultado de cada ronda"
@@ -154,15 +168,9 @@ struct SharePrefs: Hashable, Codable, Sendable {
 
     var jsonBody: [String: Any] {
         [
-            "scoring": scoring,
-            "handicap": handicap,
-            "birdies_pars": birdiesPars,
-            "hole_heatmap": holeHeatmap,
-            "gir_fairways": girFairways,
-            "putting": putting,
-            "gps_distances": gpsDistances,
-            "bag": bag,
-            "ball": ball
+            "prefs": Dictionary(uniqueKeysWithValues: ShareCategory.allCases.map {
+                ($0.apiKey, isShared($0))
+            })
         ]
     }
 }
@@ -182,6 +190,15 @@ enum GroupMetricKind: String, CaseIterable, Identifiable, Codable, Sendable {
     case ball
 
     var id: String { rawValue }
+
+    static func parse(_ raw: String) -> GroupMetricKind? {
+        if let value = GroupMetricKind(rawValue: raw) { return value }
+        switch raw {
+        case "avg_gross", "best_gross", "rounds": return .gross
+        case "avg_net", "best_net": return .net
+        default: return nil
+        }
+    }
 
     var title: String {
         switch self {
@@ -267,12 +284,18 @@ struct GroupViewConfig: Hashable, Codable, Sendable {
     )
 
     var jsonBody: [String: Any] {
-        [
+        var sections = ["table"]
+        if charts.contains(where: { $0 == .grossTrend || $0 == .handicapTrend }) {
+            sections.append("trend")
+        }
+        if charts.contains(.birdies) { sections.append("holes") }
+        var view: [String: Any] = [
             "metrics": metrics.map(\.rawValue),
-            "charts": charts.map(\.rawValue),
-            "range": range.rawValue,
-            "course": courseFilter ?? "all"
+            "sections": sections,
+            "range": range.rawValue
         ]
+        view["course"] = courseFilter
+        return ["view": view]
     }
 }
 
