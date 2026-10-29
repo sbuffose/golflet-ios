@@ -41,9 +41,10 @@ enum TextSizePref: String, CaseIterable, Identifiable, Codable, Sendable {
 
     static func parse(_ raw: Any?) -> TextSizePref? {
         if let number = JSONFlex.double(from: raw) {
-            if number >= 1.24 || number >= 124 { return .extraLarge }
-            if number >= 1.08 || number >= 108 { return .large }
-            if number > 0 { return .normal }
+            let scale = number >= 2 ? number / 100 : number
+            if scale >= 1.24 { return .extraLarge }
+            if scale >= 1.08 { return .large }
+            if scale > 0 { return .normal }
         }
         let value = string(raw)
         switch value {

@@ -151,6 +151,8 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-handicap")
+                .accessibilityElement(children: .contain)
+                .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
 
                 HStack(alignment: .top) {
                     NavigationLink(value: MetricRoute.roundList(.allCards)) {
@@ -175,6 +177,7 @@ struct HomeView: View {
             }
         }
         .accessibilityIdentifier("handicap-card")
+        .accessibilityElement(children: .contain)
     }
 
     private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
