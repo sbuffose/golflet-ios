@@ -357,6 +357,34 @@ final class AppModel {
         }
     }
 
+    func presentCreateGroup() {
+        presentAfterDismissing { $0.showsCreateGroup = true }
+    }
+
+    func presentGroupDetail(_ id: String) {
+        presentAfterDismissing { $0.presentedGroupID = id }
+    }
+
+    func presentInvite(_ invite: GroupInvitePreview) {
+        presentAfterDismissing { $0.presentedInvite = invite }
+    }
+
+    func presentSharePrefs() {
+        presentAfterDismissing { $0.showsSharePrefs = true }
+    }
+
+    func presentGroups() {
+        presentAfterDismissing { $0.showsGroups = true }
+    }
+
+    private func presentAfterDismissing(_ present: @escaping (AppModel) -> Void) {
+        showsGroups = false
+        showsClubs = false
+        Task { @MainActor in
+            present(self)
+        }
+    }
+
     func refreshGroups() async {
         guard isSignedIn else { return }
         do {
@@ -377,7 +405,10 @@ final class AppModel {
             groups.insert(group, at: 0)
             showsCreateGroup = false
             if let invite = group.invite, invite.enabled {
-                inviteShare = InviteSharePayload(groupName: group.name, url: invite.url)
+                let payload = InviteSharePayload(groupName: group.name, url: invite.url)
+                Task { @MainActor in
+                    inviteShare = payload
+                }
             }
             await refreshGroups()
         }

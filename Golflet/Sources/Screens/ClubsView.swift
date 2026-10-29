@@ -97,7 +97,7 @@ struct ClubsView: View {
             if !model.pendingInvites.isEmpty {
                 ForEach(model.pendingInvites) { invite in
                     Button {
-                        model.presentedInvite = invite
+                        model.presentInvite(invite)
                     } label: {
                         GCard(radius: 16, padding: 14) {
                             HStack(spacing: 12) {
@@ -123,7 +123,7 @@ struct ClubsView: View {
             }
             ForEach(model.groups.prefix(3)) { group in
                 Button {
-                    model.presentedGroupID = group.id
+                    model.presentGroupDetail(group.id)
                 } label: {
                     HStack {
                         Text(group.name)
@@ -141,8 +141,7 @@ struct ClubsView: View {
                 .accessibilityIdentifier("perfil-group-\(group.id)")
             }
             Button {
-                model.showsClubs = false
-                model.showsGroups = true
+                model.presentGroups()
             } label: {
                 Text(model.groups.isEmpty ? "Crear o unirte a un grupo" : "Ver todos los grupos")
                     .font(GType.headline)
@@ -159,8 +158,7 @@ struct ClubsView: View {
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             Button {
-                model.showsClubs = false
-                model.showsSharePrefs = true
+                model.presentSharePrefs()
             } label: {
                 GCard(radius: 16, padding: 14) {
                     HStack {
