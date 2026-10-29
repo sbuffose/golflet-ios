@@ -212,6 +212,7 @@ struct ClubCatalogEntry: Identifiable, Hashable, Sendable {
     var id: Int
     var name: String
     var baseURL: String
+    var directLogin: Bool = false
 }
 
 struct GolfletUser: Hashable, Sendable {
@@ -632,6 +633,7 @@ enum GolfletError: LocalizedError, Equatable {
     case wrongGolfisticsCredentials
     case golfisticsAppDown
     case auth(AuthFailure)
+    case needsClub(NeedsClubPayload)
     case fixtureMissing(String)
     case decoding(String)
     case server(String)
@@ -645,6 +647,7 @@ enum GolfletError: LocalizedError, Equatable {
         case .wrongGolfisticsCredentials: return "Matrícula o clave incorrecta."
         case .golfisticsAppDown: return "La App de Golfistics no responde."
         case .auth(let failure): return failure.message
+        case .needsClub(let payload): return payload.message
         case .fixtureMissing(let n): return "Falta el fixture \(n)."
         case .decoding(let n): return "No se pudo leer \(n)."
         case .server(let message): return message
@@ -654,6 +657,11 @@ enum GolfletError: LocalizedError, Equatable {
 
     var authFailure: AuthFailure? {
         if case .auth(let failure) = self { return failure }
+        return nil
+    }
+
+    var needsClub: NeedsClubPayload? {
+        if case .needsClub(let payload) = self { return payload }
         return nil
     }
 

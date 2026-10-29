@@ -79,6 +79,8 @@ enum ShareCategory: String, CaseIterable, Identifiable, Codable, Sendable {
     case gpsDistances = "gps_distances"
     case bag
     case ball
+    case profile
+    case holeByHole = "rounds_detail"
 
     var id: String { rawValue }
 
@@ -93,6 +95,8 @@ enum ShareCategory: String, CaseIterable, Identifiable, Codable, Sendable {
         case .gpsDistances: return "Distancias GPS"
         case .bag: return "Bolsa"
         case .ball: return "Pelota"
+        case .profile: return "Mi perfil en los grupos"
+        case .holeByHole: return "Mis tarjetas hoyo por hoyo"
         }
     }
 
@@ -107,6 +111,8 @@ enum ShareCategory: String, CaseIterable, Identifiable, Codable, Sendable {
         case .gpsDistances: return "gps"
         case .bag: return "bag"
         case .ball: return "ball"
+        case .profile: return "profile"
+        case .holeByHole: return "rounds_detail"
         }
     }
 
@@ -121,6 +127,8 @@ enum ShareCategory: String, CaseIterable, Identifiable, Codable, Sendable {
         case .gpsDistances: return "Carry y distancias de la ronda con GPS"
         case .bag: return "Palos y yardajes de tu bolsa"
         case .ball: return "La pelota que estás usando"
+        case .profile: return "Si está apagado, en el grupo solo ven tu nombre"
+        case .holeByHole: return "Que puedan abrir cada ronda, no solo los promedios"
         }
     }
 }
@@ -135,6 +143,8 @@ struct SharePrefs: Hashable, Codable, Sendable {
     var gpsDistances = true
     var bag = true
     var ball = true
+    var profile = true
+    var holeByHole = false
 
     static let allShared = SharePrefs()
 
@@ -149,6 +159,8 @@ struct SharePrefs: Hashable, Codable, Sendable {
         case .gpsDistances: return gpsDistances
         case .bag: return bag
         case .ball: return ball
+        case .profile: return profile
+        case .holeByHole: return holeByHole
         }
     }
 
@@ -163,6 +175,8 @@ struct SharePrefs: Hashable, Codable, Sendable {
         case .gpsDistances: gpsDistances = shared
         case .bag: bag = shared
         case .ball: ball = shared
+        case .profile: profile = shared
+        case .holeByHole: holeByHole = shared
         }
     }
 
