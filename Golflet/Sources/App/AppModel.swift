@@ -225,6 +225,9 @@ final class AppModel {
             if case .recordShot(let club) = action {
                 _ = ActivePlayIntents.enqueueShot(club: club)
             }
+            if case .openInvite(let token) = action {
+                PendingInviteStore.save(token)
+            }
             IntentRouter.shared.post(action)
             Task { await consumeIntent() }
         }
@@ -250,6 +253,11 @@ final class AppModel {
             }
         case .openRound(let id):
             presentedRound = rounds.first { $0.roundId == id } ?? home.lastRound
+        case .openInvite(let token):
+            PendingInviteStore.save(token)
+            toastMessage = isSignedIn
+                ? "Invitación recibida. La vas a ver en Amigos."
+                : "Invitación guardada. Entrá con tu matrícula para verla."
         }
     }
 

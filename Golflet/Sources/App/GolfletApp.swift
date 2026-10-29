@@ -27,6 +27,11 @@ struct GolfletApp: App {
                 .golfletChrome()
                 .preferredColorScheme(nil)
                 .onOpenURL { model.handleURL($0) }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL {
+                        model.handleURL(url)
+                    }
+                }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active {
                         Task {
