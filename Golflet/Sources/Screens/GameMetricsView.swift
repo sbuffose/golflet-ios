@@ -179,7 +179,7 @@ struct GameMetricsView: View {
                     .accessibilityIdentifier("met-iron-\(id.rawValue)")
                 }
             }
-            Text("Cada golpe que salió a entre 30 y 150 yd de la bandera. Distancia a la bandera que marcaste; si no la marcaste, al centro del green. Tocá una distancia para ver el detalle.")
+            Text(GameMetricsCopy.flagHowApproach)
                 .font(GType.label)
                 .foregroundStyle(p.ink3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -289,6 +289,10 @@ struct GameMetricsView: View {
                         Text("\(pu.firstPutt.holes) \(pu.firstPutt.holes == 1 ? "hoyo" : "hoyos") con el primer putt marcado")
                             .font(GType.label)
                             .foregroundStyle(p.ink3)
+                        Text(GameMetricsCopy.flagHowPutting + (pu.firstPutt.atCenter > 0 ? " En \(pu.firstPutt.atCenter) \(pu.firstPutt.atCenter == 1 ? "hoyo" : "hoyos") se midió al centro del green." : ""))
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 shotList(pu.firstPutt.bins) { bin in
@@ -603,7 +607,7 @@ struct GameMetricsIronDetailView: View {
                             GCard(radius: 18, padding: 12) {
                                 VStack(alignment: .leading, spacing: 10) {
                                     ApproachMissMap(shots: band.list, compact: false)
-                                    Text("La bandera está en el centro; arriba es largo, abajo corto; anillos cada 10 yd.")
+                                    Text("La bandera está en el centro; arriba es largo, abajo corto; anillos cada 10 yd. \(GameMetricsCopy.flagHow)")
                                         .font(GType.label)
                                         .foregroundStyle(p.ink3)
                                         .fixedSize(horizontal: false, vertical: true)
@@ -640,6 +644,11 @@ struct GameMetricsIronDetailView: View {
                                                     .font(GType.label)
                                                     .tabular()
                                                     .foregroundStyle(p.ink2)
+                                            }
+                                            if !GameMetricsCopy.flagSource(shot.flagSource).isEmpty {
+                                                Text(GameMetricsCopy.flagSource(shot.flagSource))
+                                                    .font(GType.label)
+                                                    .foregroundStyle(p.ink3)
                                             }
                                         }
                                     }

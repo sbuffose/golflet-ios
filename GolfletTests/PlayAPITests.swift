@@ -181,12 +181,55 @@ final class PlayAPITests: XCTestCase {
         let holes = try await api.liveRoundHoles(id: live.id)
         XCTAssertEqual(holes.count, 18)
         XCTAssertNil(holes.first?.putts)
-        let saved = try await api.putLiveRoundHole(id: live.id, hole: 1, putts: 2, pin: LivePin(lat: -34.48305, lng: -58.52881, accuracyM: 3))
+        XCTAssertEqual(holes.first { $0.number == 1 }?.pinAction, .mark)
+        XCTAssertEqual(holes.first { $0.number == 2 }?.pinAction, .report)
+        XCTAssertEqual(holes.first { $0.number == 2 }?.dayPin?.sourcePhrase, "cargada por un jugador")
+        XCTAssertEqual(holes.first { $0.number == 3 }?.pinAction, .none)
+        XCTAssertEqual(holes.first { $0.number == 3 }?.dayPin?.source, .club)
+        let saved = try await api.putLiveRoundHole(id: live.id, hole: 1, putts: 2)
         XCTAssertEqual(saved.putts, 2)
-        XCTAssertEqual(saved.pin?.lat ?? 0, -34.48305, accuracy: 0.0001)
+        XCTAssertNil(saved.dayPin)
+        let marked = try await api.postLiveRoundPin(
+            id: live.id,
+            hole: 1,
+            pin: LivePin(lat: -34.48305, lng: -58.52881, accuracyM: 3),
+            zone: .middle
+        )
+        XCTAssertEqual(marked.dayPin?.zone, .middle)
+        XCTAssertEqual(marked.dayPin?.sourcePhrase, "la marcaste vos")
+        XCTAssertEqual(marked.pinAction, .remark)
         let againHoles = try await api.liveRoundHoles(id: live.id)
         XCTAssertEqual(againHoles.first { $0.number == 1 }?.putts, 2)
-        XCTAssertNotNil(againHoles.first { $0.number == 1 }?.pin)
+        XCTAssertNotNil(againHoles.first { $0.number == 1 }?.dayPin)
+
+        do {
+            _ = try await api.postLiveRoundPin(
+                id: live.id,
+                hole: 2,
+                pin: LivePin(lat: -34.48, lng: -58.53, accuracyM: 4),
+                zone: .front
+            )
+            XCTFail("Expected 409 when a player pin already exists")
+        } catch let error as GolfletError {
+            XCTAssertEqual(error.httpStatus, 409)
+        }
+
+        let reported = try await api.postLiveRoundPinReport(
+            id: live.id,
+            hole: 2,
+            pin: LivePin(lat: -34.48, lng: -58.53, accuracyM: 4)
+        )
+        XCTAssertEqual(reported.pinAction, .reported)
+        do {
+            _ = try await api.postLiveRoundPinReport(
+                id: live.id,
+                hole: 2,
+                pin: LivePin(lat: -34.48, lng: -58.53, accuracyM: 4)
+            )
+            XCTFail("Expected 429 after reporting once")
+        } catch let error as GolfletError {
+            XCTAssertEqual(error.httpStatus, 429)
+        }
 
         let stats = try await api.clubStats(code: "7i")
         XCTAssertEqual(stats.club.shots, 22)

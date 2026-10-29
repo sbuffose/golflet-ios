@@ -559,20 +559,89 @@ extension MockAPIClient {
         defer { Self.playLock.unlock() }
         let stored = Self.holesByRound[id] ?? [:]
         return (1...18).map { number in
-            stored[number] ?? LiveHoleRecord(number: number, par: number == 3 || number == 12 ? 3 : (number == 5 || number == 18 ? 5 : 4), putts: nil, pin: nil)
+            stored[number] ?? Self.defaultHole(number)
         }
     }
 
-    func putLiveRoundHole(id: String, hole: Int, putts: Int?, pin: LivePin?) async throws -> LiveHoleRecord {
+    func putLiveRoundHole(id: String, hole: Int, putts: Int?) async throws -> LiveHoleRecord {
         Self.playLock.lock()
         defer { Self.playLock.unlock() }
         var stored = Self.holesByRound[id] ?? [:]
-        var record = stored[hole] ?? LiveHoleRecord(number: hole, par: nil, putts: nil, pin: nil)
+        var record = stored[hole] ?? Self.defaultHole(hole)
         if let putts { record.putts = putts }
-        if let pin { record.pin = pin }
         stored[hole] = record
         Self.holesByRound[id] = stored
         return record
+    }
+
+    func postLiveRoundPin(id: String, hole: Int, pin: LivePin, zone: PinZone) async throws -> LiveHoleRecord {
+        Self.playLock.lock()
+        defer { Self.playLock.unlock() }
+        var stored = Self.holesByRound[id] ?? [:]
+        var record = stored[hole] ?? Self.defaultHole(hole)
+        if let existing = record.dayPin, !(existing.byMe && existing.source == .player) {
+            throw GolfletError.http(status: 409, message: "Este hoyo ya tiene bandera de hoy.")
+        }
+        let day = DayPin(
+            lat: pin.lat,
+            lng: pin.lng,
+            accuracyM: pin.accuracyM,
+            zone: zone,
+            zoneLabel: zone.label,
+            source: .player,
+            byMe: true
+        )
+        record.pin = pin
+        record.dayPin = day
+        record.pinAction = .remark
+        stored[hole] = record
+        Self.holesByRound[id] = stored
+        return record
+    }
+
+    func postLiveRoundPinReport(id: String, hole: Int, pin: LivePin) async throws -> LiveHoleRecord {
+        _ = pin
+        Self.playLock.lock()
+        defer { Self.playLock.unlock() }
+        var stored = Self.holesByRound[id] ?? [:]
+        var record = stored[hole] ?? Self.defaultHole(hole)
+        if record.pinAction == .reported {
+            throw GolfletError.http(status: 429, message: "Ya reportaste esta bandera.")
+        }
+        if record.dayPin?.source == .club || record.dayPin == nil || record.dayPin?.byMe == true {
+            throw GolfletError.http(status: 409, message: "Esta bandera no se puede reportar.")
+        }
+        record.pinAction = .reported
+        stored[hole] = record
+        Self.holesByRound[id] = stored
+        return record
+    }
+
+    private static func defaultHole(_ number: Int) -> LiveHoleRecord {
+        let par = number == 3 || number == 12 ? 3 : (number == 5 || number == 18 ? 5 : 4)
+        if number == 2 {
+            let pin = LivePin(lat: -34.4832, lng: -58.5291, accuracyM: 5)
+            return LiveHoleRecord(
+                number: number,
+                par: par,
+                putts: nil,
+                pin: pin,
+                dayPin: DayPin(lat: pin.lat, lng: pin.lng, accuracyM: pin.accuracyM, zone: .middle, zoneLabel: "Medio", source: .player, byMe: false),
+                pinAction: .report
+            )
+        }
+        if number == 3 {
+            let pin = LivePin(lat: -34.4834, lng: -58.5289, accuracyM: 3)
+            return LiveHoleRecord(
+                number: number,
+                par: par,
+                putts: nil,
+                pin: pin,
+                dayPin: DayPin(lat: pin.lat, lng: pin.lng, accuracyM: pin.accuracyM, zone: .front, zoneLabel: "Adelante", source: .club, byMe: false),
+                pinAction: .none
+            )
+        }
+        return LiveHoleRecord(number: number, par: par, putts: nil, pin: nil, dayPin: nil, pinAction: .mark)
     }
 
     private func attachSeries(_ drill: MetricDrilldown, rounds: [Round], metric: String) -> MetricDrilldown {

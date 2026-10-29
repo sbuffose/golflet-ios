@@ -35,7 +35,9 @@ protocol GolfletAPI: Sendable {
     func metricsSummary(range: String) async throws -> MetricsSummary
     func gameMetrics(range: String) async throws -> GameMetrics
     func liveRoundHoles(id: String) async throws -> [LiveHoleRecord]
-    func putLiveRoundHole(id: String, hole: Int, putts: Int?, pin: LivePin?) async throws -> LiveHoleRecord
+    func putLiveRoundHole(id: String, hole: Int, putts: Int?) async throws -> LiveHoleRecord
+    func postLiveRoundPin(id: String, hole: Int, pin: LivePin, zone: PinZone) async throws -> LiveHoleRecord
+    func postLiveRoundPinReport(id: String, hole: Int, pin: LivePin) async throws -> LiveHoleRecord
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy
 
     func profesores() async throws -> [Profesor]
