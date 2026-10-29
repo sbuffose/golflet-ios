@@ -318,6 +318,28 @@ enum StatsEngine {
         }
         return totals
     }
+
+    static func holesPlayed(in round: Round) -> Int {
+        if !round.holes.isEmpty { return round.holes.count }
+        if round.holesPlayed > 0 { return round.holesPlayed }
+        return round.isNineHoles ? 9 : 18
+    }
+
+    static func holeShare(_ kind: ScoreKind, in rounds: [Round]) -> Double {
+        let holes = rounds.reduce(0) { $0 + holesPlayed(in: $1) }
+        guard holes > 0 else { return 0 }
+        let scored = rounds.reduce(0) { $0 + count(kind, in: $1).count }
+        return Double(scored) / Double(holes)
+    }
+
+    static func recentGross(_ rounds: [Round], limit: Int = 18) -> [Double] {
+        Array(
+            eighteenHoleValid(rounds)
+                .sorted { $0.date < $1.date }
+                .compactMap { $0.gross.map(Double.init) }
+                .suffix(limit)
+        )
+    }
 }
 
 extension Calendar {

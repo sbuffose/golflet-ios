@@ -81,6 +81,8 @@ struct StrategyCourseView: View {
                 Text("\(number)")
                     .font(GType.headline)
                     .tabular()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .foregroundStyle(published ? p.onPrimary : p.ink3)
                     .frame(width: 32, height: 32)
                     .background(published ? p.primary : p.surface2)

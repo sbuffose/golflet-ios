@@ -48,6 +48,7 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Cancha")
         XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
+        assertCanchaHoleGrid(app)
         if waitFor(app, "filter-colorada", timeout: 2) {
             first(app, "filter-colorada").tap()
         }
@@ -291,6 +292,60 @@ final class GolfletUITests: XCTestCase {
         saveShot("25_login_first_sync")
     }
 
+    func testCanchaHoleGridDoesNotWrapOnIPhone() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Cancha")
+        XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
+        assertCanchaHoleGrid(app)
+        saveShot("30_cancha_hoyos")
+    }
+
+    func testResumenTrendCardFillsPhoneWidth() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+
+        let card = first(app, "metric-summary-trend")
+        XCTAssertTrue(card.waitForExistence(timeout: 6), "Falta la card de Tendencia")
+        reveal(app, card)
+
+        let width = app.frame.width
+        XCTAssertGreaterThan(width, 300, "El test tiene que correr a ancho iPhone")
+        XCTAssertGreaterThan(card.frame.width, width - 56, "Tendencia no es full-width: \(card.frame)")
+
+        let chart = largest(app, "trend-chart")
+        XCTAssertTrue(chart.waitForExistence(timeout: 3), "Falta el gráfico de tendencia")
+        XCTAssertGreaterThan(chart.frame.width, width * 0.62, "El gráfico quedó estrecho: \(chart.frame)")
+        XCTAssertGreaterThan(chart.frame.height, 169, "El gráfico no mide ~180pt: \(chart.frame)")
+
+        let legend = first(app, "trend-legend")
+        XCTAssertTrue(legend.waitForExistence(timeout: 2), "Falta la leyenda de tees")
+        XCTAssertGreaterThan(legend.frame.width, 160, "La leyenda no es una fila: \(legend.frame)")
+        XCTAssertLessThan(legend.frame.height, 40, "La leyenda se apiló en columnas: \(legend.frame)")
+
+        let footnote = first(app, "trend-footnote")
+        XCTAssertTrue(footnote.waitForExistence(timeout: 2), "Falta la nota de Tendencia")
+        XCTAssertGreaterThan(footnote.frame.width, width * 0.55, "La nota se partió en columnas: \(footnote.frame)")
+        XCTAssertLessThan(footnote.frame.height, 56, "La nota envuelve letra por letra: \(footnote.frame)")
+        XCTAssertGreaterThan(footnote.frame.minY, chart.frame.maxY - 4, "Gráfico y nota quedaron lado a lado")
+
+        saveShot("29_resumen_tendencia")
+
+        card.tap()
+        XCTAssertTrue(waitFor(app, "screen-metric-handicap", timeout: 6), "La card no abre el detalle de tendencia")
+        dismissIfPresent(app, "metric-back")
+    }
+
     private func submitLogin(_ app: XCUIApplication) {
         if app.keyboards.element.exists {
             app.swipeDown()
@@ -306,6 +361,22 @@ final class GolfletUITests: XCTestCase {
 
     private func first(_ app: XCUIApplication, _ id: String) -> XCUIElement {
         app.descendants(matching: .any)[id].firstMatch
+    }
+
+    private func largest(_ app: XCUIApplication, _ id: String) -> XCUIElement {
+        let matches = app.descendants(matching: .any).matching(identifier: id)
+        guard matches.firstMatch.waitForExistence(timeout: 3) else { return matches.firstMatch }
+        var best = matches.firstMatch
+        var bestArea: CGFloat = 0
+        for index in 0..<matches.count {
+            let element = matches.element(boundBy: index)
+            let area = element.frame.width * element.frame.height
+            if area > bestArea {
+                bestArea = area
+                best = element
+            }
+        }
+        return best
     }
 
     @discardableResult
@@ -372,6 +443,38 @@ final class GolfletUITests: XCTestCase {
             } else {
                 app.swipeUp()
             }
+        }
+    }
+
+    private func assertCanchaHoleGrid(_ app: XCUIApplication) {
+        let ten = first(app, "hole-10")
+        reveal(app, ten)
+        XCTAssertTrue(ten.waitForExistence(timeout: 4), "Falta el hoyo 10")
+        let one = first(app, "hole-1")
+        let eleven = first(app, "hole-11")
+        XCTAssertGreaterThan(app.frame.width, 300, "El test tiene que correr a ancho iPhone")
+        XCTAssertGreaterThan(ten.frame.width, 44, "La tile del 10 quedó estrecha: \(ten.frame)")
+        XCTAssertLessThan(ten.frame.height, 86, "La tile del 10 wrappea: \(ten.frame)")
+        XCTAssertEqual(ten.frame.height, one.frame.height, accuracy: 6, "El 10 no debería ser más alto que el 1")
+        XCTAssertEqual(ten.frame.minY, eleven.frame.minY, accuracy: 2, "10 y 11 tienen que compartir fila")
+
+        let legend = first(app, "course-tee-legend")
+        if legend.waitForExistence(timeout: 2) {
+            XCTAssertLessThan(legend.frame.height, 72, "La leyenda de tees se partió: \(legend.frame)")
+        }
+        if first(app, "tee-azul").waitForExistence(timeout: 1) {
+            XCTAssertLessThan(first(app, "tee-azul").frame.height, 28, "Azul wrappea: \(first(app, "tee-azul").frame)")
+        }
+        if first(app, "tee-blanco").waitForExistence(timeout: 1) {
+            XCTAssertLessThan(first(app, "tee-blanco").frame.height, 28, "Blanco wrappea: \(first(app, "tee-blanco").frame)")
+        }
+    }
+
+    private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
+        var attempts = 0
+        while !element.isHittable && attempts < 6 {
+            app.swipeUp()
+            attempts += 1
         }
     }
 

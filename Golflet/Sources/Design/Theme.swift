@@ -32,6 +32,7 @@ struct Palette: Equatable {
     let green: Color
     let sand: Color
     let water: Color
+    let dangerSoft: Color
 
     static let light = Palette(
         bg: Color(hex: 0xF7F5F0),
@@ -47,12 +48,13 @@ struct Palette: Equatable {
         accent: Color(hex: 0xC8A86A),
         accentSoft: Color(hex: 0xF3EAD6),
         positive: Color(hex: 0x2F7D5B),
-        negative: Color(hex: 0xB5543C),
+        negative: Color(hex: 0xB4553F),
         turf: Color(hex: 0xDCE8D2),
         fairway: Color(hex: 0xB7D3A0),
         green: Color(hex: 0x8DBE73),
         sand: Color(hex: 0xEFE3C6),
-        water: Color(hex: 0xBBD7DE)
+        water: Color(hex: 0xBBD7DE),
+        dangerSoft: Color(hex: 0xF3E4DF)
     )
 
     static let dark = Palette(
@@ -74,7 +76,8 @@ struct Palette: Equatable {
         fairway: Color(hex: 0x2F4A32),
         green: Color(hex: 0x3D6A38),
         sand: Color(hex: 0x3A3424),
-        water: Color(hex: 0x2A4046)
+        water: Color(hex: 0x2A4046),
+        dangerSoft: Color(hex: 0x3A241F)
     )
 
     static func make(_ scheme: ColorScheme) -> Palette {
