@@ -32,7 +32,8 @@ struct GroupDetailView: View {
         }
         .accessibilityIdentifier("screen-grupo")
         .safeAreaInset(edge: .top) { closeBar(action: { model.presentedGroupID = nil }, id: "close-grupo") }
-        .task { await load() }
+        .task(id: groupID) { await load() }
+        .onAppear { Task { await load() } }
         .sheet(item: Bindable(model).inviteShare) { payload in
             NavigationStack {
                 InviteShareView(payload: payload)
@@ -278,6 +279,12 @@ struct GroupDetailView: View {
 
             if let comparison {
                 ForEach(comparison.rows) { row in
+                    ForEach(row.values) { value in
+                        GProbe(
+                            id: "compare-\(row.metric.rawValue)-\(value.memberID)",
+                            label: "\(value.memberName), \(display(value, metric: row.metric))"
+                        )
+                    }
                     comparisonCard(row)
                 }
             }

@@ -1,5 +1,19 @@
 import SwiftUI
 
+struct GProbe: View {
+    let id: String
+    var label: String?
+
+    var body: some View {
+        Text(label ?? id)
+            .font(.system(size: 1))
+            .foregroundStyle(.clear)
+            .frame(width: 1, height: 1)
+            .accessibilityIdentifier(id)
+            .accessibilityLabel(label ?? id)
+    }
+}
+
 struct GScreen<Content: View>: View {
     @Environment(\.palette) private var p
     var probeID: String?
