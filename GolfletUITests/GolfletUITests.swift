@@ -405,7 +405,12 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "invite-accept").waitForExistence(timeout: 3))
         XCTAssertTrue(first(app, "invite-decline").waitForExistence(timeout: 2))
         saveShot("34_invitacion")
-        first(app, "invite-accept").tap()
+        let accept = app.buttons["invite-accept"].exists ? app.buttons["invite-accept"] : first(app, "invite-accept")
+        if accept.isHittable {
+            accept.tap()
+        } else {
+            accept.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "Aceptar no abrió el grupo")
         saveShot("35_grupo_aceptado")
     }
@@ -637,24 +642,21 @@ final class GolfletUITests: XCTestCase {
         if first(app, "screen-ronda").exists {
             dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
         }
-        let addClub = app.buttons["add-club-home"]
-        if addClub.waitForExistence(timeout: timeout) {
-            revealHittable(app, addClub)
-            if addClub.isHittable {
-                addClub.tap()
-                return true
-            }
-        }
         let avatar = app.buttons["avatar-button"].exists ? app.buttons["avatar-button"] : first(app, "avatar-button")
-        guard avatar.waitForExistence(timeout: 3) else { return false }
-        if avatar.isHittable {
-            avatar.tap()
-        } else {
-            avatar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        if avatar.waitForExistence(timeout: timeout) {
+            if avatar.isHittable {
+                avatar.tap()
+            } else {
+                avatar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
+                first(app, "notifications-cuenta").tap()
+            }
+            return true
         }
-        if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
-            first(app, "notifications-cuenta").tap()
-        }
+        let addClub = app.buttons["add-club-home"]
+        guard addClub.waitForExistence(timeout: 2), addClub.isHittable else { return false }
+        addClub.tap()
         return true
     }
 
