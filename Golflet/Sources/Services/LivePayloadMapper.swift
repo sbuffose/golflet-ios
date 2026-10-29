@@ -43,7 +43,8 @@ enum LivePayloadMapper {
             bag: parseBag(json["bag"]),
             hiHistory: hiHistory,
             courseGroups: parseCourseGroups(json["course_groups"] ?? json["courseGroups"]),
-            teeTimes: TeeTimesParser.list(from: json)
+            teeTimes: TeeTimesParser.list(from: json),
+            profesores: ProfesoresParser.list(from: json)
         )
     }
 

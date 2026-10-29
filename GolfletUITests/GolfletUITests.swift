@@ -323,6 +323,35 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    func testHomeHcpProfesorOpensPage() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "home-hcp-profesor").waitForExistence(timeout: 4), "Falta el avatar del profesor en HCP")
+        first(app, "home-hcp-profesor").tap()
+        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 6), "No se abrió la página del profesor")
+        saveShot("43_inicio_hcp_profesor")
+    }
+
+    func testHomeHcpProfesoresStackOpensList() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-many-profesores"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "home-hcp-profesor").waitForExistence(timeout: 4), "Falta el stack de profesores")
+        first(app, "home-hcp-profesor").tap()
+        XCTAssertTrue(waitFor(app, "screen-home-profesores", timeout: 6), "No se abrió la lista de profesores")
+        XCTAssertTrue(first(app, "home-profesor-p-manu").waitForExistence(timeout: 4))
+        first(app, "home-profesor-p-manu").tap()
+        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 8), "No entró al profesor")
+        saveShot("44_inicio_hcp_profesores")
+    }
+
     func testHomeHcpGroupsStackOpensGroup() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]

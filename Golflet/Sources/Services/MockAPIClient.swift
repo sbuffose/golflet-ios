@@ -114,7 +114,8 @@ struct MockAPIClient: GolfletAPI {
             holeStats: stats,
             bag: DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) },
             hiHistory: [],
-            teeTimes: linked ? (try? await teeTimes()) ?? [] : []
+            teeTimes: linked ? (try? await teeTimes()) ?? [] : [],
+            profesores: linked ? (try? await profesores()) ?? [] : []
         )
     }
 

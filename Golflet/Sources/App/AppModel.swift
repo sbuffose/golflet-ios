@@ -42,6 +42,7 @@ final class AppModel {
     var activeLiveRound: LiveRound?
     var activeCourse: GPSCourseDetail?
     var metricsSummary: MetricsSummary?
+    var profesores: [Profesor] = []
     var groups: [GolfletGroup] = []
     var pendingInvites: [GroupInvitePreview] = []
     var sharePrefs = SharePrefs.allShared
@@ -138,6 +139,7 @@ final class AppModel {
             await refreshGroups()
             await refreshNotifications()
             await refreshTextPrefs()
+            await refreshProfesores()
             await refreshTeeTimes()
             isLoaded = true
             await consumeIntent()
@@ -216,6 +218,7 @@ final class AppModel {
             holeStats = []
             bag = []
             recurring = nil
+            profesores = []
             groups = []
             pendingInvites = []
             notifications = []
@@ -534,6 +537,13 @@ final class AppModel {
                 when: next.chipWhen,
                 deepLink: "golflet://inicio"
             ))
+        }
+    }
+
+    func refreshProfesores() async {
+        guard isSignedIn else { return }
+        if let loaded = try? await api.profesores() {
+            profesores = loaded
         }
     }
 
@@ -889,6 +899,9 @@ final class AppModel {
         }
         if !snap.teeTimes.isEmpty {
             teeTimes = snap.teeTimes
+        }
+        if !snap.profesores.isEmpty {
+            profesores = snap.profesores
         }
         if let last = snap.rounds.sorted(by: { $0.date > $1.date }).first,
            last.course == "Azul" || last.course == "Colorada" {
