@@ -79,7 +79,8 @@ final class GroupsTests: XCTestCase {
         let saved = try await api.saveGroupView(groupID: "g-jockey", config: config)
         XCTAssertEqual(saved.range, .threeMonths)
         XCTAssertEqual(saved.courseFilter, "Azul")
-        XCTAssertEqual(try await api.groupView(groupID: "g-jockey").metrics, [.gross, .birdies])
+        let view = try await api.groupView(groupID: "g-jockey")
+        XCTAssertEqual(view.metrics, [.gross, .birdies])
 
         try await api.leaveGroup(id: "g-jockey")
         let remaining = try await api.groups()
@@ -105,9 +106,9 @@ final class GroupsTests: XCTestCase {
         XCTAssertFalse(titles.contains("voz"))
         XCTAssertFalse(titles.contains("estrateg"))
         XCTAssertEqual(ShareCategory.allCases.count, 9)
-        XCTAssertEqual(SharePrefs.allShared.jsonBody["voice"], nil)
-        XCTAssertEqual(SharePrefs.allShared.jsonBody["notes"], nil)
-        XCTAssertEqual(SharePrefs.allShared.jsonBody["strategy"], nil)
+        XCTAssertNil(SharePrefs.allShared.jsonBody["voice"])
+        XCTAssertNil(SharePrefs.allShared.jsonBody["notes"])
+        XCTAssertNil(SharePrefs.allShared.jsonBody["strategy"])
     }
 
     func testParsesFlexibleGroupPayload() {
