@@ -91,7 +91,8 @@ struct HandicapHistoryView: View {
                 year: Calendar.gregorian.component(.year, from: Date()),
                 course: "all",
                 sort: "date",
-                order: "desc"
+                order: "desc",
+                range: model.statsRange.query
             ), !drill.history.isEmpty {
                 apiPoints = drill.history.compactMap { item in
                     guard let date = item.date else { return nil }

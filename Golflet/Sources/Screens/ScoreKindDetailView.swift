@@ -69,7 +69,8 @@ struct ScoreKindDetailView: View {
             year: year,
             course: MetricAPIMap.course(course),
             sort: "count",
-            order: "desc"
+            order: "desc",
+            range: model.statsRange.query
         ), drill.total != nil || !drill.rounds.isEmpty else {
             apiSnapshot = nil
             return

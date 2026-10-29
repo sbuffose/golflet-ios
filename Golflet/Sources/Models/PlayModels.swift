@@ -322,6 +322,37 @@ struct MetricAPIHistory: Hashable, Sendable {
     var club: String?
 }
 
+struct MetricSeriesPoint: Hashable, Sendable, Identifiable {
+    var id: String { "\(date.timeIntervalSince1970)-\(value)" }
+    var date: Date
+    var value: Double
+    var course: String
+}
+
+struct MetricMonthlyPoint: Hashable, Sendable, Identifiable {
+    var id: String { month }
+    var month: String
+    var date: Date
+    var value: Double
+    var rounds: Int
+}
+
+struct MetricsSummary: Hashable, Sendable {
+    var range: String
+    var rangeLabel: String?
+    var since: Date?
+    var roundsInRange: Int
+    var validRounds: Int
+    var averageGross: Double?
+    var averageNet: Double?
+    var bestGross: Int?
+    var worstGross: Int?
+    var eagles: Int
+    var birdies: Int
+    var pars: Int
+    var bogeys: Int
+}
+
 struct MetricDrilldown: Hashable, Sendable {
     var metric: String
     var total: Int?
@@ -333,6 +364,23 @@ struct MetricDrilldown: Hashable, Sendable {
     var summaryRounds: Int?
     var averageGross: Double?
     var bestGross: Int?
+    var series: [MetricSeriesPoint] = []
+    var monthly: [MetricMonthlyPoint] = []
+    var roundsInRange: Int?
+    var since: Date?
+    var rangeLabel: String?
+
+    func chartPoints(preferMonthly: Bool) -> [MetricPoint] {
+        if preferMonthly, !monthly.isEmpty {
+            return monthly.map {
+                MetricPoint(date: $0.date, value: $0.rounds > 0 ? $0.value / Double($0.rounds) : $0.value, course: "")
+            }
+        }
+        if !series.isEmpty {
+            return series.map { MetricPoint(date: $0.date, value: $0.value, course: $0.course) }
+        }
+        return []
+    }
 }
 
 enum RecapCopy {

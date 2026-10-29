@@ -622,13 +622,34 @@ enum DayStamp {
               let year = Int(parts[0]),
               let month = Int(parts[1]),
               let day = Int(parts[2])
-        else { return nil }
+        else { return parseMonth(raw) }
         return Calendar.gregorian.date(from: DateComponents(
             calendar: Calendar.gregorian,
             timeZone: Calendar.gregorian.timeZone,
             year: year,
             month: month,
             day: day
+        ))
+    }
+
+    static func formatMonth(_ date: Date) -> String {
+        let parts = Calendar.gregorian.dateComponents([.year, .month], from: date)
+        return String(format: "%04d-%02d", parts.year ?? 0, parts.month ?? 1)
+    }
+
+    static func parseMonth(_ raw: String) -> Date? {
+        let stamp = String(raw.prefix(7))
+        let parts = stamp.split(separator: "-")
+        guard parts.count >= 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1])
+        else { return nil }
+        return Calendar.gregorian.date(from: DateComponents(
+            calendar: Calendar.gregorian,
+            timeZone: Calendar.gregorian.timeZone,
+            year: year,
+            month: month,
+            day: 1
         ))
     }
 }
