@@ -339,7 +339,10 @@ struct InviteShareView: View {
 
     var body: some View {
         GScreen(id: "screen-compartir-grupo") {
+            ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
+                GProbe(id: "share-whatsapp", label: "Compartir por WhatsApp")
+                GProbe(id: "invite-link", label: payload.url.absoluteString)
                 VStack(alignment: .leading, spacing: 6) {
                     GOverline(text: "Listo")
                     GTitle(text: payload.groupName, size: 30)
@@ -389,9 +392,10 @@ struct InviteShareView: View {
                 }
                 .accessibilityIdentifier("share-more")
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 28)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
+            }
         }
         .accessibilityIdentifier("screen-compartir-grupo")
         .safeAreaInset(edge: .top) {
