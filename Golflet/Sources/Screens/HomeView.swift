@@ -890,8 +890,8 @@ struct HomeHcpPeople: View {
             }
         }
         .buttonStyle(.plain)
+        .padding(8)
         .contentShape(Rectangle())
-        .frame(minWidth: 44, minHeight: 44, alignment: .topTrailing)
         .accessibilityIdentifier("home-hcp-profesor")
         .accessibilityLabel(profesorLabel)
         .overlay { GProbe(id: "home-hcp-profesor", label: profesorLabel) }

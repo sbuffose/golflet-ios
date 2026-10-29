@@ -331,7 +331,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         XCTAssertTrue(first(app, "home-hcp-profesor").waitForExistence(timeout: 4), "Falta el avatar del profesor en HCP")
-        largest(app, "home-hcp-profesor").tap()
+        tapLargest(app, "home-hcp-profesor")
         XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 6), "No se abrió la página del profesor")
         saveShot("43_inicio_hcp_profesor")
     }
@@ -734,6 +734,16 @@ final class GolfletUITests: XCTestCase {
             }
         }
         return best
+    }
+
+    private func tapLargest(_ app: XCUIApplication, _ id: String) {
+        let button = app.buttons[id]
+        let target = button.waitForExistence(timeout: 1) ? button : largest(app, id)
+        if target.isHittable {
+            target.tap()
+            return
+        }
+        target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     @discardableResult
