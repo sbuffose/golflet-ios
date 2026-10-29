@@ -6,6 +6,7 @@ enum NativeAction: Hashable, Sendable {
     case recordShot(club: String)
     case recordRecap
     case openRound(id: String)
+    case openInvite(token: String)
 }
 
 @MainActor
@@ -26,7 +27,26 @@ final class IntentRouter {
 }
 
 enum GolfletURL {
+    static func inviteURL(token: String) -> URL {
+        URL(string: "https://\(AssociatedDomains.host)\(AssociatedDomains.invitePathPrefix)\(token)")!
+    }
+
+    static func inviteToken(from url: URL) -> String? {
+        let host = (url.host ?? "").lowercased()
+        if url.scheme == "http" || url.scheme == "https" {
+            guard host == AssociatedDomains.host || host == "www.\(AssociatedDomains.host)" else { return nil }
+            return token(in: url.pathComponents)
+        }
+        guard url.scheme == "golflet" else { return nil }
+        var parts = [url.host].compactMap { $0?.isEmpty == false ? $0 : nil }
+        parts.append(contentsOf: url.pathComponents.filter { $0 != "/" })
+        return token(in: parts)
+    }
+
     static func parse(_ url: URL) -> NativeAction? {
+        if let token = inviteToken(from: url) {
+            return .openInvite(token: token)
+        }
         guard url.scheme == "golflet" else { return nil }
         var parts = [url.host].compactMap { $0?.isEmpty == false ? $0 : nil }
         parts.append(contentsOf: url.pathComponents.filter { $0 != "/" })
@@ -44,5 +64,13 @@ enum GolfletURL {
         default:
             return nil
         }
+    }
+
+    private static func token(in parts: [String]) -> String? {
+        guard let index = parts.firstIndex(where: { $0.caseInsensitiveCompare("g") == .orderedSame }),
+              let raw = parts.dropFirst(index + 1).first
+        else { return nil }
+        let cleaned = raw.trimmingCharacters(in: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_")).inverted)
+        return cleaned.isEmpty ? nil : cleaned
     }
 }

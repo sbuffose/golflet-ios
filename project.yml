@@ -91,6 +91,9 @@ targets:
           PROVISIONING_PROFILE_SPECIFIER: "Golflet AppStore GHA v2"
     entitlements:
       path: Golflet/Golflet.entitlements
+      properties:
+        com.apple.developer.associated-domains:
+          - applinks:golflet.vercel.app
     dependencies:
       - target: GolfletKit
       - target: GolfletWidgets
