@@ -73,10 +73,13 @@ final class StatsEngineTests: XCTestCase {
         let mid = sampleRound(id: "b", date: "2026-02-01", club: "Jockey", course: "Azul", courseKey: "118:Azul", other: false, gross: 76)
         let high = sampleRound(id: "c", date: "2026-03-01", club: "Jockey", course: "Azul", courseKey: "118:Azul", other: false, gross: 80)
         var a = low
+        a.holes = []
         a.counts.birdies = 1
         var b = mid
+        b.holes = []
         b.counts.birdies = 2
         var c = high
+        c.holes = []
         c.counts.birdies = 3
         let stats = StatsEngine.perRound([a, b, c], range: .all)
         XCTAssertEqual(stats.birdies.mean ?? 0, 2, accuracy: 0.01)

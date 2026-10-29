@@ -311,10 +311,11 @@ struct HomeView: View {
                 Text(partners)
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
-                    .accessibilityIdentifier("home-tee-partners-\(booking.id)")
+                GProbe(id: "home-tee-partners-\(booking.id)", label: partners)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-tee-row-\(booking.id)")
     }
 
