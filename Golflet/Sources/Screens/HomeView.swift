@@ -27,7 +27,7 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
-                .padding(.bottom, 28)
+                .padding(.bottom, 96)
             }
         }
         .accessibilityElement(children: .contain)
@@ -63,6 +63,7 @@ struct HomeView: View {
                     AvatarCircle(initials: model.profile.initials)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("avatar-button")
             }
             Text("Hola, \(model.profile.displayName.components(separatedBy: " ").first ?? model.profile.displayName)")
                 .font(GType.largeTitle)
