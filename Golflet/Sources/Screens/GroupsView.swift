@@ -289,35 +289,6 @@ struct GroupInviteView: View {
                             .foregroundStyle(p.negative)
                     }
 
-                    if !invite.alreadyMember {
-                        Button {
-                            Task { await model.acceptInvite(invite) }
-                        } label: {
-                            Text(model.isBusy ? "Entrando…" : "Aceptar")
-                                .font(GType.headline)
-                                .foregroundStyle(p.onPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(p.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                        .disabled(model.isBusy)
-                        .accessibilityIdentifier("invite-accept")
-
-                        Button {
-                            Task { await model.declineInvite(invite) }
-                        } label: {
-                            Text("Rechazar")
-                                .font(GType.headline)
-                                .foregroundStyle(p.negative)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(p.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                        .disabled(model.isBusy)
-                        .accessibilityIdentifier("invite-decline")
-                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -326,6 +297,44 @@ struct GroupInviteView: View {
         }
         .accessibilityIdentifier("screen-invitacion")
         .safeAreaInset(edge: .top) { closeBar(action: { model.presentedInvite = nil }, id: "close-invitacion") }
+        .safeAreaInset(edge: .bottom) {
+            if !invite.alreadyMember {
+                VStack(spacing: 10) {
+                    Button {
+                        Task { await model.acceptInvite(invite) }
+                    } label: {
+                        Text(model.isBusy ? "Entrando…" : "Aceptar")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.isBusy)
+                    .accessibilityIdentifier("invite-accept")
+
+                    Button {
+                        Task { await model.declineInvite(invite) }
+                    } label: {
+                        Text("Rechazar")
+                            .font(GType.headline)
+                            .foregroundStyle(p.negative)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(p.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.isBusy)
+                    .accessibilityIdentifier("invite-decline")
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(p.bg)
+            }
+        }
     }
 }
 
