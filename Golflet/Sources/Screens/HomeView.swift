@@ -800,7 +800,7 @@ struct HomeHcpPeople: View {
             }
             if !groups.isEmpty {
                 groupsColumn
-            } else if !profesores.isEmpty {
+            } else {
                 createGroup
             }
         }
