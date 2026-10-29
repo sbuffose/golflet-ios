@@ -78,7 +78,7 @@ struct HomeView: View {
             .golfletChrome()
             .environment(model)
         }
-        .sheet(item: $presentedProfesor) { profesor in
+        .fullScreenCover(item: $presentedProfesor) { profesor in
             NavigationStack {
                 ProfesorDetailView(profesor: profesor)
             }
@@ -94,11 +94,10 @@ struct HomeView: View {
         let dismissing = showsHomeProfesores || showsAgregarProfesor
         showsHomeProfesores = false
         showsAgregarProfesor = false
-        if dismissing {
-            Task { @MainActor in
-                presentedProfesor = profesor
+        Task { @MainActor in
+            if dismissing {
+                try? await Task.sleep(for: .milliseconds(350))
             }
-        } else {
             presentedProfesor = profesor
         }
     }
@@ -846,7 +845,6 @@ struct HomeHcpPeople: View {
     var onAddProfesor: () -> Void
     var onGroups: () -> Void
     var onCreate: () -> Void
-    @State private var presentedProfesor: Profesor?
 
     private let groupAvatar: CGFloat = HomeHcpPeopleLayout.groupAvatar
     private let profesorAvatar: CGFloat = HomeHcpPeopleLayout.profesorAvatar
@@ -867,18 +865,12 @@ struct HomeHcpPeople: View {
         .fixedSize(horizontal: true, vertical: true)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-hcp-people")
-        .sheet(item: $presentedProfesor) { profesor in
-            NavigationStack {
-                ProfesorDetailView(profesor: profesor)
-            }
-            .golfletChrome()
-        }
     }
 
     private var profesorAvatarButton: some View {
         Button {
             if profesores.count == 1, let first = profesores.first {
-                presentedProfesor = first
+                onProfesor(first)
             } else {
                 onProfesores()
             }
