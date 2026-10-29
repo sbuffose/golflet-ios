@@ -160,18 +160,24 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-tarjetas")
+                    .accessibilityElement(children: .contain)
+                    .overlay { GProbe(id: "metric-tarjetas", label: "Tarjetas") }
                     Spacer()
                     NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: false))) {
                         heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-best-gross")
+                    .accessibilityElement(children: .contain)
+                    .overlay { GProbe(id: "metric-best-gross", label: "Mejor gross") }
                     Spacer()
                     NavigationLink(value: MetricRoute.roundList(.average(yearOnly: true))) {
                         heroMini("Promedio \(Calendar.gregorian.component(.year, from: Date()))", snap.yearAverage.map(FormatAR.one) ?? "—")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-average")
+                    .accessibilityElement(children: .contain)
+                    .overlay { GProbe(id: "metric-average", label: "Promedio") }
                 }
                 .padding(.top, 4)
             }
