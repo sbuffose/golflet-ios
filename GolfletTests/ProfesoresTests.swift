@@ -96,4 +96,12 @@ final class ProfesoresTests: XCTestCase {
         XCTAssertEqual(HomeHcpPeopleLayout.profesorVisible, 3)
         XCTAssertEqual(HomeHcpPeopleLayout.groupVisible, 4)
     }
+
+    func testSearchMatchesName() {
+        let catalog = MockAPIClient.profesorDirectory
+        XCTAssertEqual(ProfesorSearch.matches("ma", in: catalog).map(\.id), ["p-manu"])
+        XCTAssertEqual(ProfesorSearch.matches("lucía", in: catalog).map(\.id), ["p-lucia"])
+        XCTAssertTrue(ProfesorSearch.matches("x", in: catalog).isEmpty)
+        XCTAssertTrue(ProfesorSearch.matches("zzz", in: catalog).isEmpty)
+    }
 }

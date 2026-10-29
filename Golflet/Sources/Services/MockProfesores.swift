@@ -7,35 +7,37 @@ extension MockAPIClient {
             return []
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-many-profesores") {
-            return Self.mockProfesores + [
-                Profesor(
-                    id: "p-lucia",
-                    name: "Lucía Fernández",
-                    photoURL: nil,
-                    verified: false,
-                    locations: ["Olivos Golf Club"],
-                    bio: nil,
-                    pending: false,
-                    canViewMetrics: false,
-                    canHearAudio: false,
-                    newContent: 0
-                ),
-                Profesor(
-                    id: "p-diego",
-                    name: "Diego Rossi",
-                    photoURL: nil,
-                    verified: true,
-                    locations: ["Mar del Plata Golf Club"],
-                    bio: nil,
-                    pending: false,
-                    canViewMetrics: true,
-                    canHearAudio: false,
-                    newContent: 1
-                )
-            ]
+            return Self.profesorDirectory
         }
         return Self.mockProfesores
     }
+
+    static let profesorDirectory: [Profesor] = mockProfesores + [
+        Profesor(
+            id: "p-lucia",
+            name: "Lucía Fernández",
+            photoURL: nil,
+            verified: false,
+            locations: ["Olivos Golf Club"],
+            bio: nil,
+            pending: false,
+            canViewMetrics: false,
+            canHearAudio: false,
+            newContent: 0
+        ),
+        Profesor(
+            id: "p-diego",
+            name: "Diego Rossi",
+            photoURL: nil,
+            verified: true,
+            locations: ["Mar del Plata Golf Club"],
+            bio: nil,
+            pending: false,
+            canViewMetrics: true,
+            canHearAudio: false,
+            newContent: 1
+        )
+    ]
 
     static let mockProfesores: [Profesor] = [
         Profesor(

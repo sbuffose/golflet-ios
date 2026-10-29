@@ -25,3 +25,13 @@ struct Profesor: Identifiable, Hashable, Sendable {
         return shown.isEmpty ? nil : shown.joined(separator: " · ")
     }
 }
+
+enum ProfesorSearch {
+    static func matches(_ query: String, in catalog: [Profesor]) -> [Profesor] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard needle.count >= 2 else { return [] }
+        return catalog.filter {
+            $0.name.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
+    }
+}

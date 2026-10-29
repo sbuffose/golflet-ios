@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var showsHcpImpact = false
     @State private var showsHomeGroups = false
     @State private var showsHomeProfesores = false
+    @State private var showsAddProfesor = false
     @State private var presentedProfesor: Profesor?
     @State private var highlightPartners = false
 
@@ -66,6 +67,15 @@ struct HomeView: View {
             .golfletChrome()
             .environment(model)
         }
+        .sheet(isPresented: $showsAddProfesor) {
+            NavigationStack {
+                AddProfesorSheet { profesor in
+                    presentProfesor(profesor)
+                }
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .sheet(item: $presentedProfesor) { profesor in
             NavigationStack {
                 ProfesorDetailView(profesor: profesor)
@@ -80,6 +90,7 @@ struct HomeView: View {
 
     private func presentProfesor(_ profesor: Profesor) {
         showsHomeProfesores = false
+        showsAddProfesor = false
         Task { @MainActor in
             presentedProfesor = profesor
         }
@@ -174,7 +185,7 @@ struct HomeView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    HStack(alignment: .center, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
                         NavigationLink(value: MetricRoute.handicap) {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(FormatAR.one(snap.handicapIndex))
@@ -204,6 +215,7 @@ struct HomeView: View {
                             groups: model.groups,
                             onProfesor: { presentProfesor($0) },
                             onProfesores: { showsHomeProfesores = true },
+                            onAddProfesor: { showsAddProfesor = true },
                             onGroups: { showsHomeGroups = true },
                             onCreate: { model.presentCreateGroup() }
                         )
@@ -795,24 +807,29 @@ struct HomeHcpPeople: View {
     let groups: [GolfletGroup]
     var onProfesor: (Profesor) -> Void
     var onProfesores: () -> Void
+    var onAddProfesor: () -> Void
     var onGroups: () -> Void
     var onCreate: () -> Void
 
-    private let groupAvatar: CGFloat = 36
-    private let profesorAvatar: CGFloat = 28
+    private let groupAvatar: CGFloat = HomeHcpPeopleLayout.groupAvatar
+    private let profesorAvatar: CGFloat = HomeHcpPeopleLayout.profesorAvatar
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            if !profesores.isEmpty {
+        VStack(alignment: .trailing, spacing: HomeHcpPeopleLayout.stackSpacing) {
+            if profesores.isEmpty {
+                addProfesor
+            } else {
                 profesorAvatarButton
             }
-            if !groups.isEmpty {
-                groupsColumn
-            } else {
+            if groups.isEmpty {
                 createGroup
+            } else {
+                groupsColumn
             }
         }
+        .fixedSize(horizontal: true, vertical: true)
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home-hcp-people")
     }
 
     private var profesorAvatarButton: some View {
@@ -831,13 +848,32 @@ struct HomeHcpPeople: View {
         .overlay { GProbe(id: "home-hcp-profesor", label: profesorLabel) }
     }
 
+    private var addProfesor: some View {
+        Button(action: onAddProfesor) {
+            ZStack {
+                Circle()
+                    .strokeBorder(Color(hex: HomeHcpPeopleLayout.gold), lineWidth: 1.5)
+                Image(systemName: "person.badge.plus")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(hex: HomeHcpPeopleLayout.gold))
+            }
+            .frame(width: profesorAvatar, height: profesorAvatar)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home-hcp-add-profesor")
+        .accessibilityLabel("Agregar profesor")
+        .overlay { GProbe(id: "home-hcp-add-profesor", label: "Agregar profesor") }
+    }
+
     private var groupsColumn: some View {
         Button(action: onGroups) {
-            VStack(spacing: 6) {
+            VStack(alignment: .trailing, spacing: 6) {
                 groupStack
-                Text("Grupos")
+                Text(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
                     .font(GType.label)
                     .foregroundStyle(p.onPrimary.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
         .buttonStyle(.plain)
@@ -848,7 +884,7 @@ struct HomeHcpPeople: View {
 
     private var createGroup: some View {
         Button(action: onCreate) {
-            VStack(spacing: 6) {
+            VStack(alignment: .trailing, spacing: 6) {
                 Text("+")
                     .font(GFont.ui(22, weight: .semibold))
                     .foregroundStyle(p.primary)
@@ -859,6 +895,7 @@ struct HomeHcpPeople: View {
                     .font(GType.label)
                     .foregroundStyle(p.onPrimary.opacity(0.7))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
         }
         .buttonStyle(.plain)
@@ -934,6 +971,34 @@ struct HomeHcpPeople: View {
 enum HomeHcpPeopleLayout {
     static let profesorVisible = 3
     static let groupVisible = 4
+    static let stackSpacing: CGFloat = 8
+    static let profesorAvatar: CGFloat = 28
+    static let groupAvatar: CGFloat = 36
+    static let profesorOverlap: CGFloat = 7
+    static let groupOverlap: CGFloat = 12
+    static let gold: UInt32 = 0xC8A86A
+    static let seContentWidth: CGFloat = 280
+
+    static func stackWidth(count: Int, avatar: CGFloat, overlap: CGFloat, extraChip: Bool) -> CGFloat {
+        let n = max(1, count + (extraChip ? 1 : 0))
+        return avatar + CGFloat(n - 1) * (avatar - overlap)
+    }
+
+    static func profesorWidth(count: Int) -> CGFloat {
+        if count == 0 { return profesorAvatar }
+        let shown = min(count, profesorVisible)
+        return stackWidth(count: shown, avatar: profesorAvatar, overlap: profesorOverlap, extraChip: count > profesorVisible)
+    }
+
+    static func groupWidth(count: Int) -> CGFloat {
+        if count == 0 { return groupAvatar }
+        let shown = min(count, groupVisible)
+        return stackWidth(count: shown, avatar: groupAvatar, overlap: groupOverlap, extraChip: true)
+    }
+
+    static func columnWidth(profesorCount: Int, groupCount: Int) -> CGFloat {
+        max(profesorWidth(count: profesorCount), groupWidth(count: groupCount))
+    }
 }
 
 struct HomeHcpAvatar: View {
