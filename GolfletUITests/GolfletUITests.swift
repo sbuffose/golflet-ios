@@ -381,6 +381,21 @@ final class GolfletUITests: XCTestCase {
         saveShot("42_inicio_hcp_crear_grupo")
     }
 
+    func testHomeHcpCreateGroupWhenNoProfesorOrGroups() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-no-groups", "-ui-testing-no-profesor"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertFalse(first(app, "home-hcp-profesor").waitForExistence(timeout: 2))
+        XCTAssertFalse(first(app, "home-hcp-groups").exists)
+        XCTAssertTrue(first(app, "home-hcp-crear-grupo").waitForExistence(timeout: 4), "Falta Crear grupo")
+        first(app, "home-hcp-crear-grupo").tap()
+        XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
+        saveShot("45_inicio_hcp_crear_grupo_vacio")
+    }
+
     func testCanchaHoleGridDoesNotWrapOnIPhone() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
