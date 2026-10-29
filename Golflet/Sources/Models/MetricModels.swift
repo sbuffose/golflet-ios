@@ -233,6 +233,7 @@ struct RoundListQuery: Hashable, Sendable {
 enum MetricRoute: Hashable, Sendable {
     case roundList(RoundListQuery)
     case scoreKind(ScoreKind, RoundListQuery)
+    case chart(MetricChartQuery)
     case handicap
     case recurring
     case clubStats(String)

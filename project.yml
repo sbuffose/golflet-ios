@@ -99,6 +99,7 @@ targets:
       - target: GolfletWidgets
         embed: true
         codeSign: true
+      - sdk: Charts.framework
 
   GolfletKit:
     type: library.static

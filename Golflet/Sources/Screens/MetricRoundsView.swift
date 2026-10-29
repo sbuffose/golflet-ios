@@ -141,7 +141,8 @@ struct MetricRoundsView: View {
             year: year,
             course: MetricAPIMap.course(course),
             sort: MetricAPIMap.sortKey(sort),
-            order: MetricAPIMap.orderKey(sort, order)
+            order: MetricAPIMap.orderKey(sort, order),
+            range: model.statsRange.query
         ), !drill.rounds.isEmpty else {
             apiRounds = nil
             return
