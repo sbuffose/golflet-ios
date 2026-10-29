@@ -32,7 +32,7 @@ struct GroupsView: View {
                                 .foregroundStyle(p.ink)
                             ForEach(model.groups) { group in
                                 Button {
-                                    model.presentedGroupID = group.id
+                                    model.presentGroupDetail(group.id)
                                 } label: {
                                     groupRow(group)
                                 }
@@ -43,7 +43,7 @@ struct GroupsView: View {
                     }
 
                     Button {
-                        model.showsCreateGroup = true
+                        model.presentCreateGroup()
                     } label: {
                         Text("Crear un grupo")
                             .font(GType.headline)
@@ -78,7 +78,7 @@ struct GroupsView: View {
                 .foregroundStyle(p.ink)
             ForEach(model.pendingInvites) { invite in
                 Button {
-                    model.presentedInvite = invite
+                    model.presentInvite(invite)
                 } label: {
                     GCard(radius: 18, padding: 14) {
                         HStack(spacing: 12) {
