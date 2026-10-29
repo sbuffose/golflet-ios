@@ -70,6 +70,8 @@ struct LiveRound: Hashable, Sendable, Identifiable {
     var roundId: String?
     var recapId: String?
     var shots: Int
+    var players: Int = PaceDefaults.players
+    var modality: String = PaceDefaults.modality
 }
 
 struct Shot: Hashable, Sendable, Identifiable {

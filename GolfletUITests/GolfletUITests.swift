@@ -117,8 +117,7 @@ final class GolfletUITests: XCTestCase {
         first(app, "play-start").tap()
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6), "No se abrió la lista de canchas")
         saveShot("16_play_canchas")
-        XCTAssertTrue(first(app, "course-118-jockey-azul").waitForExistence(timeout: 4))
-        first(app, "course-118-jockey-azul").tap()
+        startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8), "No se abrió el hoyo GPS")
         XCTAssertTrue(waitFor(app, "distance-center", timeout: 4))
         XCTAssertTrue(app.buttons["Ya pegué"].waitForExistence(timeout: 2) || first(app, "play-hit").label.contains("Ya pegué"), "Falta Ya pegué")
@@ -270,8 +269,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
         first(app, "play-start").tap()
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
-        XCTAssertTrue(first(app, "course-118-jockey-azul").waitForExistence(timeout: 4))
-        first(app, "course-118-jockey-azul").tap()
+        startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
         first(app, "play-hit").tap()
         XCTAssertTrue(
@@ -428,7 +426,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
         first(app, "play-start").tap()
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
-        first(app, "course-118-jockey-azul").tap()
+        startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
         XCTAssertTrue(waitFor(app, "distance-far", timeout: 4), "Falta Estás lejos de la cancha")
         XCTAssertFalse(first(app, "distance-center").exists)
@@ -449,7 +447,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
         first(app, "play-start").tap()
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
-        first(app, "course-118-jockey-azul").tap()
+        startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
         XCTAssertFalse(first(app, "pace-alert").exists, "El aviso no puede aparecer antes del 10")
         first(app, "play-hole-picker").tap()
@@ -460,6 +458,28 @@ final class GolfletUITests: XCTestCase {
             "Falta el aviso de ritmo en el hoyo 10"
         )
         saveShot("33_play_ritmo")
+    }
+
+    func testStartRoundPlayersAndModality() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
+        first(app, "play-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
+        XCTAssertTrue(first(app, "course-118-jockey-azul").waitForExistence(timeout: 4))
+        first(app, "course-118-jockey-azul").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-start", timeout: 6), "Falta el armado de la ronda")
+        XCTAssertTrue(first(app, "play-players-4").waitForExistence(timeout: 3), "Falta el selector de jugadores")
+        XCTAssertTrue(first(app, "play-modality-medal").waitForExistence(timeout: 2), "Falta la modalidad")
+        first(app, "play-players-2").tap()
+        first(app, "play-modality-fourball").tap()
+        first(app, "play-start-round").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8), "No se abrió el hoyo GPS")
+        saveShot("38_play_start_ronda")
     }
 
     func testResumenTrendCardFillsPhoneWidth() throws {
@@ -601,6 +621,7 @@ final class GolfletUITests: XCTestCase {
         saveShot("37_grupo_comparacion")
     }
 
+<<<<<<< HEAD
     func testNotificationsBadgeAndInbox() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
@@ -735,6 +756,16 @@ final class GolfletUITests: XCTestCase {
             XCTAssertFalse(first(app, "home-tee-tab").waitForExistence(timeout: 1), "No debería haber tab")
         }
         app.terminate()
+    }
+
+    private func startAzulRound(_ app: XCUIApplication) {
+        XCTAssertTrue(first(app, "course-118-jockey-azul").waitForExistence(timeout: 4))
+        first(app, "course-118-jockey-azul").tap()
+        XCTAssertTrue(
+            first(app, "play-start-round").waitForExistence(timeout: 4) || waitFor(app, "screen-play-start", timeout: 4),
+            "Falta Empezar ronda"
+        )
+        first(app, "play-start-round").tap()
     }
 
     private func submitLogin(_ app: XCUIApplication) {

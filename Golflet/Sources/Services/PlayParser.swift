@@ -41,7 +41,9 @@ enum PlayParser {
             endedAt: parseDate(blob["ended_at"]),
             roundId: blob["round_id"] as? String,
             recapId: blob["recap_id"] as? String,
-            shots: JSONFlex.int(from: blob["shots"]) ?? 0
+            shots: JSONFlex.int(from: blob["shots"]) ?? 0,
+            players: PaceDefaults.clampPlayers(JSONFlex.int(from: blob["players"])),
+            modality: PaceDefaults.normalizeModality(blob["modality"] as? String)
         )
     }
 
