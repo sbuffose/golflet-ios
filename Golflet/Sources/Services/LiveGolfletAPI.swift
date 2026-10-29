@@ -204,6 +204,10 @@ struct LiveGolfletAPI: GolfletAPI {
         return PlayParser.metric(try await request("GET", path))
     }
 
+    func metricsSummary(range: String) async throws -> MetricsSummary {
+        PlayParser.metricsSummary(try await request("GET", "/api/metrics/summary?range=\(range)"))
+    }
+
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy {
         var query: [String] = []
         if let courseKey {

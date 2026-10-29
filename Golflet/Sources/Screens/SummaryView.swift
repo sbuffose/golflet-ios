@@ -29,15 +29,18 @@ struct SummaryView: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     GTitle(text: "Resumen")
-                    Text("\(model.summary.validRoundCount) \(model.summary.validRoundCount == 1 ? "ronda" : "rondas")")
+                    Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
                         .accessibilityIdentifier("range-count")
                 }
                 Spacer(minLength: 8)
                 RangeMenuButton(
-                    range: Binding(get: { model.statsRange }, set: { model.statsRange = $0 }),
-                    count: model.summary.validRoundCount
+                    range: Binding(
+                        get: { model.statsRange },
+                        set: { model.setStatsRange($0) }
+                    ),
+                    count: model.rangeRoundCount
                 )
             }
         }

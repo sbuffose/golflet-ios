@@ -118,6 +118,48 @@ final class MetricQueryTests: XCTestCase {
         XCTAssertEqual(snap.tally.first?.course, "Colorada")
     }
 
+    func testMetricsSummaryAndSeriesUseRange() async throws {
+        let api = MockAPIClient(autoSession: true)
+        let month = try await api.metricsSummary(range: "1m")
+        let all = try await api.metricsSummary(range: "all")
+        XCTAssertEqual(month.range, "1m")
+        XCTAssertLessThanOrEqual(month.roundsInRange, all.roundsInRange)
+        XCTAssertGreaterThan(all.validRounds, 0)
+
+        let drill = try await api.metricDrilldown(
+            metric: "gross",
+            scope: "all",
+            year: 2026,
+            course: "all",
+            sort: "date",
+            order: "desc",
+            range: "3m"
+        )
+        XCTAssertFalse(drill?.series.isEmpty == true)
+        XCTAssertFalse(drill?.monthly.isEmpty == true)
+        XCTAssertFalse(drill?.chartPoints(preferMonthly: false).isEmpty == true)
+
+        let parsed = PlayParser.metric([
+            "metric": "birdies",
+            "rounds_in_range": 4,
+            "since": "2026-07-29",
+            "range_label": "3 meses",
+            "series": [
+                ["date": "2026-08-01", "value": 2, "course": "Azul"],
+                ["date": "2026-09-01", "value": 3, "course": "Colorada"]
+            ],
+            "monthly": [
+                ["month": "2026-08", "value": 4, "rounds": 2],
+                ["month": "2026-09", "value": 3, "rounds": 1]
+            ]
+        ])
+        XCTAssertEqual(parsed.roundsInRange, 4)
+        XCTAssertEqual(parsed.series.count, 2)
+        XCTAssertEqual(parsed.monthly.count, 2)
+        XCTAssertEqual(parsed.chartPoints(preferMonthly: true).count, 2)
+        XCTAssertEqual(parsed.chartPoints(preferMonthly: true).first?.value, 2)
+    }
+
     private func sample(
         id: String = "r",
         date iso: String = "2026-01-01",

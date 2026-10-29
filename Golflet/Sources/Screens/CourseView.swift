@@ -38,7 +38,10 @@ struct CourseView: View {
                 }
                 Spacer(minLength: 8)
                 RangeMenuButton(
-                    range: Binding(get: { model.statsRange }, set: { model.statsRange = $0 }),
+                    range: Binding(
+                        get: { model.statsRange },
+                        set: { model.setStatsRange($0) }
+                    ),
                     count: model.courseSnapshot().validCount
                 )
             }
