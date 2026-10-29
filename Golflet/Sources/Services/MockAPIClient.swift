@@ -30,6 +30,7 @@ struct MockAPIClient: GolfletAPI {
             Self.mockPasswordSaved = true
         }
         Self.sessionLock.unlock()
+        Self.resetGroups()
     }
 
     var isAuthenticated: Bool {

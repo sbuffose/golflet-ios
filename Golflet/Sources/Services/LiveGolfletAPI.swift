@@ -229,7 +229,7 @@ struct LiveGolfletAPI: GolfletAPI {
         return set
     }()
 
-    private func request(
+    func request(
         _ method: String,
         _ path: String,
         body: [String: Any]? = nil,

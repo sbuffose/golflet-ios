@@ -23,6 +23,7 @@ struct HomeView: View {
                     lastRound
                     yearRow
                     recurring
+                    groups
                     clubs
                 }
                 .padding(.horizontal, 20)
@@ -299,6 +300,60 @@ struct HomeView: View {
                     .accessibilityIdentifier("home-recurring")
                 }
             }
+        }
+    }
+
+    private var groups: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Grupos")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            if let invite = model.pendingInvites.first {
+                Button {
+                    model.presentedInvite = invite
+                } label: {
+                    GCard(radius: 22, padding: 16) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.2.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(p.accent)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Invitación pendiente")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                Text(invite.name)
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink2)
+                            }
+                            Spacer()
+                            MetricChevron(color: p.ink3)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home-pending-invite")
+            }
+            Button { model.showsGroups = true } label: {
+                GCard(radius: 22, padding: 16) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.3.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(p.primary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(model.groups.isEmpty ? "Crear un grupo" : "\(model.groups.count) \(model.groups.count == 1 ? "grupo" : "grupos")")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text(model.groups.first?.name ?? "Compará tu juego con amigos")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                        Spacer()
+                        MetricChevron(color: p.ink3)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-grupos")
         }
     }
 

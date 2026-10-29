@@ -34,6 +34,25 @@ protocol GolfletAPI: Sendable {
     func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String, range: String) async throws -> MetricDrilldown?
     func metricsSummary(range: String) async throws -> MetricsSummary
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy
+
+    func groups() async throws -> [GolfletGroup]
+    func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup
+    func group(id: String) async throws -> GolfletGroup
+    func updateGroup(id: String, name: String?, photoJPEG: Data?) async throws -> GolfletGroup
+    func leaveGroup(id: String) async throws
+    func removeMember(groupID: String, userID: String) async throws -> GolfletGroup
+    func setMemberRole(groupID: String, userID: String, role: GroupRole) async throws -> GolfletGroup
+    func regenerateInvite(groupID: String) async throws -> GroupInviteLink
+    func disableInvite(groupID: String) async throws -> GroupInviteLink
+    func pendingInvites() async throws -> [GroupInvitePreview]
+    func invitePreview(token: String) async throws -> GroupInvitePreview
+    func acceptInvite(token: String) async throws -> GolfletGroup
+    func declineInvite(token: String) async throws
+    func groupView(groupID: String) async throws -> GroupViewConfig
+    func saveGroupView(groupID: String, config: GroupViewConfig) async throws -> GroupViewConfig
+    func sharePrefs() async throws -> SharePrefs
+    func saveSharePrefs(_ prefs: SharePrefs) async throws -> SharePrefs
+    func groupComparison(groupID: String, config: GroupViewConfig) async throws -> GroupComparison
 }
 
 enum APIFactory {
