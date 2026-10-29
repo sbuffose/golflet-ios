@@ -44,6 +44,10 @@ struct HomeView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
         .metricDestinations()
+        .navigationDestination(for: Profesor.self) { profesor in
+            ProfesorDetailView(profesor: profesor)
+                .golfletChrome()
+        }
         .navigationDestination(item: Binding(
             get: { model.presentedProfesor },
             set: { model.presentedProfesor = $0 }
@@ -239,6 +243,7 @@ struct HomeView: View {
                         .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
                         if place == .beside {
                             homeHcpPeople()
+                                .zIndex(2)
                         }
                     }
                 }
@@ -864,10 +869,7 @@ struct HomeHcpPeople: View {
     private var profesorAvatarButton: some View {
         Group {
             if profesores.count == 1, let first = profesores.first {
-                NavigationLink {
-                    ProfesorDetailView(profesor: first)
-                        .golfletChrome()
-                } label: {
+                NavigationLink(value: first) {
                     profesorAvatarLabel
                 }
             } else {
