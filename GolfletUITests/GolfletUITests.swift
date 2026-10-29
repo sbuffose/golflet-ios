@@ -621,7 +621,6 @@ final class GolfletUITests: XCTestCase {
         saveShot("37_grupo_comparacion")
     }
 
-<<<<<<< HEAD
     func testNotificationsBadgeAndInbox() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
