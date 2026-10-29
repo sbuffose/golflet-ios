@@ -13,10 +13,10 @@ enum GameMetricsParser {
         return GameMetrics(
             range: json["range"] as? String ?? "",
             empty: GameMetricsEmpty(
-                tee: JSONFlex.bool(from: empty["tee"]) ?? (JSONFlex.int(from: tee["drives"]) ?? 0) == 0,
-                approach: JSONFlex.bool(from: empty["approach"]) ?? bands.allSatisfy { $0.shots == 0 },
-                gir: JSONFlex.bool(from: empty["gir"]) ?? (JSONFlex.int(from: gir["holes"]) ?? 0) == 0,
-                putts: JSONFlex.bool(from: empty["putts"]) ?? puttingEmpty(putts)
+                tee: flag(empty["tee"], fallback: (JSONFlex.int(from: tee["drives"]) ?? 0) == 0),
+                approach: flag(empty["approach"], fallback: bands.allSatisfy { $0.shots == 0 }),
+                gir: flag(empty["gir"], fallback: (JSONFlex.int(from: gir["holes"]) ?? 0) == 0),
+                putts: flag(empty["putts"], fallback: puttingEmpty(putts))
             ),
             tee: parseTee(tee),
             approach: bands,
@@ -199,6 +199,10 @@ enum GameMetricsParser {
     private static func live(_ blob: [String: Any]) -> GameMetricsLive? {
         guard let id = blob["id"] as? String ?? blob["live_round_id"] as? String else { return nil }
         return GameMetricsLive(id: id, roundId: blob["round_id"] as? String)
+    }
+
+    private static func flag(_ raw: Any?, fallback: Bool) -> Bool {
+        JSONFlex.bool(from: raw) ?? fallback
     }
 
     private static func puttingEmpty(_ blob: [String: Any]) -> Bool {

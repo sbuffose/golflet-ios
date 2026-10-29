@@ -14,10 +14,10 @@ struct DriveDispersionMap: View {
             let carries = points.compactMap(\.carryYd)
             let lo = carries.min().map { max(0, ($0 - 15) / 25 * 25) } ?? 200
             let hi = carries.max().map { (($0 + 15 + 24) / 25) * 25 } ?? 300
-            let sx = size.width / 96
-            let sy = (size.height - 36) / max(25, Double(hi - lo))
-            func x(_ yd: Double) -> CGFloat { size.width / 2 + CGFloat(max(-48, min(48, yd))) * CGFloat(sx) }
-            func y(_ carry: Int) -> CGFloat { size.height - 20 - CGFloat(Double(carry - lo)) * CGFloat(sy) }
+            let sx = Double(size.width) / 96
+            let sy = (Double(size.height) - 36) / max(25, Double(hi - lo))
+            func x(_ yd: Double) -> CGFloat { CGFloat(Double(size.width) / 2 + max(-48, min(48, yd)) * sx) }
+            func y(_ carry: Int) -> CGFloat { CGFloat(Double(size.height) - 20 - Double(carry - lo) * sy) }
 
             var rough = Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 14)
             context.fill(rough, with: .color(p.surface2))
@@ -70,7 +70,7 @@ struct ApproachMissMap: View {
             let side = min(size.width, size.height)
             let origin = CGPoint(x: (size.width - side) / 2, y: (size.height - side) / 2)
             let c = CGPoint(x: origin.x + side / 2, y: origin.y + side / 2)
-            let scale = (side / 2 - 8) / 34
+            let scale = (side / 2 - 8) / CGFloat(34)
             context.fill(
                 Path(roundedRect: CGRect(x: origin.x, y: origin.y, width: side, height: side), cornerRadius: compact ? 10 : 14),
                 with: .color(p.surface2)
@@ -81,15 +81,16 @@ struct ApproachMissMap: View {
                 circle.addEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
                 context.stroke(circle, with: .color(p.ink3.opacity(0.35)), lineWidth: 1)
             }
+            let flagH: CGFloat = compact ? 4 : 7
+            let tip: CGFloat = compact ? 13 : 20
             var pin = Path()
             pin.move(to: c)
-            pin.addLine(to: CGPoint(x: c.x, y: c.y - (compact ? 13 : 20)))
+            pin.addLine(to: CGPoint(x: c.x, y: c.y - tip))
             context.stroke(pin, with: .color(p.accent), lineWidth: 1.4)
-            let flagH = compact ? 4.0 : 7.0
             var flag = Path()
-            flag.move(to: CGPoint(x: c.x, y: c.y - (compact ? 13 : 20)))
-            flag.addLine(to: CGPoint(x: c.x + (compact ? 7 : 11), y: c.y - (compact ? 13 : 20) + flagH / 2))
-            flag.addLine(to: CGPoint(x: c.x, y: c.y - (compact ? 13 : 20) + flagH))
+            flag.move(to: CGPoint(x: c.x, y: c.y - tip))
+            flag.addLine(to: CGPoint(x: c.x + (compact ? 7 : 11), y: c.y - tip + flagH / 2))
+            flag.addLine(to: CGPoint(x: c.x, y: c.y - tip + flagH))
             context.fill(flag, with: .color(p.accent))
             for shot in points {
                 let x = c.x + CGFloat(max(-33, min(33, shot.lateralYd!))) * scale
@@ -98,7 +99,7 @@ struct ApproachMissMap: View {
                 if shot.onGreen == true { color = p.positive }
                 else if shot.onGreen == false { color = p.negative }
                 else { color = p.ink3 }
-                let r: CGFloat = compact ? 3.2 : 5
+                let r: CGFloat = compact ? 3.2 : 5.0
                 context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(color))
             }
             if !compact {
