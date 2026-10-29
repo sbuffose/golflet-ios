@@ -60,11 +60,28 @@ struct HomeView: View {
                     .accessibilityLabel("Actualizar")
                     .accessibilityIdentifier("home-sync-\(club.accountId)")
                 }
-                Button { model.showsClubs = true } label: {
-                    AvatarCircle(initials: model.profile.initials)
+                ZStack(alignment: .topTrailing) {
+                    Button { model.openAvatar() } label: {
+                        AvatarCircle(initials: model.profile.initials)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("avatar-button")
+                    .accessibilityLabel(model.unreadBadgeText.map { "Notificaciones, \($0) sin leer" } ?? "Tu cuenta")
+                    if let badge = model.unreadBadgeText {
+                        Text(badge)
+                            .font(GFont.ui(10, weight: .semibold))
+                            .foregroundStyle(Color(hex: 0xF7F5F0))
+                            .padding(.horizontal, badge.count > 1 ? 4 : 0)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .background(Color(hex: 0xB4553F))
+                            .clipShape(Capsule())
+                            .offset(x: 6, y: -5)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                        GProbe(id: "avatar-badge", label: "\(badge) sin leer")
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("avatar-button")
+                .padding(.top, 4)
             }
             Text("Hola, \(model.profile.displayName.components(separatedBy: " ").first ?? model.profile.displayName)")
                 .font(GType.largeTitle)
