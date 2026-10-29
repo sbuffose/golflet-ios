@@ -47,6 +47,7 @@ final class GolfletUITests: XCTestCase {
         tapTab(app, "Resumen")
         XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
         XCTAssertTrue(first(app, "range-menu").waitForExistence(timeout: 4), "Falta el selector de período")
+        XCTAssertTrue(first(app, "metric-game").waitForExistence(timeout: 4), "Falta la tarjeta de Métricas")
         saveShot("02_resumen")
 
         tapTab(app, "Rondas")
@@ -571,6 +572,140 @@ final class GolfletUITests: XCTestCase {
         }
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "Aceptar no abrió el grupo")
         saveShot("35_grupo_aceptado")
+    }
+
+    func testMetricasTabsEmptyStateAndGPSHoleTools() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        XCTAssertTrue(first(app, "metric-game").waitForExistence(timeout: 4), "Falta Métricas como primera tarjeta")
+        XCTAssertTrue(first(app, "resumen-gps-count").waitForExistence(timeout: 3))
+        first(app, "metric-game").tap()
+        XCTAssertTrue(waitFor(app, "screen-metricas", timeout: 6), "No se abrió Métricas")
+        XCTAssertTrue(first(app, "met-tabs").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "range-menu").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "met-gps-count").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "met-empty-tee").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "met-empty-how").waitForExistence(timeout: 3), "Falta el empty state sin datos de ejemplo")
+        XCTAssertEqual(first(app, "met-empty-how").label, "Jugá con “Ya pegué” para ver tus datos")
+        saveShot("52_metricas_tee")
+
+        first(app, "met-tab-hierros").tap()
+        XCTAssertTrue(first(app, "met-empty-hierros").waitForExistence(timeout: 3))
+        first(app, "met-tab-gir").tap()
+        XCTAssertTrue(first(app, "met-empty-gir").waitForExistence(timeout: 3))
+        XCTAssertFalse(first(app, "met-gir-par-3").exists, "GIR vacío no tiene datos de ejemplo")
+        first(app, "met-tab-putting").tap()
+        XCTAssertTrue(first(app, "met-empty-putting").waitForExistence(timeout: 3))
+        saveShot("53_metricas_putting")
+
+        let start = app.buttons["met-empty-start"].exists ? app.buttons["met-empty-start"] : first(app, "met-empty-start")
+        if start.isHittable {
+            start.tap()
+        } else {
+            start.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6), "Empezar ronda con GPS no abrió Jugar")
+        startAzulRound(app)
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        XCTAssertTrue(first(app, "play-hit").waitForExistence(timeout: 4))
+        XCTAssertEqual(first(app, "play-hit").label, "Ya pegué")
+        first(app, "play-hit").tap()
+        XCTAssertTrue(first(app, "play-drive-side").waitForExistence(timeout: 4), "Falta Izq./Fairway/Der. después del drive")
+        let fairway = app.buttons["drive-fairway"].exists ? app.buttons["drive-fairway"] : first(app, "drive-fairway")
+        if !fairway.waitForExistence(timeout: 3) {
+            XCTAssertTrue(app.buttons["Fairway"].waitForExistence(timeout: 3), "Falta Fairway")
+            app.buttons["Fairway"].tap()
+        } else if fairway.isHittable {
+            fairway.tap()
+        } else {
+            fairway.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        reveal(app, first(app, "play-putts-plus"))
+        XCTAssertTrue(first(app, "play-putts-plus").waitForExistence(timeout: 3))
+        first(app, "play-putts-plus").tap()
+        first(app, "play-putts-plus").tap()
+        XCTAssertEqual(first(app, "play-putts-value").label, "2")
+        reveal(app, first(app, "play-pin"))
+        first(app, "play-pin").tap()
+        XCTAssertTrue(first(app, "play-pin-zones").waitForExistence(timeout: 4), "Hay que elegir Adelante/Medio/Fondo")
+        XCTAssertTrue(first(app, "play-pin-save").exists)
+        XCTAssertFalse(first(app, "play-pin-save").isEnabled, "Guardar bandera pide zona")
+        first(app, "play-pin-zone-middle").tap()
+        XCTAssertTrue(first(app, "play-pin-save").isEnabled)
+        first(app, "play-pin-save").tap()
+        XCTAssertTrue(first(app, "play-pin-marked").waitForExistence(timeout: 4))
+        XCTAssertTrue(first(app, "play-pin-marked").label.contains("la marcaste vos"))
+        XCTAssertTrue(first(app, "play-pin-remark").waitForExistence(timeout: 3))
+        first(app, "play-hole-next").tap()
+        XCTAssertTrue(first(app, "play-putts-value").waitForExistence(timeout: 3))
+        reveal(app, first(app, "play-pin-report"))
+        XCTAssertTrue(first(app, "play-pin-marked").waitForExistence(timeout: 4))
+        XCTAssertTrue(first(app, "play-pin-marked").label.contains("cargada por un jugador"))
+        XCTAssertFalse(first(app, "play-pin-marked").label.contains("Demo"))
+        XCTAssertTrue(first(app, "distance-pin").waitForExistence(timeout: 3), "Faltan yardas a la bandera de hoy")
+        first(app, "play-pin-report").tap()
+        XCTAssertTrue(first(app, "play-pin-report-confirm").waitForExistence(timeout: 3))
+        first(app, "play-pin-report-confirm").tap()
+        XCTAssertTrue(first(app, "play-pin-reported").waitForExistence(timeout: 4))
+        XCTAssertEqual(first(app, "play-pin-reported").label, "Reportaste esta bandera")
+        first(app, "play-hole-next").tap()
+        XCTAssertTrue(first(app, "play-pin-marked").waitForExistence(timeout: 4))
+        XCTAssertTrue(first(app, "play-pin-marked").label.contains("cargada por el club"))
+        XCTAssertFalse(first(app, "play-pin").exists)
+        XCTAssertFalse(first(app, "play-pin-report").exists)
+        XCTAssertFalse(first(app, "play-pin-remark").exists)
+        saveShot("54_play_putts_pin")
+    }
+
+    func testMetricasAndPlayFitAtLargeText() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-ui-testing",
+            "-UIPreferredContentSizeCategoryName",
+            "UICTContentSizeCategoryAccessibilityXL"
+        ]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        assertFits(app, "metric-game")
+        assertFits(app, "resumen-gps-count")
+        first(app, "metric-game").tap()
+        XCTAssertTrue(waitFor(app, "screen-metricas", timeout: 6))
+        assertFits(app, "met-tabs")
+        assertFits(app, "met-gps-count")
+        assertFits(app, "met-empty-how")
+        assertFits(app, "met-empty-start")
+        XCTAssertGreaterThan(app.frame.width, 300, "El test tiene que correr a ancho iPhone")
+        saveShot("55_metricas_xl")
+
+        dismissIfPresent(app, "metric-back")
+        tapTab(app, "Inicio")
+        XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
+        first(app, "play-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
+        startAzulRound(app)
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        assertFits(app, "play-hit")
+        reveal(app, first(app, "play-putts-plus"))
+        assertFits(app, "play-putts-plus")
+        reveal(app, first(app, "play-pin"))
+        assertFits(app, "play-pin")
+        first(app, "play-pin").tap()
+        XCTAssertTrue(first(app, "play-pin-zones").waitForExistence(timeout: 4))
+        assertFits(app, "play-pin-zone-front")
+        assertFits(app, "play-pin-zone-middle")
+        assertFits(app, "play-pin-zone-back")
+        assertFits(app, "play-pin-save")
+        saveShot("56_play_xl")
     }
 
     func testQueCompartoAndGroupComparison() throws {

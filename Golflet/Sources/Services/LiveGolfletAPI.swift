@@ -211,6 +211,42 @@ struct LiveGolfletAPI: GolfletAPI {
         PlayParser.metricsSummary(try await request("GET", "/api/metrics/summary?range=\(range)"))
     }
 
+    func gameMetrics(range: String) async throws -> GameMetrics {
+        GameMetricsParser.metrics(try await request("GET", "/api/game-metrics?range=\(range)"))
+    }
+
+    func liveRoundHoles(id: String) async throws -> [LiveHoleRecord] {
+        GameMetricsParser.holes(try await request("GET", "/api/live-rounds/\(id)/holes"))
+    }
+
+    func putLiveRoundHole(id: String, hole: Int, putts: Int?) async throws -> LiveHoleRecord {
+        var body: [String: Any] = [:]
+        if let putts { body["putts"] = putts }
+        let json = try await request("PUT", "/api/live-rounds/\(id)/holes/\(hole)", body: body)
+        return try parseHole(json)
+    }
+
+    func postLiveRoundPin(id: String, hole: Int, pin: LivePin, zone: PinZone) async throws -> LiveHoleRecord {
+        var body: [String: Any] = ["lat": pin.lat, "lng": pin.lng, "zone": zone.rawValue]
+        if let accuracy = pin.accuracyM { body["accuracy_m"] = accuracy }
+        let json = try await request("POST", "/api/live-rounds/\(id)/holes/\(hole)/pin", body: body)
+        return try parseHole(json)
+    }
+
+    func postLiveRoundPinReport(id: String, hole: Int, pin: LivePin) async throws -> LiveHoleRecord {
+        var body: [String: Any] = ["lat": pin.lat, "lng": pin.lng]
+        if let accuracy = pin.accuracyM { body["accuracy_m"] = accuracy }
+        let json = try await request("POST", "/api/live-rounds/\(id)/holes/\(hole)/pin-report", body: body)
+        return try parseHole(json)
+    }
+
+    private func parseHole(_ json: [String: Any]) throws -> LiveHoleRecord {
+        guard let record = GameMetricsParser.hole(json["hole"] ?? json) else {
+            throw GolfletError.decoding("hole")
+        }
+        return record
+    }
+
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy {
         var query: [String] = []
         if let courseKey {
@@ -297,7 +333,11 @@ struct LiveGolfletAPI: GolfletAPI {
             throw error
         }
         if status >= 400 {
-            throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo completar."))
+            let message = LivePayloadMapper.authMessage(from: json, fallback: "No se pudo completar.")
+            if status == 409 || status == 429 {
+                throw GolfletError.http(status: status, message: message)
+            }
+            throw GolfletError.server(message)
         }
     }
 

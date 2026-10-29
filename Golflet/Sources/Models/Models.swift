@@ -635,6 +635,7 @@ enum GolfletError: LocalizedError, Equatable {
     case fixtureMissing(String)
     case decoding(String)
     case server(String)
+    case http(status: Int, message: String)
 
     var errorDescription: String? {
         switch self {
@@ -647,11 +648,17 @@ enum GolfletError: LocalizedError, Equatable {
         case .fixtureMissing(let n): return "Falta el fixture \(n)."
         case .decoding(let n): return "No se pudo leer \(n)."
         case .server(let message): return message
+        case .http(_, let message): return message
         }
     }
 
     var authFailure: AuthFailure? {
         if case .auth(let failure) = self { return failure }
+        return nil
+    }
+
+    var httpStatus: Int? {
+        if case .http(let status, _) = self { return status }
         return nil
     }
 }

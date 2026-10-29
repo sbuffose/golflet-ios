@@ -10,6 +10,7 @@ struct SummaryView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     header
                     filters
+                    metricsEntry
                     grid
                     trend
                     hardest
@@ -44,6 +45,34 @@ struct SummaryView: View {
                 )
             }
         }
+    }
+
+    private var metricsEntry: some View {
+        NavigationLink(value: MetricRoute.gameMetrics) {
+            GCard(radius: 22, padding: 16) {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Métricas")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        Text("Tee, hierros, GIR y putting")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(model.gpsCoverageLine)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("resumen-gps-count")
+                    }
+                    Spacer(minLength: 8)
+                    MetricChevron(color: p.ink3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("metric-game")
+        .accessibilityElement(children: .contain)
     }
 
     private var filters: some View {
