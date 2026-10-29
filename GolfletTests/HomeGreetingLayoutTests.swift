@@ -8,13 +8,28 @@ final class HomeGreetingLayoutTests: XCTestCase {
     func testDoesNotShrinkNamesThatAlreadyFit() {
         let tab = HomeGreetingLayout.tabWidth(chipWhen: chip)
         let phone = HomeGreetingLayout.availableWidth(screenWidth: HomeGreetingLayout.standardWidth, hasTab: true)
+        for name in ["Ana", "Luis", "Juan"] {
+            let greeting = HomeGreetingLayout.greetingWidth(HomeGreetingLayout.text(name))
+            XCTAssertEqual(
+                HomeGreetingLayout.place(availableWidth: phone, greetingIdealWidth: greeting, tabWidth: tab),
+                .sideBySide,
+                "\(name) entra a tamaño completo; no achicar"
+            )
+            XCTAssertLessThanOrEqual(greeting + HomeGreetingLayout.spacing + tab, phone)
+        }
+    }
+
+    func testAgustinShrinksBesideTeeTabOnStandardPhone() {
+        let tab = HomeGreetingLayout.tabWidth(chipWhen: chip)
+        let phone = HomeGreetingLayout.availableWidth(screenWidth: HomeGreetingLayout.standardWidth, hasTab: true)
         let agustin = HomeGreetingLayout.greetingWidth(HomeGreetingLayout.text("Agustin"))
         XCTAssertEqual(
             HomeGreetingLayout.place(availableWidth: phone, greetingIdealWidth: agustin, tabWidth: tab),
-            .sideBySide,
-            "Agustin entra a tamaño completo; no achicar"
+            .sideBySideShrunk,
+            "Hola, Agustin a 42 pt no entra al lado del tab; se achica, no baja"
         )
-        XCTAssertLessThanOrEqual(agustin + HomeGreetingLayout.spacing + tab, phone)
+        XCTAssertGreaterThan(agustin + HomeGreetingLayout.spacing + tab, phone)
+        XCTAssertLessThanOrEqual(agustin * HomeGreetingLayout.compactScale + HomeGreetingLayout.spacing + tab, phone)
     }
 
     func testLongNamesShrinkOrStack() {

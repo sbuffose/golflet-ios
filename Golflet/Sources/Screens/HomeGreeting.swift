@@ -59,7 +59,7 @@ enum HomeGreetingLayout {
             .kern: 1.4
         ]).width
         let chipW = (chipWhen as NSString).size(withAttributes: [.font: chipFont]).width
-        return ceil(max(titleW, chipW) + 14 + 18 + 8)
+        return ceil(max(titleW, chipW) + 14 + 18)
     }
 
     static func availableWidth(screenWidth: CGFloat, hasTab: Bool) -> CGFloat {

@@ -819,6 +819,7 @@ struct HomeHcpPeople: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-profesor")
         .accessibilityLabel(profesorLabel)
+        .overlay { GProbe(id: "home-hcp-profesor", label: profesorLabel) }
     }
 
     private var groupsColumn: some View {
@@ -833,6 +834,7 @@ struct HomeHcpPeople: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-groups")
         .accessibilityLabel(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
+        .overlay { GProbe(id: "home-hcp-groups", label: groups.count == 1 ? "1 grupo" : "\(groups.count) grupos") }
     }
 
     private var createGroup: some View {
@@ -853,6 +855,7 @@ struct HomeHcpPeople: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-crear-grupo")
         .accessibilityLabel("Crear grupo")
+        .overlay { GProbe(id: "home-hcp-crear-grupo", label: "Crear grupo") }
     }
 
     /// Web HI-card avatar: 28pt, gold ring, dark fill, blue verified, max 3 + N.
