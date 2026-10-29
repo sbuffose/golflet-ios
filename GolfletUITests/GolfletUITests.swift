@@ -1067,18 +1067,6 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
-    private func assertFits(_ app: XCUIApplication, _ id: String) {
-        let element = first(app, id)
-        XCTAssertTrue(element.waitForExistence(timeout: 4), "Falta \(id)")
-        reveal(app, element)
-        let frame = element.frame
-        let screen = app.frame
-        XCTAssertGreaterThan(frame.width, 4, "\(id) no tiene ancho")
-        XCTAssertGreaterThan(frame.height, 4, "\(id) no tiene alto")
-        XCTAssertLessThan(frame.maxX, screen.maxX + 12, "\(id) se sale a la derecha: \(frame) vs \(screen)")
-        XCTAssertGreaterThan(frame.minX, screen.minX - 12, "\(id) se sale a la izquierda: \(frame)")
-    }
-
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
         var attempts = 0
         while !element.isHittable && attempts < 6 {
