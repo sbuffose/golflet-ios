@@ -700,8 +700,8 @@ final class GolfletUITests: XCTestCase {
     }
 
     private func assertFits(_ app: XCUIApplication, _ id: String) {
-        let element = first(app, id)
-        XCTAssertTrue(element.waitForExistence(timeout: 5), "Falta \(id)")
+        XCTAssertTrue(first(app, id).waitForExistence(timeout: 5), "Falta \(id)")
+        let element = largest(app, id)
         reveal(app, element)
         let screen = app.frame
         XCTAssertGreaterThan(element.frame.width, 8, "\(id) no tiene ancho")
