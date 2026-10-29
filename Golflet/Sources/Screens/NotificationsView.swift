@@ -78,6 +78,7 @@ struct NotificationsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("notifications-cuenta")
+        .overlay { GProbe(id: "notifications-cuenta", label: "Tu cuenta") }
     }
 
     @ViewBuilder

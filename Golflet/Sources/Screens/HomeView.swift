@@ -11,7 +11,6 @@ struct HomeView: View {
     @State private var showsHomeGroups = false
     @State private var showsHomeProfesores = false
     @State private var showsAgregarProfesor = false
-    @State private var presentedProfesor: Profesor?
     @State private var highlightPartners = false
     @State private var hcpCardWidth = HomeHcpPeopleLayout.cardInnerWidth(screenWidth: HomeHcpPeopleLayout.currentScreenWidth)
 
@@ -78,12 +77,6 @@ struct HomeView: View {
             .golfletChrome()
             .environment(model)
         }
-        .fullScreenCover(item: $presentedProfesor) { profesor in
-            NavigationStack {
-                ProfesorDetailView(profesor: profesor)
-            }
-            .golfletChrome()
-        }
         .onChange(of: model.celebrateCards) { _, value in
             guard let value else { return }
             Task { await countUpCards(to: value) }
@@ -98,7 +91,7 @@ struct HomeView: View {
             if dismissing {
                 try? await Task.sleep(for: .milliseconds(350))
             }
-            presentedProfesor = profesor
+            model.presentProfesor(profesor)
         }
     }
 

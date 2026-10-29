@@ -27,12 +27,14 @@ final class GolfletUITests: XCTestCase {
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
 
-        if openClubsSheet(app, timeout: 3) {
-            XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
-            saveShot("09_clubes")
-            dismissIfPresent(app, "close-clubes")
-            XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+        XCTAssertTrue(openClubsSheet(app, timeout: 3), "No abrió el perfil")
+        XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
+        saveShot("09_clubes")
+        dismissIfPresent(app, "close-clubes")
+        if first(app, "screen-notificaciones").exists {
+            dismissIfPresent(app, "close-notificaciones")
         }
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
 
         if first(app, "metric-tarjetas").waitForExistence(timeout: 3) {
             first(app, "metric-tarjetas").tap()
@@ -808,10 +810,17 @@ final class GolfletUITests: XCTestCase {
             } else {
                 avatar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             }
-            if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
-                first(app, "notifications-cuenta").tap()
+            if waitFor(app, "screen-notificaciones", timeout: 3) {
+                let cuenta = first(app, "notifications-cuenta")
+                if cuenta.waitForExistence(timeout: 4) {
+                    if cuenta.isHittable {
+                        cuenta.tap()
+                    } else {
+                        cuenta.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                    }
+                }
             }
-            return true
+            return waitFor(app, "screen-clubes", timeout: 6)
         }
         let addClub = app.buttons["add-club-home"]
         guard addClub.waitForExistence(timeout: 2), addClub.isHittable else { return false }
