@@ -437,6 +437,25 @@ jobs:
           test -f "$APP_PATH/Geist-Regular.otf"
           test -d "$APP_PATH/PlugIns/GolfletWidgets.appex"
           echo "Assets.car, Geist-Regular.otf and GolfletWidgets.appex are in the archive."
+          WIDGET_PLIST="$APP_PATH/PlugIns/GolfletWidgets.appex/Info.plist"
+          echo "Widget NSExtension: $(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$WIDGET_PLIST")"
+          echo "Widget bundle: $(plutil -extract CFBundleIdentifier raw "$WIDGET_PLIST")"
+          echo "=== App entitlements ==="
+          codesign -d --entitlements :- "$APP_PATH"
+          echo "=== Widget entitlements ==="
+          codesign -d --entitlements :- "$APP_PATH/PlugIns/GolfletWidgets.appex"
+          for target in "$APP_PATH" "$APP_PATH/PlugIns/GolfletWidgets.appex"; do
+            ENT=$(codesign -d --entitlements :- "$target" 2>/dev/null || true)
+            if ! printf '%s' "$ENT" | grep -q 'com.apple.security.application-groups'; then
+              echo "Signed entitlements for $target are missing application-groups."
+              echo "Golflet AppStore GHA v2 includes that key (empty until group.com.sbuffose.golflet exists)."
+              exit 1
+            fi
+            if printf '%s' "$ENT" | grep -q 'group.com.sbuffose.golflet'; then
+              echo "Do not claim group.com.sbuffose.golflet until it exists on the portal."
+              exit 1
+            fi
+          done
 
       - name: Create ExportOptions.plist
         run: |
@@ -475,6 +494,23 @@ jobs:
             -archivePath "$RUNNER_TEMP/Golflet.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Validate IPA with App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcrun altool --validate-app \
+            --type ios \
+            --file "$RUNNER_TEMP/export/Golflet.ipa" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/altool-validate.log"
+          if grep -qiE 'UPLOAD FAILED|Validation failed|Failed to upload package|ERRORITMS|ITMS-' "$RUNNER_TEMP/altool-validate.log"; then
+            echo "App Store Connect rejected the IPA during validate-app."
+            exit 1
+          fi
 
       - name: Upload to TestFlight
         env:
