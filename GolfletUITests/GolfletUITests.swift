@@ -291,6 +291,47 @@ final class GolfletUITests: XCTestCase {
         saveShot("25_login_first_sync")
     }
 
+    func testResumenTrendCardFillsPhoneWidth() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+
+        let card = first(app, "metric-summary-trend")
+        XCTAssertTrue(card.waitForExistence(timeout: 6), "Falta la card de Tendencia")
+        reveal(app, card)
+
+        let width = app.frame.width
+        XCTAssertGreaterThan(width, 300, "El test tiene que correr a ancho iPhone")
+        XCTAssertGreaterThan(card.frame.width, width - 56, "Tendencia no es full-width: \(card.frame)")
+
+        let chart = first(app, "trend-chart")
+        XCTAssertTrue(chart.waitForExistence(timeout: 3), "Falta el gráfico de tendencia")
+        XCTAssertGreaterThan(chart.frame.width, width * 0.62, "El gráfico quedó estrecho: \(chart.frame)")
+        XCTAssertGreaterThan(chart.frame.height, 169, "El gráfico no mide ~180pt: \(chart.frame)")
+
+        let legend = first(app, "trend-legend")
+        XCTAssertTrue(legend.waitForExistence(timeout: 2), "Falta la leyenda de tees")
+        XCTAssertGreaterThan(legend.frame.width, 160, "La leyenda no es una fila: \(legend.frame)")
+        XCTAssertLessThan(legend.frame.height, 40, "La leyenda se apiló en columnas: \(legend.frame)")
+
+        let footnote = first(app, "trend-footnote")
+        XCTAssertTrue(footnote.waitForExistence(timeout: 2), "Falta la nota de Tendencia")
+        XCTAssertGreaterThan(footnote.frame.width, width * 0.55, "La nota se partió en columnas: \(footnote.frame)")
+        XCTAssertLessThan(footnote.frame.height, 56, "La nota envuelve letra por letra: \(footnote.frame)")
+        XCTAssertGreaterThan(footnote.frame.minY, chart.frame.maxY - 4, "Gráfico y nota quedaron lado a lado")
+
+        saveShot("29_resumen_tendencia")
+
+        card.tap()
+        XCTAssertTrue(waitFor(app, "screen-metric-handicap", timeout: 6), "La card no abre el detalle de tendencia")
+        dismissIfPresent(app, "metric-back")
+    }
+
     private func submitLogin(_ app: XCUIApplication) {
         if app.keyboards.element.exists {
             app.swipeDown()
@@ -372,6 +413,14 @@ final class GolfletUITests: XCTestCase {
             } else {
                 app.swipeUp()
             }
+        }
+    }
+
+    private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
+        var attempts = 0
+        while !element.isHittable && attempts < 6 {
+            app.swipeUp()
+            attempts += 1
         }
     }
 

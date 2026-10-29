@@ -43,13 +43,15 @@ struct GCard<Content: View>: View {
     }
 
     var body: some View {
-        content
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(fill ?? p.surface)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
-            .shadow(color: Color.black.opacity(0.06), radius: 12, y: 8)
+        VStack(alignment: .leading, spacing: 0) {
+            content
+        }
+        .padding(padding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(fill ?? p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
+        .shadow(color: Color.black.opacity(0.06), radius: 12, y: 8)
     }
 }
 
