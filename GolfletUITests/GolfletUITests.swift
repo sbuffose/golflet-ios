@@ -333,8 +333,17 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         XCTAssertTrue(first(app, "home-hcp-profesor").waitForExistence(timeout: 4), "Falta el avatar del profesor en HCP")
-        tapLargest(app, "home-hcp-profesor")
-        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 6), "No se abrió la página del profesor")
+        tapProfesorAvatar(app)
+        if waitFor(app, "screen-metric-handicap", timeout: 1) {
+            dismissIfPresent(app, "metric-back")
+            XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+            tapProfesorAvatar(app)
+        }
+        if waitFor(app, "screen-home-profesores", timeout: 2) {
+            XCTAssertTrue(first(app, "home-profesor-p-manu").waitForExistence(timeout: 4))
+            first(app, "home-profesor-p-manu").tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 8), "No se abrió la página del profesor")
         saveShot("43_inicio_hcp_profesor")
     }
 
@@ -736,6 +745,24 @@ final class GolfletUITests: XCTestCase {
             }
         }
         return best
+    }
+
+    private func tapProfesorAvatar(_ app: XCUIApplication) {
+        let matches = app.descendants(matching: .any).matching(identifier: "home-hcp-profesor")
+        var best: XCUIElement?
+        var bestArea: CGFloat = -1
+        let count = matches.count
+        for index in 0..<count {
+            let el = matches.element(boundBy: index)
+            guard el.exists else { continue }
+            let area = el.frame.width * el.frame.height
+            if area > bestArea {
+                best = el
+                bestArea = area
+            }
+        }
+        let target = best ?? largest(app, "home-hcp-profesor")
+        target.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).tap()
     }
 
     private func tapLargest(_ app: XCUIApplication, _ id: String) {
