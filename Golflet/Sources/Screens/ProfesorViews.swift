@@ -57,6 +57,101 @@ struct HomeProfesoresSheet: View {
     }
 }
 
+struct AddProfesorSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.palette) private var p
+    @Environment(\.dismiss) private var dismiss
+    var onSelect: (Profesor) -> Void
+    @State private var query = ""
+
+    var body: some View {
+        GScreen(id: "screen-agregar-profesor") {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        GOverline(text: "Profesores")
+                        GTitle(text: "Agregar profesor", size: 34)
+                    }
+                    Text("Buscá a tu profesor por nombre. El listado se está armando; cuando esté, lo vas a poder agregar desde acá.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+
+                    GField(label: "Buscar") {
+                        TextField("Nombre del profesor", text: $query)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                            .accessibilityIdentifier("profesor-search")
+                    }
+
+                    if matches.isEmpty {
+                        Text(emptyCopy)
+                            .font(GType.body)
+                            .foregroundStyle(p.ink3)
+                            .accessibilityIdentifier("profesor-search-empty")
+                    } else {
+                        ForEach(matches) { profesor in
+                            Button {
+                                dismiss()
+                                onSelect(profesor)
+                            } label: {
+                                GCard(radius: 18, padding: 14) {
+                                    HStack(spacing: 12) {
+                                        HomeHcpAvatar(
+                                            url: profesor.photoURL,
+                                            initials: profesor.initials,
+                                            size: 44,
+                                            fill: p.primary,
+                                            ink: p.onPrimary,
+                                            ring: p.accent,
+                                            verified: profesor.verified
+                                        )
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(profesor.name)
+                                                .font(GType.headline)
+                                                .foregroundStyle(p.ink)
+                                            Text(profesor.locationsLine ?? "Profesor")
+                                                .font(GType.label)
+                                                .foregroundStyle(p.ink2)
+                                        }
+                                        Spacer()
+                                        MetricChevron(color: p.ink3)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("add-profesor-\(profesor.id)")
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
+            }
+        }
+        .accessibilityIdentifier("screen-agregar-profesor")
+        .safeAreaInset(edge: .top) { closeBar(dismiss: dismiss, id: "close-agregar-profesor") }
+    }
+
+    private var catalog: [Profesor] {
+        model.api.persistsLocally ? MockAPIClient.profesorDirectory : []
+    }
+
+    private var matches: [Profesor] {
+        ProfesorSearch.matches(query, in: catalog)
+    }
+
+    private var emptyCopy: String {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if needle.count < 2 {
+            return "Escribí al menos dos letras para buscar."
+        }
+        if catalog.isEmpty {
+            return "Todavía no hay un listado para buscar. Te avisamos cuando esté."
+        }
+        return "No encontramos a ese profesor todavía."
+    }
+}
+
 struct ProfesorDetailView: View {
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
