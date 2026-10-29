@@ -120,8 +120,11 @@ struct LiveGolfletAPI: GolfletAPI {
         return detail
     }
 
-    func createLiveRound(courseId: String?, tee: String?) async throws -> LiveRound {
-        var body: [String: Any] = [:]
+    func createLiveRound(courseId: String?, tee: String?, players: Int, modality: String) async throws -> LiveRound {
+        var body: [String: Any] = [
+            "players": PaceDefaults.clampPlayers(players),
+            "modality": PaceDefaults.normalizeModality(modality)
+        ]
         if let courseId { body["course_id"] = courseId }
         if let tee { body["tee"] = tee }
         let json = try await request("POST", "/api/live-rounds", body: body)

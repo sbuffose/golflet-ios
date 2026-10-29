@@ -769,7 +769,12 @@ final class AppModel {
             if OfflinePlay.isLocal(liveId) {
                 guard let local = OfflinePlay.lookup(liveId) else { continue }
                 do {
-                    let created = try await api.createLiveRound(courseId: local.courseId, tee: local.tee)
+                    let created = try await api.createLiveRound(
+                        courseId: local.courseId,
+                        tee: local.tee,
+                        players: local.players ?? PaceDefaults.players,
+                        modality: local.modality ?? PaceDefaults.modality
+                    )
                     target = created.id
                     OfflinePlay.remove(liveId)
                     if activeLiveRound?.id == liveId {

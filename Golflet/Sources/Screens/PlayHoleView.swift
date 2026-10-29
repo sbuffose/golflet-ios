@@ -71,7 +71,8 @@ struct PlayHoleView: View {
             }
             RoundLiveActivity.start(course: course, liveRound: liveRound, here: location.coordinate, shots: shots)
             beginPace()
-            await loadPace()
+            await loadPaceEstimate()
+            await refreshLivePace()
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
@@ -534,10 +535,7 @@ struct PlayHoleView: View {
         OfflinePlay.saveActive(roundId: liveRound.id, courseId: course.courseId, hole: clamped, courseName: course.course)
         refreshLiveActivity()
         updatePace { $0.enter(hole: clamped) }
-        evaluatePace()
-        Task {
-            _ = try? await model.api.patchLiveRound(id: liveRound.id, body: ["current_hole": clamped])
-        }
+        Task { await syncHoleAndPace(clamped) }
     }
 
     private func maybeAdvance() {
@@ -664,20 +662,48 @@ struct PlayHoleView: View {
             updatePace { $0.startedAt = Date().addingTimeInterval(-3 * 3600) }
         }
         if let minutes = course.minutesPerHole {
-            pace = PaceConfig(minutesPerHole: minutes, players: pace.players, modality: pace.modality, source: "course")
+            pace = PaceConfig(
+                minutesPerHole: minutes,
+                players: liveRound.players,
+                modality: liveRound.modality,
+                source: "course"
+            )
         }
     }
 
-    private func loadPace() async {
+    private func loadPaceEstimate() async {
         if let remote = try? await model.api.paceConfig(
             courseId: course.courseId,
             clubCode: course.clubCode,
-            players: nil,
-            modality: nil
-        ), remote.source == "api" {
+            players: liveRound.players,
+            modality: liveRound.modality
+        ), remote.source != "fallback" {
             pace = remote
         }
-        evaluatePace()
+    }
+
+    private func syncHoleAndPace(_ hole: Int) async {
+        _ = try? await model.api.patchLiveRound(id: liveRound.id, body: [
+            "current_hole": hole,
+            "players": liveRound.players,
+            "modality": liveRound.modality
+        ])
+        await refreshLivePace()
+    }
+
+    private func refreshLivePace() async {
+        do {
+            let remote = try await model.api.liveRoundPace(id: liveRound.id)
+            guard remote.alertDue else { return }
+            let text = PaceParser.optionalString(remote.alertText)
+                ?? PaceEngine.fallbackAlertText(elapsed: remote.elapsedMin, expected: remote.expectedMin)
+            paceAlertText = text
+            showsPaceAlert = true
+            updatePace { $0.alertedHole10 = true }
+            _ = try? await model.api.markPaceAlerted(id: liveRound.id)
+        } catch {
+            evaluatePaceFallback()
+        }
     }
 
     private func updatePace(_ edit: (inout PaceSession) -> Void) {
@@ -687,7 +713,7 @@ struct PlayHoleView: View {
         PaceSessionStore.save(session)
     }
 
-    private func evaluatePace() {
+    private func evaluatePaceFallback() {
         guard let session = paceSession else { return }
         guard PaceEngine.shouldAlert(
             hole: hole,
@@ -698,7 +724,7 @@ struct PlayHoleView: View {
         ) else { return }
         let elapsed = PaceEngine.elapsedMinutes(from: session.startedAt, now: Date())
         let expected = PaceEngine.expectedMinutes(holesReached: hole, minutesPerHole: pace.minutesPerHole)
-        paceAlertText = "Vas más de 10 minutos atrasado del ritmo de la cancha. Llevás \(PaceEngine.durationLabel(elapsed)). El ritmo esperado era \(PaceEngine.durationLabel(expected))."
+        paceAlertText = PaceEngine.fallbackAlertText(elapsed: elapsed, expected: expected)
         updatePace { $0.alertedHole10 = true }
         showsPaceAlert = true
     }

@@ -1,13 +1,87 @@
 import Foundation
 
+enum PaceDefaults {
+    static let players = 4
+    static let modality = "medal"
+    static let minutesPerHole = 12.0
+    static let alertHole = 10
+    static let thresholdMin = 10.0
+
+    static func clampPlayers(_ value: Int?) -> Int {
+        min(max(value ?? players, 1), 4)
+    }
+
+    static func normalizeModality(_ value: String?) -> String {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty { return modality }
+        if let known = PaceModality(rawValue: trimmed.lowercased()) {
+            return known.rawValue
+        }
+        return trimmed
+    }
+}
+
+enum PaceModality: String, CaseIterable, Hashable, Sendable {
+    case medal
+    case stableford
+    case match
+    case fourball
+
+    var label: String {
+        switch self {
+        case .medal: return "Medal"
+        case .stableford: return "Stableford"
+        case .match: return "Match"
+        case .fourball: return "Fourball"
+        }
+    }
+
+    static func parse(_ raw: String?) -> PaceModality {
+        PaceModality(rawValue: (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) ?? .medal
+    }
+}
+
+struct PaceTimelineHole: Hashable, Sendable {
+    var hole: Int
+    var par: Int?
+    var minutes: Double
+    var expectedEndMin: Double
+}
+
 struct PaceConfig: Hashable, Sendable {
     var minutesPerHole: Double
     var players: Int?
     var modality: String?
     var source: String
+    var estimate: Double? = nil
+    var scope: String? = nil
+    var totalMin: Double? = nil
+    var parWeighted: Bool = false
+    var timeline: [PaceTimelineHole] = []
 
-    static let fallbackMinutes = 12.0
-    static let fallback = PaceConfig(minutesPerHole: fallbackMinutes, players: nil, modality: nil, source: "fallback")
+    static let fallbackMinutes = PaceDefaults.minutesPerHole
+    static let fallback = PaceConfig(
+        minutesPerHole: fallbackMinutes,
+        players: nil,
+        modality: nil,
+        source: "fallback",
+        estimate: nil,
+        scope: nil,
+        totalMin: nil,
+        parWeighted: false,
+        timeline: []
+    )
+}
+
+struct LiveRoundPace: Hashable, Sendable {
+    var expectedMin: Double
+    var elapsedMin: Double
+    var behindMin: Double
+    var alertDue: Bool
+    var alertText: String?
+    var alertHole: Int
+    var thresholdMin: Double
+    var enabled: Bool
 }
 
 struct PlaySettings: Hashable, Codable, Sendable {
@@ -17,8 +91,8 @@ struct PlaySettings: Hashable, Codable, Sendable {
 }
 
 enum PaceEngine {
-    static let alertHole = 10
-    static let behindThresholdMinutes = 10.0
+    static let alertHole = PaceDefaults.alertHole
+    static let behindThresholdMinutes = PaceDefaults.thresholdMin
 
     static func expectedMinutes(holesReached: Int, minutesPerHole: Double) -> Double {
         Double(max(holesReached - 1, 0)) * minutesPerHole
@@ -55,6 +129,10 @@ enum PaceEngine {
         let mins = total % 60
         if mins == 0 { return "\(hours) h" }
         return "\(hours) h \(mins) min"
+    }
+
+    static func fallbackAlertText(elapsed: Double, expected: Double) -> String {
+        "Vas más de 10 minutos atrasado del ritmo de la cancha. Llevás \(durationLabel(elapsed)). El ritmo esperado era \(durationLabel(expected))."
     }
 }
 
