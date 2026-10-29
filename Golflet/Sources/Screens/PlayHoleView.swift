@@ -26,6 +26,13 @@ struct PlayHoleView: View {
     @State private var paceAlertText = ""
     @State private var holeRecords: [Int: LiveHoleRecord] = [:]
     @State private var draftPutts: [Int: Int] = [:]
+    @State private var pinStep: PinStep = .idle
+
+    private enum PinStep: Equatable {
+        case idle
+        case zone(LivePin, PinZone?)
+        case report
+    }
 
     enum Phase { case ready, pickClub, pickResult }
 
@@ -214,9 +221,21 @@ struct PlayHoleView: View {
                 .padding(.vertical, 12)
                 .accessibilityIdentifier("distance-far")
         } else {
+            if let day = holeRecord?.dayPin {
+                Text(day.headline)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("play-day-pin-dist")
+            }
             HStack(alignment: .bottom, spacing: 8) {
-                yardCell("Frente", front, id: "distance-front")
-                yardCell("Centro", center, id: "distance-center", hero: true)
+                yardCell("Adelante", front, id: "distance-front")
+                if let day = holeRecord?.dayPin {
+                    yardCell("A la bandera", yards(from: here, to: day.coord), id: "distance-pin", hero: true)
+                } else {
+                    yardCell("Al centro", center, id: "distance-center", hero: true)
+                }
                 yardCell("Fondo", back, id: "distance-back")
             }
         }
@@ -544,6 +563,197 @@ struct PlayHoleView: View {
         draftPutts[hole] ?? holeRecords[hole]?.putts
     }
 
+    private var holeRecord: LiveHoleRecord? {
+        holeRecords[hole]
+    }
+
+    private var pinAction: PinAction {
+        if liveRound.endedAt != nil { return .none }
+        return holeRecord?.pinAction ?? (holeRecord?.dayPin == nil ? .mark : .none)
+    }
+
+    @ViewBuilder
+    private var pinCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let day = holeRecord?.dayPin {
+                Text(day.headline)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("play-pin-marked")
+                    .accessibilityLabel(day.headline)
+                Text(day.byMe ? "La marcaste vos: la ven todos los que juegan hoy" : PinCopy.usesThis)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("play-day-pin")
+            }
+
+            switch pinStep {
+            case .zone(let fix, let zone):
+                Text(PinCopy.whereOnGreen)
+                    .font(GType.body)
+                    .foregroundStyle(p.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                zoneChips(current: zone) { picked in
+                    pinStep = .zone(fix, picked)
+                }
+                Text(PinCopy.gpsNote(fix.accuracyM))
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { await savePin(fix: fix, zone: zone) }
+                } label: {
+                    pinButtonLabel(PinCopy.save, primary: true)
+                }
+                .buttonStyle(.plain)
+                .disabled(zone == nil)
+                .accessibilityIdentifier("play-pin-save")
+                Button {
+                    pinStep = .idle
+                } label: {
+                    pinButtonLabel(PinCopy.cancel, primary: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-pin-cancel")
+
+            case .report:
+                Text(PinCopy.reportAsk)
+                    .font(GType.body)
+                    .foregroundStyle(p.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(PinCopy.reportFoot)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { await confirmPinReport() }
+                } label: {
+                    pinButtonLabel(PinCopy.confirm, primary: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-pin-report-confirm")
+                Button {
+                    pinStep = .idle
+                } label: {
+                    pinButtonLabel(PinCopy.cancel, primary: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-pin-cancel")
+
+            case .idle:
+                idlePinActions
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var idlePinActions: some View {
+        switch pinAction {
+        case .mark:
+            Text(PinCopy.askMark)
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task { await beginMarkPin() }
+            } label: {
+                pinButtonLabel(PinCopy.mark, primary: true)
+            }
+            .buttonStyle(.plain)
+            .disabled(location.coordinate == nil)
+            .accessibilityIdentifier("play-pin")
+            .accessibilityLabel(PinCopy.mark)
+            Text(PinCopy.firstToday)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        case .remark:
+            Button {
+                Task { await beginMarkPin() }
+            } label: {
+                pinButtonLabel(PinCopy.remark, primary: false)
+            }
+            .buttonStyle(.plain)
+            .disabled(location.coordinate == nil)
+            .accessibilityIdentifier("play-pin-remark")
+        case .report:
+            Button {
+                pinStep = .report
+            } label: {
+                pinButtonLabel(PinCopy.report, primary: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-pin-report")
+            Text(PinCopy.usesThis)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        case .reported:
+            Text(PinCopy.reportedFoot)
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("play-pin-reported")
+                .accessibilityLabel(PinCopy.reported)
+        case .none:
+            if holeRecord?.dayPin == nil {
+                Text(PinCopy.noPin)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func zoneChips(current: PinZone?, pick: @escaping (PinZone) -> Void) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                ForEach(PinZone.allCases, id: \.self) { zone in
+                    zoneChip(zone, zone.label, current: current, pick: pick)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(PinZone.allCases, id: \.self) { zone in
+                    zoneChip(zone, zone.label, current: current, pick: pick)
+                }
+            }
+        }
+        .accessibilityIdentifier("play-pin-zones")
+    }
+
+    private func zoneChip(_ zone: PinZone, _ label: String, current: PinZone?, pick: @escaping (PinZone) -> Void) -> some View {
+        Button { pick(zone) } label: {
+            Text(label)
+                .font(GType.headline)
+                .foregroundStyle(current == zone ? p.onPrimary : p.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(current == zone ? p.primary : p.surface2)
+                .clipShape(Capsule())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("play-pin-zone-\(zone.rawValue)")
+        .accessibilityAddTraits(current == zone ? .isSelected : [])
+    }
+
+    private func pinButtonLabel(_ title: String, primary: Bool) -> some View {
+        Text(title)
+            .font(GType.headline)
+            .foregroundStyle(primary ? p.onPrimary : p.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(primary ? p.primary : p.surface2)
+            .clipShape(Capsule())
+            .minimumScaleFactor(0.7)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+    }
+
     @ViewBuilder
     private var driveSide: some View {
         let par = current?.par ?? 4
@@ -634,40 +844,7 @@ struct PlayHoleView: View {
                 }
             }
             GCard(radius: 18, padding: 16) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if let pin = holeRecords[hole]?.pin {
-                        Text("Bandera marcada\(pin.accuracyM.map { " · GPS ±\(Int($0.rounded())) m" } ?? "")")
-                            .font(GType.headline)
-                            .foregroundStyle(p.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("play-pin-marked")
-                    } else {
-                        Text("¿Embocaste? Parate al lado del hoyo y tocá:")
-                            .font(GType.body)
-                            .foregroundStyle(p.ink2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Button {
-                        Task { await markPin() }
-                    } label: {
-                        Text(holeRecords[hole]?.pin == nil ? "Estoy en la bandera" : "Volver a marcar la bandera")
-                            .font(GType.headline)
-                            .foregroundStyle(holeRecords[hole]?.pin == nil ? p.onPrimary : p.ink)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(holeRecords[hole]?.pin == nil ? p.primary : p.surface2)
-                            .clipShape(Capsule())
-                            .minimumScaleFactor(0.7)
-                            .lineLimit(1)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("play-pin")
-                    .disabled(location.coordinate == nil)
-                    Text("Con la bandera marcada medimos a cuántas yardas de la bandera quedan tus approaches. Si no la marcás, medimos al centro del green.")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                pinCard
             }
         }
     }
@@ -689,25 +866,58 @@ struct PlayHoleView: View {
         await patch(body)
     }
 
-    private func markPin() async {
+    private func beginMarkPin() async {
+        guard let here = location.coordinate else { return }
+        pinStep = .zone(LivePin(lat: here.lat, lng: here.lng, accuracyM: location.accuracyM), nil)
+    }
+
+    private func savePin(fix: LivePin, zone: PinZone?) async {
+        guard let zone else { return }
+        do {
+            let record = try await model.api.postLiveRoundPin(id: liveRound.id, hole: hole, pin: fix, zone: zone)
+            holeRecords[record.number] = record
+            pinStep = .idle
+            message = "Bandera de hoy guardada: ya la ven todos los que juegan este hoyo."
+        } catch {
+            await handlePinError(error)
+        }
+    }
+
+    private func confirmPinReport() async {
         guard let here = location.coordinate else { return }
         do {
-            let record = try await model.api.putLiveRoundHole(
+            let record = try await model.api.postLiveRoundPinReport(
                 id: liveRound.id,
                 hole: hole,
-                putts: nil,
                 pin: LivePin(lat: here.lat, lng: here.lng, accuracyM: location.accuracyM)
             )
-            holeRecords[hole] = record
+            holeRecords[record.number] = record
+            pinStep = .idle
+            message = "Reporte enviado. Gracias."
         } catch {
-            message = error.localizedDescription
+            await handlePinError(error)
+        }
+    }
+
+    private func handlePinError(_ error: Error) async {
+        let status = (error as? GolfletError)?.httpStatus
+        if status == 409 || status == 429 {
+            await reloadHoles()
+            pinStep = .idle
+        }
+        message = error.localizedDescription
+    }
+
+    private func reloadHoles() async {
+        if let holes = try? await model.api.liveRoundHoles(id: liveRound.id) {
+            holeRecords = Dictionary(uniqueKeysWithValues: holes.map { ($0.number, $0) })
         }
     }
 
     private func savePuttsIfNeeded() async {
         guard let value = draftPutts[hole], value != holeRecords[hole]?.putts else { return }
         do {
-            let record = try await model.api.putLiveRoundHole(id: liveRound.id, hole: hole, putts: value, pin: nil)
+            let record = try await model.api.putLiveRoundHole(id: liveRound.id, hole: hole, putts: value)
             holeRecords[record.number] = record
             draftPutts[hole] = nil
         } catch {
@@ -723,6 +933,7 @@ struct PlayHoleView: View {
         await savePuttsIfNeeded()
         let clamped = min(max(next, 1), max(course.holes.count, 1))
         hole = clamped
+        pinStep = .idle
         lastManualChange = Date()
         phase = .ready
         PlayHaptics.holeChange()

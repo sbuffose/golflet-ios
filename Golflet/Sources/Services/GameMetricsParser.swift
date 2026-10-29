@@ -35,11 +35,15 @@ enum GameMetricsParser {
         guard let blob = raw as? [String: Any], let number = JSONFlex.int(from: blob["hole"] ?? blob["number"]) else {
             return nil
         }
+        let day = dayPin(blob["day_pin"])
+        let marked = pin(blob["pin"])
         return LiveHoleRecord(
             number: number,
             par: JSONFlex.int(from: blob["par"]),
             putts: JSONFlex.int(from: blob["putts"]),
-            pin: pin(blob["pin"])
+            pin: marked ?? day.map { LivePin(lat: $0.lat, lng: $0.lng, accuracyM: $0.accuracyM) },
+            dayPin: day,
+            pinAction: pinAction(blob["pin_action"], hasPin: day != nil)
         )
     }
 
@@ -49,6 +53,33 @@ enum GameMetricsParser {
               let lng = JSONFlex.double(from: blob["lng"])
         else { return nil }
         return LivePin(lat: lat, lng: lng, accuracyM: JSONFlex.double(from: blob["accuracy_m"]))
+    }
+
+    static func dayPin(_ raw: Any?) -> DayPin? {
+        guard let blob = raw as? [String: Any],
+              let lat = JSONFlex.double(from: blob["lat"]),
+              let lng = JSONFlex.double(from: blob["lng"])
+        else { return nil }
+        let zone = PinZone(rawValue: blob["zone"] as? String ?? "")
+        let zoneLabel = blob["zone_label"] as? String ?? zone?.label ?? ""
+        let sourceRaw = blob["source"] as? String ?? ""
+        let source: PinSource = sourceRaw == "club" ? .club : .player
+        return DayPin(
+            lat: lat,
+            lng: lng,
+            accuracyM: JSONFlex.double(from: blob["accuracy_m"]),
+            zone: zone,
+            zoneLabel: zoneLabel,
+            source: source,
+            byMe: JSONFlex.bool(from: blob["by_me"]) ?? false
+        )
+    }
+
+    private static func pinAction(_ raw: Any?, hasPin: Bool) -> PinAction {
+        if let value = raw as? String, let action = PinAction(rawValue: value) {
+            return action
+        }
+        return hasPin ? .none : .mark
     }
 
     private static func parseTee(_ blob: [String: Any]) -> GameTeeMetrics {

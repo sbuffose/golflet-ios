@@ -228,12 +228,107 @@ struct LiveHoleRecord: Hashable, Sendable, Identifiable {
     var par: Int?
     var putts: Int?
     var pin: LivePin?
+    var dayPin: DayPin? = nil
+    var pinAction: PinAction = .mark
 }
 
 struct LivePin: Hashable, Sendable {
     var lat: Double
     var lng: Double
     var accuracyM: Double?
+
+    var coord: GPSCoord { GPSCoord(lat: lat, lng: lng) }
+}
+
+enum PinZone: String, CaseIterable, Sendable, Hashable {
+    case front
+    case middle
+    case back
+
+    var label: String {
+        switch self {
+        case .front: return "Adelante"
+        case .middle: return "Medio"
+        case .back: return "Fondo"
+        }
+    }
+}
+
+enum PinAction: String, Sendable, Hashable {
+    case mark
+    case remark
+    case report
+    case reported
+    case none
+}
+
+enum PinSource: String, Sendable, Hashable {
+    case club
+    case player
+}
+
+struct DayPin: Hashable, Sendable {
+    var lat: Double
+    var lng: Double
+    var accuracyM: Double?
+    var zone: PinZone?
+    var zoneLabel: String
+    var source: PinSource
+    var byMe: Bool
+
+    var coord: GPSCoord { GPSCoord(lat: lat, lng: lng) }
+
+    var sourcePhrase: String {
+        PinCopy.phrase(source: source, byMe: byMe)
+    }
+
+    var headline: String {
+        PinCopy.headline(zone: zoneLabel.isEmpty ? (zone?.label ?? "Medio") : zoneLabel, phrase: sourcePhrase)
+    }
+}
+
+enum GamePinPriority {
+    /// Metrics flag: club > own > other player > green center.
+    static func resolve(club: Bool, own: Bool, other: Bool) -> String {
+        if club { return "club" }
+        if own { return "own" }
+        if other { return "other" }
+        return "green_center"
+    }
+}
+
+enum PinCopy {
+    static let mark = "Estoy en la bandera"
+    static let save = "Guardar bandera"
+    static let cancel = "Cancelar"
+    static let remark = "Volver a marcar la bandera"
+    static let report = "Bandera mal registrada"
+    static let confirm = "Confirmar reporte"
+    static let reported = "Reportaste esta bandera"
+    static let whereOnGreen = "¿Dónde está la bandera en el green?"
+    static let reportAsk = "¿La bandera no está donde dice?"
+    static let reportFoot = "Parate al lado de la bandera real y confirmá. Le avisamos a Golflet para que la revise; nadie ve quién reportó."
+    static let reportedFoot = "Reportaste esta bandera. Gracias, la vamos a revisar."
+    static let usesThis = "Tus yardas y tus métricas de approach usan esta bandera."
+    static let firstToday = "Sos el primero en este hoyo hoy: la bandera que marques la usan todos los que juegan hoy, con yardas exactas."
+    static let askMark = "¿Embocaste? Parate al lado del hoyo y tocá:"
+    static let noPin = "Sin bandera de hoy en este hoyo: medimos al centro del green."
+    static let sharedToday = "La ven todos los que juegan este hoyo hoy."
+
+    static func phrase(source: PinSource, byMe: Bool) -> String {
+        switch source {
+        case .club: return "cargada por el club"
+        case .player: return byMe ? "la marcaste vos" : "cargada por un jugador"
+        }
+    }
+
+    static func headline(zone: String, phrase: String) -> String {
+        "Bandera de hoy · \(zone) · \(phrase)"
+    }
+
+    static func gpsNote(_ meters: Double?) -> String {
+        "GPS ±\(meters.map { "\(Int($0.rounded()))" } ?? "—") m. \(sharedToday)"
+    }
 }
 
 enum GameMetricsCoverage {
@@ -315,5 +410,19 @@ enum GameMetricsCopy {
             return "\(Int(value)) yd"
         }
         return String(format: "%.1f yd", value)
+    }
+
+    static let flagHow = "Distancia a la bandera de ese día: la que cargó el club, la que marcaste vos o la que marcó otro jugador; si no había, al centro del green."
+    static let flagHowApproach = "Cada golpe que salió a entre 30 y 150 yd de la bandera. Distancia a la bandera de ese día (del club, tuya o de otro jugador); si no había, al centro del green. Tocá una distancia para ver el detalle."
+    static let flagHowPutting = "Desde donde marcaste el primer putt hasta la bandera de ese día: la que cargó el club, la que marcaste vos o la que marcó otro jugador. Si nadie la marcó, al centro del green."
+
+    static func flagSource(_ value: String?) -> String {
+        switch value {
+        case "club": return "bandera del club"
+        case "day_pin": return "bandera de hoy"
+        case "player_marked", "pin": return "bandera marcada"
+        case "green_center": return "al centro del green"
+        default: return ""
+        }
     }
 }

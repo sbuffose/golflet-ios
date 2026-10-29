@@ -64,14 +64,68 @@ final class GameMetricsTests: XCTestCase {
         let holes = GameMetricsParser.holes([
             "holes": [
                 ["hole": 7, "par": 3, "putts": 2, "pin": ["lat": -34.48, "lng": -58.53, "accuracy_m": 4]],
-                ["hole": 8, "par": 4]
+                ["hole": 8, "par": 4],
+                [
+                    "hole": 9,
+                    "par": 5,
+                    "pin_action": "report",
+                    "day_pin": [
+                        "lat": -34.481,
+                        "lng": -58.531,
+                        "zone": "middle",
+                        "zone_label": "Medio",
+                        "source": "player",
+                        "source_label": "Juan Pérez",
+                        "by_me": false
+                    ]
+                ],
+                [
+                    "hole": 10,
+                    "par": 4,
+                    "pin_action": "none",
+                    "day_pin": [
+                        "lat": -34.482,
+                        "lng": -58.532,
+                        "zone": "front",
+                        "zone_label": "Adelante",
+                        "source": "club",
+                        "by_me": false
+                    ]
+                ],
+                [
+                    "hole": 11,
+                    "par": 4,
+                    "pin_action": "remark",
+                    "day_pin": [
+                        "lat": -34.483,
+                        "lng": -58.533,
+                        "zone": "back",
+                        "zone_label": "Fondo",
+                        "source": "player",
+                        "by_me": true
+                    ]
+                ]
             ]
         ])
-        XCTAssertEqual(holes.count, 2)
+        XCTAssertEqual(holes.count, 5)
         XCTAssertEqual(holes[0].putts, 2)
         XCTAssertEqual(holes[0].pin?.accuracyM, 4)
+        XCTAssertEqual(holes[0].pinAction, .mark)
         XCTAssertNil(holes[1].pin)
         XCTAssertNil(holes[1].putts)
+        XCTAssertEqual(holes[2].pinAction, .report)
+        XCTAssertEqual(holes[2].dayPin?.headline, "Bandera de hoy · Medio · cargada por un jugador")
+        XCTAssertFalse(holes[2].dayPin?.headline.contains("Juan") == true)
+        XCTAssertEqual(holes[3].pinAction, .none)
+        XCTAssertEqual(holes[3].dayPin?.headline, "Bandera de hoy · Adelante · cargada por el club")
+        XCTAssertEqual(holes[4].dayPin?.headline, "Bandera de hoy · Fondo · la marcaste vos")
+        XCTAssertEqual(GamePinPriority.resolve(club: true, own: true, other: true), "club")
+        XCTAssertEqual(GamePinPriority.resolve(club: false, own: true, other: true), "own")
+        XCTAssertEqual(GamePinPriority.resolve(club: false, own: false, other: true), "other")
+        XCTAssertEqual(GamePinPriority.resolve(club: false, own: false, other: false), "green_center")
+        XCTAssertEqual(GameMetricsCopy.flagSource("club"), "bandera del club")
+        XCTAssertTrue(GameMetricsCopy.yards(8.5).hasSuffix("yd"))
+        XCTAssertTrue(GameMetricsCopy.flagHowPutting.contains("yardas") || GameMetricsCopy.yards(8.5).contains("yd"))
     }
 
     private static let populated: [String: Any] = [
