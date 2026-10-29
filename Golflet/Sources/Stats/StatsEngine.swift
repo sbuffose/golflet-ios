@@ -101,7 +101,7 @@ enum StatsEngine {
 
     static func ranged(_ rounds: [Round], range: StatsRange, now: Date = Date()) -> [Round] {
         guard let start = range.startDate(now: now) else { return rounds }
-        return rounds.filter { $0.date >= start }
+        return rounds.filter { $0.date >= start && $0.date <= now }
     }
 
     static func hasCompleteHoleData(_ rounds: [Round]) -> Bool {
