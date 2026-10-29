@@ -429,7 +429,10 @@ final class AppModel {
     }
 
     func presentProfesor(_ profesor: Profesor) {
-        presentAfterDismissing { $0.presentedProfesor = profesor }
+        showsGroups = false
+        showsClubs = false
+        showsNotifications = false
+        presentedProfesor = profesor
     }
 
     func openAvatar() {

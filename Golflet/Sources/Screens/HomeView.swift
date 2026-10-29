@@ -44,6 +44,13 @@ struct HomeView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
         .metricDestinations()
+        .navigationDestination(item: Binding(
+            get: { model.presentedProfesor },
+            set: { model.presentedProfesor = $0 }
+        )) { profesor in
+            ProfesorDetailView(profesor: profesor)
+                .golfletChrome()
+        }
         .sheet(isPresented: $showsHcpImpact) {
             if let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact {
                 NavigationStack {
@@ -84,15 +91,9 @@ struct HomeView: View {
     }
 
     private func presentProfesor(_ profesor: Profesor) {
-        let dismissing = showsHomeProfesores || showsAgregarProfesor
         showsHomeProfesores = false
         showsAgregarProfesor = false
-        Task { @MainActor in
-            if dismissing {
-                try? await Task.sleep(for: .milliseconds(350))
-            }
-            model.presentProfesor(profesor)
-        }
+        model.presentedProfesor = profesor
     }
 
     private func homeHcpPeople() -> HomeHcpPeople {
@@ -886,7 +887,10 @@ struct HomeHcpPeople: View {
         .contentShape(Rectangle())
         .accessibilityIdentifier("home-hcp-profesor")
         .accessibilityLabel(profesorLabel)
-        .overlay { GProbe(id: "home-hcp-profesor", label: profesorLabel) }
+        .overlay {
+            GProbe(id: "home-hcp-profesor", label: profesorLabel)
+                .allowsHitTesting(false)
+        }
     }
 
     private var addProfesor: some View {
