@@ -35,6 +35,7 @@ protocol GolfletAPI: Sendable {
     func metricsSummary(range: String) async throws -> MetricsSummary
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy
 
+    func profesores() async throws -> [Profesor]
     func groups() async throws -> [GolfletGroup]
     func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup
     func group(id: String) async throws -> GolfletGroup

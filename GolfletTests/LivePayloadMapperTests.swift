@@ -86,6 +86,7 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(snap.tees.first?.slope, 123)
         XCTAssertEqual(try XCTUnwrap(snap.holeStats.first?.holes.first?.averageToPar), 0.2, accuracy: 0.001)
         XCTAssertEqual(snap.bag.first?.carry, 250)
+        XCTAssertTrue(snap.profesores.isEmpty)
     }
 
     func testMapsOtherCourseRoundAndAppAccounts() {

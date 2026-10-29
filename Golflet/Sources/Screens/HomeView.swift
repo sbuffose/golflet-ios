@@ -8,6 +8,8 @@ struct HomeView: View {
     @State private var cardsGold = false
     @State private var showsHcpImpact = false
     @State private var showsHomeGroups = false
+    @State private var showsHomeProfesores = false
+    @State private var presentedProfesor: Profesor?
     @State private var highlightPartners = false
 
     var body: some View {
@@ -55,9 +57,31 @@ struct HomeView: View {
             .golfletChrome()
             .environment(model)
         }
+        .sheet(isPresented: $showsHomeProfesores) {
+            NavigationStack {
+                HomeProfesoresSheet { profesor in
+                    presentProfesor(profesor)
+                }
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(item: $presentedProfesor) { profesor in
+            NavigationStack {
+                ProfesorDetailView(profesor: profesor)
+            }
+            .golfletChrome()
+        }
         .onChange(of: model.celebrateCards) { _, value in
             guard let value else { return }
             Task { await countUpCards(to: value) }
+        }
+    }
+
+    private func presentProfesor(_ profesor: Profesor) {
+        showsHomeProfesores = false
+        Task { @MainActor in
+            presentedProfesor = profesor
         }
     }
 
@@ -176,7 +200,10 @@ struct HomeView: View {
                         .accessibilityElement(children: .contain)
                         .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
                         HomeHcpPeople(
+                            profesores: model.profesores,
                             groups: model.groups,
+                            onProfesor: { presentProfesor($0) },
+                            onProfesores: { showsHomeProfesores = true },
                             onGroups: { showsHomeGroups = true },
                             onCreate: { model.presentCreateGroup() }
                         )
@@ -756,58 +783,125 @@ struct RoundRow: View {
 
 struct HomeHcpPeople: View {
     @Environment(\.palette) private var p
+    let profesores: [Profesor]
     let groups: [GolfletGroup]
+    var onProfesor: (Profesor) -> Void
+    var onProfesores: () -> Void
     var onGroups: () -> Void
     var onCreate: () -> Void
 
     private let avatar: CGFloat = 36
 
     var body: some View {
-        if groups.isEmpty {
-            Button(action: onCreate) {
-                VStack(spacing: 6) {
-                    Text("+")
-                        .font(GFont.ui(22, weight: .semibold))
-                        .foregroundStyle(p.primary)
-                        .frame(width: avatar, height: avatar)
-                        .background(p.accent)
-                        .clipShape(Circle())
-                    Text("Crear grupo")
-                        .font(GType.label)
-                        .foregroundStyle(p.onPrimary.opacity(0.7))
-                        .lineLimit(1)
-                }
+        HStack(alignment: .bottom, spacing: 14) {
+            if !profesores.isEmpty {
+                profesorColumn
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("home-hcp-crear-grupo")
-            .accessibilityLabel("Crear grupo")
-        } else {
-            Button(action: onGroups) {
-                VStack(spacing: 6) {
-                    stack
-                    Text("Grupos")
-                        .font(GType.label)
-                        .foregroundStyle(p.onPrimary.opacity(0.7))
-                }
+            if !groups.isEmpty {
+                groupsColumn
+            } else if !profesores.isEmpty {
+                createGroup
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("home-hcp-groups")
-            .accessibilityLabel(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
         }
     }
 
-    private var stack: some View {
-        let shown = Array(groups.prefix(4))
+    private var profesorColumn: some View {
+        Button {
+            if profesores.count == 1, let first = profesores.first {
+                onProfesor(first)
+            } else {
+                onProfesores()
+            }
+        } label: {
+            VStack(spacing: 6) {
+                profesorStack
+                Text(profesores.count == 1 ? "Profesor" : "Profesores")
+                    .font(GType.label)
+                    .foregroundStyle(p.onPrimary.opacity(0.7))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home-hcp-profesor")
+        .accessibilityLabel(profesorLabel)
+    }
+
+    private var groupsColumn: some View {
+        Button(action: onGroups) {
+            VStack(spacing: 6) {
+                groupStack
+                Text("Grupos")
+                    .font(GType.label)
+                    .foregroundStyle(p.onPrimary.opacity(0.7))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home-hcp-groups")
+        .accessibilityLabel(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
+    }
+
+    private var createGroup: some View {
+        Button(action: onCreate) {
+            VStack(spacing: 6) {
+                Text("+")
+                    .font(GFont.ui(22, weight: .semibold))
+                    .foregroundStyle(p.primary)
+                    .frame(width: avatar, height: avatar)
+                    .background(p.accent)
+                    .clipShape(Circle())
+                Text("Crear grupo")
+                    .font(GType.label)
+                    .foregroundStyle(p.onPrimary.opacity(0.7))
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home-hcp-crear-grupo")
+        .accessibilityLabel("Crear grupo")
+    }
+
+    private var profesorStack: some View {
+        let shown = Array(profesores.prefix(HomeHcpPeopleLayout.profesorVisible))
+        let extra = profesores.count - shown.count
+        return HStack(spacing: -10) {
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, profesor in
+                HomeHcpAvatar(
+                    url: profesor.photoURL,
+                    initials: profesor.initials,
+                    size: avatar,
+                    fill: Color(hex: 0x1E5440),
+                    ink: p.onPrimary,
+                    ring: p.accent,
+                    verified: profesor.verified
+                )
+                .zIndex(Double(shown.count - index))
+            }
+            if extra > 0 {
+                Text("+\(extra)")
+                    .font(GFont.ui(11, weight: .semibold))
+                    .foregroundStyle(p.accent)
+                    .frame(width: avatar, height: avatar)
+                    .background(p.primary)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(p.accent, lineWidth: 2))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var groupStack: some View {
+        let shown = Array(groups.prefix(HomeHcpPeopleLayout.groupVisible))
         let extra = groups.count - shown.count
         return HStack(spacing: -12) {
             ForEach(shown) { group in
-                Text(GroupsParser.initials(group.name))
-                    .font(GFont.ui(12, weight: .semibold))
-                    .foregroundStyle(p.primary)
-                    .frame(width: avatar, height: avatar)
-                    .background(p.onPrimary)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(p.primary, lineWidth: 2))
+                HomeHcpAvatar(
+                    url: group.photoURL,
+                    initials: GroupsParser.initials(group.name),
+                    size: avatar,
+                    fill: p.onPrimary,
+                    ink: p.primary,
+                    ring: p.primary,
+                    verified: false
+                )
             }
             if extra > 0 {
                 Text("+\(extra)")
@@ -820,6 +914,62 @@ struct HomeHcpPeople: View {
             }
         }
         .allowsHitTesting(false)
+    }
+
+    private var profesorLabel: String {
+        if profesores.count == 1, let name = profesores.first?.name {
+            return "Tu profesor: \(name)"
+        }
+        return "Tus profesores"
+    }
+}
+
+enum HomeHcpPeopleLayout {
+    static let profesorVisible = 3
+    static let groupVisible = 4
+}
+
+struct HomeHcpAvatar: View {
+    var url: String?
+    var initials: String
+    var size: CGFloat
+    var fill: Color
+    var ink: Color
+    var ring: Color
+    var verified: Bool
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                Text(initials)
+                    .font(GFont.ui(size < 40 ? 12 : 16, weight: .semibold))
+                    .foregroundStyle(ink)
+                if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
+                    AsyncImage(url: parsed) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Color.clear
+                    }
+                }
+            }
+            .frame(width: size, height: size)
+            .background(fill)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(ring, lineWidth: 2))
+
+            if verified {
+                ZStack {
+                    Circle().fill(Color(hex: 0x1D9BF0))
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 14, height: 14)
+                .overlay(Circle().stroke(Color(hex: 0x0F3D2E), lineWidth: 1.5))
+                .offset(x: 2, y: 2)
+                .accessibilityLabel("Verificado")
+            }
+        }
     }
 }
 

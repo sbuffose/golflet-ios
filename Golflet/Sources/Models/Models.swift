@@ -519,6 +519,7 @@ struct AppSnapshot: Sendable {
     var hiHistory: [HIPoint]
     var courseGroups: [CourseFilter] = []
     var teeTimes: [TeeTime] = []
+    var profesores: [Profesor] = []
 }
 
 struct TeeTime: Identifiable, Hashable, Sendable {
