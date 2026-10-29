@@ -5,6 +5,10 @@ struct HoleRef: Identifiable, Hashable {
     var id: Int { number }
 }
 
+struct GroupRef: Identifiable, Hashable {
+    var id: String
+}
+
 struct HoleDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
