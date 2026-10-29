@@ -91,9 +91,14 @@ struct HomeView: View {
     }
 
     private func presentProfesor(_ profesor: Profesor) {
+        let dismissing = showsHomeProfesores || showsAgregarProfesor
         showsHomeProfesores = false
         showsAgregarProfesor = false
-        Task { @MainActor in
+        if dismissing {
+            Task { @MainActor in
+                presentedProfesor = profesor
+            }
+        } else {
             presentedProfesor = profesor
         }
     }
@@ -885,6 +890,8 @@ struct HomeHcpPeople: View {
             }
         }
         .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .frame(minWidth: 44, minHeight: 44, alignment: .topTrailing)
         .accessibilityIdentifier("home-hcp-profesor")
         .accessibilityLabel(profesorLabel)
         .overlay { GProbe(id: "home-hcp-profesor", label: profesorLabel) }
