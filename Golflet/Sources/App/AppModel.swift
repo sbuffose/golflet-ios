@@ -389,9 +389,9 @@ final class AppModel {
     }
 
     func presentNotifications() {
-        presentAfterDismissing {
-            $0.showsNotifications = true
-            Task { await $0.markNotificationsReadOnOpen() }
+        presentAfterDismissing { model in
+            model.showsNotifications = true
+            Task { await model.markNotificationsReadOnOpen() }
         }
     }
 
