@@ -169,16 +169,18 @@ struct RecapView: View {
         Group {
             if recap.status == "pending_ai" || recap.status == "processing" {
                 GCard(radius: 18, padding: 14) {
-                    Text(recap.error?.isEmpty == false ? recap.error! : RecapCopy.pendingAI)
-                        .font(GType.body)
-                        .foregroundStyle(p.ink2)
-                        .accessibilityIdentifier("recap-pending")
-                    Button("Reintentar") {
-                        Task { await retry() }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(recap.error?.isEmpty == false ? recap.error! : RecapCopy.pendingAI)
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("recap-pending")
+                        Button("Reintentar") {
+                            Task { await retry() }
+                        }
+                        .font(GType.headline)
+                        .foregroundStyle(p.primary)
+                        .accessibilityIdentifier("recap-retry")
                     }
-                    .font(GType.headline)
-                    .foregroundStyle(p.primary)
-                    .accessibilityIdentifier("recap-retry")
                 }
             }
         }
