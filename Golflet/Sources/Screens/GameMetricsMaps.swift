@@ -43,15 +43,16 @@ struct DriveDispersionMap: View {
                 let rect = CGRect(x: x(point.lateralYd!) - 4, y: y(point.carryYd!) - 4, width: 8, height: 8)
                 context.fill(Path(ellipseIn: rect), with: .color(color))
             }
-            let lab = { (text: String, at: CGPoint) in
-                context.draw(
-                    Text(text).font(GType.overline).foregroundStyle(p.ink3),
-                    at: at,
-                    anchor: .center
-                )
-            }
-            lab("Izq.", CGPoint(x: x(-band) / 2, y: 12))
-            lab("Der.", CGPoint(x: (x(band) + size.width) / 2, y: 12))
+            context.draw(
+                Text("Izq.").font(GType.overline).foregroundStyle(p.ink3),
+                at: CGPoint(x: x(-band) / 2, y: 12),
+                anchor: .center
+            )
+            context.draw(
+                Text("Der.").font(GType.overline).foregroundStyle(p.ink3),
+                at: CGPoint(x: (x(band) + size.width) / 2, y: 12),
+                anchor: .center
+            )
         }
         .frame(minHeight: 210)
         .accessibilityLabel("Dispersión de drives")
@@ -103,13 +104,10 @@ struct ApproachMissMap: View {
                 context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(color))
             }
             if !compact {
-                let lab = { (text: String, at: CGPoint, anchor: UnitPoint) in
-                    context.draw(Text(text).font(GType.overline).foregroundStyle(p.ink3), at: at, anchor: anchor)
-                }
-                lab("Largo", CGPoint(x: c.x, y: origin.y + 12), .center)
-                lab("Corto", CGPoint(x: c.x, y: origin.y + side - 10), .center)
-                lab("Izq.", CGPoint(x: origin.x + 10, y: c.y), .leading)
-                lab("Der.", CGPoint(x: origin.x + side - 10, y: c.y), .trailing)
+                context.draw(Text("Largo").font(GType.overline).foregroundStyle(p.ink3), at: CGPoint(x: c.x, y: origin.y + 12), anchor: .center)
+                context.draw(Text("Corto").font(GType.overline).foregroundStyle(p.ink3), at: CGPoint(x: c.x, y: origin.y + side - 10), anchor: .center)
+                context.draw(Text("Izq.").font(GType.overline).foregroundStyle(p.ink3), at: CGPoint(x: origin.x + 10, y: c.y), anchor: .leading)
+                context.draw(Text("Der.").font(GType.overline).foregroundStyle(p.ink3), at: CGPoint(x: origin.x + side - 10, y: c.y), anchor: .trailing)
             }
         }
         .aspectRatio(1, contentMode: .fit)
