@@ -9,6 +9,21 @@ final class PlayAPITests: XCTestCase {
         XCTAssertGreaterThan(meters, 400)
         XCTAssertLessThan(meters, 450)
         XCTAssertEqual(PlayMath.yards(334), 365)
+        XCTAssertEqual(PlayMath.yards(914), 1000)
+        XCTAssertEqual(PlayMath.yards(from: tee, to: center), PlayMath.yards(meters))
+        XCTAssertFalse(PlayMath.isFar(PlayMath.yards(from: tee, to: center)))
+    }
+
+    func testFarFromCourseHidesHugeYardage() {
+        let tee = GPSCoord(lat: -34.485427, lng: -58.532351)
+        let obelisco = GPSCoord(lat: -34.6037, lng: -58.3816)
+        let yards = PlayMath.yards(from: obelisco, to: tee)
+        XCTAssertGreaterThan(yards, PlayMath.farThresholdYd)
+        XCTAssertTrue(PlayMath.isFar(yards))
+        XCTAssertNil(PlayMath.displayYards(yards))
+        XCTAssertEqual(PlayMath.displayYards(365), 365)
+        XCTAssertGreaterThan(yards, 10_000)
+        XCTAssertLessThan(yards, 25_000)
     }
 
     func testClubCodeRoundTrip() {
@@ -51,6 +66,14 @@ final class PlayAPITests: XCTestCase {
         ])
         XCTAssertEqual(course?.courseId, "118-jockey-azul")
         XCTAssertEqual(course?.holes.first?.green.center?.lat, -34.48305197)
+        XCTAssertNil(course?.minutesPerHole)
+
+        let paced = PlayParser.courseDetail([
+            "course_id": "118-jockey-azul",
+            "minutes_per_hole": 14,
+            "holes": []
+        ])
+        XCTAssertEqual(paced?.minutesPerHole, 14)
 
         let pending = PlayParser.recap([
             "id": "r1",

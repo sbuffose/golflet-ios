@@ -7,6 +7,8 @@ final class NativeCapabilitiesTests: XCTestCase {
         RecapQueue.reset()
         CourseCache.reset()
         OfflinePlay.reset()
+        PlaySettingsStore.reset()
+        PaceSessionStore.reset()
         UserDefaults.standard.removeObject(forKey: WidgetSnapshotStore.key)
         PendingInviteStore.clear()
         super.tearDown()
@@ -46,6 +48,15 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertEqual(state.toPar, 1 - 5)
         XCTAssertNotNil(state.centerYd)
         XCTAssertEqual(state.holeLine, "Hoyo 1 · Par 5")
+        let far = LiveRoundState.make(
+            course: course,
+            hole: 1,
+            here: GPSCoord(lat: -34.6037, lng: -58.3816),
+            shots: shots
+        )
+        XCTAssertNil(far.centerYd)
+        XCTAssertNil(far.frontYd)
+        XCTAssertNil(far.backYd)
     }
 
     func testWidgetSnapshotHidesMissingNextRound() {

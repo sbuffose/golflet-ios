@@ -29,6 +29,6 @@ enum LiveRoundState {
 
     private static func yards(from here: GPSCoord?, to target: GPSCoord?) -> Int? {
         guard let here, let target else { return nil }
-        return PlayMath.yards(PlayMath.meters(from: here, to: target))
+        return PlayMath.displayYards(PlayMath.yards(from: here, to: target))
     }
 }
