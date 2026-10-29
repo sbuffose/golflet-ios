@@ -86,6 +86,7 @@ final class TextPrefsTests: XCTestCase {
         prefs.weight = .marked
         let saved = try await api.saveUserSettings(prefs)
         XCTAssertEqual(saved.size, .extraLarge)
-        XCTAssertEqual(try await api.userSettings().weight, .marked)
+        let reloaded = try await api.userSettings()
+        XCTAssertEqual(reloaded.weight, .marked)
     }
 }
