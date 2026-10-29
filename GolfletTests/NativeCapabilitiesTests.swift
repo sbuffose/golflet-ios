@@ -246,4 +246,37 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertTrue(RecapCopy.pendingAI.contains("iPhone"))
         XCTAssertEqual(RecapDraft(transcript: "x", structuredOnDevice: true).source, "ios_on_device")
     }
+
+    func testAppGroupStaysDisabledUntilPortalGroupExists() {
+        XCTAssertFalse(AppGroupAvailability.isEnabled)
+        XCTAssertEqual(AppGroupAvailability.identifier, "group.com.sbuffose.golflet")
+        XCTAssertNil(AppGroupAvailability.sharedDefaults)
+        XCTAssertTrue(WidgetSnapshotStore.defaults === UserDefaults.standard)
+    }
+
+    func testWidgetSnapshotParsesAPIPayloadWithoutSharedContainer() throws {
+        let json = """
+        {
+          "player": { "handicap_index": 3.1 },
+          "rounds": [
+            {
+              "round_id": "r1",
+              "course": "Colorada",
+              "gross": 79,
+              "net": 76,
+              "date": "2026-10-12"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        let snap = try XCTUnwrap(WidgetSnapshot.parseAPI(json))
+        XCTAssertEqual(snap.handicapLine, FormatAR.one(3.1))
+        XCTAssertEqual(snap.lastGross, 79)
+        XCTAssertEqual(snap.lastNet, 76)
+        XCTAssertEqual(snap.lastCourse, "Colorada")
+        XCTAssertEqual(snap.lastRoundId, "r1")
+        XCTAssertEqual(snap.lastRoundURL, URL(string: "golflet://round/r1"))
+        XCTAssertFalse(snap.isPlaceholder)
+        XCTAssertTrue(WidgetSnapshot.placeholder.isPlaceholder)
+    }
 }
