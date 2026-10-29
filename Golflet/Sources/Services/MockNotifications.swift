@@ -31,16 +31,41 @@ extension MockAPIClient {
             if unavailable { throw GolfletError.server("No se pudo completar.") }
             return NotificationsInbox(
                 unreadCount: store.unreadCount,
+                badge: NotificationBadge.text(store.unreadCount),
                 items: store.items.sorted { $0.createdAt > $1.createdAt }
             )
         }
     }
 
-    func markNotificationsRead(ids: [String]) async throws {
+    func unreadNotifications() async throws -> UnreadNotifications {
+        guard isAuthenticated else { throw GolfletError.notAuthenticated }
+        return try mutateNotifications { store, unavailable in
+            if unavailable { throw GolfletError.server("No se pudo completar.") }
+            return UnreadNotifications(
+                unreadCount: store.unreadCount,
+                badge: NotificationBadge.text(store.unreadCount)
+            )
+        }
+    }
+
+    func notification(id: String) async throws -> InboxNotification {
+        guard isAuthenticated else { throw GolfletError.notAuthenticated }
+        return try mutateNotifications { store, unavailable in
+            if unavailable { throw GolfletError.server("No se pudo completar.") }
+            guard let index = store.items.firstIndex(where: { $0.id == id }) else {
+                throw GolfletError.server("Esa notificación no está.")
+            }
+            store.items[index].isUnread = false
+            store.unreadCount = store.items.filter(\.isUnread).count
+            return store.items[index]
+        }
+    }
+
+    func markNotificationsRead(ids: [String], all: Bool) async throws {
         guard isAuthenticated else { throw GolfletError.notAuthenticated }
         try mutateNotifications { store, unavailable in
             if unavailable { throw GolfletError.server("No se pudo completar.") }
-            if ids.isEmpty {
+            if all || ids.isEmpty {
                 for index in store.items.indices {
                     store.items[index].isUnread = false
                 }

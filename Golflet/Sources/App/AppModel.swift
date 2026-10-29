@@ -28,6 +28,7 @@ final class AppModel {
     var showsNotifications = false
     var notifications: [InboxNotification] = []
     var unreadNotificationCount = 0
+    var unreadBadge: String?
     var notificationsAvailable = false
     var syncSession: SyncSession?
     var celebrateCards: Int?
@@ -195,6 +196,7 @@ final class AppModel {
             pendingInvites = []
             notifications = []
             unreadNotificationCount = 0
+            unreadBadge = nil
             notificationsAvailable = false
             showsNotifications = false
             presentedInvite = nil
@@ -387,17 +389,27 @@ final class AppModel {
     }
 
     func presentNotifications() {
-        showsNotifications = true
-        Task { await markNotificationsReadOnOpen() }
+        presentAfterDismissing {
+            $0.showsNotifications = true
+            Task { await $0.markNotificationsReadOnOpen() }
+        }
     }
 
     func presentClubs() {
         presentAfterDismissing { $0.showsClubs = true }
     }
 
+    func openAvatar() {
+        if unreadBadgeText != nil {
+            presentNotifications()
+        } else {
+            showsClubs = true
+        }
+    }
+
     var unreadBadgeText: String? {
         guard notificationsAvailable else { return nil }
-        return NotificationBadge.text(unreadNotificationCount)
+        return NotificationBadge.display(count: unreadNotificationCount, badge: unreadBadge)
     }
 
     private func presentAfterDismissing(_ present: @escaping (AppModel) -> Void) {
@@ -412,13 +424,18 @@ final class AppModel {
     func refreshNotifications() async {
         guard isSignedIn else { return }
         do {
-            let inbox = try await api.notifications()
+            async let loadedUnread = api.unreadNotifications()
+            async let loadedInbox = api.notifications()
+            let unread = try await loadedUnread
+            let inbox = try await loadedInbox
             notifications = inbox.items
-            unreadNotificationCount = inbox.unreadCount
+            unreadNotificationCount = unread.unreadCount
+            unreadBadge = unread.badge ?? inbox.badge
             notificationsAvailable = true
         } catch {
             notifications = []
             unreadNotificationCount = 0
+            unreadBadge = nil
             notificationsAvailable = false
         }
     }
@@ -431,8 +448,21 @@ final class AppModel {
             return copy
         }
         unreadNotificationCount = 0
+        unreadBadge = nil
         guard !ids.isEmpty else { return }
-        try? await api.markNotificationsRead(ids: ids)
+        try? await api.markNotificationsRead(ids: ids, all: true)
+    }
+
+    func openNotification(_ item: InboxNotification) async {
+        if let updated = try? await api.notification(id: item.id) {
+            if let index = notifications.firstIndex(where: { $0.id == item.id }) {
+                notifications[index] = updated
+            }
+        } else if let index = notifications.firstIndex(where: { $0.id == item.id }) {
+            notifications[index].isUnread = false
+        }
+        unreadNotificationCount = notifications.filter(\.isUnread).count
+        unreadBadge = NotificationBadge.text(unreadNotificationCount)
     }
 
     func refreshGroups() async {
@@ -468,6 +498,7 @@ final class AppModel {
             pendingInvites.removeAll { $0.token == preview.token }
             notifications.removeAll { $0.inviteToken == preview.token }
             unreadNotificationCount = notifications.filter(\.isUnread).count
+            unreadBadge = NotificationBadge.text(unreadNotificationCount)
             if !groups.contains(where: { $0.id == group.id }) {
                 groups.insert(group, at: 0)
             }
@@ -487,6 +518,7 @@ final class AppModel {
             pendingInvites.removeAll { $0.token == preview.token }
             notifications.removeAll { $0.inviteToken == preview.token }
             unreadNotificationCount = notifications.filter(\.isUnread).count
+            unreadBadge = NotificationBadge.text(unreadNotificationCount)
             await refreshNotifications()
         }
     }

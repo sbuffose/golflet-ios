@@ -15,12 +15,16 @@ final class NotificationsTests: XCTestCase {
         XCTAssertEqual(NotificationBadge.text(10), "9+")
         XCTAssertEqual(NotificationBadge.text(99), "9+")
         XCTAssertNil(NotificationsInbox.empty.badgeText)
-        XCTAssertEqual(NotificationsInbox(unreadCount: 12, items: []).badgeText, "9+")
+        XCTAssertEqual(NotificationsInbox(unreadCount: 12, badge: nil, items: []).badgeText, "9+")
+        XCTAssertEqual(NotificationsInbox(unreadCount: 12, badge: "9+", items: []).badgeText, "9+")
+        XCTAssertNil(NotificationBadge.display(count: 2, badge: "0"))
+        XCTAssertEqual(NotificationBadge.display(count: 2, badge: "9+"), "9+")
     }
 
     func testParsesPlannedInboxShapeNewestFirst() {
         let json: [String: Any] = [
             "unread_count": 2,
+            "badge": "2",
             "notifications": [
                 [
                     "id": "n-old",
@@ -50,6 +54,7 @@ final class NotificationsTests: XCTestCase {
         ]
         let inbox = NotificationsParser.inbox(from: json)
         XCTAssertEqual(inbox.unreadCount, 2)
+        XCTAssertEqual(inbox.badge, "2")
         XCTAssertEqual(inbox.items.map(\.id), ["n-new", "n-old"])
         XCTAssertEqual(inbox.items.first?.kind, .groupInvite)
         XCTAssertEqual(inbox.items.first?.inviteToken, "invite-mdp")
@@ -94,12 +99,17 @@ final class NotificationsTests: XCTestCase {
 
     func testMarkReadBodyAndPaths() {
         XCTAssertEqual(NotificationsAPIPaths.list, "/api/me/notifications")
+        XCTAssertEqual(NotificationsAPIPaths.unreadCount, "/api/me/notifications/unread-count")
         XCTAssertEqual(NotificationsAPIPaths.read, "/api/me/notifications/read")
-        let all = NotificationsParser.markReadBody(ids: [])
+        XCTAssertEqual(NotificationsAPIPaths.detail("n-1"), "/api/me/notifications/n-1")
+        let all = NotificationsParser.markReadBody(ids: [], all: true)
         XCTAssertEqual(all["all"] as? Bool, true)
         let one = NotificationsParser.markReadBody(ids: ["n-1"])
-        XCTAssertEqual(one["id"] as? String, "n-1")
         XCTAssertEqual(one["ids"] as? [String], ["n-1"])
+        XCTAssertNil(one["id"])
+        let unread = NotificationsParser.unread(from: ["unread_count": 11, "badge": "9+"])
+        XCTAssertEqual(unread.unreadCount, 11)
+        XCTAssertEqual(unread.badgeText, "9+")
     }
 
     func testMockInboxAndMarkRead() async throws {
@@ -112,7 +122,15 @@ final class NotificationsTests: XCTestCase {
         XCTAssertEqual(inbox.items.last?.kind, .clubMessage)
         XCTAssertTrue(inbox.items.allSatisfy(\.isUnread))
 
-        try await api.markNotificationsRead(ids: inbox.items.map(\.id))
+        let unread = try await api.unreadNotifications()
+        XCTAssertEqual(unread.unreadCount, 2)
+        XCTAssertEqual(unread.badge, "2")
+
+        let opened = try await api.notification(id: "n-club-jockey")
+        XCTAssertFalse(opened.isUnread)
+        XCTAssertEqual((try await api.unreadNotifications()).unreadCount, 1)
+
+        try await api.markNotificationsRead(ids: [], all: true)
         let after = try await api.notifications()
         XCTAssertEqual(after.unreadCount, 0)
         XCTAssertNil(after.badgeText)

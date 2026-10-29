@@ -9,23 +9,23 @@ extension LiveGolfletAPI {
         }
     }
 
-    func markNotificationsRead(ids: [String]) async throws {
-        let body = NotificationsParser.markReadBody(ids: ids)
-        var lastError: Error = GolfletError.server("No se pudo marcar como leído.")
-        for path in [NotificationsAPIPaths.read] + NotificationsAPIPaths.readAliases {
-            do {
-                _ = try await request("POST", path, body: body)
-                return
-            } catch {
-                lastError = error
-            }
-            do {
-                _ = try await request("PATCH", path == NotificationsAPIPaths.read ? NotificationsAPIPaths.list : path, body: body)
-                return
-            } catch {
-                lastError = error
-            }
+    func unreadNotifications() async throws -> UnreadNotifications {
+        do {
+            return NotificationsParser.unread(from: try await request("GET", NotificationsAPIPaths.unreadCount))
+        } catch {
+            return .empty
         }
-        throw lastError
+    }
+
+    func notification(id: String) async throws -> InboxNotification {
+        let json = try await request("GET", NotificationsAPIPaths.detail(id))
+        guard let item = NotificationsParser.notification(from: json["notification"] ?? json) else {
+            throw GolfletError.decoding("notification")
+        }
+        return item
+    }
+
+    func markNotificationsRead(ids: [String], all: Bool) async throws {
+        _ = try await request("POST", NotificationsAPIPaths.read, body: NotificationsParser.markReadBody(ids: ids, all: all))
     }
 }

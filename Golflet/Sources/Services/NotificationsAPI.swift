@@ -1,14 +1,15 @@
 import Foundation
 
-/// Planned web shape: GET /api/me/notifications with unread_count + items.
-/// Mark-read is POST /api/me/notifications/read. Field names are not locked yet.
+/// API_v5 §53 — live paths from golflet.vercel.app.
 enum NotificationsAPIPaths {
     static let list = "/api/me/notifications"
+    static let unreadCount = "/api/me/notifications/unread-count"
     static let read = "/api/me/notifications/read"
-    static let readAliases = [
-        "/api/me/notifications/mark-read",
-        "/api/me/notifications/mark_read"
-    ]
+
+    static func detail(_ id: String) -> String {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return "/api/me/notifications/\(encoded)"
+    }
 }
 
 enum NotificationsParser {
@@ -21,7 +22,19 @@ enum NotificationsParser {
                 ?? blob["unread"]
                 ?? json["unread_count"]
         ) ?? items.filter(\.isUnread).count
-        return NotificationsInbox(unreadCount: max(0, unread), items: items)
+        let badge = optionalString(blob["badge"] ?? json["badge"])
+        return NotificationsInbox(unreadCount: max(0, unread), badge: badge, items: items)
+    }
+
+    static func unread(from json: [String: Any]) -> UnreadNotifications {
+        let blob = json["data"] as? [String: Any] ?? json
+        let count = JSONFlex.int(
+            from: blob["unread_count"] ?? blob["unreadCount"] ?? blob["unread"] ?? json["unread_count"]
+        ) ?? 0
+        return UnreadNotifications(
+            unreadCount: max(0, count),
+            badge: optionalString(blob["badge"] ?? json["badge"])
+        )
     }
 
     static func notifications(from json: [String: Any]) -> [InboxNotification] {
@@ -101,9 +114,8 @@ enum NotificationsParser {
         )
     }
 
-    static func markReadBody(ids: [String]) -> [String: Any] {
-        if ids.isEmpty { return ["all": true] }
-        if ids.count == 1 { return ["id": ids[0], "ids": ids] }
+    static func markReadBody(ids: [String], all: Bool = false) -> [String: Any] {
+        if all || ids.isEmpty { return ["all": true] }
         return ["ids": ids]
     }
 

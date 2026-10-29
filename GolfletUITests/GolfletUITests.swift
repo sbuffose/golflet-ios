@@ -485,11 +485,15 @@ final class GolfletUITests: XCTestCase {
         )
         XCTAssertTrue(first(app, "notification-n-club-jockey").waitForExistence(timeout: 2))
 
-        first(app, "notifications-cuenta").tap()
-        XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6), "Tu cuenta no abrió Clubes")
-        dismissIfPresent(app, "close-clubes")
+        dismissIfPresent(app, "close-notificaciones")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         XCTAssertFalse(first(app, "avatar-badge").waitForExistence(timeout: 2), "El badge tenía que ocultarse al abrir")
+
+        first(app, "avatar-button").tap()
+        XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6), "Sin no leídas el avatar abre la cuenta")
+        XCTAssertTrue(first(app, "perfil-notificaciones").waitForExistence(timeout: 3), "Falta la fila de Notificaciones")
+        first(app, "perfil-notificaciones").tap()
+        XCTAssertTrue(waitFor(app, "screen-notificaciones", timeout: 6))
     }
 
     private func submitLogin(_ app: XCUIApplication) {
