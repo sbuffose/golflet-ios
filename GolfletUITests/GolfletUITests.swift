@@ -316,11 +316,40 @@ final class GolfletUITests: XCTestCase {
     }
 
     func testHomeGreetingFitsBesideOrBelowTeeTab() throws {
-        let names = ["Agustin", "Maximiliano", "Juan Bautista"]
+        let names = ["Guillermo", "Maximiliano", "Juan Bautista"]
         for name in names {
             assertHomeGreeting(name, hasTab: true)
             assertHomeGreeting(name, hasTab: false)
         }
+    }
+
+    func testHomeHcpGroupsStackOpensGroup() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "home-hcp-groups").waitForExistence(timeout: 4), "Falta el stack de grupos en HCP")
+        first(app, "home-hcp-groups").tap()
+        XCTAssertTrue(waitFor(app, "screen-home-groups", timeout: 6), "No se abrió la lista de grupos")
+        XCTAssertTrue(first(app, "home-group-g-jockey").waitForExistence(timeout: 4))
+        first(app, "home-group-g-jockey").tap()
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No entró al grupo")
+        saveShot("41_inicio_hcp_grupos")
+    }
+
+    func testHomeHcpCreateGroupWhenEmpty() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-no-groups"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "home-hcp-crear-grupo").waitForExistence(timeout: 4), "Falta Crear grupo")
+        first(app, "home-hcp-crear-grupo").tap()
+        XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
+        saveShot("42_inicio_hcp_crear_grupo")
     }
 
     func testCanchaHoleGridDoesNotWrapOnIPhone() throws {
@@ -475,7 +504,6 @@ final class GolfletUITests: XCTestCase {
         saveShot("37_grupo_comparacion")
     }
 
-<<<<<<< HEAD
     func testNotificationsBadgeAndInbox() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
@@ -604,7 +632,8 @@ final class GolfletUITests: XCTestCase {
             } else {
                 XCTAssertLessThanOrEqual(g.maxX, t.minX + 3, "\(name) entra en el tab")
             }
-            saveShot(name == "Juan Bautista" ? "40_inicio_juan_bautista" : "40_inicio_\(name.lowercased())")
+            let shot = name == "Juan Bautista" ? "40_inicio_juan_bautista" : "40_inicio_\(name.lowercased())"
+            saveShot(shot)
         } else {
             XCTAssertFalse(first(app, "home-tee-tab").waitForExistence(timeout: 1), "No debería haber tab")
         }
