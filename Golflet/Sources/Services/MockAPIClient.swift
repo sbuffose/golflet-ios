@@ -13,13 +13,17 @@ struct MockAPIClient: GolfletAPI {
     private static var mockSignedIn = false
     private static var mockLinked = true
     private static var mockPasswordSaved = true
-    private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
+    private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
 
     init(autoSession: Bool = true) {
         self.autoSession = autoSession
         Self.sessionLock.lock()
-        Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
+        if let greeting = RuntimeFlags.testingGreetingName {
+            Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: greeting, firstName: greeting)
+        } else {
+            Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
+        }
         if autoSession {
             Self.mockSignedIn = true
             Self.mockLinked = true
@@ -33,6 +37,7 @@ struct MockAPIClient: GolfletAPI {
         Self.resetGroups()
         Self.resetNotifications()
         Self.resetTextPrefs()
+        Self.resetProfesores()
     }
 
     var isAuthenticated: Bool {
@@ -49,7 +54,7 @@ struct MockAPIClient: GolfletAPI {
         guard !trimmed.isEmpty, !clave.isEmpty else {
             throw GolfletError.auth(AuthFailure(
                 code: "BAD_INPUT",
-                message: "Escribí tu matrícula y tu clave de Golfistics.",
+                message: "Escribí tu matrícula y tu contraseña.",
                 hint: nil,
                 golfisticsURL: nil,
                 retryAfterS: nil
@@ -102,14 +107,16 @@ struct MockAPIClient: GolfletAPI {
         let hi = rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 3.1
         return AppSnapshot(
             user: Self.mockUser,
-            profile: PlayerProfile(displayName: Self.mockUser.name, initials: initials(Self.mockUser.name), currentHandicap: hi),
+            profile: PlayerProfile(displayName: Self.mockUser.name, initials: initials(Self.mockUser.name), currentHandicap: hi, firstName: Self.mockUser.firstName),
             clubs: clubs,
             rounds: rounds,
             courses: courses,
             tees: tees,
             holeStats: stats,
             bag: DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) },
-            hiHistory: []
+            hiHistory: [],
+            teeTimes: linked ? (try? await teeTimes()) ?? [] : [],
+            profesores: linked ? (try? await profesores()) ?? [] : []
         )
     }
 
@@ -244,7 +251,12 @@ struct MockAPIClient: GolfletAPI {
     private func loadRounds() async throws -> [Round] {
         let raw: [[String: Any]] = try FixtureLoader.array("rounds")
         let extra: [[String: Any]] = (try? FixtureLoader.array("other_course")) ?? []
-        return (raw + extra).compactMap(Self.parseRound)
+        return (raw + extra).compactMap(Self.parseRound).enumerated().map { index, round in
+            guard index == 0, !round.isCompetition else { return round }
+            var copy = round
+            copy.isCompetition = true
+            return copy
+        }
     }
 
     private func loadCourses() async throws -> [Course] {
@@ -580,7 +592,8 @@ struct MockAPIClient: GolfletAPI {
             sourceClubName: item["source_club_name"] as? String,
             courseLabel: item["course_label"] as? String,
             recapId: item["recap_id"] as? String,
-            gpsShots: JSONFlex.int(from: item["gps_shots"]) ?? 0
+            gpsShots: JSONFlex.int(from: item["gps_shots"]) ?? 0,
+            isCompetition: JSONFlex.bool(from: item["is_competition"] ?? item["competition"]) ?? false
         )
     }
 }

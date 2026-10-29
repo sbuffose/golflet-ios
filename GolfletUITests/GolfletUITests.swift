@@ -13,6 +13,10 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10), "Bootstrap del mock no terminó")
         XCTAssertTrue(waitFor(app, "handicap-card"))
+        XCTAssertTrue(first(app, "home-tee-tab").waitForExistence(timeout: 4), "Falta la pestaña de próximo tee time")
+        first(app, "home-tee-tab").tap()
+        XCTAssertTrue(waitFor(app, "home-tee-times", timeout: 4), "No scrolleó a la tarjeta de tee times")
+        XCTAssertTrue(first(app, "home-tee-partners-tt-jockey-1").waitForExistence(timeout: 3), "Faltan los compañeros")
         saveShot("01_inicio")
 
         if waitFor(app, "last-round-card", timeout: 4) {
@@ -23,12 +27,14 @@ final class GolfletUITests: XCTestCase {
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
 
-        if openClubsSheet(app, timeout: 3) {
-            XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
-            saveShot("09_clubes")
-            dismissIfPresent(app, "close-clubes")
-            XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+        XCTAssertTrue(openClubsSheet(app, timeout: 3), "No abrió el perfil")
+        XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
+        saveShot("09_clubes")
+        dismissIfPresent(app, "close-clubes")
+        if first(app, "screen-notificaciones").exists {
+            dismissIfPresent(app, "close-notificaciones")
         }
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
 
         if first(app, "metric-tarjetas").waitForExistence(timeout: 3) {
             first(app, "metric-tarjetas").tap()
@@ -311,6 +317,93 @@ final class GolfletUITests: XCTestCase {
         dismissIfPresent(app, "metric-back")
     }
 
+    func testHomeGreetingFitsBesideOrBelowTeeTab() throws {
+        let names = ["Guillermo", "Maximiliano", "Juan Bautista"]
+        for name in names {
+            assertHomeGreeting(name, hasTab: true)
+            assertHomeGreeting(name, hasTab: false)
+        }
+    }
+
+    func testHomeHcpProfesoresStackOpensList() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-many-profesores"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "home-hcp-profesor").waitForExistence(timeout: 4), "Falta el stack de profesores")
+        largest(app, "home-hcp-profesor").tap()
+        XCTAssertTrue(waitFor(app, "screen-home-profesores", timeout: 6), "No se abrió Mis profesores")
+        XCTAssertFalse(first(app, "profesor-search").waitForExistence(timeout: 1), "La búsqueda vive en Agregar, no en Mis profesores")
+        XCTAssertTrue(first(app, "profesores-encontrar").waitForExistence(timeout: 3), "Falta Encontrar un profesor")
+        XCTAssertTrue(first(app, "profesores-agregar").waitForExistence(timeout: 3), "Falta Agregar un profesor")
+        XCTAssertFalse(app.staticTexts["Crear link para mi profesor"].exists)
+        XCTAssertTrue(first(app, "home-profesor-p-manu").waitForExistence(timeout: 4))
+        first(app, "home-profesor-p-manu").tap()
+        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 8), "No entró al profesor")
+        saveShot("44_inicio_hcp_profesores")
+    }
+
+    func testHomeHcpGroupsStackOpensGroup() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "home-hcp-groups").waitForExistence(timeout: 4), "Falta el stack de grupos en HCP")
+        largest(app, "home-hcp-groups").tap()
+        XCTAssertTrue(waitFor(app, "screen-home-groups", timeout: 6), "No se abrió la lista de grupos")
+        XCTAssertTrue(first(app, "home-group-g-jockey").waitForExistence(timeout: 4))
+        first(app, "home-group-g-jockey").tap()
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No entró al grupo")
+        saveShot("41_inicio_hcp_grupos")
+    }
+
+    func testHomeHcpCreateGroupWhenEmpty() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-no-groups"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "home-hcp-crear-grupo").waitForExistence(timeout: 4), "Falta Crear grupo")
+        largest(app, "home-hcp-crear-grupo").tap()
+        XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
+        saveShot("42_inicio_hcp_crear_grupo")
+    }
+
+    func testHomeHcpCreateGroupWhenNoProfesorOrGroups() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-no-groups", "-ui-testing-no-profesor"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertFalse(first(app, "home-hcp-profesor").waitForExistence(timeout: 2))
+        XCTAssertFalse(first(app, "home-hcp-groups").exists)
+        XCTAssertTrue(first(app, "home-hcp-add-profesor").waitForExistence(timeout: 4), "Falta el placeholder de profesor")
+        XCTAssertTrue(first(app, "home-hcp-crear-grupo").waitForExistence(timeout: 4), "Falta Crear grupo")
+        largest(app, "home-hcp-add-profesor").tap()
+        XCTAssertTrue(waitFor(app, "screen-agregar-profesor", timeout: 6), "No se abrió Agregar profesor")
+        let search = app.textFields["profesor-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "profesores-encontrar").waitForExistence(timeout: 3), "Falta Encontrar un profesor")
+        XCTAssertFalse(app.staticTexts["Crear link para mi profesor"].exists)
+        type(search, "Manu")
+        XCTAssertTrue(first(app, "add-profesor-p-manu").waitForExistence(timeout: 4), "La búsqueda no encontró al profesor")
+        first(app, "profesores-encontrar").tap()
+        XCTAssertTrue(waitFor(app, "screen-encontrar-profesor", timeout: 6), "No se abrió el match")
+        dismissIfPresent(app, "metric-back")
+        XCTAssertTrue(waitFor(app, "screen-agregar-profesor", timeout: 6))
+        dismissIfPresent(app, "close-agregar-profesor")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+        largest(app, "home-hcp-crear-grupo").tap()
+        XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
+        saveShot("45_inicio_hcp_crear_grupo_vacio")
+    }
+
     func testCanchaHoleGridDoesNotWrapOnIPhone() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
@@ -556,6 +649,49 @@ final class GolfletUITests: XCTestCase {
         saveShot("51_texto_xl_bolsa")
     }
 
+    private func assertHomeGreeting(_ name: String, hasTab: Bool) {
+        let app = XCUIApplication()
+        var args = ["-ui-testing", "-ui-testing-greeting", name]
+        if !hasTab { args.append("-ui-testing-no-tee") }
+        app.launchArguments = args
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció para \(name)")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        let greeting = first(app, "home-greeting")
+        XCTAssertTrue(greeting.waitForExistence(timeout: 6), "Falta Hola, \(name)")
+        let spoken = greeting.label
+        XCTAssertTrue(spoken.contains(name), "El saludo truncó \(name): \(spoken)")
+        XCTAssertTrue(spoken.contains("Hola"), "Falta Hola: \(spoken)")
+        XCTAssertLessThan(greeting.frame.height, 64, "El saludo se partió: \(greeting.frame)")
+
+        if hasTab {
+            let tab = first(app, "home-tee-tab")
+            XCTAssertTrue(tab.waitForExistence(timeout: 4), "Falta la pestaña con \(name)")
+            let g = greeting.frame
+            let t = tab.frame
+            XCTAssertFalse(
+                g.intersects(t.insetBy(dx: 1, dy: 1)),
+                "Hola, \(name) se pisa con el tab: \(g) vs \(t) en \(app.frame)"
+            )
+            XCTAssertGreaterThan(
+                t.maxX,
+                app.frame.maxX - 12,
+                "El tab no está al borde derecho: \(t) in \(app.frame)"
+            )
+            if t.minY + 4 >= g.maxY {
+                XCTAssertGreaterThan(t.minY, g.midY, "El tab no quedó debajo de \(name)")
+            } else {
+                XCTAssertLessThanOrEqual(g.maxX, t.minX + 3, "\(name) entra en el tab")
+            }
+            let shot = name == "Juan Bautista" ? "40_inicio_juan_bautista" : "40_inicio_\(name.lowercased())"
+            saveShot(shot)
+        } else {
+            XCTAssertFalse(first(app, "home-tee-tab").waitForExistence(timeout: 1), "No debería haber tab")
+        }
+        app.terminate()
+    }
+
     private func submitLogin(_ app: XCUIApplication) {
         if app.keyboards.element.exists {
             app.swipeDown()
@@ -587,6 +723,16 @@ final class GolfletUITests: XCTestCase {
             }
         }
         return best
+    }
+
+    private func tapLargest(_ app: XCUIApplication, _ id: String) {
+        let button = app.buttons[id]
+        let target = button.waitForExistence(timeout: 1) ? button : largest(app, id)
+        if target.isHittable {
+            target.tap()
+            return
+        }
+        target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     @discardableResult
@@ -624,7 +770,9 @@ final class GolfletUITests: XCTestCase {
             "Mínimo 8 caracteres",
             "Tu matrícula",
             "Tu número de matrícula",
-            "La misma que usás en Golfistics"
+            "La misma que usás en Golfistics",
+            "La misma que para entrar a tu club",
+            "Empezá a escribir, por ejemplo Manu"
         ]
         if let current = element.value as? String,
            !current.isEmpty,
@@ -642,17 +790,28 @@ final class GolfletUITests: XCTestCase {
         if first(app, "screen-ronda").exists {
             dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
         }
+        for _ in 0..<4 { app.swipeDown() }
         let avatar = app.buttons["avatar-button"].exists ? app.buttons["avatar-button"] : first(app, "avatar-button")
         if avatar.waitForExistence(timeout: timeout) {
+            if !avatar.isHittable {
+                for _ in 0..<4 { app.swipeDown() }
+            }
             if avatar.isHittable {
                 avatar.tap()
             } else {
                 avatar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             }
-            if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
-                first(app, "notifications-cuenta").tap()
+            if waitFor(app, "screen-notificaciones", timeout: 3) {
+                let cuenta = first(app, "notifications-cuenta")
+                if cuenta.waitForExistence(timeout: 4) {
+                    if cuenta.isHittable {
+                        cuenta.tap()
+                    } else {
+                        cuenta.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                    }
+                }
             }
-            return true
+            return waitFor(app, "screen-clubes", timeout: 6)
         }
         let addClub = app.buttons["add-club-home"]
         guard addClub.waitForExistence(timeout: 2), addClub.isHittable else { return false }

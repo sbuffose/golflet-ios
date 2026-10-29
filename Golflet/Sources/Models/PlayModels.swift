@@ -337,6 +337,62 @@ struct MetricMonthlyPoint: Hashable, Sendable, Identifiable {
     var rounds: Int
 }
 
+struct MonthlyScoreBar: Hashable, Sendable, Identifiable {
+    var id: String { month }
+    var month: String
+    var date: Date
+    var birdies: Int
+    var pars: Int
+
+    var hasBars: Bool { birdies > 0 || pars > 0 }
+}
+
+struct PerRoundAverage: Hashable, Sendable {
+    var mean: Double?
+    var median: Double?
+    var rounds: Int
+
+    static let empty = PerRoundAverage(mean: nil, median: nil, rounds: 0)
+}
+
+struct PerRoundStats: Hashable, Sendable {
+    var eagles: PerRoundAverage
+    var birdies: PerRoundAverage
+    var pars: PerRoundAverage
+    var bogeys: PerRoundAverage
+    var doubles: PerRoundAverage
+
+    static let empty = PerRoundStats(
+        eagles: .empty, birdies: .empty, pars: .empty, bogeys: .empty, doubles: .empty
+    )
+
+    func value(for kind: ScoreKind) -> PerRoundAverage {
+        switch kind {
+        case .eagle: return eagles
+        case .birdie: return birdies
+        case .par: return pars
+        case .bogey: return bogeys
+        }
+    }
+}
+
+struct HcpImpactCard: Hashable, Sendable, Identifiable {
+    var id: String
+    var date: Date?
+    var differential: Double?
+    var course: String?
+    var counting: Bool
+}
+
+struct HcpImpact: Hashable, Sendable {
+    var delta: Double
+    var start: Double?
+    var now: Double?
+    var estimated: Bool
+    var counting: [HcpImpactCard]
+    var dropped: [HcpImpactCard]
+}
+
 struct MetricsSummary: Hashable, Sendable {
     var range: String
     var rangeLabel: String?
@@ -351,6 +407,9 @@ struct MetricsSummary: Hashable, Sendable {
     var birdies: Int
     var pars: Int
     var bogeys: Int
+    var perRound: PerRoundStats = .empty
+    var hcpImpact: HcpImpact? = nil
+    var courseGroups: [CourseFilter] = []
 }
 
 struct MetricDrilldown: Hashable, Sendable {
@@ -369,6 +428,9 @@ struct MetricDrilldown: Hashable, Sendable {
     var roundsInRange: Int?
     var since: Date?
     var rangeLabel: String?
+    var start: Date? = nil
+    var recordsTotal: Int? = nil
+    var monthlyScores: [MonthlyScoreBar] = []
 
     func chartPoints(preferMonthly: Bool) -> [MetricPoint] {
         if preferMonthly, !monthly.isEmpty {

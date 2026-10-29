@@ -54,6 +54,7 @@ struct ScoreCounts: Hashable, Sendable {
     var doubles: Int
     var triples: Int
     var worse: Int
+    var eagles: Int = 0
 }
 
 struct Round: Identifiable, Hashable, Sendable {
@@ -90,6 +91,7 @@ struct Round: Identifiable, Hashable, Sendable {
     var hcpAllowancePct: Int?
     var courseKey: String = ""
     var putts: Int? = nil
+    var puttsSource: String? = nil
     var gir: Int? = nil
     var fir: Int? = nil
     var notes: String? = nil
@@ -100,6 +102,7 @@ struct Round: Identifiable, Hashable, Sendable {
     var courseLabel: String? = nil
     var recapId: String? = nil
     var gpsShots: Int = 0
+    var isCompetition: Bool = false
 
     var isOtherCourse: Bool {
         otherCourse || courseKey.hasPrefix("x:")
@@ -215,6 +218,7 @@ struct GolfletUser: Hashable, Sendable {
     var id: String
     var email: String
     var name: String
+    var firstName: String = ""
 
     var visibleEmail: String? {
         if email.isEmpty || email.contains("@golfistics.invalid") { return nil }
@@ -257,15 +261,15 @@ enum AuthCopy {
 
     static let rejected = AuthFailure(
         code: "GOLFISTICS_REJECTED",
-        message: "No pudimos entrar a Golfistics con esa matrícula y clave.",
-        hint: "Si todavía no configuraste tu clave de Golfistics o no la recordás, andá a Golfistics a configurarla (se recupera desde el sitio de tu club) y volvé a intentar.",
+        message: "No pudimos entrar con esa matrícula y contraseña.",
+        hint: "Si todavía no configuraste tu contraseña o no la recordás, andá al sitio de tu club a configurarla y volvé a intentar.",
         golfisticsURL: golfisticsURL,
         retryAfterS: nil
     )
 
     static let unavailable = AuthFailure(
         code: "GOLFISTICS_UNAVAILABLE",
-        message: "Golfistics no responde en este momento. Probá de nuevo en unos minutos.",
+        message: "El club no responde en este momento. Probá de nuevo en unos minutos.",
         hint: nil,
         golfisticsURL: nil,
         retryAfterS: nil
@@ -275,7 +279,7 @@ enum AuthCopy {
         AuthFailure(
             code: "TOO_MANY_ATTEMPTS",
             message: "Demasiados intentos. Esperá un rato y volvé a probar.",
-            hint: "Golfistics bloquea un rato si fallás varias veces seguidas. Configurá o recuperá la clave en Golfistics si no la recordás.",
+            hint: "Si fallás varias veces seguidas hay que esperar un rato. Configurá o recuperá la contraseña en el sitio de tu club.",
             golfisticsURL: golfisticsURL,
             retryAfterS: seconds
         )
@@ -492,6 +496,15 @@ enum RuntimeFlags {
         guard args.contains("-ui-testing-text-xl-bold") else { return nil }
         return TextPrefs(size: .extraLarge, weight: .marked)
     }
+
+    static var testingGreetingName: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "-ui-testing-greeting"),
+              args.indices.contains(index + 1)
+        else { return nil }
+        let value = args[index + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
 }
 
 
@@ -505,12 +518,52 @@ struct AppSnapshot: Sendable {
     var holeStats: [CourseHoleStats]
     var bag: [BagClub]
     var hiHistory: [HIPoint]
+    var courseGroups: [CourseFilter] = []
+    var teeTimes: [TeeTime] = []
+    var profesores: [Profesor] = []
+}
+
+struct TeeTime: Identifiable, Hashable, Sendable {
+    var id: String
+    var startsAt: Date
+    var clubName: String
+    var clubCode: String
+    var course: String
+    var companions: [String]
+
+    var chipWhen: String { FormatAR.teeChip(startsAt) }
+
+    var companionsLine: String? {
+        TeeTime.companionsLine(from: companions)
+    }
+
+    static func companionsLine(from names: [String]) -> String? {
+        let cleaned = names
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return nil }
+        if cleaned.count <= 2 {
+            return "con " + cleaned.joined(separator: ", ")
+        }
+        let shown = cleaned.prefix(2).joined(separator: ", ")
+        return "con \(shown) +\(cleaned.count - 2)"
+    }
+
+    func isUpcoming(now: Date = Date(), grace: TimeInterval = 3 * 3600) -> Bool {
+        startsAt.addingTimeInterval(grace) >= now
+    }
 }
 
 struct PlayerProfile: Hashable, Sendable {
     var displayName: String
     var initials: String
     var currentHandicap: Double
+    var firstName: String = ""
+
+    var greetingName: String {
+        let first = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return first.isEmpty ? displayName : first
+    }
 }
 
 struct BagClub: Identifiable, Hashable, Sendable {
@@ -528,18 +581,41 @@ struct ClubCredential: Codable, Hashable, Sendable {
     var clave: String
 }
 
-enum CourseFilter: String, CaseIterable, Identifiable, Sendable {
-    case all = "Todas"
-    case azul = "Azul"
-    case colorada = "Colorada"
+struct CourseFilter: Hashable, Sendable, Identifiable {
+    var id: String
+    var title: String
+    var courseNames: [String]
+    var kind: Kind
 
-    var id: String { rawValue }
+    enum Kind: Hashable, Sendable {
+        case all, group, other
+    }
+
+    static let all = CourseFilter(id: "all", title: "Todas", courseNames: [], kind: .all)
+    static let other = CourseFilter(id: "other", title: "Otras canchas", courseNames: [], kind: .other)
+    static let azul = CourseFilter(id: "azul", title: "Azul", courseNames: ["Azul"], kind: .group)
+    static let colorada = CourseFilter(id: "colorada", title: "Colorada", courseNames: ["Colorada"], kind: .group)
+
+    var rawValue: String { title }
 
     var courseName: String? {
-        switch self {
-        case .all: return nil
-        case .azul: return "Azul"
-        case .colorada: return "Colorada"
+        kind == .group && courseNames.count == 1 ? courseNames[0] : nil
+    }
+
+    func matches(_ round: Round, groupedNames: [String] = []) -> Bool {
+        switch kind {
+        case .all:
+            return true
+        case .group:
+            return courseNames.contains { name in
+                round.course.caseInsensitiveCompare(name) == .orderedSame
+                    || round.displayCourse.caseInsensitiveCompare(name) == .orderedSame
+            }
+        case .other:
+            return !groupedNames.contains { name in
+                round.course.caseInsensitiveCompare(name) == .orderedSame
+                    || round.displayCourse.caseInsensitiveCompare(name) == .orderedSame
+            }
         }
     }
 }

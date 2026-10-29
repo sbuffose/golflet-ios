@@ -249,6 +249,24 @@ enum FormatAR {
         if value < 0 { return "−\(-value)" }
         return "E"
     }
+
+    static func teeChip(_ date: Date) -> String {
+        let locale = Locale(identifier: "es_AR")
+        let weekday = DateFormatter()
+        weekday.locale = locale
+        weekday.dateFormat = "EEE"
+        let day = DateFormatter()
+        day.locale = locale
+        day.dateFormat = "d"
+        let time = DateFormatter()
+        time.locale = locale
+        time.dateFormat = "HH:mm"
+        let raw = weekday.string(from: date)
+            .replacingOccurrences(of: ".", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let short = raw.isEmpty ? raw : raw.prefix(1).uppercased() + raw.dropFirst()
+        return "\(short) \(day.string(from: date)) · \(time.string(from: date))"
+    }
 }
 
 struct PaletteInjector: ViewModifier {

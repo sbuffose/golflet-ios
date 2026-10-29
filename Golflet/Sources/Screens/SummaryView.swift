@@ -47,18 +47,23 @@ struct SummaryView: View {
     }
 
     private var filters: some View {
-        FilterPills(
-            options: CourseFilter.allCases.map(\.rawValue),
+        ScrollFilterPills(
+            options: model.courseFilterOptions.map(\.title),
             selection: Binding(
-                get: { model.courseFilter.rawValue },
-                set: { model.courseFilter = CourseFilter(rawValue: $0) ?? .all }
+                get: { model.courseFilter.title },
+                set: { title in
+                    model.courseFilter = model.courseFilterOptions.first { $0.title == title } ?? .all
+                }
             ),
             leadingDot: { option in
-                switch CourseFilter(rawValue: option) {
-                case .azul: return p.teeColor("azul")
-                case .colorada: return p.teeColor("colorada")
-                default: return nil
+                let names = model.courseFilterOptions.first { $0.title == option }?.courseNames ?? []
+                if names.contains(where: { $0.localizedCaseInsensitiveContains("azul") }) {
+                    return p.teeColor("azul")
                 }
+                if names.contains(where: { $0.localizedCaseInsensitiveContains("colorada") }) {
+                    return p.teeColor("colorada")
+                }
+                return nil
             }
         )
     }
@@ -226,9 +231,9 @@ struct SummaryView: View {
         let ranged = StatsEngine.ranged(model.rounds, range: model.statsRange)
         let rows: [(String, HoleStat)] = {
             if StatsEngine.hasCompleteHoleData(ranged) {
-                return StatsEngine.hardestFromRounds(ranged, filter: model.courseFilter)
+                return StatsEngine.hardestFromRounds(ranged, filter: model.courseFilter, groupedNames: model.groupedCourseNames)
             }
-            return StatsEngine.hardestHoles(from: model.holeStats, filter: model.courseFilter).map { ($0.0.course, $0.1) }
+            return StatsEngine.hardestHoles(from: model.holeStats, filter: model.courseFilter, groupedNames: model.groupedCourseNames).map { ($0.0.course, $0.1) }
         }()
         return VStack(alignment: .leading, spacing: 12) {
             Text("Hoyos que más te cuestan")

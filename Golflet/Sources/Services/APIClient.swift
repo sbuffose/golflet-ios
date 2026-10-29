@@ -35,6 +35,12 @@ protocol GolfletAPI: Sendable {
     func metricsSummary(range: String) async throws -> MetricsSummary
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy
 
+    func profesores() async throws -> [Profesor]
+    func searchProfesores(query: String) async throws -> [Profesor]
+    func addProfesor(id: String, source: String?) async throws -> Profesor
+    func profesorMatchAnswers() async throws -> ProfesorMatchAnswers
+    func saveProfesorMatchAnswers(_ answers: ProfesorMatchAnswers) async throws -> ProfesorMatchAnswers
+    func profesorMatches() async throws -> [ProfesorMatch]
     func groups() async throws -> [GolfletGroup]
     func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup
     func group(id: String) async throws -> GolfletGroup
@@ -60,6 +66,7 @@ protocol GolfletAPI: Sendable {
     func markNotificationsRead(ids: [String], all: Bool) async throws
     func userSettings() async throws -> TextPrefs
     func saveUserSettings(_ prefs: TextPrefs) async throws -> TextPrefs
+    func teeTimes() async throws -> [TeeTime]
 }
 
 enum APIFactory {

@@ -72,10 +72,18 @@ struct RoundDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             GOverline(text: FormatAR.longDate(round.date).uppercased())
-            Text(round.displayTitle)
-                .font(GType.sheetTitle)
-                .tracking(-1.2)
-                .foregroundStyle(p.ink)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if round.isCompetition {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0x86672F))
+                        .accessibilityIdentifier("round-trophy")
+                }
+                Text(round.displayTitle)
+                    .font(GType.sheetTitle)
+                    .tracking(-1.2)
+                    .foregroundStyle(p.ink)
+            }
             Text(round.tournament)
                 .font(GType.label)
                 .foregroundStyle(p.ink3)
