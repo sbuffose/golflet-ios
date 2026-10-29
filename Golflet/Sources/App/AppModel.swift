@@ -36,6 +36,7 @@ final class AppModel {
     var toastMessage: String?
     var isSignedIn: Bool
     var showsPlay = false
+    var presentedProfesor: Profesor?
     var presentedRecap: RecapTarget?
     var recurring: RecurringReport?
     var pendingCourseHint: String?
@@ -226,6 +227,7 @@ final class AppModel {
             unreadBadge = nil
             notificationsAvailable = false
             showsNotifications = false
+            presentedProfesor = nil
             presentedInvite = nil
             presentedGroupID = nil
             inviteShare = nil
@@ -426,6 +428,10 @@ final class AppModel {
         presentAfterDismissing { $0.showsClubs = true }
     }
 
+    func presentProfesor(_ profesor: Profesor) {
+        presentAfterDismissing { $0.presentedProfesor = profesor }
+    }
+
     func openAvatar() {
         if unreadBadgeText != nil {
             presentNotifications()
@@ -443,6 +449,7 @@ final class AppModel {
         showsGroups = false
         showsClubs = false
         showsNotifications = false
+        presentedProfesor = nil
         Task { @MainActor in
             present(self)
         }

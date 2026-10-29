@@ -164,6 +164,13 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
+        .sheet(item: bindings.presentedProfesor) { profesor in
+            NavigationStack {
+                ProfesorDetailView(profesor: profesor)
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .sheet(item: bindings.presentedRecap) { target in
             NavigationStack {
                 RecapView(roundId: target.roundId, liveRoundId: target.liveRoundId)
