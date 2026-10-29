@@ -109,6 +109,43 @@ final class StatsEngineTests: XCTestCase {
         XCTAssertEqual(StatsEngine.summary(rounds: [home, away], filter: .azul).validRoundCount, 1)
     }
 
+    func testHoleShareAndRecentGross() async throws {
+        let rounds = try await MockAPIClient().bootstrap().rounds
+        let valid = StatsEngine.eighteenHoleValid(rounds)
+        let holes = valid.reduce(0) { $0 + StatsEngine.holesPlayed(in: $1) }
+        XCTAssertGreaterThan(holes, 0)
+
+        let eagle = StatsEngine.holeShare(.eagle, in: valid)
+        let birdie = StatsEngine.holeShare(.birdie, in: valid)
+        let par = StatsEngine.holeShare(.par, in: valid)
+        let bogey = StatsEngine.holeShare(.bogey, in: valid)
+        XCTAssertGreaterThan(par, birdie)
+        XCTAssertGreaterThan(birdie, eagle)
+        XCTAssertGreaterThan(bogey, 0)
+        XCTAssertLessThan(eagle + birdie + par + bogey, 1.0001)
+
+        let totals = StatsEngine.scoreTotals(valid)
+        XCTAssertEqual(eagle, Double(totals[.eagle] ?? 0) / Double(holes), accuracy: 0.0001)
+        XCTAssertEqual(birdie, Double(totals[.birdie] ?? 0) / Double(holes), accuracy: 0.0001)
+
+        let spark = StatsEngine.recentGross(valid, limit: 8)
+        XCTAssertEqual(spark.count, 8)
+        XCTAssertEqual(spark.last, valid.sorted { $0.date < $1.date }.compactMap { $0.gross.map(Double.init) }.last)
+
+        let allPar = sampleRound(
+            id: "118:pars",
+            date: "2024-06-01",
+            club: "Jockey Club Buenos Aires",
+            course: "Azul",
+            courseKey: "118:Azul",
+            other: false,
+            gross: 72
+        )
+        XCTAssertEqual(StatsEngine.holeShare(.par, in: [allPar]), 1, accuracy: 0.001)
+        XCTAssertEqual(StatsEngine.holeShare(.birdie, in: [allPar]), 0, accuracy: 0.001)
+        XCTAssertEqual(StatsEngine.holeShare(.bogey, in: []), 0)
+    }
+
     func testAnonymizedPlayerName() async throws {
         let profile = try await MockAPIClient().bootstrap().profile
         XCTAssertEqual(profile.displayName, "Jugador Demo")
