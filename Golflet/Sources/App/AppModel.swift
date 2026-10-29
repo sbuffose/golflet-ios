@@ -44,6 +44,7 @@ final class AppModel {
     var activeCourse: GPSCourseDetail?
     var metricsSummary: MetricsSummary?
     var profesores: [Profesor] = []
+    var gameMetrics: GameMetrics?
     var groups: [GolfletGroup] = []
     var pendingInvites: [GroupInvitePreview] = []
     var sharePrefs = SharePrefs.allShared
@@ -138,6 +139,7 @@ final class AppModel {
             }
             publishWidgetSnapshot()
             await refreshMetricsSummary()
+            await refreshGameMetrics()
             await refreshGroups()
             await refreshNotifications()
             await refreshTextPrefs()
@@ -154,7 +156,10 @@ final class AppModel {
 
     func setStatsRange(_ range: StatsRange) {
         statsRange = range
-        Task { await refreshMetricsSummary() }
+        Task {
+            await refreshMetricsSummary()
+            await refreshGameMetrics()
+        }
     }
 
     func refreshPlaySettings() async {
@@ -187,6 +192,23 @@ final class AppModel {
         if let groups = metricsSummary?.courseGroups, !groups.isEmpty {
             courseGroups = groups
         }
+    }
+
+    func refreshGameMetrics() async {
+        guard isSignedIn else {
+            gameMetrics = nil
+            return
+        }
+        gameMetrics = try? await api.gameMetrics(range: statsRange.query)
+    }
+
+    var gpsCoverage: (gps: Int, n: Int) {
+        GameMetricsCoverage.count(rounds: rounds, range: statsRange, live: gameMetrics?.live ?? [])
+    }
+
+    var gpsCoverageLine: String {
+        let count = gpsCoverage
+        return GameMetricsCoverage.line(gps: count.gps, n: count.n)
     }
 
     func metricChartPoints(_ query: MetricChartQuery) async -> [MetricPoint] {

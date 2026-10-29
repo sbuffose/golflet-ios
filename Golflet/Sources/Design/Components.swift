@@ -355,6 +355,12 @@ extension View {
                 ClubStatsView(code: code)
             case .strategy(let courseKey, let courseName):
                 StrategyCourseView(courseKey: courseKey, courseName: courseName)
+            case .gameMetrics:
+                GameMetricsView()
+            case .ironBand(let id):
+                GameMetricsIronDetailView(bandID: id)
+            case .girPar(let par):
+                GameMetricsGIRParView(par: par)
             }
         }
     }

@@ -24,6 +24,15 @@ struct PlayHoleView: View {
     @State private var paceSession: PaceSession?
     @State private var showsPaceAlert = false
     @State private var paceAlertText = ""
+    @State private var holeRecords: [Int: LiveHoleRecord] = [:]
+    @State private var draftPutts: [Int: Int] = [:]
+    @State private var pinStep: PinStep = .idle
+
+    private enum PinStep: Equatable {
+        case idle
+        case zone(LivePin, PinZone?)
+        case report
+    }
 
     enum Phase { case ready, pickClub, pickResult }
 
@@ -44,6 +53,8 @@ struct PlayHoleView: View {
                     hitButton
                     if phase != .ready { clubGrid }
                     if phase == .pickResult { resultGrid }
+                    driveSide
+                    greenTools
                     holeShots
                     footer
                 }
@@ -210,9 +221,21 @@ struct PlayHoleView: View {
                 .padding(.vertical, 12)
                 .accessibilityIdentifier("distance-far")
         } else {
+            if let day = holeRecord?.dayPin {
+                Text(day.headline)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("play-day-pin-dist")
+            }
             HStack(alignment: .bottom, spacing: 8) {
-                yardCell("Frente", front, id: "distance-front")
-                yardCell("Centro", center, id: "distance-center", hero: true)
+                yardCell("Adelante", front, id: "distance-front")
+                if let day = holeRecord?.dayPin {
+                    yardCell("A la bandera", yards(from: here, to: day.coord), id: "distance-pin", hero: true)
+                } else {
+                    yardCell("Al centro", center, id: "distance-center", hero: true)
+                }
                 yardCell("Fondo", back, id: "distance-back")
             }
         }
@@ -332,6 +355,7 @@ struct PlayHoleView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Ya pegué")
         .accessibilityIdentifier("play-hit")
+        .accessibilityLabel("Ya pegué")
         .disabled(location.coordinate == nil)
     }
 
@@ -526,9 +550,392 @@ struct PlayHoleView: View {
         return PlayMath.yards(from: here, to: target)
     }
 
+    private var driveShot: Shot? {
+        shots.filter { $0.hole == hole && !isPutt($0) }.sorted { $0.shotNumber < $1.shotNumber }.first
+    }
+
+    private func isPutt(_ shot: Shot) -> Bool {
+        let club = (shot.club ?? "").lowercased()
+        return club == "pt" || club == "putter" || shot.lie == "green"
+    }
+
+    private var displayedPutts: Int? {
+        draftPutts[hole] ?? holeRecords[hole]?.putts
+    }
+
+    private var holeRecord: LiveHoleRecord? {
+        holeRecords[hole]
+    }
+
+    private var pinAction: PinAction {
+        if liveRound.endedAt != nil { return .none }
+        return holeRecord?.pinAction ?? (holeRecord?.dayPin == nil ? .mark : .none)
+    }
+
+    @ViewBuilder
+    private var pinCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let day = holeRecord?.dayPin {
+                Text(day.headline)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("play-pin-marked")
+                    .accessibilityLabel(day.headline)
+                Text(day.byMe ? "La marcaste vos: la ven todos los que juegan hoy" : PinCopy.usesThis)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("play-day-pin")
+            }
+
+            switch pinStep {
+            case .zone(let fix, let zone):
+                Text(PinCopy.whereOnGreen)
+                    .font(GType.body)
+                    .foregroundStyle(p.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                zoneChips(current: zone) { picked in
+                    pinStep = .zone(fix, picked)
+                }
+                Text(PinCopy.gpsNote(fix.accuracyM))
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { await savePin(fix: fix, zone: zone) }
+                } label: {
+                    pinButtonLabel(PinCopy.save, primary: true)
+                }
+                .buttonStyle(.plain)
+                .disabled(zone == nil)
+                .accessibilityIdentifier("play-pin-save")
+                Button {
+                    pinStep = .idle
+                } label: {
+                    pinButtonLabel(PinCopy.cancel, primary: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-pin-cancel")
+
+            case .report:
+                Text(PinCopy.reportAsk)
+                    .font(GType.body)
+                    .foregroundStyle(p.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(PinCopy.reportFoot)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { await confirmPinReport() }
+                } label: {
+                    pinButtonLabel(PinCopy.confirm, primary: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-pin-report-confirm")
+                Button {
+                    pinStep = .idle
+                } label: {
+                    pinButtonLabel(PinCopy.cancel, primary: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-pin-cancel")
+
+            case .idle:
+                idlePinActions
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var idlePinActions: some View {
+        switch pinAction {
+        case .mark:
+            Text(PinCopy.askMark)
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task { await beginMarkPin() }
+            } label: {
+                pinButtonLabel(PinCopy.mark, primary: true)
+            }
+            .buttonStyle(.plain)
+            .disabled(location.coordinate == nil)
+            .accessibilityIdentifier("play-pin")
+            .accessibilityLabel(PinCopy.mark)
+            Text(PinCopy.firstToday)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        case .remark:
+            Button {
+                Task { await beginMarkPin() }
+            } label: {
+                pinButtonLabel(PinCopy.remark, primary: false)
+            }
+            .buttonStyle(.plain)
+            .disabled(location.coordinate == nil)
+            .accessibilityIdentifier("play-pin-remark")
+        case .report:
+            Button {
+                pinStep = .report
+            } label: {
+                pinButtonLabel(PinCopy.report, primary: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-pin-report")
+            Text(PinCopy.usesThis)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        case .reported:
+            Text(PinCopy.reportedFoot)
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("play-pin-reported")
+                .accessibilityLabel(PinCopy.reported)
+        case .none:
+            if holeRecord?.dayPin == nil {
+                Text(PinCopy.noPin)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func zoneChips(current: PinZone?, pick: @escaping (PinZone) -> Void) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                ForEach(PinZone.allCases, id: \.self) { zone in
+                    zoneChip(zone, zone.label, current: current, pick: pick)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(PinZone.allCases, id: \.self) { zone in
+                    zoneChip(zone, zone.label, current: current, pick: pick)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("play-pin-zones")
+    }
+
+    private func zoneChip(_ zone: PinZone, _ label: String, current: PinZone?, pick: @escaping (PinZone) -> Void) -> some View {
+        Button { pick(zone) } label: {
+            Text(label)
+                .font(GType.headline)
+                .foregroundStyle(current == zone ? p.onPrimary : p.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(current == zone ? p.primary : p.surface2)
+                .clipShape(Capsule())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("play-pin-zone-\(zone.rawValue)")
+        .accessibilityAddTraits(current == zone ? .isSelected : [])
+    }
+
+    private func pinButtonLabel(_ title: String, primary: Bool) -> some View {
+        Text(title)
+            .font(GType.headline)
+            .foregroundStyle(primary ? p.onPrimary : p.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(primary ? p.primary : p.surface2)
+            .clipShape(Capsule())
+            .minimumScaleFactor(0.7)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+    }
+
+    @ViewBuilder
+    private var driveSide: some View {
+        let par = current?.par ?? 4
+        if let tee = driveShot, par >= 4 {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("¿Cómo salió el drive?")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                HStack(spacing: 8) {
+                    driveChip("left", "Izq.", current: tee.direction)
+                    driveChip("center", "Fairway", current: tee.direction)
+                    driveChip("right", "Der.", current: tee.direction)
+                }
+                Text("Opcional. Si no marcás, lo calculamos con tu golpe siguiente.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("play-drive-side")
+        }
+    }
+
+    private func driveChip(_ value: String, _ title: String, current: String?) -> some View {
+        Button {
+            Task { await setDriveDirection(value) }
+        } label: {
+            Text(title)
+                .font(GType.headline)
+                .foregroundStyle(current == value ? p.onPrimary : p.ink)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(current == value ? p.primary : p.surface)
+                .clipShape(Capsule())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("drive-\(value == "center" ? "fairway" : value)")
+    }
+
+    private var greenTools: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("En el green")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            GCard(radius: 18, padding: 16) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Putts")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        Spacer()
+                        HStack(spacing: 12) {
+                            Button { adjustPutts(-1) } label: {
+                                Text("−")
+                                    .font(GType.section)
+                                    .foregroundStyle(p.ink)
+                                    .frame(width: 36, height: 36)
+                                    .background(p.surface2)
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled((displayedPutts ?? 0) <= 0)
+                            .accessibilityIdentifier("play-putts-minus")
+                            Text(displayedPutts.map(String.init) ?? "—")
+                                .font(GType.statM)
+                                .tabular()
+                                .foregroundStyle(p.ink)
+                                .frame(minWidth: 28)
+                                .minimumScaleFactor(0.5)
+                                .lineLimit(1)
+                                .accessibilityIdentifier("play-putts-value")
+                            Button { adjustPutts(1) } label: {
+                                Text("+")
+                                    .font(GType.section)
+                                    .foregroundStyle(p.ink)
+                                    .frame(width: 36, height: 36)
+                                    .background(p.surface2)
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("play-putts-plus")
+                        }
+                    }
+                    Text("Se guarda al pasar al hoyo siguiente.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
+                }
+            }
+            GCard(radius: 18, padding: 16) {
+                pinCard
+            }
+        }
+    }
+
+    private func adjustPutts(_ delta: Int) {
+        let gpsPutts = shots.filter { $0.hole == hole && isPutt($0) }.count
+        let current = displayedPutts ?? gpsPutts
+        draftPutts[hole] = min(10, max(0, current + delta))
+    }
+
+    private func setDriveDirection(_ value: String) async {
+        guard let tee = driveShot else { return }
+        var body: [String: Any] = [:]
+        if tee.direction == value {
+            body["direction"] = NSNull()
+        } else {
+            body["direction"] = value
+        }
+        await patch(body)
+    }
+
+    private func beginMarkPin() async {
+        guard let here = location.coordinate else { return }
+        pinStep = .zone(LivePin(lat: here.lat, lng: here.lng, accuracyM: location.accuracyM), nil)
+    }
+
+    private func savePin(fix: LivePin, zone: PinZone?) async {
+        guard let zone else { return }
+        do {
+            let record = try await model.api.postLiveRoundPin(id: liveRound.id, hole: hole, pin: fix, zone: zone)
+            holeRecords[record.number] = record
+            pinStep = .idle
+            message = "Bandera de hoy guardada: ya la ven todos los que juegan este hoyo."
+        } catch {
+            await handlePinError(error)
+        }
+    }
+
+    private func confirmPinReport() async {
+        guard let here = location.coordinate else { return }
+        do {
+            let record = try await model.api.postLiveRoundPinReport(
+                id: liveRound.id,
+                hole: hole,
+                pin: LivePin(lat: here.lat, lng: here.lng, accuracyM: location.accuracyM)
+            )
+            holeRecords[record.number] = record
+            pinStep = .idle
+            message = "Reporte enviado. Gracias."
+        } catch {
+            await handlePinError(error)
+        }
+    }
+
+    private func handlePinError(_ error: Error) async {
+        let status = (error as? GolfletError)?.httpStatus
+        if status == 409 || status == 429 {
+            await reloadHoles()
+            pinStep = .idle
+        }
+        message = error.localizedDescription
+    }
+
+    private func reloadHoles() async {
+        if let holes = try? await model.api.liveRoundHoles(id: liveRound.id) {
+            holeRecords = Dictionary(uniqueKeysWithValues: holes.map { ($0.number, $0) })
+        }
+    }
+
+    private func savePuttsIfNeeded() async {
+        guard let value = draftPutts[hole], value != holeRecords[hole]?.putts else { return }
+        do {
+            let record = try await model.api.putLiveRoundHole(id: liveRound.id, hole: hole, putts: value)
+            holeRecords[record.number] = record
+            draftPutts[hole] = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func changeHole(_ next: Int) {
+        Task { await changeHoleAsync(next) }
+    }
+
+    private func changeHoleAsync(_ next: Int) async {
+        await savePuttsIfNeeded()
         let clamped = min(max(next, 1), max(course.holes.count, 1))
         hole = clamped
+        pinStep = .idle
         lastManualChange = Date()
         phase = .ready
         PlayHaptics.holeChange()
@@ -634,7 +1041,11 @@ struct PlayHoleView: View {
             ShotQueue.update(clientId: client) { draft in
                 if let club = body["club"] as? String { draft.club = club }
                 if let result = body["result"] as? String { draft.result = result }
-                if let direction = body["direction"] as? String { draft.direction = direction }
+                if body["direction"] is NSNull {
+                    draft.direction = nil
+                } else if let direction = body["direction"] as? String {
+                    draft.direction = direction
+                }
                 if let length = body["length"] as? String { draft.length = length }
                 if let mishit = body["mishit"] as? Bool { draft.mishit = mishit }
             }
@@ -646,9 +1057,13 @@ struct PlayHoleView: View {
             liveRound = detail.liveRound
             shots = detail.shots
         }
+        if let holes = try? await model.api.liveRoundHoles(id: liveRound.id) {
+            holeRecords = Dictionary(uniqueKeysWithValues: holes.map { ($0.number, $0) })
+        }
     }
 
     private func endRound() async {
+        await savePuttsIfNeeded()
         _ = try? await model.api.patchLiveRound(id: liveRound.id, body: ["ended": true])
         await model.endPlay(recapLiveRoundId: liveRound.id)
     }
