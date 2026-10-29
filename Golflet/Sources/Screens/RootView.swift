@@ -137,7 +137,10 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
-        .sheet(item: bindings.inviteShare) { payload in
+        .sheet(item: Binding(
+            get: { (model.showsCreateGroup || model.presentedGroupID != nil) ? nil : model.inviteShare },
+            set: { model.inviteShare = $0 }
+        )) { payload in
             NavigationStack {
                 InviteShareView(payload: payload)
             }

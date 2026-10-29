@@ -148,6 +148,14 @@ struct CreateGroupView: View {
     @State private var photoData: Data?
 
     var body: some View {
+        if let payload = model.inviteShare {
+            InviteShareView(payload: payload)
+        } else {
+            form
+        }
+    }
+
+    private var form: some View {
         GScreen(id: "screen-crear-grupo") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
@@ -194,9 +202,6 @@ struct CreateGroupView: View {
                                 name: name,
                                 photoJPEG: photoData.map { GroupPhoto.jpegData(from: $0) }
                             )
-                            if model.errorMessage == nil {
-                                dismiss()
-                            }
                         }
                     } label: {
                         Text(model.isBusy ? "Creando…" : "Crear grupo")
@@ -389,7 +394,12 @@ struct InviteShareView: View {
             .padding(.bottom, 28)
         }
         .accessibilityIdentifier("screen-compartir-grupo")
-        .safeAreaInset(edge: .top) { closeBar(action: { model.inviteShare = nil }, id: "close-compartir") }
+        .safeAreaInset(edge: .top) {
+            closeBar(action: {
+                model.inviteShare = nil
+                model.showsCreateGroup = false
+            }, id: "close-compartir")
+        }
         .sheet(isPresented: $showsSystemShare) {
             InviteShareSheet(url: payload.url, groupName: payload.groupName)
         }

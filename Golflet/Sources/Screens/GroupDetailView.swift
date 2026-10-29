@@ -33,6 +33,13 @@ struct GroupDetailView: View {
         .accessibilityIdentifier("screen-grupo")
         .safeAreaInset(edge: .top) { closeBar(action: { model.presentedGroupID = nil }, id: "close-grupo") }
         .task { await load() }
+        .sheet(item: Bindable(model).inviteShare) { payload in
+            NavigationStack {
+                InviteShareView(payload: payload)
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .sheet(isPresented: $showsViewSettings) {
             NavigationStack {
                 GroupViewSettings(groupID: groupID, config: $config) { updated in
@@ -301,6 +308,7 @@ struct GroupDetailView: View {
                             .tabular()
                             .foregroundStyle(value.shared ? p.ink : p.ink3)
                     }
+                    .accessibilityElement(children: .combine)
                     .accessibilityLabel("\(value.memberName), \(display(value, metric: row.metric))")
                     .accessibilityIdentifier("compare-\(row.metric.rawValue)-\(value.memberID)")
                 }

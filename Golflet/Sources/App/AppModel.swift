@@ -403,12 +403,8 @@ final class AppModel {
         await run {
             let group = try await api.createGroup(name: name, photoJPEG: photoJPEG)
             groups.insert(group, at: 0)
-            showsCreateGroup = false
             if let invite = group.invite, invite.enabled {
-                let payload = InviteSharePayload(groupName: group.name, url: invite.url)
-                Task { @MainActor in
-                    inviteShare = payload
-                }
+                inviteShare = InviteSharePayload(groupName: group.name, url: invite.url)
             }
             await refreshGroups()
         }
