@@ -328,6 +328,8 @@ extension View {
                 MetricRoundsView(query: query)
             case .scoreKind(let kind, let query):
                 ScoreKindDetailView(kind: kind, query: query)
+            case .chart(let query):
+                MetricChartView(query: query)
             case .handicap:
                 HandicapHistoryView()
             case .recurring:

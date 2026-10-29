@@ -163,6 +163,11 @@ struct HoleDetailView: View {
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
                     }
+                    if holeSeries.count > 1 {
+                        MetricLineChart(points: holeSeries, valueTitle: "Golpes")
+                            .frame(height: 160)
+                            .accessibilityIdentifier("hole-score-chart")
+                    }
                     distribution
                     comparison
                 }
@@ -279,8 +284,15 @@ struct HoleDetailView: View {
     }
 
     private var stat: HoleStat? {
-        model.holeStats.first { $0.course.caseInsensitiveCompare(courseName) == .orderedSame }?
-            .holes.first { $0.number == currentHole }
+        model.holesForCourse(courseName).first { $0.number == currentHole }
+    }
+
+    private var holeSeries: [MetricPoint] {
+        StatsEngine.series(
+            from: StatsEngine.ranged(model.rounds, range: model.statsRange),
+            kind: .hole(currentHole),
+            courseName: courseName
+        )
     }
 
     private var teeYardages: [(String, Int)] {

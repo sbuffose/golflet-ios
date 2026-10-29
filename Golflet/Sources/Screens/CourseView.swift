@@ -26,9 +26,25 @@ struct CourseView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             GOverline(text: model.clubs.first?.name ?? "Golflet")
-            GTitle(text: "Cancha")
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    GTitle(text: "Cancha")
+                    Text("\(model.courseSnapshot().validCount) \(model.courseSnapshot().validCount == 1 ? "ronda" : "rondas")")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("range-count")
+                }
+                Spacer(minLength: 8)
+                RangeMenuButton(
+                    range: Binding(
+                        get: { model.statsRange },
+                        set: { model.setStatsRange($0) }
+                    ),
+                    count: model.courseSnapshot().validCount
+                )
+            }
         }
     }
 
@@ -128,10 +144,13 @@ struct CourseView: View {
             clubCode: selectedClub?.clubCode ?? "",
             clubName: selectedClub?.clubName ?? ""
         )
-        return GCard(fill: p.primary, radius: 28, padding: 20) {
+        if snap.validCount == 0 {
+            return AnyView(RangeEmptyState(range: model.statsRange))
+        }
+        return AnyView(GCard(fill: p.primary, radius: 28, padding: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 GOverline(text: "Cancha \(courseTitle) · Par \(snap.par)", color: p.onPrimary.opacity(0.55))
-                NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "Promedio \(snap.course)", sort: .gross))) {
+                NavigationLink(value: chart(.gross, title: "Promedio \(snap.course)", course: snap.course)) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(snap.averageGross.map(FormatAR.one) ?? "—")
                             .font(GType.statHero)
@@ -151,19 +170,19 @@ struct CourseView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-course-average")
                 HStack {
-                    NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "Mejor \(snap.course)", sort: .gross))) {
+                    NavigationLink(value: chart(.gross, title: "Mejor \(snap.course)", course: snap.course)) {
                         mini("Mejor", snap.bestGross.map(String.init) ?? "—")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-course-best")
                     Spacer()
-                    NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "Neto \(snap.course)", sort: .net))) {
+                    NavigationLink(value: chart(.net, title: "Neto \(snap.course)", course: snap.course)) {
                         mini("Neto prom.", snap.averageNet.map(FormatAR.one) ?? "—")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-course-net")
                     Spacer()
-                    NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "\(snap.course) desde 2025", sinceYear: 2025, sort: .gross))) {
+                    NavigationLink(value: chart(.differential, title: "\(snap.course) desde 2025", course: snap.course)) {
                         mini("Desde 2025", snap.since2025Average.map(FormatAR.one) ?? "—")
                     }
                     .buttonStyle(.plain)
@@ -171,7 +190,11 @@ struct CourseView: View {
                 }
                 .padding(.top, 8)
             }
-        }
+        })
+    }
+
+    private func chart(_ kind: MetricChartKind, title: String, course: String) -> MetricRoute {
+        .chart(MetricChartQuery(title: title, kind: kind, courseName: course, range: model.statsRange))
     }
 
     private func mini(_ label: String, _ value: String) -> some View {
@@ -221,8 +244,7 @@ struct CourseView: View {
     }
 
     private var holes: some View {
-        let stats = model.holeStats.first { $0.course.caseInsensitiveCompare(model.selectedCourseName) == .orderedSame }
-        let holes = stats?.holes.sorted { $0.number < $1.number } ?? []
+        let holes = model.holesForCourse(model.selectedCourseName).sorted { $0.number < $1.number }
         let hardest = Set(holes.sorted { $0.averageToPar > $1.averageToPar }.prefix(3).map(\.number))
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -243,6 +265,7 @@ struct CourseView: View {
             CourseHolesGrid(holes: holes, hardest: hardest, width: holesWidth) { number in
                 model.presentedHole = number
             }
+            .opacity(model.courseSnapshot().validCount == 0 ? 0.35 : 1)
             .background {
                 GeometryReader { geo in
                     Color.clear.preference(key: CourseHolesWidthKey.self, value: geo.size.width)

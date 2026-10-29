@@ -18,6 +18,9 @@ final class AppModel {
     var authFailure: AuthFailure?
     var selectedTab: AppTab = .inicio
     var courseFilter: CourseFilter = .all
+    var statsRange: StatsRange = .all {
+        didSet { statsRange.persist() }
+    }
     var selectedCourseName = "Colorada"
     var presentedRound: Round?
     var presentedHole: Int?
@@ -32,6 +35,7 @@ final class AppModel {
     var pendingCourseHint: String?
     var activeLiveRound: LiveRound?
     var activeCourse: GPSCourseDetail?
+    var metricsSummary: MetricsSummary?
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -41,15 +45,38 @@ final class AppModel {
         self.api = api
         self.notes = notes
         self.isSignedIn = api.isAuthenticated
+        let testing = ProcessInfo.processInfo.arguments.contains("-ui-testing")
+            || ProcessInfo.processInfo.arguments.contains("-ui-testing-auth")
+        self.statsRange = testing ? .all : StatsRange.persisted()
     }
 
     var isAuthenticated: Bool { isSignedIn }
     var isLive: Bool { !api.persistsLocally }
     var home: HomeSnapshot { StatsEngine.home(rounds: rounds) }
-    var summary: SummarySnapshot { StatsEngine.summary(rounds: rounds, filter: courseFilter) }
+    var summary: SummarySnapshot { StatsEngine.summary(rounds: rounds, filter: courseFilter, range: statsRange) }
+    var rangeRoundCount: Int { metricsSummary?.roundsInRange ?? summary.validRoundCount }
 
     func courseSnapshot() -> CourseSnapshot {
-        StatsEngine.course(named: selectedCourseName, rounds: rounds, courses: courses, tees: tees)
+        StatsEngine.course(named: selectedCourseName, rounds: rounds, courses: courses, tees: tees, range: statsRange)
+    }
+
+    func rangedValidRounds(course: String? = nil) -> [Round] {
+        var scoped = StatsEngine.eighteenHoleValid(StatsEngine.ranged(rounds, range: statsRange))
+        if let course {
+            scoped = scoped.filter { $0.course.caseInsensitiveCompare(course) == .orderedSame }
+        } else if let name = courseFilter.courseName {
+            scoped = scoped.filter { $0.course.caseInsensitiveCompare(name) == .orderedSame }
+        }
+        return scoped
+    }
+
+    func holesForCourse(_ name: String) -> [HoleStat] {
+        let scoped = StatsEngine.ranged(rounds, range: statsRange)
+        if StatsEngine.hasCompleteHoleData(scoped) {
+            let computed = StatsEngine.holeAverages(rounds: scoped, course: name)
+            if !computed.isEmpty { return computed }
+        }
+        return holeStats.first { $0.course.caseInsensitiveCompare(name) == .orderedSame }?.holes ?? []
     }
 
     func load() async {
@@ -69,12 +96,48 @@ final class AppModel {
                 CourseCache.saveList(courses)
             }
             publishWidgetSnapshot()
+            await refreshMetricsSummary()
             isLoaded = true
             await consumeIntent()
         } catch {
             errorMessage = error.localizedDescription
             isLoaded = true
         }
+    }
+
+    func setStatsRange(_ range: StatsRange) {
+        statsRange = range
+        Task { await refreshMetricsSummary() }
+    }
+
+    func refreshMetricsSummary() async {
+        guard isSignedIn else {
+            metricsSummary = nil
+            return
+        }
+        metricsSummary = try? await api.metricsSummary(range: statsRange.query)
+    }
+
+    func metricChartPoints(_ query: MetricChartQuery) async -> [MetricPoint] {
+        let local = StatsEngine.series(
+            from: StatsEngine.ranged(rounds, range: query.range),
+            kind: query.kind,
+            courseName: query.courseName
+        )
+        guard let metric = query.kind.apiMetric else { return local }
+        let year = Calendar.gregorian.component(.year, from: Date())
+        let course = query.courseName.flatMap { CourseIdentity.key(for: $0) } ?? "all"
+        guard let drill = try? await api.metricDrilldown(
+            metric: metric,
+            scope: "all",
+            year: year,
+            course: course,
+            sort: "date",
+            order: "desc",
+            range: query.range.query
+        ) else { return local }
+        let remote = drill.chartPoints(preferMonthly: query.kind.usesMonthly)
+        return remote.isEmpty ? local : remote
     }
 
     func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async {

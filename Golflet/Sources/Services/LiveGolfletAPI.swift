@@ -199,9 +199,13 @@ struct LiveGolfletAPI: GolfletAPI {
         return detail
     }
 
-    func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String) async throws -> MetricDrilldown? {
-        let path = "/api/metrics/\(metric)?scope=\(scope)&year=\(year)&course=\(course)&sort=\(sort)&order=\(order)"
+    func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String, range: String) async throws -> MetricDrilldown? {
+        let path = "/api/metrics/\(metric)?scope=\(scope)&year=\(year)&course=\(course)&sort=\(sort)&order=\(order)&range=\(range)"
         return PlayParser.metric(try await request("GET", path))
+    }
+
+    func metricsSummary(range: String) async throws -> MetricsSummary {
+        PlayParser.metricsSummary(try await request("GET", "/api/metrics/summary?range=\(range)"))
     }
 
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy {

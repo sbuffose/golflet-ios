@@ -289,8 +289,75 @@ enum PlayParser {
             },
             summaryRounds: JSONFlex.int(from: (json["summary"] as? [String: Any])?["rounds"]),
             averageGross: JSONFlex.double(from: (json["summary"] as? [String: Any])?["average_gross"]),
-            bestGross: JSONFlex.int(from: (json["summary"] as? [String: Any])?["best_gross"])
+            bestGross: JSONFlex.int(from: (json["summary"] as? [String: Any])?["best_gross"]),
+            series: series(from: json["series"]),
+            monthly: monthly(from: json["monthly"]),
+            roundsInRange: JSONFlex.int(from: json["rounds_in_range"]),
+            since: (json["since"] as? String).flatMap(DayStamp.parse),
+            rangeLabel: json["range_label"] as? String
         )
+    }
+
+    static func metricsSummary(_ json: [String: Any]) -> MetricsSummary {
+        let blob = json["summary"] as? [String: Any] ?? json
+        return MetricsSummary(
+            range: string(json["range"] ?? blob["range"]),
+            rangeLabel: optionalString(json["range_label"] ?? blob["range_label"]),
+            since: (json["since"] as? String).flatMap(DayStamp.parse)
+                ?? (blob["since"] as? String).flatMap(DayStamp.parse),
+            roundsInRange: JSONFlex.int(from: json["rounds_in_range"] ?? blob["rounds_in_range"] ?? blob["rounds"]) ?? 0,
+            validRounds: JSONFlex.int(from: blob["valid_rounds"] ?? blob["valid"]) ?? 0,
+            averageGross: JSONFlex.double(from: blob["average_gross"] ?? blob["avg_gross"]),
+            averageNet: JSONFlex.double(from: blob["average_net"] ?? blob["avg_net"]),
+            bestGross: JSONFlex.int(from: blob["best_gross"]),
+            worstGross: JSONFlex.int(from: blob["worst_gross"]),
+            eagles: JSONFlex.int(from: blob["eagles"]) ?? 0,
+            birdies: JSONFlex.int(from: blob["birdies"]) ?? 0,
+            pars: JSONFlex.int(from: blob["pars"]) ?? 0,
+            bogeys: JSONFlex.int(from: blob["bogeys"]) ?? 0
+        )
+    }
+
+    private static func series(from raw: Any?) -> [MetricSeriesPoint] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let date = DayStamp.parse(string(item["date"] ?? item["x"])),
+                  let value = JSONFlex.double(from: item["value"] ?? item["v"] ?? item["gross"])
+            else { return nil }
+            return MetricSeriesPoint(
+                date: date,
+                value: value,
+                course: string(item["course"] ?? item["course_label"])
+            )
+        }
+    }
+
+    private static func monthly(from raw: Any?) -> [MetricMonthlyPoint] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            let month = string(item["month"] ?? item["x"])
+            guard !month.isEmpty,
+                  let date = DayStamp.parseMonth(month) ?? DayStamp.parse(month),
+                  let value = JSONFlex.double(from: item["value"] ?? item["v"])
+            else { return nil }
+            return MetricMonthlyPoint(
+                month: month,
+                date: date,
+                value: value,
+                rounds: JSONFlex.int(from: item["rounds"] ?? item["n"]) ?? 0
+            )
+        }
+    }
+
+    private static func string(_ raw: Any?) -> String {
+        if let value = raw as? String { return value }
+        if let value = raw as? Int { return String(value) }
+        return ""
+    }
+
+    private static func optionalString(_ raw: Any?) -> String? {
+        let value = string(raw)
+        return value.isEmpty ? nil : value
     }
 
     private static func parseCourse(_ blob: [String: Any], nearby: Bool) -> GPSCourseSummary? {
