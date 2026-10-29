@@ -6,8 +6,20 @@ extension LiveGolfletAPI {
     }
 
     func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup {
-        let json = try await submitGroup(path: GroupsAPIPaths.list, method: "POST", name: name, photoJPEG: photoJPEG)
-        guard let group = GroupsParser.group(from: json["group"] ?? json) else { throw GolfletError.decoding("group") }
+        let json = try await request(
+            "POST",
+            GroupsAPIPaths.list,
+            body: ["name": name, "matriculas": [String]()]
+        )
+        guard var group = GroupsParser.group(from: json["group"] ?? json) else { throw GolfletError.decoding("group") }
+        if let photoJPEG, !photoJPEG.isEmpty {
+            let photo = try await putGroupPhoto(id: group.id, jpeg: photoJPEG)
+            if let updated = GroupsParser.group(from: photo["group"] ?? photo) {
+                group = updated
+            } else if let url = photo["photo_url"] as? String {
+                group.photoURL = url
+            }
+        }
         return group
     }
 
@@ -18,7 +30,15 @@ extension LiveGolfletAPI {
     }
 
     func updateGroup(id: String, name: String?, photoJPEG: Data?) async throws -> GolfletGroup {
-        let json = try await submitGroup(path: GroupsAPIPaths.detail(id), method: "PATCH", name: name, photoJPEG: photoJPEG)
+        var json: [String: Any] = [:]
+        if let name {
+            json = try await request("PATCH", GroupsAPIPaths.detail(id), body: ["name": name])
+        } else {
+            json = try await request("GET", GroupsAPIPaths.detail(id))
+        }
+        if let photoJPEG, !photoJPEG.isEmpty {
+            json = try await putGroupPhoto(id: id, jpeg: photoJPEG)
+        }
         guard let group = GroupsParser.group(from: json["group"] ?? json) else { throw GolfletError.decoding("group") }
         return group
     }
@@ -35,8 +55,8 @@ extension LiveGolfletAPI {
 
     func setMemberRole(groupID: String, userID: String, role: GroupRole) async throws -> GolfletGroup {
         let json = try await request(
-            "POST",
-            GroupsAPIPaths.memberRole(groupID, userID: userID),
+            "PATCH",
+            GroupsAPIPaths.member(groupID, userID: userID),
             body: ["role": role.rawValue]
         )
         guard let group = GroupsParser.group(from: json["group"] ?? json) else { throw GolfletError.decoding("group") }
@@ -44,34 +64,45 @@ extension LiveGolfletAPI {
     }
 
     func regenerateInvite(groupID: String) async throws -> GroupInviteLink {
-        let json = try await request("POST", GroupsAPIPaths.invite(groupID), body: [:])
-        guard let link = GroupsParser.inviteLink(from: json["invite"] ?? json) else { throw GolfletError.decoding("invite") }
+        let json = try await request("POST", GroupsAPIPaths.link(groupID), body: ["action": "regenerate"])
+        guard let link = GroupsParser.inviteLink(
+            from: json["link"] ?? json["invite"] ?? (json["group"] as? [String: Any])?["link"] ?? json
+        ) else {
+            throw GolfletError.decoding("invite")
+        }
         return link
     }
 
     func disableInvite(groupID: String) async throws -> GroupInviteLink {
-        let json = try await request("POST", GroupsAPIPaths.disableInvite(groupID), body: [:])
-        return GroupsParser.inviteLink(from: json["invite"] ?? json) ?? .make(token: "", enabled: false)
+        let json = try await request("POST", GroupsAPIPaths.link(groupID), body: ["action": "disable"])
+        return GroupsParser.inviteLink(
+            from: json["link"] ?? json["invite"] ?? (json["group"] as? [String: Any])?["link"] ?? json
+        ) ?? .make(token: "", enabled: false)
     }
 
     func pendingInvites() async throws -> [GroupInvitePreview] {
-        GroupsParser.invites(from: try await request("GET", GroupsAPIPaths.pendingInvites))
+        GroupsParser.invites(from: try await request("GET", GroupsAPIPaths.list))
     }
 
     func invitePreview(token: String) async throws -> GroupInvitePreview {
-        let json = try await request("GET", GroupsAPIPaths.preview(token), authorized: false)
-        guard let invite = GroupsParser.invite(from: json["invite"] ?? json) else { throw GolfletError.decoding("invite") }
+        let encoded = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
+        let json = try await request("GET", GroupsAPIPaths.join(encoded))
+        guard var invite = GroupsParser.invite(from: json, fallbackToken: token) else {
+            throw GolfletError.decoding("invite")
+        }
+        if invite.token.isEmpty { invite.token = token }
         return invite
     }
 
     func acceptInvite(token: String) async throws -> GolfletGroup {
-        let json = try await request("POST", GroupsAPIPaths.accept(token), body: [:])
-        guard let group = GroupsParser.group(from: json["group"] ?? json) else { throw GolfletError.decoding("group") }
-        return group
+        let json = try await respond(to: token, accept: true)
+        if let group = GroupsParser.group(from: json["group"] ?? json) { return group }
+        if let id = json["group_id"] as? String { return try await group(id: id) }
+        throw GolfletError.decoding("group")
     }
 
     func declineInvite(token: String) async throws {
-        _ = try await request("POST", GroupsAPIPaths.decline(token), body: [:])
+        _ = try await respond(to: token, accept: false)
     }
 
     func groupView(groupID: String) async throws -> GroupViewConfig {
@@ -96,43 +127,29 @@ extension LiveGolfletAPI {
             let encoded = course.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? course
             query += "&course=\(encoded)"
         }
-        let json = try await request("GET", "\(GroupsAPIPaths.comparison(groupID))?\(query)")
+        let json = try await request("GET", "\(GroupsAPIPaths.detail(groupID))?\(query)")
         return GroupsParser.comparison(from: json, fallback: config)
     }
 
-    private func submitGroup(path: String, method: String, name: String?, photoJPEG: Data?) async throws -> [String: Any] {
-        if let photoJPEG, !photoJPEG.isEmpty {
-            return try await uploadGroup(path: path, method: method, name: name, photoJPEG: photoJPEG)
+    private func respond(to token: String, accept: Bool) async throws -> [String: Any] {
+        if token.hasPrefix("group:") {
+            let id = String(token.dropFirst(6))
+            return try await request("POST", GroupsAPIPaths.respond(id), body: ["accept": accept])
         }
-        var body: [String: Any] = [:]
-        if let name { body["name"] = name }
-        return try await request(method, path, body: body)
+        let encoded = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
+        return try await request("POST", GroupsAPIPaths.join(encoded), body: ["accept": accept])
     }
 
-    private func uploadGroup(path: String, method: String, name: String?, photoJPEG: Data) async throws -> [String: Any] {
-        guard let url = URL(string: path, relativeTo: baseURL) else { throw GolfletError.invalidClub }
-        let boundary = "Golflet\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+    private func putGroupPhoto(id: String, jpeg: Data) async throws -> [String: Any] {
+        guard let url = URL(string: GroupsAPIPaths.photo(id), relativeTo: baseURL) else { throw GolfletError.invalidClub }
         var request = URLRequest(url: url)
-        request.httpMethod = method
+        request.httpMethod = "PUT"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 45
         guard let token = KeychainStore.loadToken() else { throw GolfletError.notAuthenticated }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        var body = Data()
-        func field(_ key: String, _ value: String) {
-            body.append(Data("--\(boundary)\r\n".utf8))
-            body.append(Data("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".utf8))
-            body.append(Data("\(value)\r\n".utf8))
-        }
-        if let name { field("name", name) }
-        body.append(Data("--\(boundary)\r\n".utf8))
-        body.append(Data("Content-Disposition: form-data; name=\"photo\"; filename=\"group.jpg\"\r\n".utf8))
-        body.append(Data("Content-Type: image/jpeg\r\n\r\n".utf8))
-        body.append(photoJPEG)
-        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
-        request.httpBody = body
+        request.httpBody = jpeg
 
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 45
@@ -145,7 +162,7 @@ extension LiveGolfletAPI {
             throw GolfletError.notAuthenticated
         }
         if status >= 400 {
-            throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo guardar el grupo."))
+            throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo guardar la foto."))
         }
         return json
     }

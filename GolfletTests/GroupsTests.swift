@@ -122,7 +122,7 @@ final class GroupsTests: XCTestCase {
                     ["id": "u1", "name": "Ana Pérez", "role": "admin", "is_owner": true],
                     ["user_id": "u2", "display_name": "Luis Gómez", "role": "member"]
                 ],
-                "invite": ["token": "tok-1", "enabled": true]
+                "link": ["url": "https://golflet.vercel.app/g/tok-1", "enabled": true]
             ]
         ]
         let group = GroupsParser.group(from: json)
@@ -130,6 +130,49 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(group?.members.count, 2)
         XCTAssertEqual(group?.invite?.url.absoluteString, "https://golflet.vercel.app/g/tok-1")
         XCTAssertTrue(group?.isAdmin == true)
+    }
+
+    func testParsesGroupsV2JoinAndSharing() {
+        XCTAssertEqual(GroupsAPIPaths.sharePrefs, "/api/me/sharing")
+        XCTAssertEqual(GroupsAPIPaths.join("abc"), "/api/groups/join/abc")
+        XCTAssertEqual(GroupsAPIPaths.link("g1"), "/api/groups/g1/link")
+        XCTAssertEqual(GroupsAPIPaths.photo("g1"), "/api/groups/g1/photo")
+
+        let invite = GroupsParser.invite(
+            from: [
+                "status": "pending",
+                "group": [
+                    "id": "g9",
+                    "name": "Sábados",
+                    "owner": "Clara Ruiz",
+                    "members": 3,
+                    "photo_url": "https://golflet.vercel.app/p.jpg"
+                ]
+            ],
+            fallbackToken: "invite-mdp"
+        )
+        XCTAssertEqual(invite?.token, "invite-mdp")
+        XCTAssertEqual(invite?.name, "Sábados")
+        XCTAssertEqual(invite?.ownerName, "Clara Ruiz")
+        XCTAssertEqual(invite?.groupID, "g9")
+
+        let pending = GroupsParser.invites(from: [
+            "invitations": [
+                ["group_id": "g2", "name": "Birdie Club", "invited_by": "Ana"]
+            ]
+        ])
+        XCTAssertEqual(pending.first?.token, "group:g2")
+        XCTAssertEqual(pending.first?.name, "Birdie Club")
+
+        let prefs = GroupsParser.sharePrefs(from: [
+            "prefs": ["scores": true, "handicap": false, "score_types": true, "gps": false]
+        ])
+        XCTAssertTrue(prefs.scoring)
+        XCTAssertFalse(prefs.handicap)
+        XCTAssertTrue(prefs.birdiesPars)
+        XCTAssertFalse(prefs.gpsDistances)
+        XCTAssertEqual((SharePrefs.allShared.jsonBody["prefs"] as? [String: Any])?["scores"] as? Bool, true)
+        XCTAssertNil((SharePrefs.allShared.jsonBody["prefs"] as? [String: Any])?["voice"])
     }
 
     func testRegenerateAndDisableInvite() async throws {
