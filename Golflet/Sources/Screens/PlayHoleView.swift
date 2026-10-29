@@ -720,6 +720,7 @@ struct PlayHoleView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("play-pin-zones")
     }
 
@@ -772,6 +773,7 @@ struct PlayHoleView: View {
                     .foregroundStyle(p.ink3)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("play-drive-side")
         }
     }
