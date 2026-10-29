@@ -604,9 +604,14 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "met-empty-putting").waitForExistence(timeout: 3))
         saveShot("53_metricas_putting")
 
-        first(app, "met-empty-start").tap()
+        let start = app.buttons["met-empty-start"].exists ? app.buttons["met-empty-start"] : first(app, "met-empty-start")
+        if start.isHittable {
+            start.tap()
+        } else {
+            start.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6), "Empezar ronda con GPS no abrió Jugar")
-        first(app, "course-118-jockey-azul").tap()
+        startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
         XCTAssertTrue(first(app, "play-hit").waitForExistence(timeout: 4))
         XCTAssertEqual(first(app, "play-hit").label, "Ya pegué")
@@ -680,7 +685,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
         first(app, "play-start").tap()
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
-        first(app, "course-118-jockey-azul").tap()
+        startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
         assertFits(app, "play-hit")
         reveal(app, first(app, "play-putts-plus"))

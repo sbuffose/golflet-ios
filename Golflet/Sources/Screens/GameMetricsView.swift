@@ -578,10 +578,6 @@ struct GameMetricsEmptyCard: View {
             GProbe(id: "met-empty-how", label: GameMetricsCopy.howToPlay)
                 .allowsHitTesting(false)
         }
-        .overlay {
-            GProbe(id: "met-empty-start", label: GameMetricsCopy.startGPS)
-                .allowsHitTesting(false)
-        }
     }
 }
 
