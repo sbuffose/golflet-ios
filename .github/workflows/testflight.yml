@@ -423,6 +423,14 @@ jobs:
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
+      - name: Keep empty App Groups entitlement
+        run: |
+          set -euo pipefail
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          chmod +x .github/scripts/keep-empty-app-groups.sh
+          .github/scripts/keep-empty-app-groups.sh \
+            "$RUNNER_TEMP/Golflet.xcarchive/Products/Applications/Golflet.app"
+
       - name: Validate archive bundle
         run: |
           set -euo pipefail
@@ -494,6 +502,21 @@ jobs:
             -archivePath "$RUNNER_TEMP/Golflet.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Keep empty App Groups entitlement in IPA
+        run: |
+          set -euo pipefail
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          IPA="$RUNNER_TEMP/export/Golflet.ipa"
+          WORK="$RUNNER_TEMP/ipa-keep-groups"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          unzip -q "$IPA" -d "$WORK"
+          chmod +x .github/scripts/keep-empty-app-groups.sh
+          .github/scripts/keep-empty-app-groups.sh "$WORK"
+          rm -f "$IPA"
+          (cd "$WORK" && zip -qr "$IPA" Payload)
+          echo "Re-packed $IPA with empty application-groups."
 
       - name: Validate IPA with App Store Connect
         env:
