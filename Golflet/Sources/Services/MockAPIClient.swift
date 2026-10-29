@@ -13,7 +13,7 @@ struct MockAPIClient: GolfletAPI {
     private static var mockSignedIn = false
     private static var mockLinked = true
     private static var mockPasswordSaved = true
-    private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
+    private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
 
     init(autoSession: Bool = true) {
@@ -49,7 +49,7 @@ struct MockAPIClient: GolfletAPI {
         guard !trimmed.isEmpty, !clave.isEmpty else {
             throw GolfletError.auth(AuthFailure(
                 code: "BAD_INPUT",
-                message: "Escribí tu matrícula y tu clave de Golfistics.",
+                message: "Escribí tu matrícula y tu contraseña.",
                 hint: nil,
                 golfisticsURL: nil,
                 retryAfterS: nil
@@ -102,14 +102,15 @@ struct MockAPIClient: GolfletAPI {
         let hi = rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 3.1
         return AppSnapshot(
             user: Self.mockUser,
-            profile: PlayerProfile(displayName: Self.mockUser.name, initials: initials(Self.mockUser.name), currentHandicap: hi),
+            profile: PlayerProfile(displayName: Self.mockUser.name, initials: initials(Self.mockUser.name), currentHandicap: hi, firstName: Self.mockUser.firstName),
             clubs: clubs,
             rounds: rounds,
             courses: courses,
             tees: tees,
             holeStats: stats,
             bag: DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) },
-            hiHistory: []
+            hiHistory: [],
+            teeTimes: linked ? (try? await teeTimes()) ?? [] : []
         )
     }
 

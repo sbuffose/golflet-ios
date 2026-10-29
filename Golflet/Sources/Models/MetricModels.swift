@@ -64,11 +64,17 @@ enum MetricSortOrder: String, Hashable, Sendable {
     func label(for field: MetricSortField) -> String {
         switch field {
         case .date:
-            return self == .bestFirst ? "Más reciente" : "Más antigua"
+            return self == .bestFirst ? "Recientes" : "Antiguas"
         case .gross, .net:
-            return self == .bestFirst ? "Mejor primero" : "Peor primero"
+            return self == .bestFirst ? "Mejor" : "Peor"
         }
     }
+}
+
+struct RoundYearSection: Identifiable, Hashable {
+    var id: String
+    var isCurrent: Bool
+    var rounds: [Round]
 }
 
 enum ScoreKind: String, Hashable, CaseIterable, Sendable {
@@ -129,7 +135,7 @@ struct RoundListQuery: Hashable, Sendable {
     var defaultOrder: MetricSortOrder = .bestFirst
 
     static var allCards: RoundListQuery {
-        RoundListQuery(title: "Tarjetas", footnote: "Todas las tarjetas que trajo Golfistics.")
+        RoundListQuery(title: "Tarjetas", footnote: "Todas las tarjetas de tu ficha del club.")
     }
 
     static var yearRounds: RoundListQuery {

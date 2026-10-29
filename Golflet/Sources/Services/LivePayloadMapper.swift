@@ -3,16 +3,24 @@ import Foundation
 enum LivePayloadMapper {
     static func snapshot(from json: [String: Any]) -> AppSnapshot {
         let userObj = json["user"] as? [String: Any]
+        let me = json["me"] as? [String: Any]
         let user = userObj.map {
             GolfletUser(
                 id: $0["id"] as? String ?? "",
                 email: $0["email"] as? String ?? "",
-                name: $0["name"] as? String ?? ""
+                name: $0["name"] as? String ?? "",
+                firstName: string($0["first_name"])
             )
         }
         let player = json["player"] as? [String: Any]
         let playerName = (player?["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let display = (playerName?.isEmpty == false ? playerName : user?.name) ?? "Jugador"
+        let firstName = firstNonEmpty(
+            string(userObj?["first_name"]),
+            string(player?["first_name"]),
+            string(me?["first_name"]),
+            user?.firstName ?? ""
+        )
         let playerHI = JSONFlex.double(from: player?["handicap_index"])
         let hiHistory = parseHI(json["hi_history"])
         let clubs = parseClubs(json["clubs"])
@@ -24,7 +32,8 @@ enum LivePayloadMapper {
             profile: PlayerProfile(
                 displayName: display,
                 initials: initials(display),
-                currentHandicap: playerHI ?? hiHistory.last?.handicap ?? rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 0
+                currentHandicap: playerHI ?? hiHistory.last?.handicap ?? rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 0,
+                firstName: firstName
             ),
             clubs: clubs,
             rounds: rounds,
@@ -32,7 +41,9 @@ enum LivePayloadMapper {
             tees: mappedCourses.tees,
             holeStats: mappedCourses.stats,
             bag: parseBag(json["bag"]),
-            hiHistory: hiHistory
+            hiHistory: hiHistory,
+            courseGroups: parseCourseGroups(json["course_groups"] ?? json["courseGroups"]),
+            teeTimes: TeeTimesParser.list(from: json)
         )
     }
 
@@ -165,7 +176,7 @@ enum LivePayloadMapper {
         switch code {
         case "GOLFISTICS_UNAVAILABLE": return AuthCopy.unavailable.message
         case "TOO_MANY_ATTEMPTS": return AuthCopy.rateLimited().message
-        case "BAD_INPUT": return "Escribí tu matrícula y tu clave de Golfistics."
+        case "BAD_INPUT": return "Escribí tu matrícula y tu contraseña."
         default: return AuthCopy.rejected.message
         }
     }
@@ -231,9 +242,10 @@ enum LivePayloadMapper {
                 birdies: JSONFlex.int(from: counts["birdies"]) ?? 0,
                 pars: JSONFlex.int(from: counts["pars"]) ?? 0,
                 bogeys: JSONFlex.int(from: counts["bogeys"]) ?? 0,
-                doubles: JSONFlex.int(from: counts["double_bogeys"]) ?? 0,
+                doubles: JSONFlex.int(from: counts["double_bogeys"] ?? counts["double_plus"] ?? counts["doubles"]) ?? 0,
                 triples: JSONFlex.int(from: counts["triple_bogeys"]) ?? 0,
-                worse: JSONFlex.int(from: counts["worse"]) ?? 0
+                worse: JSONFlex.int(from: counts["worse"]) ?? 0,
+                eagles: JSONFlex.int(from: counts["eagles"] ?? counts["eagle_or_better"]) ?? 0
             ),
             holes: holes,
             holesPlayed: JSONFlex.int(from: item["holes_played"]) ?? holes.count,
@@ -244,7 +256,8 @@ enum LivePayloadMapper {
             courseHandicap: JSONFlex.int(from: item["course_handicap"]),
             hcpAllowancePct: JSONFlex.int(from: item["hcp_allowance_pct"]),
             courseKey: courseKey,
-            putts: JSONFlex.int(from: item["putts"]),
+            putts: JSONFlex.int(from: item["putts_total"] ?? item["putts"]),
+            puttsSource: item["putts_source"] as? String,
             gir: JSONFlex.int(from: item["gir"]),
             fir: JSONFlex.int(from: item["fir"]),
             notes: item["notes"] as? String,
@@ -413,6 +426,37 @@ enum LivePayloadMapper {
         let parts = name.split(separator: " ").filter { !$0.isEmpty }
         let letters = parts.prefix(2).compactMap { $0.first }.map(String.init)
         return letters.isEmpty ? "JD" : letters.joined().uppercased()
+    }
+
+    private static func string(_ raw: Any?) -> String {
+        (raw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func firstNonEmpty(_ values: String...) -> String {
+        values.first { !$0.isEmpty } ?? ""
+    }
+
+    static func parseCourseGroups(_ raw: Any?) -> [CourseFilter] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            let title = firstNonEmpty(
+                string(item["name"]),
+                string(item["title"]),
+                string(item["club_name"]),
+                string(item["label"])
+            )
+            guard !title.isEmpty else { return nil }
+            let courses = (item["courses"] as? [Any] ?? []).compactMap { value -> String? in
+                if let name = value as? String, !name.isEmpty { return name }
+                if let blob = value as? [String: Any] {
+                    let name = firstNonEmpty(string(blob["name"]), string(blob["course"]), string(blob["label"]))
+                    return name.isEmpty ? nil : name
+                }
+                return nil
+            }
+            let id = firstNonEmpty(string(item["id"]), string(item["key"]), title.lowercased())
+            return CourseFilter(id: id, title: title, courseNames: courses, kind: .group)
+        }
     }
 }
 

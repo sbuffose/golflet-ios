@@ -16,10 +16,10 @@ struct ClubsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Golfistics App")
+                        GOverline(text: "Tu ficha del club")
                         GTitle(text: "Clubes")
                     }
-                    Text("Golflet entra a la App de Golfistics con tu matrícula y clave y trae todos tus clubes. Nunca cambia nada en tu cuenta.")
+                    Text("Golflet entra con tu matrícula y contraseña y trae todos tus clubes. Nunca cambia nada en tu cuenta.")
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
 
@@ -311,11 +311,11 @@ struct ClubsView: View {
 
     private var sharedActions: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(model.clubs.first?.passwordSaved == true ? "Clave guardada para todos los clubes" : "Sin clave guardada")
+            Text(model.clubs.first?.passwordSaved == true ? "Contraseña guardada para todos los clubes" : "Sin contraseña guardada")
                 .font(GType.label)
                 .foregroundStyle(model.clubs.first?.passwordSaved == true ? p.positive : p.ink3)
             if needsSyncPassword {
-                SecureField("Clave para actualizar", text: $syncPassword)
+                SecureField("Contraseña para actualizar", text: $syncPassword)
                     .font(GType.body)
                     .accessibilityIdentifier("club-sync-password")
                 Toggle("Guardarla encriptada", isOn: $saveOnSync)
@@ -323,7 +323,7 @@ struct ClubsView: View {
                     .tint(p.primary)
             }
             if model.clubs.contains(where: \.passwordSaved) {
-                Button("Olvidar la clave de todos los clubes") {
+                Button("Olvidar la contraseña de todos los clubes") {
                     if let club = model.clubs.first {
                         Task { await model.forgetPassword(club) }
                     }
@@ -343,7 +343,7 @@ struct ClubsView: View {
 
     private var linkForm: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Vincular Golfistics App")
+            Text("Vincular mi ficha del club")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             GField(label: "Matrícula") {
@@ -351,12 +351,12 @@ struct ClubsView: View {
                     .keyboardType(.numberPad)
                     .accessibilityIdentifier("club-matricula")
             }
-            GField(label: "Clave de Golfistics") {
-                SecureField("La misma que usás en la App", text: $clave)
+            GField(label: "Contraseña") {
+                SecureField("La misma que para entrar a tu club", text: $clave)
                     .accessibilityIdentifier("club-clave")
             }
             Toggle(isOn: $savePassword) {
-                Text("Guardar la clave (encriptada) para actualizar mis tarjetas todos los días. Si no, te la pido cada vez que actualices.")
+                Text("Guardar mi contraseña (cifrada) para traer mis tarjetas nuevas todos los días")
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
             }
