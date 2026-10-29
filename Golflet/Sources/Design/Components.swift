@@ -9,6 +9,7 @@ struct GProbe: View {
             .font(.system(size: 1))
             .foregroundStyle(.clear)
             .frame(width: 1, height: 1)
+            .allowsHitTesting(false)
             .accessibilityIdentifier(id)
             .accessibilityLabel(label ?? id)
     }

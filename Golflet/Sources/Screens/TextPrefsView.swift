@@ -101,6 +101,7 @@ struct TextPrefsView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.45)
                     .accessibilityIdentifier("text-preview-hero")
+                    .overlay { GProbe(id: "text-preview-hero", label: FormatAR.one(model.profile.currentHandicap)) }
                 Text("Tus números y textos usan Geist. Así se ve el cuerpo y una etiqueta.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
@@ -111,5 +112,6 @@ struct TextPrefsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityIdentifier("text-preview")
+        .accessibilityElement(children: .contain)
     }
 }
