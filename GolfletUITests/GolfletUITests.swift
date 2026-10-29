@@ -803,8 +803,12 @@ final class GolfletUITests: XCTestCase {
         if first(app, "screen-ronda").exists {
             dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
         }
+        for _ in 0..<4 { app.swipeDown() }
         let avatar = app.buttons["avatar-button"].exists ? app.buttons["avatar-button"] : first(app, "avatar-button")
         if avatar.waitForExistence(timeout: timeout) {
+            if !avatar.isHittable {
+                for _ in 0..<4 { app.swipeDown() }
+            }
             if avatar.isHittable {
                 avatar.tap()
             } else {
