@@ -278,6 +278,7 @@ struct TrendChart: View {
                         .tabular()
                         .foregroundStyle(p.ink2)
                         .position(x: 16, y: tick.y)
+                        .accessibilityHidden(true)
                 }
                 if let badge = layout.badgeCenter {
                     Text(FormatAR.one(current))
@@ -289,12 +290,13 @@ struct TrendChart: View {
                         .background(p.primary)
                         .clipShape(Capsule())
                         .position(x: badge.x, y: badge.y)
+                        .accessibilityHidden(true)
                         .accessibilityIdentifier("trend-last-value")
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("trend-chart")
-        .accessibilityElement(children: .contain)
         .accessibilityLabel("Tendencia, índice \(FormatAR.one(current))")
     }
 

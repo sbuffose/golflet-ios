@@ -323,7 +323,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertGreaterThan(width, 300, "El test tiene que correr a ancho iPhone")
         XCTAssertGreaterThan(card.frame.width, width - 56, "Tendencia no es full-width: \(card.frame)")
 
-        let chart = first(app, "trend-chart")
+        let chart = largest(app, "trend-chart")
         XCTAssertTrue(chart.waitForExistence(timeout: 3), "Falta el gráfico de tendencia")
         XCTAssertGreaterThan(chart.frame.width, width * 0.62, "El gráfico quedó estrecho: \(chart.frame)")
         XCTAssertGreaterThan(chart.frame.height, 169, "El gráfico no mide ~180pt: \(chart.frame)")
@@ -361,6 +361,22 @@ final class GolfletUITests: XCTestCase {
 
     private func first(_ app: XCUIApplication, _ id: String) -> XCUIElement {
         app.descendants(matching: .any)[id].firstMatch
+    }
+
+    private func largest(_ app: XCUIApplication, _ id: String) -> XCUIElement {
+        let matches = app.descendants(matching: .any).matching(identifier: id)
+        guard matches.firstMatch.waitForExistence(timeout: 3) else { return matches.firstMatch }
+        var best = matches.firstMatch
+        var bestArea: CGFloat = 0
+        for index in 0..<matches.count {
+            let element = matches.element(boundBy: index)
+            let area = element.frame.width * element.frame.height
+            if area > bestArea {
+                bestArea = area
+                best = element
+            }
+        }
+        return best
     }
 
     @discardableResult
