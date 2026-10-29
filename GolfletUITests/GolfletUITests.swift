@@ -23,8 +23,7 @@ final class GolfletUITests: XCTestCase {
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
 
-        if app.buttons["add-club-home"].waitForExistence(timeout: 3) {
-            app.buttons["add-club-home"].tap()
+        if openClubsSheet(app, timeout: 3) {
             XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
             saveShot("09_clubes")
             dismissIfPresent(app, "close-clubes")
@@ -197,11 +196,7 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 12), "El login demo no llegó a Inicio")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 8))
-        if app.buttons["add-club-home"].waitForExistence(timeout: 6) {
-            app.buttons["add-club-home"].tap()
-        } else if app.buttons["avatar-button"].waitForExistence(timeout: 3) {
-            app.buttons["avatar-button"].tap()
-        }
+        XCTAssertTrue(openClubsSheet(app), "No se pudo abrir Clubes después del login")
         XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 8))
         XCTAssertFalse(first(app, "club-picker").exists)
         XCTAssertFalse(first(app, "club-url").exists)
@@ -349,6 +344,35 @@ final class GolfletUITests: XCTestCase {
             element.typeText(delete)
         }
         element.typeText(text)
+    }
+
+    @discardableResult
+    private func openClubsSheet(_ app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
+        let addClub = app.buttons["add-club-home"]
+        if addClub.waitForExistence(timeout: timeout) {
+            revealHittable(app, addClub)
+            if addClub.isHittable {
+                addClub.tap()
+                return true
+            }
+        }
+        let avatar = first(app, "avatar-button")
+        guard avatar.waitForExistence(timeout: 3) else { return false }
+        avatar.tap()
+        return true
+    }
+
+    private func revealHittable(_ app: XCUIApplication, _ element: XCUIElement) {
+        if element.isHittable { return }
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<6 {
+            if element.isHittable { return }
+            if scroll.exists {
+                scroll.swipeUp()
+            } else {
+                app.swipeUp()
+            }
+        }
     }
 
     private func tapTab(_ app: XCUIApplication, _ name: String) {

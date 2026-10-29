@@ -272,7 +272,6 @@ struct AvatarCircle: View {
             .frame(width: 36, height: 36)
             .background(p.primary)
             .clipShape(Circle())
-            .accessibilityIdentifier("avatar-button")
     }
 }
 
