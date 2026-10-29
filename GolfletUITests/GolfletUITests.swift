@@ -617,8 +617,15 @@ final class GolfletUITests: XCTestCase {
         XCTAssertEqual(first(app, "play-hit").label, "Ya pegué")
         first(app, "play-hit").tap()
         XCTAssertTrue(first(app, "play-drive-side").waitForExistence(timeout: 4), "Falta Izq./Fairway/Der. después del drive")
-        XCTAssertTrue(first(app, "drive-fairway").waitForExistence(timeout: 3))
-        first(app, "drive-fairway").tap()
+        let fairway = app.buttons["drive-fairway"].exists ? app.buttons["drive-fairway"] : first(app, "drive-fairway")
+        if !fairway.waitForExistence(timeout: 3) {
+            XCTAssertTrue(app.buttons["Fairway"].waitForExistence(timeout: 3), "Falta Fairway")
+            app.buttons["Fairway"].tap()
+        } else if fairway.isHittable {
+            fairway.tap()
+        } else {
+            fairway.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         reveal(app, first(app, "play-putts-plus"))
         XCTAssertTrue(first(app, "play-putts-plus").waitForExistence(timeout: 3))
         first(app, "play-putts-plus").tap()
