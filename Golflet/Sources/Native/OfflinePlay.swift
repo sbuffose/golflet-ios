@@ -6,6 +6,8 @@ struct OfflineLiveRound: Hashable, Codable, Sendable {
     var course: String?
     var tee: String?
     var currentHole: Int
+    var players: Int?
+    var modality: String?
 }
 
 enum OfflinePlay {
@@ -18,13 +20,15 @@ enum OfflinePlay {
         id.hasPrefix(prefix)
     }
 
-    static func begin(course: GPSCourseDetail, tee: String?) -> LiveRound {
+    static func begin(course: GPSCourseDetail, tee: String?, players: Int = PaceDefaults.players, modality: String = PaceDefaults.modality) -> LiveRound {
         let local = OfflineLiveRound(
             localId: prefix + UUID().uuidString,
             courseId: course.courseId,
             course: course.course,
             tee: tee ?? course.course,
-            currentHole: 1
+            currentHole: 1,
+            players: PaceDefaults.clampPlayers(players),
+            modality: PaceDefaults.normalizeModality(modality)
         )
         var items = pending()
         items.append(local)
@@ -42,7 +46,9 @@ enum OfflinePlay {
             endedAt: nil,
             roundId: nil,
             recapId: nil,
-            shots: 0
+            shots: 0,
+            players: local.players ?? PaceDefaults.players,
+            modality: local.modality ?? PaceDefaults.modality
         )
     }
 

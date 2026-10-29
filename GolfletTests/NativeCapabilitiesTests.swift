@@ -7,6 +7,8 @@ final class NativeCapabilitiesTests: XCTestCase {
         RecapQueue.reset()
         CourseCache.reset()
         OfflinePlay.reset()
+        PlaySettingsStore.reset()
+        PaceSessionStore.reset()
         UserDefaults.standard.removeObject(forKey: WidgetSnapshotStore.key)
         PendingInviteStore.clear()
         super.tearDown()
@@ -46,6 +48,15 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertEqual(state.toPar, 1 - 5)
         XCTAssertNotNil(state.centerYd)
         XCTAssertEqual(state.holeLine, "Hoyo 1 · Par 5")
+        let far = LiveRoundState.make(
+            course: course,
+            hole: 1,
+            here: GPSCoord(lat: -34.6037, lng: -58.3816),
+            shots: shots
+        )
+        XCTAssertNil(far.centerYd)
+        XCTAssertNil(far.frontYd)
+        XCTAssertNil(far.backYd)
     }
 
     func testWidgetSnapshotHidesMissingNextRound() {
@@ -151,9 +162,13 @@ final class NativeCapabilitiesTests: XCTestCase {
         CourseCache.saveList(list)
         XCTAssertEqual(CourseCache.loadList()?.courses.first?.courseId, "118-jockey-azul")
 
-        let local = OfflinePlay.begin(course: detail, tee: "Azul")
+        let local = OfflinePlay.begin(course: detail, tee: "Azul", players: 2, modality: "match")
         XCTAssertTrue(OfflinePlay.isLocal(local.id))
         XCTAssertEqual(OfflinePlay.lookup(local.id)?.courseId, "118-jockey-azul")
+        XCTAssertEqual(OfflinePlay.lookup(local.id)?.players, 2)
+        XCTAssertEqual(OfflinePlay.lookup(local.id)?.modality, "match")
+        XCTAssertEqual(local.players, 2)
+        XCTAssertEqual(local.modality, "match")
         let remapped = OfflinePlay.remap([
             ShotDraft(clientId: "c1", hole: 1, lat: 1, lng: 2, accuracyM: 4, takenAt: Date(), club: "7i", lie: "tee", result: nil, direction: nil, length: nil, mishit: false, liveRoundId: local.id)
         ], to: "live-real")
