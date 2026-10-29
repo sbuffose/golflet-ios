@@ -57,10 +57,13 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
         let reserved = HomeGreetingLayout.reservedTabWidth(tab)
         XCTAssertEqual(reserved, tab + 12)
         let ana = HomeGreetingLayout.greetingWidth(HomeGreetingLayout.text("Ana"))
-        XCTAssertEqual(
-            HomeGreetingLayout.place(availableWidth: se, greetingIdealWidth: ana, tabWidth: tab),
-            .sideBySide
-        )
+        let anaPlace = HomeGreetingLayout.place(availableWidth: se, greetingIdealWidth: ana, tabWidth: tab)
+        if ana + reserved <= se {
+            XCTAssertEqual(anaPlace, .sideBySide)
+        } else {
+            XCTAssertEqual(anaPlace, .sideBySideShrunk, "Ana en 320 se achica; no baja el tab")
+        }
+        XCTAssertNotEqual(anaPlace, .stacked)
         let long = HomeGreetingLayout.greetingWidth(HomeGreetingLayout.text("Juan Bautista"))
         XCTAssertEqual(
             HomeGreetingLayout.place(availableWidth: se, greetingIdealWidth: long, tabWidth: tab),
