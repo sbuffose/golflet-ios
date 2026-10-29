@@ -295,16 +295,21 @@ enum PlayParser {
 
     private static func parseCourse(_ blob: [String: Any], nearby: Bool) -> GPSCourseSummary? {
         guard let id = blob["course_id"] as? String else { return nil }
+        let courseLabel = blob["course_label"] as? String
+        let displayName = blob["display_name"] as? String
         return GPSCourseSummary(
             courseId: id,
             clubCode: blob["club_code"] as? String ?? "",
             clubName: blob["club_name"] as? String ?? "",
-            course: blob["course"] as? String ?? blob["label"] as? String ?? "",
-            label: blob["label"] as? String ?? blob["course"] as? String ?? id,
+            course: blob["course"] as? String ?? blob["label"] as? String ?? courseLabel ?? "",
+            label: courseLabel ?? displayName ?? blob["label"] as? String ?? blob["course"] as? String ?? "",
             courseKey: blob["course_key"] as? String ?? "",
             holesCached: JSONFlex.int(from: blob["holes_cached"]) ?? 0,
             mine: blob["mine"] as? Bool ?? !nearby,
-            distanceKm: JSONFlex.double(from: blob["distance_km"])
+            distanceKm: JSONFlex.double(from: blob["distance_km"]),
+            courseLabel: courseLabel,
+            clubCourseCount: JSONFlex.int(from: blob["club_course_count"]),
+            displayName: displayName
         )
     }
 

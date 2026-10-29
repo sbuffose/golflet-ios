@@ -83,34 +83,80 @@ struct PlayCourseView: View {
             Text(title)
                 .font(GType.section)
                 .foregroundStyle(p.ink)
-            ForEach(courses) { course in
-                Button {
-                    Task { await start(course) }
-                } label: {
-                    GCard(radius: 18, padding: 14) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(course.label)
+            ForEach(CourseGroups.make(courses)) { group in
+                clubBlock(group)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func clubBlock(_ group: ClubCourseGroup) -> some View {
+        if group.isSingle, let course = group.courses.first {
+            Button {
+                Task { await start(course) }
+            } label: {
+                clubCard(group, showsChevron: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("course-\(course.courseId)")
+            .accessibilityLabel(group.clubName)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                clubCard(group, showsChevron: false)
+                    .accessibilityIdentifier("club-\(group.clubCode.isEmpty ? group.groupingKey : group.clubCode)")
+                ForEach(group.courses) { course in
+                    Button {
+                        Task { await start(course) }
+                    } label: {
+                        GCard(radius: 16, padding: 12) {
+                            HStack {
+                                Text(CourseDisplay.courseTitle(course))
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
-                                Text(course.clubName)
-                                    .font(GType.label)
-                                    .foregroundStyle(p.ink2)
-                                    .lineLimit(1)
+                                    .accessibilityIdentifier("course-\(course.courseId)")
+                                Spacer()
+                                MetricChevron(color: p.ink3)
                             }
-                            Spacer()
-                            if let km = course.distanceKm {
-                                Text(km < 10 ? "\(FormatAR.one(km)) km" : "\(Int(km.rounded())) km")
-                                    .font(GType.label)
-                                    .tabular()
-                                    .foregroundStyle(p.ink3)
-                            }
-                            MetricChevron(color: p.ink3)
                         }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("course-\(course.courseId)")
+                    .accessibilityLabel(CourseDisplay.fullName(course))
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("course-\(course.courseId)")
+            }
+        }
+    }
+
+    private func clubCard(_ group: ClubCourseGroup, showsChevron: Bool) -> some View {
+        GCard(radius: 18, padding: 14) {
+            clubHeader(group, showsChevron: showsChevron)
+        }
+    }
+
+    private func clubHeader(_ group: ClubCourseGroup, showsChevron: Bool) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(group.clubName)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                    .lineLimit(2)
+                if group.courseCount > 1 {
+                    Text(group.courseCount == 2 ? "2 canchas" : "\(group.courseCount) canchas")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                }
+            }
+            Spacer()
+            if let km = group.distanceKm {
+                Text(km < 10 ? "\(FormatAR.one(km)) km" : "\(Int(km.rounded())) km")
+                    .font(GType.label)
+                    .tabular()
+                    .foregroundStyle(p.ink3)
+            }
+            if showsChevron {
+                MetricChevron(color: p.ink3)
             }
         }
     }
@@ -136,24 +182,32 @@ struct PlayCourseView: View {
         let pool = (list?.nearby ?? []) + (list?.courses ?? [])
         if let match = pool.first(where: { $0.courseId == hint })
             ?? pool.first(where: {
-                ClubPhrase.matchesCourse(hint, name: $0.course, club: $0.clubName, courseId: $0.courseId)
+                ClubPhrase.matchesCourse(hint, name: CourseDisplay.courseTitle($0), club: CourseDisplay.clubTitle($0), courseId: $0.courseId)
+                    || ClubPhrase.matchesCourse(hint, name: $0.course, club: $0.clubName, courseId: $0.courseId)
                     || ClubPhrase.matchesCourse(hint, name: $0.label, club: $0.clubName, courseId: $0.courseId)
+                    || ClubPhrase.matchesCourse(hint, name: $0.displayName ?? "", club: $0.clubCode, courseId: $0.courseId)
             }) {
             await start(match)
         }
+    }
+
+    private func teeName(_ summary: GPSCourseSummary) -> String {
+        CourseDisplay.human(summary.course, courseId: summary.courseId)
+            ?? CourseDisplay.human(summary.courseLabel, courseId: summary.courseId)
+            ?? summary.course
     }
 
     private func start(_ summary: GPSCourseSummary) async {
         do {
             let detail = try await model.api.gpsCourse(id: summary.courseId, lat: location.coordinate?.lat, lng: location.coordinate?.lng)
             CourseCache.save(detail: detail, strategy: try? await model.api.courseStrategy(courseKey: detail.courseKey, courseId: detail.courseId))
-            let round = try await model.api.createLiveRound(courseId: summary.courseId, tee: summary.course)
+            let round = try await model.api.createLiveRound(courseId: summary.courseId, tee: teeName(summary))
             model.rememberPlay(course: detail, round: round)
             live = round
             selected = detail
         } catch {
             if let cached = CourseCache.load(courseId: summary.courseId) {
-                let round = OfflinePlay.begin(course: cached.detail, tee: summary.course)
+                let round = OfflinePlay.begin(course: cached.detail, tee: teeName(summary))
                 model.rememberPlay(course: cached.detail, round: round)
                 live = round
                 selected = cached.detail

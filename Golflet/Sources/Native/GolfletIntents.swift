@@ -86,26 +86,34 @@ struct GolfletCourseEntity: AppEntity, Identifiable, Hashable {
     var label: String
     var clubName: String
     var courseName: String
+    var clubCode: String
 
-    init(id: String, label: String, clubName: String, courseName: String) {
+    init(id: String, label: String, clubName: String, courseName: String, clubCode: String = "") {
         self.id = id
         self.label = label
         self.clubName = clubName
         self.courseName = courseName
+        self.clubCode = clubCode
     }
 
     init(summary: GPSCourseSummary) {
+        let club = CourseDisplay.clubTitle(summary)
+        let course = CourseDisplay.courseTitle(summary)
         self.init(
             id: summary.courseId,
-            label: summary.label.isEmpty ? summary.course : summary.label,
-            clubName: summary.clubName,
-            courseName: summary.course
+            label: CourseDisplay.fullName(summary),
+            clubName: club,
+            courseName: course,
+            clubCode: summary.clubCode
         )
     }
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(
-            title: LocalizedStringResource(stringLiteral: label),
+        if clubName.caseInsensitiveCompare(courseName) == .orderedSame {
+            return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: clubName))
+        }
+        return DisplayRepresentation(
+            title: LocalizedStringResource(stringLiteral: courseName),
             subtitle: LocalizedStringResource(stringLiteral: clubName)
         )
     }
@@ -118,7 +126,12 @@ struct GolfletCourseEntityQuery: EntityQuery {
     }
 
     func suggestedEntities() async throws -> [GolfletCourseEntity] {
-        await CourseCatalog.entities()
+        await CourseCatalog.entities().sorted {
+            if $0.clubName != $1.clubName {
+                return $0.clubName.localizedStandardCompare($1.clubName) == .orderedAscending
+            }
+            return $0.courseName.localizedStandardCompare($1.courseName) == .orderedAscending
+        }
     }
 }
 
@@ -140,7 +153,7 @@ struct EmpezarRondaIntent: AppIntent {
         await MainActor.run {
             IntentRouter.shared.post(.startRound(hint: course.id))
         }
-        return .result(dialog: "Vamos a empezar en \(course.label).")
+        return .result(dialog: "Vamos a empezar en \(course.courseName).")
     }
 }
 

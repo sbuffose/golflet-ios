@@ -31,21 +31,91 @@ struct CourseView: View {
         }
     }
 
+    private var clubGroups: [ClubStatsGroup] {
+        CourseGroups.make(from: model.courses)
+    }
+
+    private var selectedClub: ClubStatsGroup? {
+        clubGroups.first { group in
+            group.courses.contains { $0.name.caseInsensitiveCompare(model.selectedCourseName) == .orderedSame }
+        } ?? clubGroups.first
+    }
+
+    @ViewBuilder
     private var coursePills: some View {
-        FilterPills(
-            options: ["Azul", "Colorada"],
-            selection: Binding(
-                get: { model.selectedCourseName },
-                set: { model.selectedCourseName = $0 }
-            )
-        )
+        let groups = clubGroups
+        if !groups.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                if groups.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(groups) { group in
+                                let selected = group.id == selectedClub?.id
+                                Button {
+                                    if let first = group.courses.first {
+                                        model.selectedCourseName = first.name
+                                    }
+                                } label: {
+                                    Text(group.clubName)
+                                        .font(GType.headline)
+                                        .foregroundStyle(selected ? p.ink : p.ink2)
+                                        .padding(.horizontal, 18)
+                                        .padding(.vertical, 10)
+                                        .background(selected ? p.surface : Color.clear)
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("club-filter-\(group.clubCode.isEmpty ? group.groupingKey : group.clubCode)")
+                            }
+                        }
+                        .padding(4)
+                        .background(p.surface2)
+                        .clipShape(Capsule())
+                    }
+                }
+                if let group = selectedClub, group.courses.count > 1 {
+                    courseNamePills(group.courses)
+                }
+            }
+        }
+    }
+
+    private func courseNamePills(_ courses: [Course]) -> some View {
+        HStack(spacing: 8) {
+            ForEach(courses) { course in
+                let title = CourseDisplay.courseTitle(name: course.name, clubCode: course.clubCode, clubName: course.clubName)
+                let selected = course.name.caseInsensitiveCompare(model.selectedCourseName) == .orderedSame
+                Button {
+                    model.selectedCourseName = course.name
+                } label: {
+                    Text(title)
+                        .font(GType.headline)
+                        .foregroundStyle(selected ? p.ink : p.ink2)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(selected ? p.surface : Color.clear)
+                        .clipShape(Capsule())
+                        .shadow(color: selected ? Color.black.opacity(0.06) : .clear, radius: 8, y: 2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("filter-\(title.lowercased())")
+            }
+        }
+        .padding(4)
+        .background(p.surface2)
+        .clipShape(Capsule())
     }
 
     private var hero: some View {
         let snap = model.courseSnapshot()
+        let courseTitle = CourseDisplay.courseTitle(
+            name: snap.course,
+            clubCode: selectedClub?.clubCode ?? "",
+            clubName: selectedClub?.clubName ?? ""
+        )
         return GCard(fill: p.primary, radius: 28, padding: 20) {
             VStack(alignment: .leading, spacing: 10) {
-                GOverline(text: "Cancha \(snap.course) · Par \(snap.par)", color: p.onPrimary.opacity(0.55))
+                GOverline(text: "Cancha \(courseTitle) · Par \(snap.par)", color: p.onPrimary.opacity(0.55))
                 NavigationLink(value: MetricRoute.roundList(.course(snap.course, title: "Promedio \(snap.course)", sort: .gross))) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(snap.averageGross.map(FormatAR.one) ?? "—")
