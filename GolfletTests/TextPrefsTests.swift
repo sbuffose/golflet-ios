@@ -65,6 +65,10 @@ final class TextPrefsTests: XCTestCase {
         let numeric = TextPrefsParser.prefs(from: ["textSize": 115, "textWeight": true])
         XCTAssertEqual(numeric?.size, .large)
         XCTAssertEqual(numeric?.weight, .marked)
+        XCTAssertEqual(TextSizePref.parse(115), .large)
+        XCTAssertEqual(TextSizePref.parse(1.15), .large)
+        XCTAssertEqual(TextSizePref.parse(130), .extraLarge)
+        XCTAssertEqual(TextSizePref.parse(1.30), .extraLarge)
 
         let body = TextPrefsParser.jsonBody(.default)
         XCTAssertEqual(body["text_size"] as? String, "normal")
