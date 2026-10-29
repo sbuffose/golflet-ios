@@ -5,74 +5,17 @@ struct HomeProfesoresSheet: View {
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
     var onSelect: (Profesor) -> Void
+    @State private var query = ""
 
     var body: some View {
         GScreen(id: "screen-home-profesores") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Tus profesores")
-                        GTitle(text: "Profesores", size: 34)
-                    }
-                    ForEach(model.profesores) { profesor in
-                        Button {
-                            dismiss()
-                            onSelect(profesor)
-                        } label: {
-                            GCard(radius: 18, padding: 14) {
-                                HStack(spacing: 12) {
-                                    HomeHcpAvatar(
-                                        url: profesor.photoURL,
-                                        initials: profesor.initials,
-                                        size: 44,
-                                        fill: p.primary,
-                                        ink: p.onPrimary,
-                                        ring: p.accent,
-                                        verified: profesor.verified
-                                    )
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(profesor.name)
-                                            .font(GType.headline)
-                                            .foregroundStyle(p.ink)
-                                        Text(profesor.locationsLine ?? (profesor.pending ? "Todavía no activó su cuenta" : "Profesor"))
-                                            .font(GType.label)
-                                            .foregroundStyle(p.ink2)
-                                    }
-                                    Spacer()
-                                    MetricChevron(color: p.ink3)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("home-profesor-\(profesor.id)")
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 28)
-            }
-        }
-        .accessibilityIdentifier("screen-home-profesores")
-        .safeAreaInset(edge: .top) { closeBar(dismiss: dismiss, id: "close-home-profesores") }
-    }
-}
-
-struct AddProfesorSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.palette) private var p
-    @Environment(\.dismiss) private var dismiss
-    var onSelect: (Profesor) -> Void
-    @State private var query = ""
-
-    var body: some View {
-        GScreen(id: "screen-agregar-profesor") {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 6) {
                         GOverline(text: "Profesores")
-                        GTitle(text: "Agregar profesor", size: 34)
+                        GTitle(text: "Mis profesores", size: 34)
                     }
-                    Text("Buscá a tu profesor por nombre. El listado se está armando; cuando esté, lo vas a poder agregar desde acá.")
+                    Text("Cada uno abre su página. Buscá para agregar otro; el listado se está armando.")
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
 
@@ -83,44 +26,23 @@ struct AddProfesorSheet: View {
                             .accessibilityIdentifier("profesor-search")
                     }
 
-                    if matches.isEmpty {
+                    if !linkedMatches.isEmpty {
+                        ForEach(linkedMatches) { profesor in
+                            profesorRow(profesor, id: "home-profesor-\(profesor.id)")
+                        }
+                    }
+
+                    if !addMatches.isEmpty {
+                        ForEach(addMatches) { profesor in
+                            profesorRow(profesor, id: "add-profesor-\(profesor.id)")
+                        }
+                    }
+
+                    if linkedMatches.isEmpty && addMatches.isEmpty {
                         Text(emptyCopy)
                             .font(GType.body)
                             .foregroundStyle(p.ink3)
                             .accessibilityIdentifier("profesor-search-empty")
-                    } else {
-                        ForEach(matches) { profesor in
-                            Button {
-                                dismiss()
-                                onSelect(profesor)
-                            } label: {
-                                GCard(radius: 18, padding: 14) {
-                                    HStack(spacing: 12) {
-                                        HomeHcpAvatar(
-                                            url: profesor.photoURL,
-                                            initials: profesor.initials,
-                                            size: 44,
-                                            fill: p.primary,
-                                            ink: p.onPrimary,
-                                            ring: p.accent,
-                                            verified: profesor.verified
-                                        )
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(profesor.name)
-                                                .font(GType.headline)
-                                                .foregroundStyle(p.ink)
-                                            Text(profesor.locationsLine ?? "Profesor")
-                                                .font(GType.label)
-                                                .foregroundStyle(p.ink2)
-                                        }
-                                        Spacer()
-                                        MetricChevron(color: p.ink3)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("add-profesor-\(profesor.id)")
-                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -128,27 +50,72 @@ struct AddProfesorSheet: View {
                 .padding(.bottom, 28)
             }
         }
-        .accessibilityIdentifier("screen-agregar-profesor")
-        .safeAreaInset(edge: .top) { closeBar(dismiss: dismiss, id: "close-agregar-profesor") }
+        .accessibilityIdentifier("screen-home-profesores")
+        .overlay { GProbe(id: "screen-agregar-profesor", label: "Mis profesores") }
+        .safeAreaInset(edge: .top) { closeBar(dismiss: dismiss, id: "close-home-profesores") }
+    }
+
+    private var needle: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var linkedMatches: [Profesor] {
+        needle.isEmpty ? model.profesores : ProfesorSearch.matches(needle, in: model.profesores)
     }
 
     private var catalog: [Profesor] {
         model.api.persistsLocally ? MockAPIClient.profesorDirectory : []
     }
 
-    private var matches: [Profesor] {
-        ProfesorSearch.matches(query, in: catalog)
+    private var addMatches: [Profesor] {
+        guard needle.count >= 2 else { return [] }
+        let linked = Set(model.profesores.map(\.id))
+        return ProfesorSearch.matches(needle, in: catalog).filter { !linked.contains($0.id) }
     }
 
     private var emptyCopy: String {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if needle.count < 2 {
-            return "Escribí al menos dos letras para buscar."
+            return model.profesores.isEmpty
+                ? "Escribí al menos dos letras para buscar a tu profesor."
+                : "Tus profesores. Escribí para buscar o agregar otro."
         }
         if catalog.isEmpty {
             return "Todavía no hay un listado para buscar. Te avisamos cuando esté."
         }
         return "No encontramos a ese profesor todavía."
+    }
+
+    private func profesorRow(_ profesor: Profesor, id: String) -> some View {
+        Button {
+            dismiss()
+            onSelect(profesor)
+        } label: {
+            GCard(radius: 18, padding: 14) {
+                HStack(spacing: 12) {
+                    HomeHcpAvatar(
+                        url: profesor.photoURL,
+                        initials: profesor.initials,
+                        size: 44,
+                        fill: p.primary,
+                        ink: p.onPrimary,
+                        ring: Color(hex: HomeHcpPeopleLayout.celeste),
+                        verified: profesor.verified
+                    )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(profesor.name)
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        Text(profesor.locationsLine ?? (profesor.pending ? "Todavía no activó su cuenta" : "Profesor"))
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    Spacer()
+                    MetricChevron(color: p.ink3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
     }
 }
 
@@ -162,7 +129,7 @@ struct ProfesorDetailView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Profesores")
+                        GOverline(text: "Mis profesores")
                         HStack(alignment: .center, spacing: 8) {
                             Text(profesor.name)
                                 .font(GFont.ui(34, weight: .semibold))
@@ -186,7 +153,7 @@ struct ProfesorDetailView: View {
                             size: 64,
                             fill: p.primary,
                             ink: p.onPrimary,
-                            ring: p.accent,
+                            ring: Color(hex: HomeHcpPeopleLayout.celeste),
                             verified: profesor.verified
                         )
                         VStack(alignment: .leading, spacing: 4) {

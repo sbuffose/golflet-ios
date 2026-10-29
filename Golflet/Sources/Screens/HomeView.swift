@@ -9,7 +9,6 @@ struct HomeView: View {
     @State private var showsHcpImpact = false
     @State private var showsHomeGroups = false
     @State private var showsHomeProfesores = false
-    @State private var showsAddProfesor = false
     @State private var presentedProfesor: Profesor?
     @State private var highlightPartners = false
 
@@ -67,15 +66,6 @@ struct HomeView: View {
             .golfletChrome()
             .environment(model)
         }
-        .sheet(isPresented: $showsAddProfesor) {
-            NavigationStack {
-                AddProfesorSheet { profesor in
-                    presentProfesor(profesor)
-                }
-            }
-            .golfletChrome()
-            .environment(model)
-        }
         .sheet(item: $presentedProfesor) { profesor in
             NavigationStack {
                 ProfesorDetailView(profesor: profesor)
@@ -90,7 +80,6 @@ struct HomeView: View {
 
     private func presentProfesor(_ profesor: Profesor) {
         showsHomeProfesores = false
-        showsAddProfesor = false
         Task { @MainActor in
             presentedProfesor = profesor
         }
@@ -215,7 +204,7 @@ struct HomeView: View {
                             groups: model.groups,
                             onProfesor: { presentProfesor($0) },
                             onProfesores: { showsHomeProfesores = true },
-                            onAddProfesor: { showsAddProfesor = true },
+                            onAddProfesor: { showsHomeProfesores = true },
                             onGroups: { showsHomeGroups = true },
                             onCreate: { model.presentCreateGroup() }
                         )
@@ -840,7 +829,18 @@ struct HomeHcpPeople: View {
                 onProfesores()
             }
         } label: {
-            profesorStack
+            if let caption = HomeHcpPeopleLayout.profesorCaption(profesores.count) {
+                VStack(alignment: .trailing, spacing: 6) {
+                    profesorStack
+                    Text(caption)
+                        .font(GType.label)
+                        .foregroundStyle(p.onPrimary.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            } else {
+                profesorStack
+            }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-profesor")
@@ -852,10 +852,10 @@ struct HomeHcpPeople: View {
         Button(action: onAddProfesor) {
             ZStack {
                 Circle()
-                    .strokeBorder(Color(hex: HomeHcpPeopleLayout.gold), lineWidth: 1.5)
+                    .strokeBorder(Color(hex: HomeHcpPeopleLayout.celeste), lineWidth: 1.5)
                 Image(systemName: "person.badge.plus")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(hex: HomeHcpPeopleLayout.gold))
+                    .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
             }
             .frame(width: profesorAvatar, height: profesorAvatar)
         }
@@ -904,11 +904,12 @@ struct HomeHcpPeople: View {
         .overlay { GProbe(id: "home-hcp-crear-grupo", label: "Crear grupo") }
     }
 
-    /// Web HI-card avatar: 28pt, gold ring, dark fill, blue verified, max 3 + N.
+    /// Web HI-card avatar: 28pt, celeste ring, dark fill, blue verified, max 3 + N.
     private var profesorStack: some View {
         let shown = Array(profesores.prefix(HomeHcpPeopleLayout.profesorVisible))
         let extra = profesores.count - shown.count
-        return HStack(spacing: -7) {
+        let ring = Color(hex: HomeHcpPeopleLayout.celeste)
+        return HStack(spacing: -HomeHcpPeopleLayout.profesorOverlap) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, profesor in
                 HomeHcpAvatar(
                     url: profesor.photoURL,
@@ -916,7 +917,7 @@ struct HomeHcpPeople: View {
                     size: profesorAvatar,
                     fill: Color(hex: 0x1E5440),
                     ink: p.onPrimary,
-                    ring: p.accent,
+                    ring: ring,
                     verified: profesor.verified
                 )
                 .zIndex(Double(shown.count - index))
@@ -924,11 +925,11 @@ struct HomeHcpPeople: View {
             if extra > 0 {
                 Text("+\(extra)")
                     .font(GFont.ui(10, weight: .semibold))
-                    .foregroundStyle(p.accent)
+                    .foregroundStyle(ring)
                     .frame(width: profesorAvatar, height: profesorAvatar)
                     .background(p.primary)
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(p.accent, lineWidth: 2))
+                    .overlay(Circle().stroke(ring, lineWidth: 2))
             }
         }
         .allowsHitTesting(false)
@@ -937,7 +938,8 @@ struct HomeHcpPeople: View {
     private var groupStack: some View {
         let shown = Array(groups.prefix(HomeHcpPeopleLayout.groupVisible))
         let extra = groups.count - shown.count
-        return HStack(spacing: -12) {
+        let ring = Color(hex: HomeHcpPeopleLayout.gold)
+        return HStack(spacing: -HomeHcpPeopleLayout.groupOverlap) {
             ForEach(shown) { group in
                 HomeHcpAvatar(
                     url: group.photoURL,
@@ -945,7 +947,7 @@ struct HomeHcpPeople: View {
                     size: groupAvatar,
                     fill: p.onPrimary,
                     ink: p.primary,
-                    ring: p.primary,
+                    ring: ring,
                     verified: false
                 )
             }
@@ -954,7 +956,7 @@ struct HomeHcpPeople: View {
                 size: groupAvatar,
                 fill: p.accent,
                 ink: p.primary,
-                ring: p.primary
+                ring: ring
             )
         }
         .allowsHitTesting(false)
@@ -964,7 +966,7 @@ struct HomeHcpPeople: View {
         if profesores.count == 1, let name = profesores.first?.name {
             return "Tu profesor: \(name)"
         }
-        return "Tus profesores"
+        return HomeHcpPeopleLayout.profesorCaption(profesores.count) ?? "Tus profesores"
     }
 }
 
@@ -977,7 +979,12 @@ enum HomeHcpPeopleLayout {
     static let profesorOverlap: CGFloat = 7
     static let groupOverlap: CGFloat = 12
     static let gold: UInt32 = 0xC8A86A
+    static let celeste: UInt32 = 0x75AADB
     static let seContentWidth: CGFloat = 280
+
+    static func profesorCaption(_ count: Int) -> String? {
+        count >= 2 ? "\(count) profes" : nil
+    }
 
     static func stackWidth(count: Int, avatar: CGFloat, overlap: CGFloat, extraChip: Bool) -> CGFloat {
         let n = max(1, count + (extraChip ? 1 : 0))

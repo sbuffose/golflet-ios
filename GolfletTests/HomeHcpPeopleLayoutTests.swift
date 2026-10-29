@@ -10,7 +10,12 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(HomeHcpPeopleLayout.columnWidth(profesorCount: 1, groupCount: 1), width)
         XCTAssertLessThanOrEqual(HomeHcpPeopleLayout.columnWidth(profesorCount: 4, groupCount: 5), width)
         XCTAssertEqual(HomeHcpPeopleLayout.gold, 0xC8A86A)
+        XCTAssertEqual(HomeHcpPeopleLayout.celeste, 0x75AADB)
         XCTAssertEqual(HomeHcpPeopleLayout.profesorAvatar, 28)
+        XCTAssertNil(HomeHcpPeopleLayout.profesorCaption(0))
+        XCTAssertNil(HomeHcpPeopleLayout.profesorCaption(1))
+        XCTAssertEqual(HomeHcpPeopleLayout.profesorCaption(2), "2 profes")
+        XCTAssertEqual(HomeHcpPeopleLayout.profesorCaption(5), "5 profes")
     }
 
     func testGreetingRuleUnchangedOn320() {
@@ -41,7 +46,7 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
             ([sampleProfesor("p-1", "Manu García")], []),
             ([], [sampleGroup("g-1", "Sábados")]),
             (
-                [sampleProfesor("p-1", "Manu García")],
+                [sampleProfesor("p-1", "Manu García"), sampleProfesor("p-2", "Lucía Fernández")],
                 (1...5).map { sampleGroup("g-\($0)", "Grupo \($0)") }
             )
         ]
