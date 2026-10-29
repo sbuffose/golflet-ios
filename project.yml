@@ -65,7 +65,10 @@ targets:
         NSLocationWhenInUseUsageDescription: Golflet usa tu ubicación mientras jugás para calcular la distancia al green y guardar el punto de cada golpe.
         NSMicrophoneUsageDescription: Golflet usa el micrófono para grabar el recap de la ronda y transcribir cómo te fue.
         NSSpeechRecognitionUsageDescription: Golflet transcribe en el iPhone lo que contás de la ronda para armar el recap, sin mandar el audio a un servicio de transcripción.
+        NSPhotoLibraryUsageDescription: Golflet usa una foto de tu carrete para la imagen del grupo, si elegís una.
         NSSupportsLiveActivities: true
+        LSApplicationQueriesSchemes:
+          - whatsapp
         CFBundleURLTypes:
           - CFBundleURLName: com.sbuffose.golflet
             CFBundleURLSchemes:

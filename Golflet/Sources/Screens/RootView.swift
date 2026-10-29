@@ -19,6 +19,11 @@ struct RootView: View {
         .onChange(of: IntentRouter.shared.pending) { _, _ in
             Task { await model.consumeIntent() }
         }
+        .onChange(of: model.isSignedIn) { _, signedIn in
+            if signedIn {
+                Task { await model.consumePendingInvite() }
+            }
+        }
         .overlay {
             if model.syncSession != nil {
                 SyncProgressView()
@@ -90,6 +95,51 @@ struct RootView: View {
         .sheet(isPresented: bindings.showsClubs) {
             NavigationStack {
                 ClubsView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(isPresented: bindings.showsGroups) {
+            NavigationStack {
+                GroupsView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(isPresented: bindings.showsCreateGroup) {
+            NavigationStack {
+                CreateGroupView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(isPresented: bindings.showsSharePrefs) {
+            NavigationStack {
+                SharePrefsView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(item: bindings.presentedInvite) { invite in
+            NavigationStack {
+                GroupInviteView(invite: invite)
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(item: Binding(
+            get: { model.presentedGroupID.map { GroupRef(id: $0) } },
+            set: { model.presentedGroupID = $0?.id }
+        )) { ref in
+            NavigationStack {
+                GroupDetailView(groupID: ref.id)
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(item: bindings.inviteShare) { payload in
+            NavigationStack {
+                InviteShareView(payload: payload)
             }
             .golfletChrome()
             .environment(model)

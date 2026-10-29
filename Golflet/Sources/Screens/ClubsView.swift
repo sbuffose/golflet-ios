@@ -22,6 +22,9 @@ struct ClubsView: View {
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
 
+                    groupsSection
+                    shareSection
+
                     ForEach(model.clubs) { club in
                         clubCard(club)
                     }
@@ -83,6 +86,101 @@ struct ClubsView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
+        }
+    }
+
+    private var groupsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Grupos")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            if !model.pendingInvites.isEmpty {
+                ForEach(model.pendingInvites) { invite in
+                    Button {
+                        model.presentedInvite = invite
+                    } label: {
+                        GCard(radius: 16, padding: 14) {
+                            HStack(spacing: 12) {
+                                GroupPhotoView(url: invite.photoURL, initials: invite.ownerInitials, size: 36)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(invite.name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    Text("Invitación pendiente")
+                                        .font(GType.label)
+                                        .foregroundStyle(p.accent)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(p.ink3)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("perfil-pending-\(invite.token)")
+                }
+            }
+            ForEach(model.groups.prefix(3)) { group in
+                Button {
+                    model.presentedGroupID = group.id
+                } label: {
+                    HStack {
+                        Text(group.name)
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        Spacer()
+                        Text("\(group.memberCount)")
+                            .font(GType.label)
+                            .tabular()
+                            .foregroundStyle(p.ink3)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("perfil-group-\(group.id)")
+            }
+            Button {
+                model.showsClubs = false
+                model.showsGroups = true
+            } label: {
+                Text(model.groups.isEmpty ? "Crear o unirte a un grupo" : "Ver todos los grupos")
+                    .font(GType.headline)
+                    .foregroundStyle(p.primary)
+            }
+            .accessibilityIdentifier("perfil-grupos")
+        }
+        .task { await model.refreshGroups() }
+    }
+
+    private var shareSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Privacidad")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            Button {
+                model.showsClubs = false
+                model.showsSharePrefs = true
+            } label: {
+                GCard(radius: 16, padding: 14) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Qué comparto")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text("Elegí qué ven tus grupos")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(p.ink3)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("perfil-que-comparto")
         }
     }
 
