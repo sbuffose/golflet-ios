@@ -790,12 +790,13 @@ struct HomeHcpPeople: View {
     var onGroups: () -> Void
     var onCreate: () -> Void
 
-    private let avatar: CGFloat = 36
+    private let groupAvatar: CGFloat = 36
+    private let profesorAvatar: CGFloat = 28
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 14) {
+        HStack(alignment: .center, spacing: 12) {
             if !profesores.isEmpty {
-                profesorColumn
+                profesorAvatarButton
             }
             if !groups.isEmpty {
                 groupsColumn
@@ -805,7 +806,7 @@ struct HomeHcpPeople: View {
         }
     }
 
-    private var profesorColumn: some View {
+    private var profesorAvatarButton: some View {
         Button {
             if profesores.count == 1, let first = profesores.first {
                 onProfesor(first)
@@ -813,12 +814,7 @@ struct HomeHcpPeople: View {
                 onProfesores()
             }
         } label: {
-            VStack(spacing: 6) {
-                profesorStack
-                Text(profesores.count == 1 ? "Profesor" : "Profesores")
-                    .font(GType.label)
-                    .foregroundStyle(p.onPrimary.opacity(0.7))
-            }
+            profesorStack
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-profesor")
@@ -845,7 +841,7 @@ struct HomeHcpPeople: View {
                 Text("+")
                     .font(GFont.ui(22, weight: .semibold))
                     .foregroundStyle(p.primary)
-                    .frame(width: avatar, height: avatar)
+                    .frame(width: groupAvatar, height: groupAvatar)
                     .background(p.accent)
                     .clipShape(Circle())
                 Text("Crear grupo")
@@ -859,15 +855,16 @@ struct HomeHcpPeople: View {
         .accessibilityLabel("Crear grupo")
     }
 
+    /// Web HI-card avatar: 28pt, gold ring, dark fill, blue verified, max 3 + N.
     private var profesorStack: some View {
         let shown = Array(profesores.prefix(HomeHcpPeopleLayout.profesorVisible))
         let extra = profesores.count - shown.count
-        return HStack(spacing: -10) {
+        return HStack(spacing: -7) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, profesor in
                 HomeHcpAvatar(
                     url: profesor.photoURL,
                     initials: profesor.initials,
-                    size: avatar,
+                    size: profesorAvatar,
                     fill: Color(hex: 0x1E5440),
                     ink: p.onPrimary,
                     ring: p.accent,
@@ -877,9 +874,9 @@ struct HomeHcpPeople: View {
             }
             if extra > 0 {
                 Text("+\(extra)")
-                    .font(GFont.ui(11, weight: .semibold))
+                    .font(GFont.ui(10, weight: .semibold))
                     .foregroundStyle(p.accent)
-                    .frame(width: avatar, height: avatar)
+                    .frame(width: profesorAvatar, height: profesorAvatar)
                     .background(p.primary)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(p.accent, lineWidth: 2))
@@ -896,22 +893,20 @@ struct HomeHcpPeople: View {
                 HomeHcpAvatar(
                     url: group.photoURL,
                     initials: GroupsParser.initials(group.name),
-                    size: avatar,
+                    size: groupAvatar,
                     fill: p.onPrimary,
                     ink: p.primary,
                     ring: p.primary,
                     verified: false
                 )
             }
-            if extra > 0 {
-                Text("+\(extra)")
-                    .font(GFont.ui(12, weight: .semibold))
-                    .foregroundStyle(p.primary)
-                    .frame(width: avatar, height: avatar)
-                    .background(p.accent)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(p.primary, lineWidth: 2))
-            }
+            HomeHcpCountChip(
+                text: extra > 0 ? "+\(extra)" : "\(groups.count)",
+                size: groupAvatar,
+                fill: p.accent,
+                ink: p.primary,
+                ring: p.primary
+            )
         }
         .allowsHitTesting(false)
     }
@@ -942,7 +937,7 @@ struct HomeHcpAvatar: View {
         ZStack(alignment: .bottomTrailing) {
             ZStack {
                 Text(initials)
-                    .font(GFont.ui(size < 40 ? 12 : 16, weight: .semibold))
+                    .font(GFont.ui(size <= 28 ? 10.5 : (size < 40 ? 12 : 16), weight: .semibold))
                     .foregroundStyle(ink)
                 if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
                     AsyncImage(url: parsed) { image in
@@ -970,6 +965,24 @@ struct HomeHcpAvatar: View {
                 .accessibilityLabel("Verificado")
             }
         }
+    }
+}
+
+struct HomeHcpCountChip: View {
+    var text: String
+    var size: CGFloat
+    var fill: Color
+    var ink: Color
+    var ring: Color
+
+    var body: some View {
+        Text(text)
+            .font(GFont.ui(size < 40 ? 12 : 16, weight: .semibold))
+            .foregroundStyle(ink)
+            .frame(width: size, height: size)
+            .background(fill)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(ring, lineWidth: 2))
     }
 }
 
