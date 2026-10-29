@@ -19,7 +19,7 @@ final class GolfletUITests: XCTestCase {
             first(app, "last-round-card").tap()
             XCTAssertTrue(waitFor(app, "screen-ronda", timeout: 6))
             saveShot("04_ronda")
-            dismissIfPresent(app, "close-round")
+            dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
 
@@ -601,6 +601,16 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    private func dismissSheet(_ app: XCUIApplication, closeID: String, screenID: String) {
+        dismissIfPresent(app, closeID)
+        if first(app, screenID).waitForNonExistence(timeout: 3) { return }
+        dismissIfPresent(app, closeID)
+        if first(app, screenID).exists {
+            app.swipeDown()
+        }
+        _ = first(app, screenID).waitForNonExistence(timeout: 3)
+    }
+
     private func type(_ element: XCUIElement, _ text: String) {
         element.tap()
         let placeholders = [
@@ -624,6 +634,9 @@ final class GolfletUITests: XCTestCase {
 
     @discardableResult
     private func openClubsSheet(_ app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
+        if first(app, "screen-ronda").exists {
+            dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
+        }
         let addClub = app.buttons["add-club-home"]
         if addClub.waitForExistence(timeout: timeout) {
             revealHittable(app, addClub)
@@ -632,9 +645,13 @@ final class GolfletUITests: XCTestCase {
                 return true
             }
         }
-        let avatar = first(app, "avatar-button")
+        let avatar = app.buttons["avatar-button"].exists ? app.buttons["avatar-button"] : first(app, "avatar-button")
         guard avatar.waitForExistence(timeout: 3) else { return false }
-        avatar.tap()
+        if avatar.isHittable {
+            avatar.tap()
+        } else {
+            avatar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
             first(app, "notifications-cuenta").tap()
         }
