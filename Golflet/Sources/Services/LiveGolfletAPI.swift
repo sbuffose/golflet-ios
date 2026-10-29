@@ -259,7 +259,18 @@ struct LiveGolfletAPI: GolfletAPI {
         let http = response as? HTTPURLResponse
         let status = http?.statusCode ?? 0
 
-        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        let json: [String: Any]
+        if let object = try? JSONSerialization.jsonObject(with: data) {
+            if let dict = object as? [String: Any] {
+                json = dict
+            } else if let items = object as? [Any] {
+                json = ["items": items]
+            } else {
+                json = [:]
+            }
+        } else {
+            json = [:]
+        }
         if captureToken {
             if let token = http?.value(forHTTPHeaderField: "set-auth-token"), !token.isEmpty {
                 try KeychainStore.saveToken(token)

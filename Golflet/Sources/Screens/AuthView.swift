@@ -36,7 +36,7 @@ struct AuthView: View {
                             .foregroundStyle(p.accent)
                     }
 
-                    Text("Entrá con tu matrícula y tu clave de Golfistics.")
+                    Text("Entrá con tu matrícula y tu contraseña.")
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
 
@@ -49,14 +49,14 @@ struct AuthView: View {
                             .tabular()
                             .accessibilityIdentifier("auth-matricula")
                     }
-                    GField(label: "Clave de Golfistics") {
-                        SecureField("La misma que usás en Golfistics", text: $clave)
+                    GField(label: "Contraseña") {
+                        SecureField("La misma que para entrar a tu club", text: $clave)
                             .textContentType(RuntimeFlags.isUITesting ? nil : .password)
                             .accessibilityIdentifier("auth-clave")
                     }
 
                     Toggle(isOn: $savePassword) {
-                        Text("Guardar mi clave (cifrada) para traer mis tarjetas nuevas todos los días")
+                        Text("Guardar mi contraseña (cifrada) para traer mis tarjetas nuevas todos los días")
                             .font(GType.body)
                             .foregroundStyle(p.ink)
                     }
@@ -95,7 +95,7 @@ struct AuthView: View {
                     Button {
                         openGolfistics(AuthCopy.golfisticsURL)
                     } label: {
-                        Text("¿No tenés clave o te la olvidaste? Configurala en Golfistics (se recupera desde el sitio de tu club) y volvé.")
+                        Text("¿No tenés contraseña o te la olvidaste? Configurala desde el sitio de tu club y volvé.")
                             .font(GType.body)
                             .foregroundStyle(p.ink)
                             .multilineTextAlignment(.leading)
@@ -103,7 +103,7 @@ struct AuthView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("auth-forgot")
 
-                    Text("Golflet verifica tu matrícula y clave directamente con Golfistics y solo lee tus datos: no cambia nada en Golfistics.")
+                    Text("Golflet verifica tu matrícula y contraseña y solo lee tu ficha del club: no cambia nada.")
                         .font(GType.label)
                         .foregroundStyle(p.ink3)
                 }
@@ -131,7 +131,7 @@ struct AuthView: View {
                 Button {
                     openGolfistics(failure.golfisticsURL ?? AuthCopy.golfisticsURL)
                 } label: {
-                    Text("Ir a Golfistics a configurar mi clave")
+                    Text("Configurar mi contraseña en el club")
                         .font(GType.headline)
                         .foregroundStyle(p.ink)
                         .frame(maxWidth: .infinity)
