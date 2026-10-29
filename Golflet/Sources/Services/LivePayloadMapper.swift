@@ -302,7 +302,7 @@ enum LivePayloadMapper {
         var tees: [TeeRating] = []
         var stats: [CourseHoleStats] = []
         for item in items {
-            let name = item["course"] as? String ?? item["label"] as? String ?? ""
+            let name = item["course"] as? String ?? item["label"] as? String ?? item["course_label"] as? String ?? ""
             let clubName = item["club_name"] as? String ?? ""
             let clubCode = item["club_code"] as? String ?? (item["key"] as? String)?.split(separator: ":").first.map(String.init) ?? ""
             let holesRaw = item["holes"] as? [[String: Any]] ?? []

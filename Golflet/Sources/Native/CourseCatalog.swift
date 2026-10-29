@@ -38,8 +38,13 @@ enum CourseCatalog {
             ClubPhrase.fold($0.label).contains(folded)
                 || ClubPhrase.fold($0.clubName).contains(folded)
                 || ClubPhrase.fold($0.courseName).contains(folded)
+                || ClubPhrase.fold($0.clubCode).contains(folded)
                 || ClubPhrase.fold($0.id).contains(folded)
         }
+    }
+
+    static func grouped(_ items: [GPSCourseSummary]) -> [ClubCourseGroup] {
+        CourseGroups.make(items)
     }
 
     private static func fetchRemote(api: (any GolfletAPI)?) async -> GPSCourseList? {
