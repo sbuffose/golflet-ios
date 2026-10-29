@@ -63,6 +63,24 @@ struct AuthView: View {
                     .tint(p.primary)
                     .accessibilityIdentifier("auth-save-password")
 
+                    if let payload = model.needsClub {
+                        ClubPickerBlock(payload: payload) { club in
+                            Task {
+                                await model.retryLinkWithClub(club)
+                            }
+                        }
+                    } else {
+                        Button {
+                            Task { await model.revealClubPicker() }
+                        } label: {
+                            Text("¿Tu club no aparece? Elegilo")
+                                .font(GType.body)
+                                .foregroundStyle(p.ink2)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("club-picker-toggle")
+                    }
+
                     if let failure = model.authFailure {
                         failureCard(failure)
                     } else if let error = model.errorMessage {

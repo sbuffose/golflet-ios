@@ -104,6 +104,22 @@ final class AuthAPITests: XCTestCase {
         XCTAssertEqual(session.userName, "Buffo Sempé")
     }
 
+    func testNeedsClubOnFirstSyncDoesNotLink() async throws {
+        let api = MockAPIClient(autoSession: false)
+        let session = try await api.signInGolfistics(matricula: "noclub", clave: "ok", savePassword: true)
+        XCTAssertTrue(session.needsFirstSync)
+        do {
+            _ = try await api.startFirstSync(progressID: "p-club")
+            XCTFail("Tenía que pedir club")
+        } catch let error as GolfletError {
+            XCTAssertEqual(error.needsClub?.clubs.first?.id, 124)
+        }
+        let linked = try await api.startFirstSync(progressID: "p-club-2", clubID: 124)
+        XCTAssertTrue(linked.ok)
+        let snap = try await api.bootstrap()
+        XCTAssertFalse(snap.clubs.isEmpty)
+    }
+
     func testEmptyCredentialsAreBadInput() async {
         let api = MockAPIClient(autoSession: false)
         do {

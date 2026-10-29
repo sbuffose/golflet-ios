@@ -5,12 +5,12 @@ protocol GolfletAPI: Sendable {
     var persistsLocally: Bool { get }
 
     func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async throws -> GolfisticsSession
-    func startFirstSync(progressID: String) async throws -> SyncResult
+    func startFirstSync(progressID: String, clubID: Int?) async throws -> SyncResult
     func signOut() async throws
 
     func bootstrap() async throws -> AppSnapshot
     func clubCatalogue() async throws -> [ClubCatalogEntry]
-    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult
+    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String, clubID: Int?) async throws -> SyncResult
     func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult
     func forgetPassword(accountId: String) async throws
     func unlink(accountId: String) async throws
@@ -64,6 +64,9 @@ protocol GolfletAPI: Sendable {
     func sharePrefs() async throws -> SharePrefs
     func saveSharePrefs(_ prefs: SharePrefs) async throws -> SharePrefs
     func groupComparison(groupID: String, config: GroupViewConfig) async throws -> GroupComparison
+    func groupPeriod(groupID: String, kind: ComparativoKind, off: Int) async throws -> ComparativoData
+    func memberProfile(groupID: String, memberID: String) async throws -> GroupMemberProfile
+    func memberRound(groupID: String, memberID: String, roundID: String) async throws -> SharedScorecard
 
     func notifications() async throws -> NotificationsInbox
     func unreadNotifications() async throws -> UnreadNotifications
@@ -82,6 +85,14 @@ protocol GolfletAPI: Sendable {
 extension GolfletAPI {
     func createLiveRound(courseId: String?, tee: String?) async throws -> LiveRound {
         try await createLiveRound(courseId: courseId, tee: tee, players: PaceDefaults.players, modality: PaceDefaults.modality)
+    }
+
+    func startFirstSync(progressID: String) async throws -> SyncResult {
+        try await startFirstSync(progressID: progressID, clubID: nil)
+    }
+
+    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
+        try await linkClub(matricula: matricula, password: password, savePassword: savePassword, progressID: progressID, clubID: nil)
     }
 }
 

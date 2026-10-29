@@ -12,6 +12,8 @@ struct GroupDetailView: View {
     @State private var editingName = ""
     @State private var pickerItem: PhotosPickerItem?
     @State private var confirmLeave = false
+    @State private var comparativoRoute: ComparativoRoute?
+    @State private var profileRoute: MemberProfileRoute?
 
     private var group: GolfletGroup? {
         model.groups.first { $0.id == groupID }
@@ -57,6 +59,12 @@ struct GroupDetailView: View {
             }
             Button("Cancelar", role: .cancel) {}
         }
+        .navigationDestination(item: $comparativoRoute) { route in
+            ComparativoView(groupID: route.groupID, kind: route.kind, off: route.off)
+        }
+        .navigationDestination(item: $profileRoute) { route in
+            MemberProfileView(groupID: route.groupID, memberID: route.memberID)
+        }
         .onChange(of: pickerItem) { _, item in
             Task {
                 guard let data = try? await item?.loadTransferable(type: Data.self), let group else { return }
@@ -74,6 +82,7 @@ struct GroupDetailView: View {
             }
             members(group)
             comparisonSection
+            comparativoEntry
             Button {
                 confirmLeave = true
             } label: {
@@ -202,7 +211,7 @@ struct GroupDetailView: View {
 
     private func members(_ group: GolfletGroup) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Miembros")
+            Text("Jugadores")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             ForEach(group.members) { member in
@@ -220,6 +229,14 @@ struct GroupDetailView: View {
                             }
                             Spacer()
                         }
+                        Button {
+                            profileRoute = MemberProfileRoute(groupID: group.id, memberID: member.id)
+                        } label: {
+                            Text("Ver perfil")
+                                .font(GType.label)
+                                .foregroundStyle(p.primary)
+                        }
+                        .accessibilityIdentifier("group-profile-\(member.id)")
                         if group.isAdmin {
                             HStack(spacing: 10) {
                                 Button {
@@ -253,6 +270,46 @@ struct GroupDetailView: View {
                 .accessibilityIdentifier("group-member-\(member.id)")
             }
         }
+    }
+
+    private var comparativoEntry: some View {
+        GCard(radius: 16, padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Comparativo")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Text("Leaderboard, birdies, pares, GIR y más, por semana o por mes")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+                HStack(spacing: 10) {
+                    Button {
+                        comparativoRoute = ComparativoRoute(groupID: groupID, kind: .semana, off: 0, stat: nil)
+                    } label: {
+                        Text("Esta semana")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .accessibilityIdentifier("group-comp-semana")
+                    Button {
+                        comparativoRoute = ComparativoRoute(groupID: groupID, kind: .mes, off: 0, stat: nil)
+                    } label: {
+                        Text("Este mes")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(p.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .accessibilityIdentifier("group-comp-mes")
+                }
+            }
+        }
+        .accessibilityIdentifier("group-comparativo")
     }
 
     private var comparisonSection: some View {

@@ -15,6 +15,7 @@ struct MockAPIClient: GolfletAPI {
     private static var mockPasswordSaved = true
     private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
+    static var pendingNeedsClub = false
 
     init(autoSession: Bool = true) {
         self.autoSession = autoSession
@@ -32,6 +33,7 @@ struct MockAPIClient: GolfletAPI {
             Self.mockSignedIn = false
             Self.mockLinked = false
             Self.mockPasswordSaved = true
+            Self.pendingNeedsClub = false
         }
         Self.sessionLock.unlock()
         Self.resetGroups()
@@ -68,10 +70,15 @@ struct MockAPIClient: GolfletAPI {
             throw GolfletError.auth(AuthCopy.unavailable)
         case "429":
             throw GolfletError.auth(AuthCopy.rateLimited())
+        case "noclub":
+            Self.pendingNeedsClub = true
         default:
             break
         }
-        let first = trimmed == "first" || ProcessInfo.processInfo.arguments.contains("-ui-testing-first-sync")
+        if clave == "mala" && trimmed == "124" {
+            throw GolfletError.auth(AuthCopy.rejected)
+        }
+        let first = trimmed == "first" || trimmed == "noclub" || ProcessInfo.processInfo.arguments.contains("-ui-testing-first-sync")
         Self.sessionLock.lock()
         Self.mockUser = GolfletUser(id: "demo", email: "matricula-\(trimmed)@golfistics.invalid", name: "Jugador Demo")
         Self.mockSignedIn = true
@@ -81,12 +88,16 @@ struct MockAPIClient: GolfletAPI {
         return GolfisticsSession(needsFirstSync: first, newAccount: first, userName: "Jugador Demo")
     }
 
-    func startFirstSync(progressID: String) async throws -> SyncResult {
+    func startFirstSync(progressID: String, clubID: Int?) async throws -> SyncResult {
+        if clubID == nil, Self.pendingNeedsClub {
+            throw MockClubLink.needsClub()
+        }
         if RuntimeFlags.isUITesting {
             await emitDemoProgress(progressID: progressID)
         }
         Self.sessionLock.lock()
         Self.mockLinked = true
+        Self.pendingNeedsClub = false
         Self.sessionLock.unlock()
         return demoSyncResult(message: "Golfistics App vinculada · datos de demostración", newCards: 98)
     }
@@ -122,22 +133,25 @@ struct MockAPIClient: GolfletAPI {
     }
 
     func clubCatalogue() async throws -> [ClubCatalogEntry] {
-        [
-            ClubCatalogEntry(id: 1, name: "Jockey Club Argentino", baseURL: demoURL.absoluteString),
-            ClubCatalogEntry(id: 2, name: "AAG Scoring (Asociación Argentina de Golf)", baseURL: "https://www.aagscoring.com/golf")
-        ]
+        MockClubLink.catalogue
     }
 
-    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
-        _ = password
+    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String, clubID: Int?) async throws -> SyncResult {
+        if password == "mala" {
+            throw GolfletError.wrongGolfisticsCredentials
+        }
+        if clubID == nil, MockClubLink.shouldAskClub(matricula: matricula) {
+            throw MockClubLink.needsClub(matricula: matricula)
+        }
         await emitDemoProgress(progressID: progressID)
         Self.sessionLock.lock()
         Self.mockLinked = true
         Self.mockPasswordSaved = savePassword
+        Self.pendingNeedsClub = false
         Self.sessionLock.unlock()
         try KeychainStore.save(ClubCredential(
-            clubCode: demoCode,
-            clubName: demoName,
+            clubCode: clubID.map(String.init) ?? demoCode,
+            clubName: MockClubLink.catalogue.first { $0.id == clubID }?.name ?? demoName,
             baseURL: demoURL.absoluteString,
             matricula: matricula,
             clave: savePassword ? "saved" : ""
@@ -667,6 +681,26 @@ enum DayStamp {
             year: year,
             month: month,
             day: 1
+        ))
+    }
+}
+
+enum MockClubLink {
+    static let catalogue: [ClubCatalogEntry] = [
+        ClubCatalogEntry(id: 118, name: "Jockey Club Buenos Aires", baseURL: "https://golf.e-jockeyclub.org.ar/golf", directLogin: false),
+        ClubCatalogEntry(id: 209, name: "Mar del Plata Golf Club", baseURL: "https://golf.mardelplata.com", directLogin: false),
+        ClubCatalogEntry(id: 124, name: "San Isidro Golf Club", baseURL: "https://www.sigc.org.ar", directLogin: true)
+    ]
+
+    static func shouldAskClub(matricula: String) -> Bool {
+        matricula == "124" || matricula == "noclub"
+    }
+
+    static func needsClub(matricula: String? = nil) -> GolfletError {
+        .needsClub(NeedsClubPayload(
+            message: "Golfistics App no listó clubes para esa matrícula. Elegí tu club.",
+            matricula: matricula,
+            clubs: catalogue.filter(\.directLogin)
         ))
     }
 }
