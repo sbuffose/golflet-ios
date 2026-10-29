@@ -315,6 +315,14 @@ final class GolfletUITests: XCTestCase {
         dismissIfPresent(app, "metric-back")
     }
 
+    func testHomeGreetingFitsBesideOrBelowTeeTab() throws {
+        let names = ["Agustin", "Maximiliano", "Juan Bautista"]
+        for name in names {
+            assertHomeGreeting(name, hasTab: true)
+            assertHomeGreeting(name, hasTab: false)
+        }
+    }
+
     func testCanchaHoleGridDoesNotWrapOnIPhone() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
@@ -467,6 +475,7 @@ final class GolfletUITests: XCTestCase {
         saveShot("37_grupo_comparacion")
     }
 
+<<<<<<< HEAD
     func testNotificationsBadgeAndInbox() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
@@ -558,6 +567,48 @@ final class GolfletUITests: XCTestCase {
         tapTab(app, "Mi bolsa")
         XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
         saveShot("51_texto_xl_bolsa")
+    }
+
+    private func assertHomeGreeting(_ name: String, hasTab: Bool) {
+        let app = XCUIApplication()
+        var args = ["-ui-testing", "-ui-testing-greeting", name]
+        if !hasTab { args.append("-ui-testing-no-tee") }
+        app.launchArguments = args
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció para \(name)")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        let greeting = first(app, "home-greeting")
+        XCTAssertTrue(greeting.waitForExistence(timeout: 6), "Falta Hola, \(name)")
+        let spoken = greeting.label
+        XCTAssertTrue(spoken.contains(name), "El saludo truncó \(name): \(spoken)")
+        XCTAssertTrue(spoken.contains("Hola"), "Falta Hola: \(spoken)")
+        XCTAssertLessThan(greeting.frame.height, 64, "El saludo se partió: \(greeting.frame)")
+
+        if hasTab {
+            let tab = first(app, "home-tee-tab")
+            XCTAssertTrue(tab.waitForExistence(timeout: 4), "Falta la pestaña con \(name)")
+            let g = greeting.frame
+            let t = tab.frame
+            XCTAssertFalse(
+                g.intersects(t.insetBy(dx: 1, dy: 1)),
+                "Hola, \(name) se pisa con el tab: \(g) vs \(t) en \(app.frame)"
+            )
+            XCTAssertGreaterThan(
+                t.maxX,
+                app.frame.maxX - 12,
+                "El tab no está al borde derecho: \(t) in \(app.frame)"
+            )
+            if t.minY + 4 >= g.maxY {
+                XCTAssertGreaterThan(t.minY, g.midY, "El tab no quedó debajo de \(name)")
+            } else {
+                XCTAssertLessThanOrEqual(g.maxX, t.minX + 3, "\(name) entra en el tab")
+            }
+            saveShot(name == "Juan Bautista" ? "40_inicio_juan_bautista" : "40_inicio_\(name.lowercased())")
+        } else {
+            XCTAssertFalse(first(app, "home-tee-tab").waitForExistence(timeout: 1), "No debería haber tab")
+        }
+        app.terminate()
     }
 
     private func submitLogin(_ app: XCUIApplication) {

@@ -19,7 +19,11 @@ struct MockAPIClient: GolfletAPI {
     init(autoSession: Bool = true) {
         self.autoSession = autoSession
         Self.sessionLock.lock()
-        Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo")
+        if let greeting = RuntimeFlags.testingGreetingName {
+            Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: greeting, firstName: greeting)
+        } else {
+            Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
+        }
         if autoSession {
             Self.mockSignedIn = true
             Self.mockLinked = true
