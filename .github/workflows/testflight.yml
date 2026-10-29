@@ -562,6 +562,7 @@ jobs:
             ${{ runner.temp }}/export/*.ipa
             ${{ runner.temp }}/Golflet.xcarchive
             ${{ runner.temp }}/altool.log
+            ${{ runner.temp }}/altool-validate.log
           retention-days: 14
 
       - name: Clean up
