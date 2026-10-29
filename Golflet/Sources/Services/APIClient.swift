@@ -36,6 +36,11 @@ protocol GolfletAPI: Sendable {
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy
 
     func profesores() async throws -> [Profesor]
+    func searchProfesores(query: String) async throws -> [Profesor]
+    func addProfesor(id: String, source: String?) async throws -> Profesor
+    func profesorMatchAnswers() async throws -> ProfesorMatchAnswers
+    func saveProfesorMatchAnswers(_ answers: ProfesorMatchAnswers) async throws -> ProfesorMatchAnswers
+    func profesorMatches() async throws -> [ProfesorMatch]
     func groups() async throws -> [GolfletGroup]
     func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup
     func group(id: String) async throws -> GolfletGroup

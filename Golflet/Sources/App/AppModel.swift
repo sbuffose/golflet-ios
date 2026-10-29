@@ -547,6 +547,44 @@ final class AppModel {
         }
     }
 
+    func searchProfesores(query: String) async -> [Profesor] {
+        (try? await api.searchProfesores(query: query)) ?? []
+    }
+
+    func addProfesor(id: String, source: String? = nil) async -> Profesor? {
+        do {
+            let added = try await api.addProfesor(id: id, source: source)
+            if let index = profesores.firstIndex(where: { $0.id == added.id }) {
+                profesores[index] = added
+            } else {
+                profesores.insert(added, at: 0)
+            }
+            toastMessage = "\(added.name) quedó en tus profesores"
+            return added
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func profesorMatchAnswers() async -> ProfesorMatchAnswers {
+        (try? await api.profesorMatchAnswers()) ?? .empty
+    }
+
+    func saveProfesorMatchAnswers(_ answers: ProfesorMatchAnswers) async -> Bool {
+        do {
+            _ = try await api.saveProfesorMatchAnswers(answers)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func profesorMatches() async -> [ProfesorMatch] {
+        (try? await api.profesorMatches()) ?? []
+    }
+
     func refreshGroups() async {
         guard isSignedIn else { return }
         do {

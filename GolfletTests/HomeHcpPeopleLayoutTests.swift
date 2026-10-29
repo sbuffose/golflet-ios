@@ -16,6 +16,36 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
         XCTAssertNil(HomeHcpPeopleLayout.profesorCaption(1))
         XCTAssertEqual(HomeHcpPeopleLayout.profesorCaption(2), "2 profes")
         XCTAssertEqual(HomeHcpPeopleLayout.profesorCaption(5), "5 profes")
+        XCTAssertEqual(HomeHcpPeopleLayout.addLabel, "Agregar profesor")
+        XCTAssertEqual(HomeHcpPeopleLayout.seWidth, 320)
+        XCTAssertEqual(HomeHcpPeopleLayout.seCardWidth, 240)
+        XCTAssertEqual(
+            HomeHcpPeopleLayout.profesorWidth(count: 4),
+            HomeHcpPeopleLayout.profesorWidth(count: 3),
+            "Más de 3 profesores no suman un chip +N"
+        )
+        XCTAssertGreaterThan(HomeHcpPeopleLayout.profesorWidth(count: 0), HomeHcpPeopleLayout.profesorAvatar)
+    }
+
+    func testPeopleMoveAboveOn320OrCollision() {
+        let people = HomeHcpPeopleLayout.columnWidth(profesorCount: 0, groupCount: 0)
+        let number = HomeHcpPeopleLayout.numberWidth(3.1)
+        XCTAssertEqual(
+            HomeHcpPeopleLayout.place(cardWidth: HomeHcpPeopleLayout.seCardWidth, numberWidth: number, peopleWidth: people),
+            .above
+        )
+        XCTAssertEqual(
+            HomeHcpPeopleLayout.place(
+                cardWidth: HomeHcpPeopleLayout.cardInnerWidth(screenWidth: 390),
+                numberWidth: number,
+                peopleWidth: people
+            ),
+            .beside
+        )
+        XCTAssertEqual(
+            HomeHcpPeopleLayout.place(cardWidth: 310, numberWidth: 220, peopleWidth: 110),
+            .above
+        )
     }
 
     func testGreetingRuleUnchangedOn320() {
@@ -72,7 +102,7 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
                 "La columna HCP se pasa de 320pt (\(profesores.count)p/\(groups.count)g): \(size)"
             )
             XCTAssertGreaterThan(size.height, 70, "La columna HCP tiene que ir apilada")
-            XCTAssertLessThan(size.height, 160)
+            XCTAssertLessThan(size.height, 200)
         }
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
@@ -9,8 +10,10 @@ struct HomeView: View {
     @State private var showsHcpImpact = false
     @State private var showsHomeGroups = false
     @State private var showsHomeProfesores = false
+    @State private var showsAgregarProfesor = false
     @State private var presentedProfesor: Profesor?
     @State private var highlightPartners = false
+    @State private var hcpCardWidth = HomeHcpPeopleLayout.cardInnerWidth(screenWidth: HomeHcpPeopleLayout.currentScreenWidth)
 
     var body: some View {
         GScreen(id: "screen-inicio") {
@@ -66,6 +69,15 @@ struct HomeView: View {
             .golfletChrome()
             .environment(model)
         }
+        .sheet(isPresented: $showsAgregarProfesor) {
+            NavigationStack {
+                AgregarProfesorSheet { profesor in
+                    presentProfesor(profesor)
+                }
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .sheet(item: $presentedProfesor) { profesor in
             NavigationStack {
                 ProfesorDetailView(profesor: profesor)
@@ -80,9 +92,22 @@ struct HomeView: View {
 
     private func presentProfesor(_ profesor: Profesor) {
         showsHomeProfesores = false
+        showsAgregarProfesor = false
         Task { @MainActor in
             presentedProfesor = profesor
         }
+    }
+
+    private func homeHcpPeople() -> HomeHcpPeople {
+        HomeHcpPeople(
+            profesores: model.profesores,
+            groups: model.groups,
+            onProfesor: { presentProfesor($0) },
+            onProfesores: { showsHomeProfesores = true },
+            onAddProfesor: { showsAgregarProfesor = true },
+            onGroups: { showsHomeGroups = true },
+            onCreate: { model.presentCreateGroup() }
+        )
     }
 
     private func header(scroll: ScrollViewProxy) -> some View {
@@ -159,8 +184,23 @@ struct HomeView: View {
 
     private var handicapCard: some View {
         let snap = model.home
+        let peopleWidth = HomeHcpPeopleLayout.columnWidth(
+            profesorCount: model.profesores.count,
+            groupCount: model.groups.count
+        )
+        let numberWidth = HomeHcpPeopleLayout.numberWidth(snap.handicapIndex)
+        let place = HomeHcpPeopleLayout.place(
+            cardWidth: hcpCardWidth,
+            numberWidth: numberWidth,
+            peopleWidth: peopleWidth
+        )
         return GCard(fill: p.primary, radius: 28, padding: 20) {
             VStack(alignment: .leading, spacing: 18) {
+                if place == .above {
+                    homeHcpPeople()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .accessibilityIdentifier("home-hcp-people-above")
+                }
                 VStack(alignment: .leading, spacing: 12) {
                     NavigationLink(value: MetricRoute.handicap) {
                         HStack(alignment: .top) {
@@ -199,15 +239,14 @@ struct HomeView: View {
                         .accessibilityIdentifier("metric-handicap")
                         .accessibilityElement(children: .contain)
                         .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
-                        HomeHcpPeople(
-                            profesores: model.profesores,
-                            groups: model.groups,
-                            onProfesor: { presentProfesor($0) },
-                            onProfesores: { showsHomeProfesores = true },
-                            onAddProfesor: { showsHomeProfesores = true },
-                            onGroups: { showsHomeGroups = true },
-                            onCreate: { model.presentCreateGroup() }
-                        )
+                        if place == .beside {
+                            homeHcpPeople()
+                        }
+                    }
+                }
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(key: HomeHcpCardWidthKey.self, value: geo.size.width)
                     }
                 }
 
@@ -246,6 +285,9 @@ struct HomeView: View {
                 }
                 .padding(.top, 4)
             }
+        }
+        .onPreferenceChange(HomeHcpCardWidthKey.self) { width in
+            if width > 0 { hcpCardWidth = width }
         }
         .accessibilityIdentifier("handicap-card")
         .accessibilityElement(children: .contain)
@@ -850,14 +892,24 @@ struct HomeHcpPeople: View {
 
     private var addProfesor: some View {
         Button(action: onAddProfesor) {
-            ZStack {
-                Circle()
-                    .strokeBorder(Color(hex: HomeHcpPeopleLayout.celeste), lineWidth: 1.5)
-                Image(systemName: "person.badge.plus")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
+            VStack(alignment: .trailing, spacing: 6) {
+                ZStack {
+                    Circle()
+                        .strokeBorder(
+                            Color(hex: HomeHcpPeopleLayout.celeste),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [3.5, 2.5])
+                        )
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
+                }
+                .frame(width: profesorAvatar, height: profesorAvatar)
+                Text(HomeHcpPeopleLayout.addLabel)
+                    .font(GType.label)
+                    .foregroundStyle(p.onPrimary.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
-            .frame(width: profesorAvatar, height: profesorAvatar)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-add-profesor")
@@ -904,10 +956,9 @@ struct HomeHcpPeople: View {
         .overlay { GProbe(id: "home-hcp-crear-grupo", label: "Crear grupo") }
     }
 
-    /// Web HI-card avatar: 28pt, celeste ring, dark fill, blue verified, max 3 + N.
+    /// Web HI-card avatar: 28pt, celeste ring, dark fill, blue verified, max 3 + "N profes".
     private var profesorStack: some View {
         let shown = Array(profesores.prefix(HomeHcpPeopleLayout.profesorVisible))
-        let extra = profesores.count - shown.count
         let ring = Color(hex: HomeHcpPeopleLayout.celeste)
         return HStack(spacing: -HomeHcpPeopleLayout.profesorOverlap) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, profesor in
@@ -921,15 +972,6 @@ struct HomeHcpPeople: View {
                     verified: profesor.verified
                 )
                 .zIndex(Double(shown.count - index))
-            }
-            if extra > 0 {
-                Text("+\(extra)")
-                    .font(GFont.ui(10, weight: .semibold))
-                    .foregroundStyle(ring)
-                    .frame(width: profesorAvatar, height: profesorAvatar)
-                    .background(p.primary)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(ring, lineWidth: 2))
             }
         }
         .allowsHitTesting(false)
@@ -970,6 +1012,11 @@ struct HomeHcpPeople: View {
     }
 }
 
+enum HomeHcpPeoplePlacement: String, Equatable, Sendable {
+    case beside
+    case above
+}
+
 enum HomeHcpPeopleLayout {
     static let profesorVisible = 3
     static let groupVisible = 4
@@ -978,9 +1025,23 @@ enum HomeHcpPeopleLayout {
     static let groupAvatar: CGFloat = 36
     static let profesorOverlap: CGFloat = 7
     static let groupOverlap: CGFloat = 12
+    static let numberPeopleGap: CGFloat = 12
     static let gold: UInt32 = 0xC8A86A
     static let celeste: UInt32 = 0x75AADB
+    static let seWidth: CGFloat = 320
     static let seContentWidth: CGFloat = 280
+    static let seCardWidth: CGFloat = 240
+    static let pageGutter: CGFloat = 20
+    static let cardPadding: CGFloat = 20
+    static let addLabel = "Agregar profesor"
+
+    static var currentScreenWidth: CGFloat {
+        UIScreen.main.bounds.width
+    }
+
+    static func cardInnerWidth(screenWidth: CGFloat) -> CGFloat {
+        screenWidth - pageGutter * 2 - cardPadding * 2
+    }
 
     static func profesorCaption(_ count: Int) -> String? {
         count >= 2 ? "\(count) profes" : nil
@@ -992,19 +1053,49 @@ enum HomeHcpPeopleLayout {
     }
 
     static func profesorWidth(count: Int) -> CGFloat {
-        if count == 0 { return profesorAvatar }
+        if count == 0 { return max(profesorAvatar, labelWidth(addLabel)) }
         let shown = min(count, profesorVisible)
-        return stackWidth(count: shown, avatar: profesorAvatar, overlap: profesorOverlap, extraChip: count > profesorVisible)
+        return stackWidth(count: shown, avatar: profesorAvatar, overlap: profesorOverlap, extraChip: false)
     }
 
     static func groupWidth(count: Int) -> CGFloat {
-        if count == 0 { return groupAvatar }
+        if count == 0 { return max(groupAvatar, labelWidth("Crear grupo")) }
         let shown = min(count, groupVisible)
         return stackWidth(count: shown, avatar: groupAvatar, overlap: groupOverlap, extraChip: true)
     }
 
     static func columnWidth(profesorCount: Int, groupCount: Int) -> CGFloat {
         max(profesorWidth(count: profesorCount), groupWidth(count: groupCount))
+    }
+
+    static func numberWidth(_ value: Double) -> CGFloat {
+        let text = FormatAR.one(value) as NSString
+        let font = UIFont(name: GFont.postScript(.semibold), size: 80)
+            ?? .systemFont(ofSize: 80, weight: .semibold)
+        return ceil(text.size(withAttributes: [
+            .font: font,
+            .kern: -4.4
+        ]).width)
+    }
+
+    static func labelWidth(_ text: String) -> CGFloat {
+        let font = UIFont(name: GFont.postScript(.medium), size: 12.5)
+            ?? .systemFont(ofSize: 12.5, weight: .medium)
+        return ceil((text as NSString).size(withAttributes: [.font: font]).width)
+    }
+
+    static func place(cardWidth: CGFloat, numberWidth: CGFloat, peopleWidth: CGFloat) -> HomeHcpPeoplePlacement {
+        if cardWidth <= seCardWidth + 1 { return .above }
+        if numberWidth + numberPeopleGap + peopleWidth > cardWidth { return .above }
+        return .beside
+    }
+}
+
+private struct HomeHcpCardWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > 0 { value = next }
     }
 }
 
