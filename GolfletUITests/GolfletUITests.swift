@@ -365,6 +365,96 @@ final class GolfletUITests: XCTestCase {
         dismissIfPresent(app, "metric-back")
     }
 
+    func testGruposCreateShareAndPendingInvite() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "home-grupos").waitForExistence(timeout: 4))
+        XCTAssertTrue(first(app, "home-pending-invite").waitForExistence(timeout: 3), "Falta la invitación pendiente")
+        first(app, "home-grupos").tap()
+        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
+        XCTAssertTrue(first(app, "pending-invite-invite-mdp").waitForExistence(timeout: 4))
+        saveShot("32_grupos")
+
+        first(app, "groups-create").tap()
+        XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6))
+        XCTAssertTrue(app.textFields["group-name"].waitForExistence(timeout: 3))
+        type(app.textFields["group-name"], "Birdie Club")
+        first(app, "group-create-submit").tap()
+        XCTAssertTrue(waitFor(app, "screen-compartir-grupo", timeout: 8), "No salió el share del link")
+        XCTAssertTrue(first(app, "share-whatsapp").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "invite-link").waitForExistence(timeout: 3))
+        XCTAssertTrue((first(app, "invite-link").label + (first(app, "invite-link").value as? String ?? "")).contains("golflet.vercel.app/g/"))
+        saveShot("33_grupo_compartir")
+        dismissIfPresent(app, "close-compartir")
+    }
+
+    func testInviteDeepLinkAfterLogin() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-auth", "-pending-invite", "invite-mdp"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-login", timeout: 10))
+        type(app.textFields["auth-matricula"], "94506")
+        type(app.secureTextFields["auth-clave"], "clave123")
+        submitLogin(app)
+        XCTAssertTrue(waitFor(app, "screen-invitacion", timeout: 12), "La invitación no apareció después del login")
+        XCTAssertTrue(first(app, "invite-accept").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "invite-decline").waitForExistence(timeout: 2))
+        saveShot("34_invitacion")
+        first(app, "invite-accept").tap()
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "Aceptar no abrió el grupo")
+        saveShot("35_grupo_aceptado")
+    }
+
+    func testQueCompartoAndGroupComparison() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        if first(app, "avatar-button").waitForExistence(timeout: 4) {
+            first(app, "avatar-button").tap()
+        } else {
+            first(app, "add-club-home").tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
+        XCTAssertTrue(first(app, "perfil-pending-invite-mdp").waitForExistence(timeout: 4))
+        XCTAssertTrue(first(app, "perfil-que-comparto").waitForExistence(timeout: 3))
+        first(app, "perfil-que-comparto").tap()
+        XCTAssertTrue(waitFor(app, "screen-que-comparto", timeout: 6))
+        XCTAssertTrue(first(app, "share-always-private").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "share-scoring").waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Notas de voz"].exists)
+        XCTAssertFalse(app.staticTexts["Estrategia"].exists)
+        saveShot("36_que_comparto")
+        dismissIfPresent(app, "close-que-comparto")
+
+        if first(app, "home-grupos").waitForExistence(timeout: 4) {
+            reveal(app, first(app, "home-grupos"))
+            first(app, "home-grupos").tap()
+        } else if first(app, "perfil-grupos").waitForExistence(timeout: 3) {
+            first(app, "perfil-grupos").tap()
+        } else {
+            first(app, "add-club-home").tap()
+            XCTAssertTrue(first(app, "perfil-grupos").waitForExistence(timeout: 4))
+            first(app, "perfil-grupos").tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
+        XCTAssertTrue(first(app, "group-g-jockey").waitForExistence(timeout: 4))
+        first(app, "group-g-jockey").tap()
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 6))
+        reveal(app, first(app, "compare-handicap-ana"))
+        XCTAssertTrue(first(app, "compare-handicap-ana").waitForExistence(timeout: 4))
+        let hidden = first(app, "compare-handicap-ana").label
+        XCTAssertTrue(hidden.contains("No compartido") || (first(app, "compare-handicap-ana").value as? String)?.contains("No compartido") == true)
+        saveShot("37_grupo_comparacion")
+    }
+
     private func submitLogin(_ app: XCUIApplication) {
         if app.keyboards.element.exists {
             app.swipeDown()

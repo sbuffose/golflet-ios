@@ -36,6 +36,15 @@ final class AppModel {
     var activeLiveRound: LiveRound?
     var activeCourse: GPSCourseDetail?
     var metricsSummary: MetricsSummary?
+    var groups: [GolfletGroup] = []
+    var pendingInvites: [GroupInvitePreview] = []
+    var sharePrefs = SharePrefs.allShared
+    var presentedInvite: GroupInvitePreview?
+    var presentedGroupID: String?
+    var showsCreateGroup = false
+    var showsSharePrefs = false
+    var showsGroups = false
+    var inviteShare: InviteSharePayload?
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -48,6 +57,11 @@ final class AppModel {
         let testing = ProcessInfo.processInfo.arguments.contains("-ui-testing")
             || ProcessInfo.processInfo.arguments.contains("-ui-testing-auth")
         self.statsRange = testing ? .all : StatsRange.persisted()
+        if testing { PendingInviteStore.clear() }
+        if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "-pending-invite"),
+           ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
+            PendingInviteStore.save(ProcessInfo.processInfo.arguments[index + 1])
+        }
     }
 
     var isAuthenticated: Bool { isSignedIn }
@@ -97,6 +111,7 @@ final class AppModel {
             }
             publishWidgetSnapshot()
             await refreshMetricsSummary()
+            await refreshGroups()
             isLoaded = true
             await consumeIntent()
         } catch {
@@ -155,6 +170,7 @@ final class AppModel {
             } else {
                 await load()
             }
+            await consumePendingInvite()
         }
     }
 
@@ -170,6 +186,11 @@ final class AppModel {
             holeStats = []
             bag = []
             recurring = nil
+            groups = []
+            pendingInvites = []
+            presentedInvite = nil
+            presentedGroupID = nil
+            inviteShare = nil
             isLoaded = true
         }
     }
@@ -318,9 +339,139 @@ final class AppModel {
             presentedRound = rounds.first { $0.roundId == id } ?? home.lastRound
         case .openInvite(let token):
             PendingInviteStore.save(token)
-            toastMessage = isSignedIn
-                ? "Invitación recibida. La vas a ver en Amigos."
-                : "Invitación guardada. Entrá con tu matrícula para verla."
+            if isSignedIn {
+                await consumePendingInvite()
+            } else {
+                toastMessage = "Invitación guardada. Entrá con tu matrícula para verla."
+            }
+        }
+    }
+
+    func consumePendingInvite() async {
+        guard isSignedIn, let token = PendingInviteStore.load() else { return }
+        do {
+            let preview = try await api.invitePreview(token: token)
+            presentedInvite = preview
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshGroups() async {
+        guard isSignedIn else { return }
+        do {
+            async let loadedGroups = api.groups()
+            async let loadedInvites = api.pendingInvites()
+            async let loadedShare = api.sharePrefs()
+            groups = try await loadedGroups
+            pendingInvites = try await loadedInvites
+            sharePrefs = try await loadedShare
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func createGroup(name: String, photoJPEG: Data?) async {
+        await run {
+            let group = try await api.createGroup(name: name, photoJPEG: photoJPEG)
+            groups.insert(group, at: 0)
+            showsCreateGroup = false
+            if let invite = group.invite, invite.enabled {
+                inviteShare = InviteSharePayload(groupName: group.name, url: invite.url)
+            }
+            await refreshGroups()
+        }
+    }
+
+    func acceptInvite(_ preview: GroupInvitePreview) async {
+        await run {
+            let group = try await api.acceptInvite(token: preview.token)
+            PendingInviteStore.clear()
+            presentedInvite = nil
+            pendingInvites.removeAll { $0.token == preview.token }
+            if !groups.contains(where: { $0.id == group.id }) {
+                groups.insert(group, at: 0)
+            }
+            presentedGroupID = group.id
+            await refreshGroups()
+        }
+    }
+
+    func declineInvite(_ preview: GroupInvitePreview) async {
+        await run {
+            try await api.declineInvite(token: preview.token)
+            PendingInviteStore.clear()
+            presentedInvite = nil
+            pendingInvites.removeAll { $0.token == preview.token }
+        }
+    }
+
+    func updateGroup(_ group: GolfletGroup, name: String?, photoJPEG: Data?) async {
+        await run {
+            let updated = try await api.updateGroup(id: group.id, name: name, photoJPEG: photoJPEG)
+            replace(updated)
+        }
+    }
+
+    func regenerateInvite(_ group: GolfletGroup) async {
+        await run {
+            let link = try await api.regenerateInvite(groupID: group.id)
+            if let index = groups.firstIndex(where: { $0.id == group.id }) {
+                groups[index].invite = link
+            }
+            inviteShare = InviteSharePayload(groupName: group.name, url: link.url)
+        }
+    }
+
+    func disableInvite(_ group: GolfletGroup) async {
+        await run {
+            let link = try await api.disableInvite(groupID: group.id)
+            if let index = groups.firstIndex(where: { $0.id == group.id }) {
+                groups[index].invite = link
+            }
+        }
+    }
+
+    func setMemberRole(group: GolfletGroup, member: GroupMember, role: GroupRole) async {
+        await run {
+            let updated = try await api.setMemberRole(groupID: group.id, userID: member.id, role: role)
+            replace(updated)
+        }
+    }
+
+    func removeMember(group: GolfletGroup, member: GroupMember) async {
+        await run {
+            let updated = try await api.removeMember(groupID: group.id, userID: member.id)
+            replace(updated)
+        }
+    }
+
+    func leaveGroup(_ group: GolfletGroup) async {
+        await run {
+            try await api.leaveGroup(id: group.id)
+            groups.removeAll { $0.id == group.id }
+            if presentedGroupID == group.id { presentedGroupID = nil }
+        }
+    }
+
+    func saveGroupView(groupID: String, config: GroupViewConfig) async {
+        await run {
+            _ = try await api.saveGroupView(groupID: groupID, config: config)
+        }
+    }
+
+    func saveSharePrefs(_ prefs: SharePrefs) async {
+        sharePrefs = prefs
+        await run {
+            sharePrefs = try await api.saveSharePrefs(prefs)
+        }
+    }
+
+    private func replace(_ group: GolfletGroup) {
+        if let index = groups.firstIndex(where: { $0.id == group.id }) {
+            groups[index] = group
+        } else {
+            groups.insert(group, at: 0)
         }
     }
 

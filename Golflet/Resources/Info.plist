@@ -49,6 +49,12 @@
 	<string>Golflet usa el micrófono para grabar el recap de la ronda y transcribir cómo te fue.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Golflet transcribe en el iPhone lo que contás de la ronda para armar el recap, sin mandar el audio a un servicio de transcripción.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Golflet usa una foto de tu carrete para la imagen del grupo, si elegís una.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>CFBundleURLTypes</key>

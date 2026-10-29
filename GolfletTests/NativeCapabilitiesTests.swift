@@ -194,6 +194,8 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertEqual(GolfletURL.parse(URL(string: "golflet://recap")!), .recordRecap)
         XCTAssertEqual(GolfletURL.parse(URL(string: "golflet://round/r88")!), .openRound(id: "r88"))
         XCTAssertEqual(GolfletURL.parse(URL(string: "golflet://shot?club=7i")!), .recordShot(club: "7i"))
+        XCTAssertEqual(GolfletURL.parse(URL(string: "https://golflet.vercel.app/g/invite-mdp")!), .openInvite(token: "invite-mdp"))
+        XCTAssertEqual(GolfletURL.parse(URL(string: "golflet://g/invite-mdp")!), .openInvite(token: "invite-mdp"))
         XCTAssertEqual(GolfletClubChoice.hierro7.code, "7i")
 
         XCTAssertEqual(
