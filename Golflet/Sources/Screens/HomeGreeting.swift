@@ -3,6 +3,7 @@ import UIKit
 
 enum HomeGreetingPlacement: String, Equatable, Sendable {
     case sideBySide
+    case sideBySideShrunk
     case stacked
 }
 
@@ -27,9 +28,12 @@ enum HomeGreetingLayout {
         tabWidth: CGFloat?
     ) -> HomeGreetingPlacement {
         guard let tabWidth, tabWidth > 0 else { return .sideBySide }
+        if greetingIdealWidth + spacing + tabWidth <= availableWidth {
+            return .sideBySide
+        }
         let compact = greetingIdealWidth * compactScale
         if compact + spacing + tabWidth <= availableWidth {
-            return .sideBySide
+            return .sideBySideShrunk
         }
         return .stacked
     }
@@ -75,13 +79,17 @@ struct HomeGreetingSplit: Layout {
             return CGSize(width: available.isFinite ? available : fitted.width, height: fitted.height)
         }
         let tab = subviews[1].sizeThatFits(.unspecified)
-        if HomeGreetingLayout.place(availableWidth: available, greetingIdealWidth: ideal.width, tabWidth: tab.width) == .sideBySide {
+        switch HomeGreetingLayout.place(availableWidth: available, greetingIdealWidth: ideal.width, tabWidth: tab.width) {
+        case .sideBySide:
+            return CGSize(width: available.isFinite ? available : ideal.width + spacing + tab.width, height: max(ideal.height, tab.height))
+        case .sideBySideShrunk:
             let greetingWidth = max(available - tab.width - spacing, 0)
             let fitted = greeting.sizeThatFits(ProposedViewSize(width: greetingWidth, height: nil))
             return CGSize(width: available.isFinite ? available : greetingWidth + spacing + tab.width, height: max(fitted.height, tab.height))
+        case .stacked:
+            let fitted = greeting.sizeThatFits(ProposedViewSize(width: available, height: nil))
+            return CGSize(width: available.isFinite ? available : max(fitted.width, tab.width), height: fitted.height + spacing + tab.height)
         }
-        let fitted = greeting.sizeThatFits(ProposedViewSize(width: available, height: nil))
-        return CGSize(width: available.isFinite ? available : max(fitted.width, tab.width), height: fitted.height + spacing + tab.height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
@@ -93,7 +101,17 @@ struct HomeGreetingSplit: Layout {
         }
         let tabView = subviews[1]
         let tab = tabView.sizeThatFits(.unspecified)
-        if HomeGreetingLayout.place(availableWidth: bounds.width, greetingIdealWidth: ideal.width, tabWidth: tab.width) == .sideBySide {
+        switch HomeGreetingLayout.place(availableWidth: bounds.width, greetingIdealWidth: ideal.width, tabWidth: tab.width) {
+        case .sideBySide:
+            greeting.place(
+                at: CGPoint(x: bounds.minX, y: bounds.midY - ideal.height / 2),
+                proposal: ProposedViewSize(width: ideal.width, height: ideal.height)
+            )
+            tabView.place(
+                at: CGPoint(x: bounds.maxX - tab.width, y: bounds.midY - tab.height / 2),
+                proposal: ProposedViewSize(width: tab.width, height: tab.height)
+            )
+        case .sideBySideShrunk:
             let greetingWidth = max(bounds.width - tab.width - spacing, 0)
             let fitted = greeting.sizeThatFits(ProposedViewSize(width: greetingWidth, height: nil))
             greeting.place(
@@ -104,14 +122,14 @@ struct HomeGreetingSplit: Layout {
                 at: CGPoint(x: bounds.maxX - tab.width, y: bounds.midY - tab.height / 2),
                 proposal: ProposedViewSize(width: tab.width, height: tab.height)
             )
-            return
+        case .stacked:
+            let fitted = greeting.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            greeting.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: fitted.height))
+            tabView.place(
+                at: CGPoint(x: bounds.maxX - tab.width, y: bounds.minY + fitted.height + spacing),
+                proposal: ProposedViewSize(width: tab.width, height: tab.height)
+            )
         }
-        let fitted = greeting.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
-        greeting.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: fitted.height))
-        tabView.place(
-            at: CGPoint(x: bounds.maxX - tab.width, y: bounds.minY + fitted.height + spacing),
-            proposal: ProposedViewSize(width: tab.width, height: tab.height)
-        )
     }
 }
 

@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var shownCards: Int?
     @State private var cardsGold = false
     @State private var showsHcpImpact = false
+    @State private var showsHomeGroups = false
     @State private var highlightPartners = false
 
     var body: some View {
@@ -46,6 +47,13 @@ struct HomeView: View {
                 }
                 .golfletChrome()
             }
+        }
+        .sheet(isPresented: $showsHomeGroups) {
+            NavigationStack {
+                HomeGroupsSheet()
+            }
+            .golfletChrome()
+            .environment(model)
         }
         .onChange(of: model.celebrateCards) { _, value in
             guard let value else { return }
@@ -129,8 +137,8 @@ struct HomeView: View {
         let snap = model.home
         return GCard(fill: p.primary, radius: 28, padding: 20) {
             VStack(alignment: .leading, spacing: 18) {
-                NavigationLink(value: MetricRoute.handicap) {
-                    VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    NavigationLink(value: MetricRoute.handicap) {
                         HStack(alignment: .top) {
                             GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
                             Spacer()
@@ -139,31 +147,41 @@ struct HomeView: View {
                                 .foregroundStyle(p.onPrimary.opacity(0.5))
                             MetricChevron(color: p.onPrimary.opacity(0.4))
                         }
-                        HStack(alignment: .center, spacing: 16) {
-                            Text(FormatAR.one(snap.handicapIndex))
-                                .font(GType.statHero)
-                                .tracking(-4.4)
-                                .tabular()
-                                .foregroundStyle(p.onPrimary)
-                                .minimumScaleFactor(0.5)
-                                .lineLimit(1)
-                            Sparkline(values: snap.trendValues, color: p.accent)
-                                .frame(height: 54)
-                        }
-                        HStack(spacing: 6) {
-                            Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
-                                .font(GType.label)
-                        }
-                        .foregroundStyle(p.onPrimary.opacity(0.7))
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    HStack(alignment: .center, spacing: 12) {
+                        NavigationLink(value: MetricRoute.handicap) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(FormatAR.one(snap.handicapIndex))
+                                    .font(GType.statHero)
+                                    .tracking(-4.4)
+                                    .tabular()
+                                    .foregroundStyle(p.onPrimary)
+                                    .minimumScaleFactor(0.55)
+                                    .lineLimit(1)
+                                HStack(spacing: 6) {
+                                    Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
+                                        .font(GType.label)
+                                }
+                                .foregroundStyle(p.onPrimary.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("metric-handicap")
+                        .accessibilityElement(children: .contain)
+                        .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
+                        HomeHcpPeople(
+                            groups: model.groups,
+                            onGroups: { showsHomeGroups = true },
+                            onCreate: { model.presentCreateGroup() }
+                        )
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("metric-handicap")
-                .accessibilityElement(children: .contain)
-                .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
 
                 HStack(alignment: .top) {
                     NavigationLink(value: MetricRoute.roundList(.allCards)) {
@@ -733,6 +751,127 @@ struct RoundRow: View {
             parts.append("\(pos)° de \(field)")
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+struct HomeHcpPeople: View {
+    @Environment(\.palette) private var p
+    let groups: [GolfletGroup]
+    var onGroups: () -> Void
+    var onCreate: () -> Void
+
+    private let avatar: CGFloat = 36
+
+    var body: some View {
+        if groups.isEmpty {
+            Button(action: onCreate) {
+                VStack(spacing: 6) {
+                    Text("+")
+                        .font(GFont.ui(22, weight: .semibold))
+                        .foregroundStyle(p.primary)
+                        .frame(width: avatar, height: avatar)
+                        .background(p.accent)
+                        .clipShape(Circle())
+                    Text("Crear grupo")
+                        .font(GType.label)
+                        .foregroundStyle(p.onPrimary.opacity(0.7))
+                        .lineLimit(1)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-hcp-crear-grupo")
+            .accessibilityLabel("Crear grupo")
+        } else {
+            Button(action: onGroups) {
+                VStack(spacing: 6) {
+                    stack
+                    Text("Grupos")
+                        .font(GType.label)
+                        .foregroundStyle(p.onPrimary.opacity(0.7))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-hcp-groups")
+            .accessibilityLabel(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
+        }
+    }
+
+    private var stack: some View {
+        let shown = Array(groups.prefix(4))
+        let extra = groups.count - shown.count
+        return HStack(spacing: -12) {
+            ForEach(shown) { group in
+                Text(GroupsParser.initials(group.name))
+                    .font(GFont.ui(12, weight: .semibold))
+                    .foregroundStyle(p.primary)
+                    .frame(width: avatar, height: avatar)
+                    .background(p.onPrimary)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(p.primary, lineWidth: 2))
+            }
+            if extra > 0 {
+                Text("+\(extra)")
+                    .font(GFont.ui(12, weight: .semibold))
+                    .foregroundStyle(p.primary)
+                    .frame(width: avatar, height: avatar)
+                    .background(p.accent)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(p.primary, lineWidth: 2))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+struct HomeGroupsSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.palette) private var p
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        GScreen(id: "screen-home-groups") {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        GOverline(text: "Tus grupos")
+                        GTitle(text: "Grupos", size: 34)
+                    }
+                    ForEach(model.groups) { group in
+                        Button {
+                            dismiss()
+                            model.presentGroupDetail(group.id)
+                        } label: {
+                            GCard(radius: 18, padding: 14) {
+                                HStack(spacing: 12) {
+                                    GroupPhotoView(
+                                        url: group.photoURL,
+                                        initials: GroupsParser.initials(group.name),
+                                        size: 44
+                                    )
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(group.name)
+                                            .font(GType.headline)
+                                            .foregroundStyle(p.ink)
+                                        Text(group.memberCount == 1 ? "1 integrante" : "\(group.memberCount) integrantes")
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink2)
+                                    }
+                                    Spacer()
+                                    MetricChevron(color: p.ink3)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-group-\(group.id)")
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
+            }
+        }
+        .accessibilityIdentifier("screen-home-groups")
+        .safeAreaInset(edge: .top) { closeBar(dismiss: dismiss, id: "close-home-groups") }
     }
 }
 

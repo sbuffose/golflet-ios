@@ -2,10 +2,22 @@ import XCTest
 @testable import Golflet
 
 final class HomeGreetingLayoutTests: XCTestCase {
-    private let names = ["Agustin", "Maximiliano", "Juan Bautista"]
+    private let longNames = ["Guillermo", "Maximiliano", "Juan Bautista"]
     private let chip = "Sáb 31 · 12:33"
 
-    func testGreetingNeverTruncatesAndTabMovesBelowWhenNeeded() {
+    func testDoesNotShrinkNamesThatAlreadyFit() {
+        let tab = HomeGreetingLayout.tabWidth(chipWhen: chip)
+        let phone = HomeGreetingLayout.availableWidth(screenWidth: HomeGreetingLayout.standardWidth, hasTab: true)
+        let agustin = HomeGreetingLayout.greetingWidth(HomeGreetingLayout.text("Agustin"))
+        XCTAssertEqual(
+            HomeGreetingLayout.place(availableWidth: phone, greetingIdealWidth: agustin, tabWidth: tab),
+            .sideBySide,
+            "Agustin entra a tamaño completo; no achicar"
+        )
+        XCTAssertLessThanOrEqual(agustin + HomeGreetingLayout.spacing + tab, phone)
+    }
+
+    func testLongNamesShrinkOrStack() {
         let tab = HomeGreetingLayout.tabWidth(chipWhen: chip)
         XCTAssertGreaterThan(tab, 120)
         XCTAssertLessThan(tab, 220)
@@ -16,7 +28,7 @@ final class HomeGreetingLayoutTests: XCTestCase {
             ("standard", HomeGreetingLayout.standardWidth)
         ]
 
-        for name in names {
+        for name in longNames {
             let label = HomeGreetingLayout.text(name)
             XCTAssertTrue(label.hasPrefix("Hola, "))
             XCTAssertTrue(label.contains(name))
@@ -31,11 +43,12 @@ final class HomeGreetingLayoutTests: XCTestCase {
                     greetingIdealWidth: ideal,
                     tabWidth: tab
                 )
-                let compact = ideal * HomeGreetingLayout.compactScale
-                if compact + HomeGreetingLayout.spacing + tab <= withTab {
-                    XCTAssertEqual(placement, .sideBySide, "\(name) debería compartir fila en \(device)")
+                if ideal + HomeGreetingLayout.spacing + tab <= withTab {
+                    XCTAssertEqual(placement, .sideBySide, "\(name) entra entero en \(device)")
+                } else if ideal * HomeGreetingLayout.compactScale + HomeGreetingLayout.spacing + tab <= withTab {
+                    XCTAssertEqual(placement, .sideBySideShrunk, "\(name) se achica en \(device)")
                 } else {
-                    XCTAssertEqual(placement, .stacked, "\(name) debería bajar el tab en \(device)")
+                    XCTAssertEqual(placement, .stacked, "\(name) baja el tab en \(device)")
                 }
 
                 let alone = HomeGreetingLayout.place(
@@ -56,13 +69,10 @@ final class HomeGreetingLayoutTests: XCTestCase {
     func testLongNamesStackOnSE() {
         let tab = HomeGreetingLayout.tabWidth(chipWhen: chip)
         let se = HomeGreetingLayout.availableWidth(screenWidth: HomeGreetingLayout.seWidth, hasTab: true)
-        for name in ["Maximiliano", "Juan Bautista"] {
+        for name in longNames {
             let ideal = HomeGreetingLayout.greetingWidth(HomeGreetingLayout.text(name))
-            XCTAssertEqual(
-                HomeGreetingLayout.place(availableWidth: se, greetingIdealWidth: ideal, tabWidth: tab),
-                .stacked,
-                "\(name) no puede compartir fila con el tab en iPhone SE"
-            )
+            let placement = HomeGreetingLayout.place(availableWidth: se, greetingIdealWidth: ideal, tabWidth: tab)
+            XCTAssertNotEqual(placement, .sideBySide, "\(name) no entra a tamaño completo en iPhone SE")
         }
     }
 }

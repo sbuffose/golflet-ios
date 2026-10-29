@@ -13,6 +13,9 @@ extension MockAPIClient {
 
     func groups() async throws -> [GolfletGroup] {
         guard isAuthenticated else { throw GolfletError.notAuthenticated }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-no-groups") {
+            return []
+        }
         return mutate { store, me in
             store.groups.filter { $0.members.contains { $0.id == me } }
         }
