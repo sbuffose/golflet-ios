@@ -247,6 +247,70 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertEqual(RecapDraft(transcript: "x", structuredOnDevice: true).source, "ios_on_device")
     }
 
+    func testCourseGroupsUseHumanNamesAndClubFallback() {
+        let azul = GPSCourseSummary(
+            courseId: "118-jockey-azul",
+            clubCode: "118",
+            clubName: "Jockey Club Argentino",
+            course: "Azul",
+            label: "Azul",
+            courseKey: "1:Azul",
+            holesCached: 18,
+            mine: true,
+            distanceKm: 0.1,
+            courseLabel: "Azul",
+            clubCourseCount: 2,
+            displayName: "Jockey Club Argentino · Azul"
+        )
+        let colorada = GPSCourseSummary(
+            courseId: "118-jockey-colorada",
+            clubCode: "118",
+            clubName: "Jockey Club Argentino",
+            course: "118-jockey-colorada",
+            label: "118-jockey-colorada",
+            courseKey: "1:Colorada",
+            holesCached: 18,
+            mine: true,
+            distanceKm: 0.4,
+            courseLabel: "Colorada",
+            clubCourseCount: 2,
+            displayName: "Jockey Club Argentino · Colorada"
+        )
+        let club902 = GPSCourseSummary(
+            courseId: "902-unknown",
+            clubCode: "902",
+            clubName: "",
+            course: "902-unknown",
+            label: "902-unknown",
+            courseKey: "",
+            holesCached: 0,
+            mine: true,
+            distanceKm: 12
+        )
+        XCTAssertEqual(CourseDisplay.courseTitle(colorada), "Colorada")
+        XCTAssertEqual(CourseDisplay.clubTitle(club902), "Club 902")
+        XCTAssertEqual(CourseDisplay.courseTitle(club902), "Club 902")
+        XCTAssertFalse(CourseDisplay.fullName(colorada).contains("118-jockey"))
+        XCTAssertFalse(CourseDisplay.courseTitle(club902).contains("902-unknown"))
+
+        let groups = CourseGroups.make([azul, colorada, club902])
+        XCTAssertEqual(groups.map(\.clubName), ["Jockey Club Argentino", "Club 902"])
+        XCTAssertEqual(groups.first?.courses.map(CourseDisplay.courseTitle), ["Azul", "Colorada"])
+        XCTAssertEqual(groups.first?.distanceKm, 0.1)
+        XCTAssertTrue(groups.last?.isSingle == true)
+        XCTAssertEqual(groups.last?.courses.first?.courseId, "902-unknown")
+
+        let stats = CourseGroups.make(from: [
+            Course(clubCode: "118", clubName: "Jockey Club Buenos Aires", name: "Colorada", holes: []),
+            Course(clubCode: "118", clubName: "Jockey Club Buenos Aires", name: "Azul", holes: []),
+            Course(clubCode: "209", clubName: "Mar del Plata Golf Club", name: "Cancha Vieja", holes: []),
+            Course(clubCode: "209", clubName: "Mar del Plata Golf Club", name: "Cancha Nueva", holes: [])
+        ])
+        XCTAssertEqual(stats.map(\.clubName), ["Jockey Club Buenos Aires", "Mar del Plata Golf Club"])
+        XCTAssertEqual(stats.first?.courses.map(\.name), ["Azul", "Colorada"])
+        XCTAssertEqual(stats.last?.courses.map(\.name), ["Cancha Nueva", "Cancha Vieja"])
+    }
+
     func testAppGroupStaysDisabledUntilPortalGroupExists() {
         XCTAssertFalse(AppGroupAvailability.isEnabled)
         XCTAssertEqual(AppGroupAvailability.identifier, "group.com.sbuffose.golflet")

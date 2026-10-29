@@ -16,6 +16,9 @@ struct GPSCourseSummary: Hashable, Sendable, Identifiable {
     var holesCached: Int
     var mine: Bool
     var distanceKm: Double?
+    var courseLabel: String? = nil
+    var clubCourseCount: Int? = nil
+    var displayName: String? = nil
 }
 
 struct GPSCourseList: Hashable, Sendable {

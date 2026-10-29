@@ -74,7 +74,10 @@ enum CourseCache {
             "course_key": item.courseKey,
             "holes_cached": item.holesCached,
             "mine": item.mine,
-            "distance_km": item.distanceKm as Any
+            "distance_km": item.distanceKm as Any,
+            "course_label": item.courseLabel as Any,
+            "club_course_count": item.clubCourseCount as Any,
+            "display_name": item.displayName as Any
         ]
     }
 
@@ -89,7 +92,10 @@ enum CourseCache {
             courseKey: json["course_key"] as? String ?? "",
             holesCached: JSONFlex.int(from: json["holes_cached"]) ?? 0,
             mine: JSONFlex.bool(from: json["mine"]) ?? false,
-            distanceKm: JSONFlex.double(from: json["distance_km"])
+            distanceKm: JSONFlex.double(from: json["distance_km"]),
+            courseLabel: json["course_label"] as? String,
+            clubCourseCount: JSONFlex.int(from: json["club_course_count"]),
+            displayName: json["display_name"] as? String
         )
     }
 

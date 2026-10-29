@@ -257,4 +257,39 @@ final class PlayAPITests: XCTestCase {
         XCTAssertGreaterThan(metrics?.total ?? 0, 0)
         XCTAssertFalse(metrics?.perHole.isEmpty ?? true)
     }
+
+    func testParsesOptionalGPSCourseDisplayFields() {
+        let fresh = PlayParser.courses([
+            "courses": [[
+                "course_id": "118-jockey-colorada",
+                "club_code": "118",
+                "club_name": "Jockey Club Argentino",
+                "course": "118-jockey-colorada",
+                "course_label": "Colorada",
+                "club_course_count": 2,
+                "display_name": "Jockey Club Argentino · Colorada"
+            ]],
+            "nearby": []
+        ])
+        let item = fresh.courses[0]
+        XCTAssertEqual(item.courseLabel, "Colorada")
+        XCTAssertEqual(item.clubCourseCount, 2)
+        XCTAssertEqual(item.displayName, "Jockey Club Argentino · Colorada")
+        XCTAssertEqual(CourseDisplay.courseTitle(item), "Colorada")
+        XCTAssertEqual(CourseDisplay.clubTitle(item), "Jockey Club Argentino")
+
+        let legacy = PlayParser.courses([
+            "courses": [[
+                "course_id": "118-jockey-azul",
+                "club_code": "118",
+                "club_name": "Jockey Club Argentino",
+                "course": "Azul",
+                "label": "Azul"
+            ]]
+        ])
+        XCTAssertNil(legacy.courses.first?.courseLabel)
+        XCTAssertNil(legacy.courses.first?.clubCourseCount)
+        XCTAssertNil(legacy.courses.first?.displayName)
+        XCTAssertEqual(CourseDisplay.courseTitle(legacy.courses[0]), "Azul")
+    }
 }
