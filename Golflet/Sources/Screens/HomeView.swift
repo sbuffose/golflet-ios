@@ -846,6 +846,7 @@ struct HomeHcpPeople: View {
     var onAddProfesor: () -> Void
     var onGroups: () -> Void
     var onCreate: () -> Void
+    @State private var presentedProfesor: Profesor?
 
     private let groupAvatar: CGFloat = HomeHcpPeopleLayout.groupAvatar
     private let profesorAvatar: CGFloat = HomeHcpPeopleLayout.profesorAvatar
@@ -866,12 +867,18 @@ struct HomeHcpPeople: View {
         .fixedSize(horizontal: true, vertical: true)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-hcp-people")
+        .sheet(item: $presentedProfesor) { profesor in
+            NavigationStack {
+                ProfesorDetailView(profesor: profesor)
+            }
+            .golfletChrome()
+        }
     }
 
     private var profesorAvatarButton: some View {
         Button {
             if profesores.count == 1, let first = profesores.first {
-                onProfesor(first)
+                presentedProfesor = first
             } else {
                 onProfesores()
             }
