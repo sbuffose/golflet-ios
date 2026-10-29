@@ -84,26 +84,33 @@ struct NotificationsView: View {
     private func notificationCard(_ item: InboxNotification) -> some View {
         GCard(radius: 18, padding: 14) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 10) {
-                    unreadDot(item.isUnread)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.kind.title.uppercased())
-                            .font(GType.overline)
-                            .tracking(0.8)
-                            .foregroundStyle(item.isUnread ? p.accent : p.ink3)
-                        Text(item.title)
-                            .font(GType.headline)
-                            .foregroundStyle(p.ink)
-                        if !item.body.isEmpty {
-                            Text(item.body)
-                                .font(GType.body)
-                                .foregroundStyle(p.ink2)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
+                        unreadDot(item.isUnread)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.kind.title.uppercased())
+                                .font(GType.overline)
+                                .tracking(0.8)
+                                .foregroundStyle(item.isUnread ? p.accent : p.ink3)
+                            Text(item.title)
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                                .accessibilityLabel(item.isUnread ? "Sin leer, \(item.title)" : item.title)
+                            if !item.body.isEmpty {
+                                Text(item.body)
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink2)
+                            }
+                            metaLine(item)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink3)
                         }
-                        metaLine(item)
-                            .font(GType.label)
-                            .foregroundStyle(p.ink3)
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    Task { await model.openNotification(item) }
                 }
 
                 if item.kind == .groupInvite, let invite = item.resolvedInvite(from: model.pendingInvites) {
@@ -124,6 +131,7 @@ struct NotificationsView: View {
                                     .background(p.primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
+                            .buttonStyle(.plain)
                             .disabled(model.isBusy)
                             .accessibilityIdentifier("notification-accept-\(item.id)")
 
@@ -138,6 +146,7 @@ struct NotificationsView: View {
                                     .background(p.surface2)
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
+                            .buttonStyle(.plain)
                             .disabled(model.isBusy)
                             .accessibilityIdentifier("notification-decline-\(item.id)")
                         }
@@ -149,12 +158,8 @@ struct NotificationsView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(item.isUnread ? p.accent.opacity(0.35) : Color.clear, lineWidth: 1)
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            Task { await model.openNotification(item) }
-        }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("notification-\(item.id)")
-        .accessibilityLabel(item.isUnread ? "Sin leer, \(item.title)" : item.title)
     }
 
     private func unreadDot(_ unread: Bool) -> some View {
