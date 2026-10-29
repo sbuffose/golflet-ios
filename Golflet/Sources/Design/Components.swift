@@ -126,6 +126,7 @@ struct FilterPills: View {
                         Text(option)
                             .font(GType.headline)
                             .foregroundStyle(selection == option ? p.ink : p.ink2)
+                            .lineLimit(1)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
