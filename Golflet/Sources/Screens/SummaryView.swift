@@ -24,9 +24,22 @@ struct SummaryView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             GOverline(text: "\(model.summary.firstYear) – \(model.summary.lastYear)")
-            GTitle(text: "Resumen")
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    GTitle(text: "Resumen")
+                    Text("\(model.summary.validRoundCount) \(model.summary.validRoundCount == 1 ? "ronda" : "rondas")")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("range-count")
+                }
+                Spacer(minLength: 8)
+                RangeMenuButton(
+                    range: Binding(get: { model.statsRange }, set: { model.statsRange = $0 }),
+                    count: model.summary.validRoundCount
+                )
+            }
         }
     }
 
@@ -50,11 +63,14 @@ struct SummaryView: View {
     private var grid: some View {
         let snap = model.summary
         let course = model.courseFilter.courseName
-        let scoped = StatsEngine.apply(StatsEngine.eighteenHoleValid(model.rounds), filter: model.courseFilter)
+        let scoped = model.rangedValidRounds()
+        if snap.validRoundCount == 0 {
+            return AnyView(RangeEmptyState(range: model.statsRange))
+        }
         let start2025 = Calendar.gregorian.date(from: DateComponents(year: 2025, month: 1, day: 1)) ?? Date.distantPast
-        return VStack(spacing: 10) {
+        return AnyView(VStack(spacing: 10) {
             HStack(spacing: 10) {
-                NavigationLink(value: MetricRoute.roundList(.summaryBest(course: course))) {
+                NavigationLink(value: chart(.gross, title: "Mejor ronda", course: course)) {
                     AccentStatCard(
                         tint: .primary,
                         icon: "trophy.fill",
@@ -69,11 +85,11 @@ struct SummaryView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-best")
-                NavigationLink(value: MetricRoute.roundList(.summaryWorst(course: course))) {
+                NavigationLink(value: chart(.gross, title: "Peor ronda", course: course)) {
                     AccentStatCard(
                         tint: .danger,
                         icon: "arrow.down.right",
-                        title: "Peor (desde 2021)",
+                        title: model.statsRange == .all ? "Peor (desde 2021)" : "Peor ronda",
                         value: snap.worstSince2021?.gross.map(String.init) ?? "—",
                         secondary: snap.worstSince2021.flatMap { w in w.net.map { "\($0) neto" } },
                         footnote: snap.worstSince2021.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
@@ -83,7 +99,7 @@ struct SummaryView: View {
                 .accessibilityIdentifier("metric-summary-worst")
             }
             HStack(spacing: 10) {
-                NavigationLink(value: MetricRoute.roundList(.average(yearOnly: false).locking(course: course))) {
+                NavigationLink(value: chart(.gross, title: "Promedio gross", course: course)) {
                     AccentStatCard(
                         tint: .primary,
                         icon: "chart.xyaxis.line",
@@ -96,7 +112,7 @@ struct SummaryView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-average")
-                NavigationLink(value: MetricRoute.roundList(.since2025(course: course))) {
+                NavigationLink(value: chart(.differential, title: "Desde 2025", course: course)) {
                     AccentStatCard(
                         tint: .primary,
                         icon: "calendar",
@@ -110,19 +126,16 @@ struct SummaryView: View {
                 .accessibilityIdentifier("metric-summary-2025")
             }
             scoreMix
-        }
+        })
+    }
+
+    private func chart(_ kind: MetricChartKind, title: String, course: String?) -> MetricRoute {
+        .chart(MetricChartQuery(title: title, kind: kind, courseName: course, range: model.statsRange))
     }
 
     private var scoreMix: some View {
-        let scoped = StatsEngine.apply(StatsEngine.eighteenHoleValid(model.rounds), filter: model.courseFilter)
+        let scoped = model.rangedValidRounds()
         let totals = StatsEngine.scoreTotals(scoped)
-        let query = RoundListQuery(
-            title: "Resumen",
-            periodDefault: .all,
-            showCourseFilter: model.courseFilter.courseName == nil,
-            valid18Only: true,
-            courseName: model.courseFilter.courseName
-        )
         return VStack(alignment: .leading, spacing: 10) {
             Text("Resultados")
                 .font(GType.section)
@@ -130,21 +143,20 @@ struct SummaryView: View {
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
                     ForEach([ScoreKind.eagle, .birdie], id: \.self) { kind in
-                        scoreTile(kind, total: totals[kind] ?? 0, query: query)
+                        scoreTile(kind, total: totals[kind] ?? 0, scoped: scoped)
                     }
                 }
                 HStack(spacing: 10) {
                     ForEach([ScoreKind.par, .bogey], id: \.self) { kind in
-                        scoreTile(kind, total: totals[kind] ?? 0, query: query)
+                        scoreTile(kind, total: totals[kind] ?? 0, scoped: scoped)
                     }
                 }
             }
         }
     }
 
-    private func scoreTile(_ kind: ScoreKind, total: Int, query: RoundListQuery) -> some View {
-        let scoped = StatsEngine.apply(StatsEngine.eighteenHoleValid(model.rounds), filter: model.courseFilter)
-        return NavigationLink(value: MetricRoute.scoreKind(kind, query)) {
+    private func scoreTile(_ kind: ScoreKind, total: Int, scoped: [Round]) -> some View {
+        return NavigationLink(value: chart(.scoreKind(kind), title: kind.title, course: model.courseFilter.courseName)) {
             AccentStatCard(
                 tint: kind.statTint,
                 icon: kind.symbolName,
@@ -208,7 +220,13 @@ struct SummaryView: View {
     }
 
     private var hardest: some View {
-        let rows = StatsEngine.hardestHoles(from: model.holeStats, filter: model.courseFilter)
+        let ranged = StatsEngine.ranged(model.rounds, range: model.statsRange)
+        let rows: [(String, HoleStat)] = {
+            if StatsEngine.hasCompleteHoleData(ranged) {
+                return StatsEngine.hardestFromRounds(ranged, filter: model.courseFilter)
+            }
+            return StatsEngine.hardestHoles(from: model.holeStats, filter: model.courseFilter).map { ($0.0.course, $0.1) }
+        }()
         return VStack(alignment: .leading, spacing: 12) {
             Text("Hoyos que más te cuestan")
                 .font(GType.section)
@@ -217,7 +235,7 @@ struct SummaryView: View {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, pair in
                     let (course, hole) = pair
                     Button {
-                        model.selectedCourseName = course.course
+                        model.selectedCourseName = course
                         model.presentedHole = hole.number
                         model.selectedTab = .cancha
                     } label: {
@@ -231,7 +249,7 @@ struct SummaryView: View {
                                 Text("Par \(hole.par) · Handicap \(hole.handicap)")
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
-                                Text("\(course.course.prefix(3).uppercased()) · Promedio \(FormatAR.one(hole.average)) en \(hole.samples) vueltas")
+                                Text("\(course.prefix(3).uppercased()) · Promedio \(FormatAR.one(hole.average)) en \(hole.samples) vueltas")
                                     .font(GType.label)
                                     .foregroundStyle(p.ink2)
                             }
@@ -247,7 +265,7 @@ struct SummaryView: View {
                         .padding(.vertical, 10)
                     }
                     .buttonStyle(.plain)
-                    if pair.1.number != rows.last?.1.number || pair.0.course != rows.last?.0.course {
+                    if pair.1.number != rows.last?.1.number || pair.0 != rows.last?.0 {
                         Hairline()
                     }
                 }

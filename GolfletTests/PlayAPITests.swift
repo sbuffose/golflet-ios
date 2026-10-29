@@ -252,7 +252,8 @@ final class PlayAPITests: XCTestCase {
             year: 2026,
             course: "all",
             sort: "count",
-            order: "desc"
+            order: "desc",
+            range: "all"
         )
         XCTAssertGreaterThan(metrics?.total ?? 0, 0)
         XCTAssertFalse(metrics?.perHole.isEmpty ?? true)

@@ -294,7 +294,7 @@ extension MockAPIClient {
         )
     }
 
-    func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String) async throws -> MetricDrilldown? {
+    func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String, range: String) async throws -> MetricDrilldown? {
         let snap = try await bootstrap()
         let bucket: MetricCourseBucket = {
             switch course {
@@ -318,6 +318,9 @@ extension MockAPIClient {
         var filtered = StatsEngine.filter(snap.rounds, query: query, period: period, course: bucket)
         if let since {
             filtered = filtered.filter { Calendar.gregorian.component(.year, from: $0.date) >= since }
+        }
+        if let statsRange = StatsRange(rawValue: range) {
+            filtered = StatsEngine.ranged(filtered, range: statsRange)
         }
         let field: MetricSortField = sort == "gross" ? .gross : (sort == "net" ? .net : .date)
         let sortOrder: MetricSortOrder = {

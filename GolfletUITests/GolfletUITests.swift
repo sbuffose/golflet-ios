@@ -40,6 +40,7 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Resumen")
         XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        XCTAssertTrue(first(app, "range-menu").waitForExistence(timeout: 4), "Falta el selector de período")
         saveShot("02_resumen")
 
         tapTab(app, "Rondas")
@@ -292,6 +293,24 @@ final class GolfletUITests: XCTestCase {
         saveShot("25_login_first_sync")
     }
 
+    func testResumenRangeOpensMetricChart() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        assertRangeMenu(app)
+        XCTAssertTrue(first(app, "metric-summary-average").waitForExistence(timeout: 4))
+        first(app, "metric-summary-average").tap()
+        XCTAssertTrue(waitFor(app, "screen-metric-chart", timeout: 6), "El promedio no abrió el gráfico")
+        XCTAssertTrue(first(app, "metric-chart").waitForExistence(timeout: 3))
+        saveShot("31_resumen_rango_chart")
+        dismissIfPresent(app, "metric-back")
+    }
+
     func testCanchaHoleGridDoesNotWrapOnIPhone() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
@@ -444,6 +463,19 @@ final class GolfletUITests: XCTestCase {
                 app.swipeUp()
             }
         }
+    }
+
+    private func assertRangeMenu(_ app: XCUIApplication) {
+        let menu = first(app, "range-menu")
+        XCTAssertTrue(menu.waitForExistence(timeout: 4), "Falta el selector de período")
+        menu.tap()
+        let three = app.buttons["range-3m"].exists ? app.buttons["range-3m"] : first(app, "range-3m")
+        if three.waitForExistence(timeout: 3) {
+            three.tap()
+        } else {
+            app.menuItems["3 meses"].tap()
+        }
+        XCTAssertTrue(first(app, "range-count").waitForExistence(timeout: 3))
     }
 
     private func assertCanchaHoleGrid(_ app: XCUIApplication) {

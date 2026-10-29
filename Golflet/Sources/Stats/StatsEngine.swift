@@ -99,8 +99,20 @@ enum StatsEngine {
         )
     }
 
-    static func summary(rounds: [Round], filter: CourseFilter) -> SummarySnapshot {
-        let scoped = apply(rounds, filter: filter)
+    static func ranged(_ rounds: [Round], range: StatsRange, now: Date = Date()) -> [Round] {
+        guard let start = range.startDate(now: now) else { return rounds }
+        return rounds.filter { $0.date >= start }
+    }
+
+    static func hasCompleteHoleData(_ rounds: [Round]) -> Bool {
+        let valid = eighteenHoleValid(rounds)
+        guard !valid.isEmpty else { return true }
+        let detailed = valid.filter { $0.holes.count >= 9 }
+        return detailed.count * 4 >= valid.count * 3
+    }
+
+    static func summary(rounds: [Round], filter: CourseFilter, range: StatsRange = .all, now: Date = Date()) -> SummarySnapshot {
+        let scoped = apply(ranged(rounds, range: range, now: now), filter: filter)
         let valid18 = eighteenHoleValid(scoped)
         let years = valid18.map { Calendar.gregorian.component(.year, from: $0.date) }
         let start2025 = Calendar.gregorian.date(from: DateComponents(year: 2025, month: 1, day: 1)) ?? Date.distantPast
@@ -137,8 +149,8 @@ enum StatsEngine {
         )
     }
 
-    static func course(named name: String, rounds: [Round], courses: [Course], tees: [TeeRating]) -> CourseSnapshot {
-        let valid18 = eighteenHoleValid(rounds).filter {
+    static func course(named name: String, rounds: [Round], courses: [Course], tees: [TeeRating], range: StatsRange = .all, now: Date = Date()) -> CourseSnapshot {
+        let valid18 = eighteenHoleValid(ranged(rounds, range: range, now: now)).filter {
             !$0.isOtherCourse && $0.course.caseInsensitiveCompare(name) == .orderedSame
         }
         let start2025 = Calendar.gregorian.date(from: DateComponents(year: 2025, month: 1, day: 1)) ?? Date.distantPast
@@ -338,6 +350,129 @@ enum StatsEngine {
                 .sorted { $0.date < $1.date }
                 .compactMap { $0.gross.map(Double.init) }
                 .suffix(limit)
+        )
+    }
+
+    static func holeAverages(rounds: [Round], course: String) -> [HoleStat] {
+        let scoped = eighteenHoleValid(rounds).filter {
+            !$0.isOtherCourse && $0.course.caseInsensitiveCompare(course) == .orderedSame && !$0.holes.isEmpty
+        }
+        var buckets: [Int: HoleBucket] = [:]
+        for round in scoped {
+            for hole in round.holes {
+                guard let strokes = hole.strokes else { continue }
+                var bucket = buckets[hole.number] ?? HoleBucket(par: hole.par, handicap: hole.handicap)
+                bucket.add(strokes: strokes, toPar: hole.toPar ?? (strokes - hole.par), result: hole.result)
+                buckets[hole.number] = bucket
+            }
+        }
+        return buckets.keys.sorted().map { number in
+            buckets[number]!.stat(number: number)
+        }
+    }
+
+    static func hardestFromRounds(_ rounds: [Round], filter: CourseFilter, limit: Int = 4) -> [(String, HoleStat)] {
+        let scoped = apply(rounds, filter: filter)
+        let names = Set(scoped.map(\.course).filter { !$0.hasPrefix("x:") })
+        var pairs: [(String, HoleStat)] = []
+        for name in names {
+            for hole in holeAverages(rounds: scoped, course: name) {
+                pairs.append((name, hole))
+            }
+        }
+        return pairs.sorted { $0.1.averageToPar > $1.1.averageToPar }.prefix(limit).map { $0 }
+    }
+
+    static func series(from rounds: [Round], kind: MetricChartKind, courseName: String?) -> [MetricPoint] {
+        let valid = eighteenHoleValid(rounds)
+            .filter { courseName == nil || $0.course.caseInsensitiveCompare(courseName!) == .orderedSame }
+            .sorted { $0.date < $1.date }
+        switch kind {
+        case .gross:
+            return valid.compactMap { round in
+                round.gross.map { MetricPoint(date: round.date, value: Double($0), course: round.course) }
+            }
+        case .net:
+            return valid.compactMap { round in
+                round.net.map { MetricPoint(date: round.date, value: Double($0), course: round.course) }
+            }
+        case .differential:
+            return valid.compactMap { round in
+                round.differential.map { MetricPoint(date: round.date, value: $0, course: round.course) }
+            }
+        case .scoreKind(let score):
+            return valid.map { round in
+                MetricPoint(date: round.date, value: Double(count(score, in: round).count), course: round.course)
+            }
+        case .hole(let number):
+            return valid.compactMap { round in
+                guard let hole = round.holes.first(where: { $0.number == number }), let strokes = hole.strokes else {
+                    return nil
+                }
+                return MetricPoint(date: round.date, value: Double(strokes), course: round.course)
+            }
+        case .handicap:
+            return handicapSeries(valid).map { MetricPoint(date: $0.date, value: $0.handicap, course: $0.course) }
+        }
+    }
+
+    static func rollingAverage(_ points: [MetricPoint], window: Int = 5) -> [MetricPoint] {
+        guard window > 1, points.count > 1 else { return [] }
+        return points.enumerated().map { index, point in
+            let start = max(0, index - window + 1)
+            let slice = points[start...index]
+            let mean = slice.map(\.value).reduce(0, +) / Double(slice.count)
+            return MetricPoint(date: point.date, value: mean, course: point.course)
+        }
+    }
+}
+
+private struct HoleBucket {
+    var par: Int
+    var handicap: Int
+    var sum = 0.0
+    var toPar = 0.0
+    var samples = 0
+    var best = 99
+    var worst = 0
+    var distribution = HoleDistribution(
+        eagleOrBetter: 0,
+        birdie: 0,
+        par: 0,
+        bogey: 0,
+        double: 0,
+        triplePlus: 0
+    )
+
+    mutating func add(strokes: Int, toPar value: Int, result: HoleResult) {
+        sum += Double(strokes)
+        toPar += Double(value)
+        samples += 1
+        best = min(best, strokes)
+        worst = max(worst, strokes)
+        switch result {
+        case .eagleOrBetter: distribution.eagleOrBetter += 1
+        case .birdie: distribution.birdie += 1
+        case .par: distribution.par += 1
+        case .bogey: distribution.bogey += 1
+        case .doubleOrWorse: distribution.double += 1
+        case .unknown: break
+        }
+    }
+
+    func stat(number: Int) -> HoleStat {
+        HoleStat(
+            number: number,
+            par: par,
+            handicap: handicap,
+            samples: samples,
+            average: samples == 0 ? 0 : sum / Double(samples),
+            averageToPar: samples == 0 ? 0 : toPar / Double(samples),
+            averageLast16: nil,
+            best: best == 99 ? nil : best,
+            worst: worst == 0 ? nil : worst,
+            distribution: distribution,
+            comparisons: []
         )
     }
 }
