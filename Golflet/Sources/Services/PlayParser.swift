@@ -22,7 +22,8 @@ enum PlayParser {
             holeCount: JSONFlex.int(from: blob["hole_count"]) ?? holes.count,
             holes: holes,
             warnings: blob["warnings"] as? [String] ?? [],
-            attribution: (blob["sources"] as? [String: Any])?["attribution"] as? String
+            attribution: (blob["sources"] as? [String: Any])?["attribution"] as? String,
+            minutesPerHole: PaceParser.minutesPerHole(from: blob)
         )
     }
 

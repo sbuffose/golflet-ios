@@ -54,6 +54,7 @@ struct GPSCourseDetail: Hashable, Sendable, Identifiable {
     var holes: [GPSHole]
     var warnings: [String]
     var attribution: String?
+    var minutesPerHole: Double? = nil
 }
 
 struct LiveRound: Hashable, Sendable, Identifiable {
@@ -700,6 +701,10 @@ enum StrategyCopy {
 }
 
 enum PlayMath {
+    static let yardsPerMeter = 1.0936133
+    static let metersPerYard = 0.9144
+    static let farThresholdYd = 1000
+
     static func meters(from a: GPSCoord, to b: GPSCoord) -> Int {
         let r = 6_371_000.0
         let dLat = (b.lat - a.lat) * .pi / 180
@@ -711,6 +716,19 @@ enum PlayMath {
     }
 
     static func yards(_ meters: Int) -> Int {
-        Int((Double(meters) * 1.0936133).rounded())
+        Int((Double(meters) * yardsPerMeter).rounded())
+    }
+
+    static func yards(from a: GPSCoord, to b: GPSCoord) -> Int {
+        yards(meters(from: a, to: b))
+    }
+
+    static func isFar(_ yards: Int?) -> Bool {
+        guard let yards else { return false }
+        return yards > farThresholdYd
+    }
+
+    static func displayYards(_ yards: Int?) -> Int? {
+        isFar(yards) ? nil : yards
     }
 }

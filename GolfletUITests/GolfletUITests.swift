@@ -121,6 +121,7 @@ final class GolfletUITests: XCTestCase {
         first(app, "course-118-jockey-azul").tap()
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8), "No se abrió el hoyo GPS")
         XCTAssertTrue(waitFor(app, "distance-center", timeout: 4))
+        XCTAssertTrue(app.buttons["Ya pegué"].waitForExistence(timeout: 2) || first(app, "play-hit").label.contains("Ya pegué"), "Falta Ya pegué")
         saveShot("17_play_hoyo")
         if first(app, "play-hole-picker").waitForExistence(timeout: 3) {
             first(app, "play-hole-picker").tap()
@@ -415,6 +416,50 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
         assertCanchaHoleGrid(app)
         saveShot("30_cancha_hoyos")
+    }
+
+    func testFarFromCourseShowsClearDistanceState() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-far-gps"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
+        first(app, "play-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
+        first(app, "course-118-jockey-azul").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        XCTAssertTrue(waitFor(app, "distance-far", timeout: 4), "Falta Estás lejos de la cancha")
+        XCTAssertFalse(first(app, "distance-center").exists)
+        saveShot("32_play_lejos")
+    }
+
+    func testPaceAlertOnlyOnHole10WhenLate() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-pace-late"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        if openClubsSheet(app, timeout: 4) {
+            XCTAssertTrue(first(app, "setting-pace-alert").waitForExistence(timeout: 4), "Falta el aviso de ritmo")
+            dismissIfPresent(app, "close-clubes")
+        }
+        XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
+        first(app, "play-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
+        first(app, "course-118-jockey-azul").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        XCTAssertFalse(first(app, "pace-alert").exists, "El aviso no puede aparecer antes del 10")
+        first(app, "play-hole-picker").tap()
+        XCTAssertTrue(first(app, "pick-hole-10").waitForExistence(timeout: 4))
+        first(app, "pick-hole-10").tap()
+        XCTAssertTrue(
+            first(app, "pace-alert").waitForExistence(timeout: 4) || app.alerts["Ritmo de juego"].waitForExistence(timeout: 3),
+            "Falta el aviso de ritmo en el hoyo 10"
+        )
+        saveShot("33_play_ritmo")
     }
 
     func testResumenTrendCardFillsPhoneWidth() throws {

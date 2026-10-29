@@ -46,6 +46,8 @@ struct ClubsView: View {
                             .foregroundStyle(p.negative)
                     }
 
+                    playSettingsSection
+
                     if let user = model.user {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Tu cuenta")
@@ -199,6 +201,30 @@ struct ClubsView: View {
             .accessibilityIdentifier("perfil-grupos")
         }
         .task { await model.refreshGroups() }
+    }
+
+    private var playSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Jugar")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            Toggle(isOn: Binding(
+                get: { model.playSettings.paceAlertEnabled },
+                set: { model.setPaceAlertEnabled($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Aviso de ritmo")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text("Si vas más de 10 minutos atrasado, te avisamos en el hoyo 10.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                }
+            }
+            .tint(p.primary)
+            .accessibilityIdentifier("setting-pace-alert")
+        }
+        .task { await model.refreshPlaySettings() }
     }
 
     private var shareSection: some View {

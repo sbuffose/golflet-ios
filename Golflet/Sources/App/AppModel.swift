@@ -55,6 +55,7 @@ final class AppModel {
     var showsGroups = false
     var inviteShare: InviteSharePayload?
     var teeTimes: [TeeTime] = []
+    var playSettings = PlaySettingsStore.load()
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -142,6 +143,7 @@ final class AppModel {
             await refreshTextPrefs()
             await refreshProfesores()
             await refreshTeeTimes()
+            await refreshPlaySettings()
             isLoaded = true
             await consumeIntent()
         } catch {
@@ -153,6 +155,27 @@ final class AppModel {
     func setStatsRange(_ range: StatsRange) {
         statsRange = range
         Task { await refreshMetricsSummary() }
+    }
+
+    func refreshPlaySettings() async {
+        guard isSignedIn else { return }
+        if let remote = try? await api.playSettings() {
+            playSettings = remote
+            PlaySettingsStore.save(remote)
+        }
+    }
+
+    func setPaceAlertEnabled(_ enabled: Bool) {
+        playSettings.paceAlertEnabled = enabled
+        PlaySettingsStore.save(playSettings)
+        Task { await persistPlaySettings() }
+    }
+
+    func persistPlaySettings() async {
+        if let remote = try? await api.savePlaySettings(playSettings) {
+            playSettings = remote
+            PlaySettingsStore.save(remote)
+        }
     }
 
     func refreshMetricsSummary() async {

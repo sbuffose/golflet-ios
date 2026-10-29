@@ -61,7 +61,7 @@ struct PlayCourseView: View {
             VStack(alignment: .leading, spacing: 6) {
                 GOverline(text: "Ronda con GPS")
                 GTitle(text: "Jugar", size: 34)
-                Text("Elegí la cancha. Después caminás, ves la distancia y tocás Pegué.")
+                Text("Elegí la cancha. Después caminás, ves la distancia y tocás Ya pegué.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
             }

@@ -20,6 +20,10 @@ struct PlayHoleView: View {
     @State private var strategy: CourseStrategy?
     @State private var lastManualChange = Date.distantPast
     @State private var pendingAdvance: Int?
+    @State private var pace = PaceConfig.fallback
+    @State private var paceSession: PaceSession?
+    @State private var showsPaceAlert = false
+    @State private var paceAlertText = ""
 
     enum Phase { case ready, pickClub, pickResult }
 
@@ -66,6 +70,8 @@ struct PlayHoleView: View {
                 CourseCache.save(detail: course, strategy: remote)
             }
             RoundLiveActivity.start(course: course, liveRound: liveRound, here: location.coordinate, shots: shots)
+            beginPace()
+            await loadPace()
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
@@ -102,6 +108,17 @@ struct PlayHoleView: View {
         }
         .sheet(isPresented: $showsHoles) { holePicker }
         .sheet(isPresented: $showsStrategy) { strategySheet }
+        .alert("Ritmo de juego", isPresented: $showsPaceAlert) {
+            Button("Listo", role: .cancel) {}
+                .accessibilityIdentifier("pace-alert-ok")
+        } message: {
+            Text(paceAlertText)
+        }
+        .overlay {
+            if showsPaceAlert {
+                GProbe(id: "pace-alert", label: paceAlertText)
+            }
+        }
     }
 
     private var current: GPSHole? {
@@ -173,11 +190,29 @@ struct PlayHoleView: View {
                     }
                     .accessibilityIdentifier("play-hole-next")
                 }
-                HStack(alignment: .bottom, spacing: 8) {
-                    yardCell("Frente", yards(from: here, to: green?.front), id: "distance-front")
-                    yardCell("Centro", yards(from: here, to: green?.center), id: "distance-center", hero: true)
-                    yardCell("Fondo", yards(from: here, to: green?.back), id: "distance-back")
-                }
+                distanceValues(here: here, green: green)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func distanceValues(here: GPSCoord?, green: GPSGreen?) -> some View {
+        let front = yards(from: here, to: green?.front)
+        let center = yards(from: here, to: green?.center)
+        let back = yards(from: here, to: green?.back)
+        if PlayMath.isFar(front) || PlayMath.isFar(center) || PlayMath.isFar(back) {
+            Text("Estás lejos de la cancha")
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .accessibilityIdentifier("distance-far")
+        } else {
+            HStack(alignment: .bottom, spacing: 8) {
+                yardCell("Frente", front, id: "distance-front")
+                yardCell("Centro", center, id: "distance-center", hero: true)
+                yardCell("Fondo", back, id: "distance-back")
             }
         }
     }
@@ -188,11 +223,12 @@ struct PlayHoleView: View {
                 .font(GType.overline)
                 .foregroundStyle(p.ink3)
             Text(value.map(String.init) ?? "—")
-                .font(hero ? GType.statHero : GType.statL)
+                .font(hero ? GFont.ui(52, weight: .semibold) : GType.statL)
                 .tabular()
                 .foregroundStyle(p.ink)
-                .minimumScaleFactor(0.4)
+                .minimumScaleFactor(0.55)
                 .lineLimit(1)
+                .frame(maxWidth: .infinity)
                 .accessibilityIdentifier(id)
             Text("yd")
                 .font(GType.label)
@@ -284,7 +320,7 @@ struct PlayHoleView: View {
         Button {
             Task { await hit() }
         } label: {
-            Text("Pegué")
+            Text("Ya pegué")
                 .font(GFont.ui(28, weight: .semibold))
                 .foregroundStyle(p.onPrimary)
                 .frame(maxWidth: .infinity)
@@ -293,6 +329,7 @@ struct PlayHoleView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Ya pegué")
         .accessibilityIdentifier("play-hit")
         .disabled(location.coordinate == nil)
     }
@@ -397,7 +434,7 @@ struct PlayHoleView: View {
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             if rows.isEmpty {
-                Text("Caminá, mirá la distancia y tocá Pegué.")
+                Text("Caminá, mirá la distancia y tocá Ya pegué.")
                     .font(GType.body)
                     .foregroundStyle(p.ink3)
             } else {
@@ -485,7 +522,7 @@ struct PlayHoleView: View {
 
     private func yards(from here: GPSCoord?, to target: GPSCoord?) -> Int? {
         guard let here, let target else { return nil }
-        return PlayMath.yards(PlayMath.meters(from: here, to: target))
+        return PlayMath.yards(from: here, to: target)
     }
 
     private func changeHole(_ next: Int) {
@@ -496,6 +533,8 @@ struct PlayHoleView: View {
         PlayHaptics.holeChange()
         OfflinePlay.saveActive(roundId: liveRound.id, courseId: course.courseId, hole: clamped, courseName: course.course)
         refreshLiveActivity()
+        updatePace { $0.enter(hole: clamped) }
+        evaluatePace()
         Task {
             _ = try? await model.api.patchLiveRound(id: liveRound.id, body: ["current_hole": clamped])
         }
@@ -538,6 +577,7 @@ struct PlayHoleView: View {
         lastDraft = draft
         ShotQueue.enqueue(draft)
         PlayHaptics.shot()
+        updatePace { $0.markStart(draft.takenAt) }
         do {
             let posted = try await model.api.postShots(liveRoundId: liveRound.id, drafts: [draft])
             ShotQueue.remove(clientIds: [draft.clientId])
@@ -613,5 +653,53 @@ struct PlayHoleView: View {
     private func endRound() async {
         _ = try? await model.api.patchLiveRound(id: liveRound.id, body: ["ended": true])
         await model.endPlay(recapLiveRoundId: liveRound.id)
+    }
+
+    private func beginPace() {
+        let start = liveRound.startedAt
+            ?? shots.compactMap(\.takenAt).min()
+            ?? Date()
+        paceSession = PaceSessionStore.make(roundId: liveRound.id, startedAt: start, hole: hole)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-pace-late") {
+            updatePace { $0.startedAt = Date().addingTimeInterval(-3 * 3600) }
+        }
+        if let minutes = course.minutesPerHole {
+            pace = PaceConfig(minutesPerHole: minutes, players: pace.players, modality: pace.modality, source: "course")
+        }
+    }
+
+    private func loadPace() async {
+        if let remote = try? await model.api.paceConfig(
+            courseId: course.courseId,
+            clubCode: course.clubCode,
+            players: nil,
+            modality: nil
+        ), remote.source == "api" {
+            pace = remote
+        }
+        evaluatePace()
+    }
+
+    private func updatePace(_ edit: (inout PaceSession) -> Void) {
+        guard var session = paceSession else { return }
+        edit(&session)
+        paceSession = session
+        PaceSessionStore.save(session)
+    }
+
+    private func evaluatePace() {
+        guard let session = paceSession else { return }
+        guard PaceEngine.shouldAlert(
+            hole: hole,
+            startedAt: session.startedAt,
+            minutesPerHole: pace.minutesPerHole,
+            alertEnabled: model.playSettings.paceAlertEnabled,
+            alreadyAlerted: session.alertedHole10
+        ) else { return }
+        let elapsed = PaceEngine.elapsedMinutes(from: session.startedAt, now: Date())
+        let expected = PaceEngine.expectedMinutes(holesReached: hole, minutesPerHole: pace.minutesPerHole)
+        paceAlertText = "Vas más de 10 minutos atrasado del ritmo de la cancha. Llevás \(PaceEngine.durationLabel(elapsed)). El ritmo esperado era \(PaceEngine.durationLabel(expected))."
+        updatePace { $0.alertedHole10 = true }
+        showsPaceAlert = true
     }
 }
