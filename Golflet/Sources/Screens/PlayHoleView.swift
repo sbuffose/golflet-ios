@@ -680,8 +680,13 @@ struct PlayHoleView: View {
 
     private func setDriveDirection(_ value: String) async {
         guard let tee = driveShot else { return }
-        let next = tee.direction == value ? NSNull() : value
-        await patch(["direction": next])
+        var body: [String: Any] = [:]
+        if tee.direction == value {
+            body["direction"] = NSNull()
+        } else {
+            body["direction"] = value
+        }
+        await patch(body)
     }
 
     private func markPin() async {
