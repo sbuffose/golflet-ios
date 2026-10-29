@@ -23,7 +23,21 @@ enum TextSizePref: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    var apiValue: String { rawValue }
+    var largeMultiplier: CGFloat {
+        switch self {
+        case .normal: return 1.00
+        case .large: return 1.06
+        case .extraLarge: return 1.12
+        }
+    }
+
+    var apiValue: String {
+        switch self {
+        case .normal: return "normal"
+        case .large: return "grande"
+        case .extraLarge: return "muy_grande"
+        }
+    }
 
     static func parse(_ raw: Any?) -> TextSizePref? {
         if let number = JSONFlex.double(from: raw) {
@@ -58,7 +72,12 @@ enum TextWeightPref: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    var apiValue: String { rawValue }
+    var apiValue: String {
+        switch self {
+        case .normal: return "normal"
+        case .marked: return "marcado"
+        }
+    }
 
     static func parse(_ raw: Any?) -> TextWeightPref? {
         if let flag = JSONFlex.bool(from: raw) {
@@ -68,7 +87,7 @@ enum TextWeightPref: String, CaseIterable, Identifiable, Codable, Sendable {
         switch value {
         case "normal", "regular", "default":
             return .normal
-        case "marked", "bold", "semibold", "heavy", "more", "mas_marcado", "más_marcado", "mas-marcado":
+        case "marcado", "marked", "bold", "semibold", "heavy", "more", "mas_marcado", "más_marcado", "mas-marcado":
             return .marked
         default:
             return nil
@@ -81,18 +100,20 @@ enum TextRole: Sendable {
     case title
     case hero
 
-    var extraFactor: CGFloat {
-        switch self {
-        case .body: return 1.00
-        case .title: return 0.70
-        case .hero: return 0.40
-        }
-    }
+    var usesLargeScale: Bool { self != .body }
 
     static func infer(base: CGFloat) -> TextRole {
-        if base >= 56 { return .hero }
-        if base >= 28 { return .title }
-        return .body
+        base >= 26 ? .hero : .body
+    }
+}
+
+enum TextPrefsLayout {
+    static let narrowWidth: CGFloat = 320
+    static let defaultTileColumns = 4
+    static let narrowTileColumns = 2
+
+    static func tileColumnCount(forWidth width: CGFloat, defaultCount: Int = defaultTileColumns) -> Int {
+        width <= narrowWidth && defaultCount == 4 ? narrowTileColumns : defaultCount
     }
 }
 
@@ -106,11 +127,14 @@ struct TextPrefs: Hashable, Codable, Sendable {
 
     var signature: String { "\(size.rawValue)|\(weight.rawValue)" }
 
+    func sizeMultiplier(base: CGFloat, role: TextRole? = nil) -> CGFloat {
+        let large = (role ?? TextRole.infer(base: base)).usesLargeScale
+        return large ? size.largeMultiplier : size.multiplier
+    }
+
     func scaledSize(_ base: CGFloat, dynamic: CGFloat = 1, role: TextRole? = nil) -> CGFloat {
-        let combined = min(Self.maxCombined, max(Self.minCombined, size.multiplier * dynamic))
-        let factor = (role ?? TextRole.infer(base: base)).extraFactor
-        let applied = 1 + (combined - 1) * factor
-        return (base * applied * 10).rounded() / 10
+        let combined = min(Self.maxCombined, max(Self.minCombined, sizeMultiplier(base: base, role: role) * dynamic))
+        return (base * combined * 10).rounded() / 10
     }
 }
 

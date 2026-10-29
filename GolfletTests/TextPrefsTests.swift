@@ -24,25 +24,38 @@ final class TextPrefsTests: XCTestCase {
         let body = prefs.scaledSize(16, role: .body) / 16
         let hero = prefs.scaledSize(80, role: .hero) / 80
         XCTAssertGreaterThan(body, hero)
-        XCTAssertEqual(hero, 1 + 0.30 * 0.40, accuracy: 0.02)
+        XCTAssertEqual(hero, 1.12, accuracy: 0.02)
         XCTAssertLessThan(prefs.scaledSize(80), 96)
     }
 
-    func testMarkedWeightBumpsRegularAndMedium() {
+    func testLargeTextUsesDampedScale() {
+        let grande = TextPrefs(size: .large)
+        let muy = TextPrefs(size: .extraLarge)
+        XCTAssertEqual(grande.sizeMultiplier(base: 16), 1.15, accuracy: 0.001)
+        XCTAssertEqual(muy.sizeMultiplier(base: 16), 1.30, accuracy: 0.001)
+        XCTAssertEqual(grande.sizeMultiplier(base: 26), 1.06, accuracy: 0.001)
+        XCTAssertEqual(muy.sizeMultiplier(base: 26), 1.12, accuracy: 0.001)
+        XCTAssertEqual(grande.scaledSize(32), 33.9, accuracy: 0.05)
+        XCTAssertEqual(muy.scaledSize(42), 47.0, accuracy: 0.1)
+    }
+
+    func testMarkedWeightBumpsOneStepMax700() {
         let marked = TextPrefs(size: .normal, weight: .marked)
         XCTAssertEqual(GFont.resolvedWeight(.regular, prefs: marked), .medium)
         XCTAssertEqual(GFont.resolvedWeight(.medium, prefs: marked), .semibold)
-        XCTAssertEqual(GFont.resolvedWeight(.semibold, prefs: marked), .semibold)
+        XCTAssertEqual(GFont.resolvedWeight(.semibold, prefs: marked), .bold)
+        XCTAssertEqual(GFont.resolvedWeight(.bold, prefs: marked), .bold)
         XCTAssertEqual(GFont.resolvedWeight(.regular, prefs: .default), .regular)
         XCTAssertEqual(GFont.postScript(.medium), "Geist-Medium")
         XCTAssertEqual(GFont.postScript(.semibold), "Geist-SemiBold")
+        XCTAssertEqual(GFont.postScript(.bold), "Geist-SemiBold")
     }
 
     func testParsesFlexibleWebKeys() {
         let json: [String: Any] = [
             "settings": [
                 "text_size": "muy_grande",
-                "font_weight": "más_marcado"
+                "text_weight": "marcado"
             ]
         ]
         let prefs = TextPrefsParser.prefs(from: json)
@@ -53,8 +66,20 @@ final class TextPrefsTests: XCTestCase {
         XCTAssertEqual(numeric?.size, .large)
         XCTAssertEqual(numeric?.weight, .marked)
 
-        XCTAssertEqual(TextPrefsParser.jsonBody(.default)["text_size"] as? String, "normal")
+        let body = TextPrefsParser.jsonBody(.default)
+        XCTAssertEqual(body["text_size"] as? String, "normal")
+        XCTAssertEqual(body["text_weight"] as? String, "normal")
+        XCTAssertEqual(TextPrefsParser.jsonBody(TextPrefs(size: .large))["text_size"] as? String, "grande")
+        XCTAssertEqual(TextPrefsParser.jsonBody(TextPrefs(size: .extraLarge, weight: .marked))["text_size"] as? String, "muy_grande")
+        XCTAssertEqual(TextPrefsParser.jsonBody(TextPrefs(weight: .marked))["text_weight"] as? String, "marcado")
         XCTAssertEqual(TextPrefsParser.listPath, "/api/me/settings")
+    }
+
+    func testFourColumnTilesBecomeTwoOnNarrow320() {
+        XCTAssertEqual(TextPrefsLayout.tileColumnCount(forWidth: 320), 2)
+        XCTAssertEqual(TextPrefsLayout.tileColumnCount(forWidth: 280), 2)
+        XCTAssertEqual(TextPrefsLayout.tileColumnCount(forWidth: 321), 4)
+        XCTAssertEqual(TextPrefsLayout.tileColumnCount(forWidth: 375), 4)
     }
 
     func testPersistsLocally() {

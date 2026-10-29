@@ -62,7 +62,7 @@ struct ClubStatsView: View {
     }
 
     private func distanceRow(_ block: ClubDistanceBlock) -> some View {
-        HStack(spacing: 8) {
+        AdaptiveTileGrid {
             stat("Mediana", block.medianYd)
             stat("Promedio", block.avgYd)
             stat("Máx.", block.maxYd)
