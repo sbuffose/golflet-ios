@@ -568,7 +568,20 @@ struct GameMetricsEmptyCard: View {
                 .accessibilityIdentifier("met-empty-start")
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("met-empty-\(tab.rawValue)")
+        .overlay(alignment: .topLeading) {
+            GProbe(id: "met-empty-\(tab.rawValue)", label: title ?? GameMetricsCopy.emptyTitle(for: tab))
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            GProbe(id: "met-empty-how", label: GameMetricsCopy.howToPlay)
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            GProbe(id: "met-empty-start", label: GameMetricsCopy.startGPS)
+                .allowsHitTesting(false)
+        }
     }
 }
 
