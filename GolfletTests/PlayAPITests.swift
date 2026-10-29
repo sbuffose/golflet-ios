@@ -184,7 +184,7 @@ final class PlayAPITests: XCTestCase {
         XCTAssertEqual(holes.first { $0.number == 1 }?.pinAction, .mark)
         XCTAssertEqual(holes.first { $0.number == 2 }?.pinAction, .report)
         XCTAssertEqual(holes.first { $0.number == 2 }?.dayPin?.sourcePhrase, "cargada por un jugador")
-        XCTAssertEqual(holes.first { $0.number == 3 }?.pinAction, .none)
+        XCTAssertEqual(holes.first { $0.number == 3 }?.pinAction, PinAction.none)
         XCTAssertEqual(holes.first { $0.number == 3 }?.dayPin?.source, .club)
         let saved = try await api.putLiveRoundHole(id: live.id, hole: 1, putts: 2)
         XCTAssertEqual(saved.putts, 2)
