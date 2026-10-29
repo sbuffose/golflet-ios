@@ -47,6 +47,7 @@ final class GolfletUITests: XCTestCase {
         tapTab(app, "Resumen")
         XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
         XCTAssertTrue(first(app, "range-menu").waitForExistence(timeout: 4), "Falta el selector de período")
+        XCTAssertTrue(first(app, "metric-game").waitForExistence(timeout: 4), "Falta la tarjeta de Métricas")
         saveShot("02_resumen")
 
         tapTab(app, "Rondas")
@@ -573,6 +574,97 @@ final class GolfletUITests: XCTestCase {
         saveShot("35_grupo_aceptado")
     }
 
+    func testMetricasTabsEmptyStateAndGPSHoleTools() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        XCTAssertTrue(first(app, "metric-game").waitForExistence(timeout: 4), "Falta Métricas como primera tarjeta")
+        XCTAssertTrue(first(app, "resumen-gps-count").waitForExistence(timeout: 3))
+        first(app, "metric-game").tap()
+        XCTAssertTrue(waitFor(app, "screen-metricas", timeout: 6), "No se abrió Métricas")
+        XCTAssertTrue(first(app, "met-tabs").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "range-menu").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "met-gps-count").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "met-empty-tee").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "met-empty-how").waitForExistence(timeout: 3), "Falta el empty state sin datos de ejemplo")
+        XCTAssertEqual(first(app, "met-empty-how").label, "Jugá con “Ya pegué” para ver tus datos")
+        saveShot("52_metricas_tee")
+
+        first(app, "met-tab-hierros").tap()
+        XCTAssertTrue(first(app, "met-empty-hierros").waitForExistence(timeout: 3))
+        first(app, "met-tab-gir").tap()
+        XCTAssertTrue(first(app, "met-empty-gir").waitForExistence(timeout: 3))
+        first(app, "met-tab-putting").tap()
+        XCTAssertTrue(first(app, "met-empty-putting").waitForExistence(timeout: 3))
+        saveShot("53_metricas_putting")
+
+        first(app, "met-empty-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6), "Empezar ronda con GPS no abrió Jugar")
+        first(app, "course-118-jockey-azul").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        XCTAssertTrue(first(app, "play-hit").waitForExistence(timeout: 4))
+        XCTAssertEqual(first(app, "play-hit").label, "Ya pegué")
+        first(app, "play-hit").tap()
+        XCTAssertTrue(first(app, "play-drive-side").waitForExistence(timeout: 4), "Falta Izq./Fairway/Der. después del drive")
+        XCTAssertTrue(first(app, "drive-fairway").waitForExistence(timeout: 3))
+        first(app, "drive-fairway").tap()
+        reveal(app, first(app, "play-putts-plus"))
+        XCTAssertTrue(first(app, "play-putts-plus").waitForExistence(timeout: 3))
+        first(app, "play-putts-plus").tap()
+        first(app, "play-putts-plus").tap()
+        XCTAssertEqual(first(app, "play-putts-value").label, "2")
+        reveal(app, first(app, "play-pin"))
+        first(app, "play-pin").tap()
+        XCTAssertTrue(first(app, "play-pin-marked").waitForExistence(timeout: 4))
+        first(app, "play-hole-next").tap()
+        XCTAssertTrue(first(app, "play-putts-value").waitForExistence(timeout: 3))
+        saveShot("54_play_putts_pin")
+    }
+
+    func testMetricasAndPlayFitAtLargeText() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-ui-testing",
+            "-UIPreferredContentSizeCategoryName",
+            "UICTContentSizeCategoryAccessibilityXL"
+        ]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        assertFits(app, "metric-game")
+        assertFits(app, "resumen-gps-count")
+        first(app, "metric-game").tap()
+        XCTAssertTrue(waitFor(app, "screen-metricas", timeout: 6))
+        assertFits(app, "met-tabs")
+        assertFits(app, "met-gps-count")
+        assertFits(app, "met-empty-how")
+        assertFits(app, "met-empty-start")
+        XCTAssertGreaterThan(app.frame.width, 300, "El test tiene que correr a ancho iPhone")
+        saveShot("55_metricas_xl")
+
+        dismissIfPresent(app, "metric-back")
+        tapTab(app, "Inicio")
+        XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
+        first(app, "play-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
+        first(app, "course-118-jockey-azul").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        assertFits(app, "play-hit")
+        reveal(app, first(app, "play-putts-plus"))
+        assertFits(app, "play-putts-plus")
+        reveal(app, first(app, "play-pin"))
+        assertFits(app, "play-pin")
+        saveShot("56_play_xl")
+    }
+
     func testQueCompartoAndGroupComparison() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]
@@ -942,6 +1034,18 @@ final class GolfletUITests: XCTestCase {
         if first(app, "tee-blanco").waitForExistence(timeout: 1) {
             XCTAssertLessThan(first(app, "tee-blanco").frame.height, 28, "Blanco wrappea: \(first(app, "tee-blanco").frame)")
         }
+    }
+
+    private func assertFits(_ app: XCUIApplication, _ id: String) {
+        let element = first(app, id)
+        XCTAssertTrue(element.waitForExistence(timeout: 4), "Falta \(id)")
+        reveal(app, element)
+        let frame = element.frame
+        let screen = app.frame
+        XCTAssertGreaterThan(frame.width, 4, "\(id) no tiene ancho")
+        XCTAssertGreaterThan(frame.height, 4, "\(id) no tiene alto")
+        XCTAssertLessThan(frame.maxX, screen.maxX + 12, "\(id) se sale a la derecha: \(frame) vs \(screen)")
+        XCTAssertGreaterThan(frame.minX, screen.minX - 12, "\(id) se sale a la izquierda: \(frame)")
     }
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {

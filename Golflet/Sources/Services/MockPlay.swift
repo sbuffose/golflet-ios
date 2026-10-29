@@ -4,6 +4,7 @@ extension MockAPIClient {
     private static let playLock = NSLock()
     private static var liveByID: [String: LiveRound] = [:]
     private static var shotsByRound: [String: [Shot]] = [:]
+    private static var holesByRound: [String: [Int: LiveHoleRecord]] = [:]
     private static var recapsByKey: [String: Recap] = [:]
     private static var recapsByID: [String: Recap] = [:]
     private static var paceAlertedIDs: Set<String> = []
@@ -64,6 +65,7 @@ extension MockAPIClient {
         Self.playLock.lock()
         Self.liveByID[round.id] = round
         Self.shotsByRound[round.id] = []
+        Self.holesByRound[round.id] = [:]
         Self.playLock.unlock()
         return round
     }
@@ -197,7 +199,11 @@ extension MockAPIClient {
             if let club = body["club"] as? String { shot.club = club }
             if let lie = body["lie"] as? String { shot.lie = lie }
             if let result = body["result"] as? String { shot.result = result }
-            if let direction = body["direction"] as? String { shot.direction = direction }
+            if body["direction"] is NSNull {
+                shot.direction = nil
+            } else if let direction = body["direction"] as? String {
+                shot.direction = direction
+            }
             if let length = body["length"] as? String { shot.length = length }
             if let mishit = JSONFlex.bool(from: body["mishit"]) { shot.mishit = mishit }
             next[index] = shot
@@ -542,6 +548,31 @@ extension MockAPIClient {
                 CourseFilter(id: "mdp", title: "Mar del Plata", courseNames: ["Cancha Vieja", "Cancha Nueva"], kind: .group)
             ]
         )
+    }
+
+    func gameMetrics(range: String) async throws -> GameMetrics {
+        GameMetrics.empty(range: range)
+    }
+
+    func liveRoundHoles(id: String) async throws -> [LiveHoleRecord] {
+        Self.playLock.lock()
+        defer { Self.playLock.unlock() }
+        let stored = Self.holesByRound[id] ?? [:]
+        return (1...18).map { number in
+            stored[number] ?? LiveHoleRecord(number: number, par: number == 3 || number == 12 ? 3 : (number == 5 || number == 18 ? 5 : 4), putts: nil, pin: nil)
+        }
+    }
+
+    func putLiveRoundHole(id: String, hole: Int, putts: Int?, pin: LivePin?) async throws -> LiveHoleRecord {
+        Self.playLock.lock()
+        defer { Self.playLock.unlock() }
+        var stored = Self.holesByRound[id] ?? [:]
+        var record = stored[hole] ?? LiveHoleRecord(number: hole, par: nil, putts: nil, pin: nil)
+        if let putts { record.putts = putts }
+        if let pin { record.pin = pin }
+        stored[hole] = record
+        Self.holesByRound[id] = stored
+        return record
     }
 
     private func attachSeries(_ drill: MetricDrilldown, rounds: [Round], metric: String) -> MetricDrilldown {

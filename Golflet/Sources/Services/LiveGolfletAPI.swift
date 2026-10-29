@@ -211,6 +211,29 @@ struct LiveGolfletAPI: GolfletAPI {
         PlayParser.metricsSummary(try await request("GET", "/api/metrics/summary?range=\(range)"))
     }
 
+    func gameMetrics(range: String) async throws -> GameMetrics {
+        GameMetricsParser.metrics(try await request("GET", "/api/game-metrics?range=\(range)"))
+    }
+
+    func liveRoundHoles(id: String) async throws -> [LiveHoleRecord] {
+        GameMetricsParser.holes(try await request("GET", "/api/live-rounds/\(id)/holes"))
+    }
+
+    func putLiveRoundHole(id: String, hole: Int, putts: Int?, pin: LivePin?) async throws -> LiveHoleRecord {
+        var body: [String: Any] = [:]
+        if let putts { body["putts"] = putts }
+        if let pin {
+            var payload: [String: Any] = ["lat": pin.lat, "lng": pin.lng]
+            if let accuracy = pin.accuracyM { payload["accuracy_m"] = accuracy }
+            body["pin"] = payload
+        }
+        let json = try await request("PUT", "/api/live-rounds/\(id)/holes/\(hole)", body: body)
+        guard let record = GameMetricsParser.hole(json["hole"] ?? json) else {
+            throw GolfletError.decoding("hole")
+        }
+        return record
+    }
+
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy {
         var query: [String] = []
         if let courseKey {

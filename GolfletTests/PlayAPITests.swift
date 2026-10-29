@@ -178,6 +178,16 @@ final class PlayAPITests: XCTestCase {
         ])
         XCTAssertEqual(again.count, 1)
 
+        let holes = try await api.liveRoundHoles(id: live.id)
+        XCTAssertEqual(holes.count, 18)
+        XCTAssertNil(holes.first?.putts)
+        let saved = try await api.putLiveRoundHole(id: live.id, hole: 1, putts: 2, pin: LivePin(lat: -34.48305, lng: -58.52881, accuracyM: 3))
+        XCTAssertEqual(saved.putts, 2)
+        XCTAssertEqual(saved.pin?.lat ?? 0, -34.48305, accuracy: 0.0001)
+        let againHoles = try await api.liveRoundHoles(id: live.id)
+        XCTAssertEqual(againHoles.first { $0.number == 1 }?.putts, 2)
+        XCTAssertNotNil(againHoles.first { $0.number == 1 }?.pin)
+
         let stats = try await api.clubStats(code: "7i")
         XCTAssertEqual(stats.club.shots, 22)
         XCTAssertEqual(stats.club.distance?.medianYd, 159)
