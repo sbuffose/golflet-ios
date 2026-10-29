@@ -332,73 +332,148 @@ extension MockAPIClient {
             let history = StatsEngine.handicapSeries(snap.rounds).reversed().map {
                 MetricAPIHistory(date: $0.date, hi: $0.handicap, club: $0.course)
             }
-            return MetricDrilldown(
-                metric: metric,
-                total: nil,
-                current: snap.rounds.sorted { $0.date > $1.date }.first?.handicapIndex,
-                change: nil,
-                rounds: [],
-                perHole: [],
-                history: Array(history),
-                summaryRounds: rows.count,
-                averageGross: nil,
-                bestGross: nil
+            return attachSeries(
+                MetricDrilldown(
+                    metric: metric,
+                    total: nil,
+                    current: snap.rounds.sorted { $0.date > $1.date }.first?.handicapIndex,
+                    change: nil,
+                    rounds: [],
+                    perHole: [],
+                    history: Array(history),
+                    summaryRounds: rows.count,
+                    averageGross: nil,
+                    bestGross: nil
+                ),
+                rounds: filtered,
+                metric: metric
             )
         }
         if ["eagles", "birdies", "pars", "bogeys"].contains(metric) {
             let kind: ScoreKind = metric == "eagles" ? .eagle : (metric == "birdies" ? .birdie : (metric == "pars" ? .par : .bogey))
             let snapKind = StatsEngine.scoreKind(kind, rounds: snap.rounds, query: query, period: period, course: bucket)
-            return MetricDrilldown(
-                metric: metric,
-                total: snapKind.total,
-                current: nil,
-                change: nil,
-                rounds: snapKind.rounds.map { item in
-                    MetricAPIRound(
-                        roundId: item.round.roundId,
-                        date: item.round.date,
-                        tournament: item.round.tournament,
-                        clubName: item.round.clubName,
-                        course: item.round.course,
-                        courseKey: item.round.courseKey,
-                        courseLabel: item.round.displayCourse,
-                        tee: item.round.tee,
-                        gross: item.round.gross,
-                        net: item.round.net,
-                        valid: item.round.isValid,
-                        isNineHoles: item.round.isNineHoles,
-                        otherCourse: item.round.isOtherCourse,
-                        count: item.count,
-                        holes: item.holes.map(\.number),
-                        holesKnown: item.usedHoleDetail
-                    )
-                },
-                perHole: snapKind.tally.map {
-                    MetricAPIHole(courseKey: nil, courseLabel: $0.course, hole: $0.hole, par: nil, count: $0.count)
-                },
-                history: [],
-                summaryRounds: snapKind.rounds.count,
-                averageGross: nil,
-                bestGross: nil
+            return attachSeries(
+                MetricDrilldown(
+                    metric: metric,
+                    total: snapKind.total,
+                    current: nil,
+                    change: nil,
+                    rounds: snapKind.rounds.map { item in
+                        MetricAPIRound(
+                            roundId: item.round.roundId,
+                            date: item.round.date,
+                            tournament: item.round.tournament,
+                            clubName: item.round.clubName,
+                            course: item.round.course,
+                            courseKey: item.round.courseKey,
+                            courseLabel: item.round.displayCourse,
+                            tee: item.round.tee,
+                            gross: item.round.gross,
+                            net: item.round.net,
+                            valid: item.round.isValid,
+                            isNineHoles: item.round.isNineHoles,
+                            otherCourse: item.round.isOtherCourse,
+                            count: item.count,
+                            holes: item.holes.map(\.number),
+                            holesKnown: item.usedHoleDetail
+                        )
+                    },
+                    perHole: snapKind.tally.map {
+                        MetricAPIHole(courseKey: nil, courseLabel: $0.course, hole: $0.hole, par: nil, count: $0.count)
+                    },
+                    history: [],
+                    summaryRounds: snapKind.rounds.count,
+                    averageGross: nil,
+                    bestGross: nil
+                ),
+                rounds: filtered,
+                metric: metric
             )
         }
         let valid = rows.filter { $0.isValid && !$0.isNineHoles }
-        return MetricDrilldown(
-            metric: metric,
-            total: rows.count,
-            current: nil,
-            change: nil,
-            rounds: rows.map { $0.asMetricAPI() },
-            perHole: [],
-            history: [],
-            summaryRounds: valid.count,
+        return attachSeries(
+            MetricDrilldown(
+                metric: metric,
+                total: rows.count,
+                current: nil,
+                change: nil,
+                rounds: rows.map { $0.asMetricAPI() },
+                perHole: [],
+                history: [],
+                summaryRounds: valid.count,
+                averageGross: {
+                    let values = valid.compactMap(\.gross)
+                    guard !values.isEmpty else { return nil }
+                    return Double(values.reduce(0, +)) / Double(values.count)
+                }(),
+                bestGross: valid.compactMap(\.gross).min()
+            ),
+            rounds: valid,
+            metric: metric
+        )
+    }
+
+    func metricsSummary(range: String) async throws -> MetricsSummary {
+        let snap = try await bootstrap()
+        let scoped = StatsRange(rawValue: range).map { StatsEngine.ranged(snap.rounds, range: $0) } ?? snap.rounds
+        let valid = StatsEngine.eighteenHoleValid(scoped)
+        let birdies = valid.reduce(0) { $0 + StatsEngine.count(.birdie, in: $1).count }
+        let eagles = valid.reduce(0) { $0 + StatsEngine.count(.eagle, in: $1).count }
+        let pars = valid.reduce(0) { $0 + StatsEngine.count(.par, in: $1).count }
+        let bogeys = valid.reduce(0) { $0 + StatsEngine.count(.bogey, in: $1).count }
+        return MetricsSummary(
+            range: range,
+            rangeLabel: StatsRange(rawValue: range)?.title,
+            since: StatsRange(rawValue: range)?.startDate(),
+            roundsInRange: scoped.count,
+            validRounds: valid.count,
             averageGross: {
                 let values = valid.compactMap(\.gross)
                 guard !values.isEmpty else { return nil }
                 return Double(values.reduce(0, +)) / Double(values.count)
             }(),
-            bestGross: valid.compactMap(\.gross).min()
+            averageNet: {
+                let values = valid.compactMap(\.net)
+                guard !values.isEmpty else { return nil }
+                return Double(values.reduce(0, +)) / Double(values.count)
+            }(),
+            bestGross: valid.compactMap(\.gross).min(),
+            worstGross: valid.compactMap(\.gross).max(),
+            eagles: eagles,
+            birdies: birdies,
+            pars: pars,
+            bogeys: bogeys
         )
+    }
+
+    private func attachSeries(_ drill: MetricDrilldown, rounds: [Round], metric: String) -> MetricDrilldown {
+        var next = drill
+        next.roundsInRange = rounds.count
+        next.series = rounds.compactMap { round in
+            let value: Double?
+            switch metric {
+            case "net": value = round.net.map(Double.init)
+            case "handicap": value = round.handicapIndex
+            case "eagles": value = Double(StatsEngine.count(.eagle, in: round).count)
+            case "birdies": value = Double(StatsEngine.count(.birdie, in: round).count)
+            case "pars": value = Double(StatsEngine.count(.par, in: round).count)
+            case "bogeys": value = Double(StatsEngine.count(.bogey, in: round).count)
+            default: value = round.gross.map(Double.init)
+            }
+            guard let value else { return nil }
+            return MetricSeriesPoint(date: round.date, value: value, course: round.course)
+        }
+        var buckets: [String: (total: Double, n: Int)] = [:]
+        for point in next.series {
+            let month = DayStamp.formatMonth(point.date)
+            let current = buckets[month] ?? (0, 0)
+            buckets[month] = (current.total + point.value, current.n + 1)
+        }
+        next.monthly = buckets.keys.sorted().compactMap { month in
+            guard let date = DayStamp.parseMonth(month), let bucket = buckets[month] else { return nil }
+            return MetricMonthlyPoint(month: month, date: date, value: bucket.total, rounds: bucket.n)
+        }
+        return next
     }
 
     private func storeRecap(_ recap: Recap) -> Recap {

@@ -5,6 +5,7 @@ struct MetricChartView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     let query: MetricChartQuery
+    @State private var remotePoints: [MetricPoint] = []
 
     var body: some View {
         let points = series
@@ -64,9 +65,13 @@ struct MetricChartView: View {
         }
         .accessibilityIdentifier("screen-metric-chart")
         .safeAreaInset(edge: .top) { MetricBackBar() }
+        .task(id: query) {
+            remotePoints = await model.metricChartPoints(query)
+        }
     }
 
     private var series: [MetricPoint] {
+        if !remotePoints.isEmpty { return remotePoints }
         let rounds = StatsEngine.ranged(model.rounds, range: query.range)
         return StatsEngine.series(from: rounds, kind: query.kind, courseName: query.courseName)
     }

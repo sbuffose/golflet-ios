@@ -35,6 +35,7 @@ final class AppModel {
     var pendingCourseHint: String?
     var activeLiveRound: LiveRound?
     var activeCourse: GPSCourseDetail?
+    var metricsSummary: MetricsSummary?
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -53,6 +54,7 @@ final class AppModel {
     var isLive: Bool { !api.persistsLocally }
     var home: HomeSnapshot { StatsEngine.home(rounds: rounds) }
     var summary: SummarySnapshot { StatsEngine.summary(rounds: rounds, filter: courseFilter, range: statsRange) }
+    var rangeRoundCount: Int { metricsSummary?.roundsInRange ?? summary.validRoundCount }
 
     func courseSnapshot() -> CourseSnapshot {
         StatsEngine.course(named: selectedCourseName, rounds: rounds, courses: courses, tees: tees, range: statsRange)
@@ -94,12 +96,48 @@ final class AppModel {
                 CourseCache.saveList(courses)
             }
             publishWidgetSnapshot()
+            await refreshMetricsSummary()
             isLoaded = true
             await consumeIntent()
         } catch {
             errorMessage = error.localizedDescription
             isLoaded = true
         }
+    }
+
+    func setStatsRange(_ range: StatsRange) {
+        statsRange = range
+        Task { await refreshMetricsSummary() }
+    }
+
+    func refreshMetricsSummary() async {
+        guard isSignedIn else {
+            metricsSummary = nil
+            return
+        }
+        metricsSummary = try? await api.metricsSummary(range: statsRange.query)
+    }
+
+    func metricChartPoints(_ query: MetricChartQuery) async -> [MetricPoint] {
+        let local = StatsEngine.series(
+            from: StatsEngine.ranged(rounds, range: query.range),
+            kind: query.kind,
+            courseName: query.courseName
+        )
+        guard let metric = query.kind.apiMetric else { return local }
+        let year = Calendar.gregorian.component(.year, from: Date())
+        let course = query.courseName.flatMap { CourseIdentity.key(for: $0) } ?? "all"
+        guard let drill = try? await api.metricDrilldown(
+            metric: metric,
+            scope: "all",
+            year: year,
+            course: course,
+            sort: "date",
+            order: "desc",
+            range: query.range.query
+        ) else { return local }
+        let remote = drill.chartPoints(preferMonthly: query.kind.usesMonthly)
+        return remote.isEmpty ? local : remote
     }
 
     func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async {

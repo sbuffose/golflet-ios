@@ -70,4 +70,23 @@ enum MetricChartKind: Hashable, Sendable {
     case scoreKind(ScoreKind)
     case hole(Int)
     case handicap
+
+    var apiMetric: String? {
+        switch self {
+        case .gross: return "gross"
+        case .net: return "net"
+        case .differential: return "average"
+        case .scoreKind(.eagle): return "eagles"
+        case .scoreKind(.birdie): return "birdies"
+        case .scoreKind(.par): return "pars"
+        case .scoreKind(.bogey): return "bogeys"
+        case .handicap: return "handicap"
+        case .hole: return nil
+        }
+    }
+
+    var usesMonthly: Bool {
+        if case .scoreKind = self { return true }
+        return false
+    }
 }
