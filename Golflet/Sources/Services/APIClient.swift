@@ -53,6 +53,9 @@ protocol GolfletAPI: Sendable {
     func sharePrefs() async throws -> SharePrefs
     func saveSharePrefs(_ prefs: SharePrefs) async throws -> SharePrefs
     func groupComparison(groupID: String, config: GroupViewConfig) async throws -> GroupComparison
+
+    func notifications() async throws -> NotificationsInbox
+    func markNotificationsRead(ids: [String]) async throws
 }
 
 enum APIFactory {

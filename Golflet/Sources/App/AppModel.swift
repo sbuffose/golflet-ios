@@ -25,6 +25,10 @@ final class AppModel {
     var presentedRound: Round?
     var presentedHole: Int?
     var showsClubs = false
+    var showsNotifications = false
+    var notifications: [InboxNotification] = []
+    var unreadNotificationCount = 0
+    var notificationsAvailable = false
     var syncSession: SyncSession?
     var celebrateCards: Int?
     var toastMessage: String?
@@ -112,6 +116,7 @@ final class AppModel {
             publishWidgetSnapshot()
             await refreshMetricsSummary()
             await refreshGroups()
+            await refreshNotifications()
             isLoaded = true
             await consumeIntent()
         } catch {
@@ -188,6 +193,10 @@ final class AppModel {
             recurring = nil
             groups = []
             pendingInvites = []
+            notifications = []
+            unreadNotificationCount = 0
+            notificationsAvailable = false
+            showsNotifications = false
             presentedInvite = nil
             presentedGroupID = nil
             inviteShare = nil
@@ -377,12 +386,53 @@ final class AppModel {
         presentAfterDismissing { $0.showsGroups = true }
     }
 
+    func presentNotifications() {
+        showsNotifications = true
+        Task { await markNotificationsReadOnOpen() }
+    }
+
+    func presentClubs() {
+        presentAfterDismissing { $0.showsClubs = true }
+    }
+
+    var unreadBadgeText: String? {
+        guard notificationsAvailable else { return nil }
+        return NotificationBadge.text(unreadNotificationCount)
+    }
+
     private func presentAfterDismissing(_ present: @escaping (AppModel) -> Void) {
         showsGroups = false
         showsClubs = false
+        showsNotifications = false
         Task { @MainActor in
             present(self)
         }
+    }
+
+    func refreshNotifications() async {
+        guard isSignedIn else { return }
+        do {
+            let inbox = try await api.notifications()
+            notifications = inbox.items
+            unreadNotificationCount = inbox.unreadCount
+            notificationsAvailable = true
+        } catch {
+            notifications = []
+            unreadNotificationCount = 0
+            notificationsAvailable = false
+        }
+    }
+
+    func markNotificationsReadOnOpen() async {
+        let ids = notifications.filter(\.isUnread).map(\.id)
+        notifications = notifications.map { item in
+            var copy = item
+            copy.isUnread = false
+            return copy
+        }
+        unreadNotificationCount = 0
+        guard !ids.isEmpty else { return }
+        try? await api.markNotificationsRead(ids: ids)
     }
 
     func refreshGroups() async {
@@ -410,17 +460,22 @@ final class AppModel {
         }
     }
 
-    func acceptInvite(_ preview: GroupInvitePreview) async {
+    func acceptInvite(_ preview: GroupInvitePreview, openGroup: Bool = true) async {
         await run {
             let group = try await api.acceptInvite(token: preview.token)
             PendingInviteStore.clear()
             presentedInvite = nil
             pendingInvites.removeAll { $0.token == preview.token }
+            notifications.removeAll { $0.inviteToken == preview.token }
+            unreadNotificationCount = notifications.filter(\.isUnread).count
             if !groups.contains(where: { $0.id == group.id }) {
                 groups.insert(group, at: 0)
             }
-            presentedGroupID = group.id
+            if openGroup {
+                presentedGroupID = group.id
+            }
             await refreshGroups()
+            await refreshNotifications()
         }
     }
 
@@ -430,6 +485,9 @@ final class AppModel {
             PendingInviteStore.clear()
             presentedInvite = nil
             pendingInvites.removeAll { $0.token == preview.token }
+            notifications.removeAll { $0.inviteToken == preview.token }
+            unreadNotificationCount = notifications.filter(\.isUnread).count
+            await refreshNotifications()
         }
     }
 
