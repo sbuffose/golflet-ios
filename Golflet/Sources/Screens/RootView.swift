@@ -99,6 +99,13 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
+        .sheet(isPresented: bindings.showsNotifications) {
+            NavigationStack {
+                NotificationsView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .sheet(isPresented: bindings.showsGroups) {
             NavigationStack {
                 GroupsView()

@@ -8,6 +8,7 @@ extension MockAPIClient {
         groupsLock.lock()
         store = MockGroupStore.seed()
         groupsLock.unlock()
+        resetNotifications()
     }
 
     func groups() async throws -> [GolfletGroup] {
@@ -162,7 +163,7 @@ extension MockAPIClient {
 
     func acceptInvite(token: String) async throws -> GolfletGroup {
         guard isAuthenticated else { throw GolfletError.notAuthenticated }
-        return try mutate { store, me in
+        let group = try mutate { store, me in
             if let pendingIndex = store.pending.firstIndex(where: { $0.token == token }) {
                 let pending = store.pending.remove(at: pendingIndex)
                 if let existing = store.groups.firstIndex(where: { $0.id == pending.groupID }) {
@@ -203,6 +204,8 @@ extension MockAPIClient {
             store.groups[index].myRole = store.groups[index].members.first { $0.id == me }?.role ?? .member
             return store.groups[index]
         }
+        Self.dropInviteNotification(token: token)
+        return group
     }
 
     func declineInvite(token: String) async throws {
@@ -210,6 +213,7 @@ extension MockAPIClient {
         mutate { store, _ in
             store.pending.removeAll { $0.token == token }
         }
+        Self.dropInviteNotification(token: token)
     }
 
     func groupView(groupID: String) async throws -> GroupViewConfig {
