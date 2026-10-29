@@ -131,9 +131,13 @@ enum GFont {
     static func resolvedWeight(_ weight: Font.Weight, prefs: TextPrefs = TextPrefsRuntime.current) -> Font.Weight {
         guard prefs.weight == .marked else { return weight }
         switch weight {
-        case .regular, .light, .thin, .ultraLight: return .medium
+        case .ultraLight: return .thin
+        case .thin: return .light
+        case .light: return .regular
+        case .regular: return .medium
         case .medium: return .semibold
-        default: return .semibold
+        case .semibold: return .bold
+        default: return .bold
         }
     }
 

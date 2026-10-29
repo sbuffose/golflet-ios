@@ -303,7 +303,7 @@ struct PlayHoleView: View {
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             let clubs = model.bag.isEmpty ? DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) } : model.bag
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], spacing: 8) {
+            AdaptiveTileGrid {
                 ForEach(clubs) { club in
                     Button {
                         Task { await pickClub(ClubCode.code(for: club.name)) }

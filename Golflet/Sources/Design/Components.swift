@@ -465,3 +465,35 @@ struct GField<Content: View>: View {
         }
     }
 }
+
+struct AdaptiveTileGrid<Content: View>: View {
+    var spacing: CGFloat = 8
+    var defaultColumns: Int = TextPrefsLayout.defaultTileColumns
+    @ViewBuilder var content: () -> Content
+    @State private var width: CGFloat = TextPrefsLayout.narrowWidth + 1
+
+    var body: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: spacing),
+                count: TextPrefsLayout.tileColumnCount(forWidth: width, defaultCount: defaultColumns)
+            ),
+            spacing: spacing
+        ) {
+            content()
+        }
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: AdaptiveTileWidthKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(AdaptiveTileWidthKey.self) { width = $0 }
+    }
+}
+
+private struct AdaptiveTileWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
