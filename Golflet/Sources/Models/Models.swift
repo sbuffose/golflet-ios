@@ -495,6 +495,15 @@ enum RuntimeFlags {
         guard args.contains("-ui-testing-text-xl-bold") else { return nil }
         return TextPrefs(size: .extraLarge, weight: .marked)
     }
+
+    static var testingGreetingName: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "-ui-testing-greeting"),
+              args.indices.contains(index + 1)
+        else { return nil }
+        let value = args[index + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
 }
 
 

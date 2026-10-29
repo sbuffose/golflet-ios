@@ -96,29 +96,11 @@ struct HomeView: View {
                 }
                 .padding(.top, 4)
             }
-            if let next = model.nextTeeTime {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 12)
-                    Button {
-                        revealPartners(scroll)
-                    } label: {
-                        TeeTimeTab(booking: next)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("home-tee-tab")
-                    .accessibilityLabel("Próximo tee time \(next.chipWhen)")
-                }
-                .padding(.trailing, -20)
-                .padding(.top, 2)
-            }
-            Text("Hola, \(model.profile.greetingName)")
-                .font(GType.largeTitle)
-                .tracking(-1.9)
-                .foregroundStyle(p.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .accessibilityIdentifier("home-greeting")
+            HomeGreetingHeader(
+                name: model.profile.greetingName,
+                booking: model.nextTeeTime,
+                onTab: { revealPartners(scroll) }
+            )
             Button { model.showsPlay = true } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
