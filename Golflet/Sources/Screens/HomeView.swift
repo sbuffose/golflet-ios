@@ -48,13 +48,6 @@ struct HomeView: View {
             ProfesorDetailView(profesor: profesor)
                 .golfletChrome()
         }
-        .navigationDestination(item: Binding(
-            get: { model.presentedProfesor },
-            set: { model.presentedProfesor = $0 }
-        )) { profesor in
-            ProfesorDetailView(profesor: profesor)
-                .golfletChrome()
-        }
         .sheet(isPresented: $showsHcpImpact) {
             if let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact {
                 NavigationStack {
