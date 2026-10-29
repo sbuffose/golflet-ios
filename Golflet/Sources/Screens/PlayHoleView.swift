@@ -24,6 +24,8 @@ struct PlayHoleView: View {
     @State private var paceSession: PaceSession?
     @State private var showsPaceAlert = false
     @State private var paceAlertText = ""
+    @State private var holeRecords: [Int: LiveHoleRecord] = [:]
+    @State private var draftPutts: [Int: Int] = [:]
 
     enum Phase { case ready, pickClub, pickResult }
 
@@ -44,6 +46,8 @@ struct PlayHoleView: View {
                     hitButton
                     if phase != .ready { clubGrid }
                     if phase == .pickResult { resultGrid }
+                    driveSide
+                    greenTools
                     holeShots
                     footer
                 }
@@ -332,6 +336,7 @@ struct PlayHoleView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Ya pegué")
         .accessibilityIdentifier("play-hit")
+        .accessibilityLabel("Ya pegué")
         .disabled(location.coordinate == nil)
     }
 
@@ -526,7 +531,191 @@ struct PlayHoleView: View {
         return PlayMath.yards(from: here, to: target)
     }
 
+    private var driveShot: Shot? {
+        shots.filter { $0.hole == hole && !isPutt($0) }.sorted { $0.shotNumber < $1.shotNumber }.first
+    }
+
+    private func isPutt(_ shot: Shot) -> Bool {
+        let club = (shot.club ?? "").lowercased()
+        return club == "pt" || club == "putter" || shot.lie == "green"
+    }
+
+    private var displayedPutts: Int? {
+        draftPutts[hole] ?? holeRecords[hole]?.putts
+    }
+
+    @ViewBuilder
+    private var driveSide: some View {
+        let par = current?.par ?? 4
+        if let tee = driveShot, par >= 4 {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("¿Cómo salió el drive?")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                HStack(spacing: 8) {
+                    driveChip("left", "Izq.", current: tee.direction)
+                    driveChip("center", "Fairway", current: tee.direction)
+                    driveChip("right", "Der.", current: tee.direction)
+                }
+                Text("Opcional. Si no marcás, lo calculamos con tu golpe siguiente.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityIdentifier("play-drive-side")
+        }
+    }
+
+    private func driveChip(_ value: String, _ title: String, current: String?) -> some View {
+        Button {
+            Task { await setDriveDirection(value) }
+        } label: {
+            Text(title)
+                .font(GType.headline)
+                .foregroundStyle(current == value ? p.onPrimary : p.ink)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(current == value ? p.primary : p.surface)
+                .clipShape(Capsule())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("drive-\(value == "center" ? "fairway" : value)")
+    }
+
+    private var greenTools: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("En el green")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            GCard(radius: 18, padding: 16) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Putts")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        Spacer()
+                        HStack(spacing: 12) {
+                            Button { adjustPutts(-1) } label: {
+                                Text("−")
+                                    .font(GType.section)
+                                    .foregroundStyle(p.ink)
+                                    .frame(width: 36, height: 36)
+                                    .background(p.surface2)
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled((displayedPutts ?? 0) <= 0)
+                            .accessibilityIdentifier("play-putts-minus")
+                            Text(displayedPutts.map(String.init) ?? "—")
+                                .font(GType.statM)
+                                .tabular()
+                                .foregroundStyle(p.ink)
+                                .frame(minWidth: 28)
+                                .minimumScaleFactor(0.5)
+                                .lineLimit(1)
+                                .accessibilityIdentifier("play-putts-value")
+                            Button { adjustPutts(1) } label: {
+                                Text("+")
+                                    .font(GType.section)
+                                    .foregroundStyle(p.ink)
+                                    .frame(width: 36, height: 36)
+                                    .background(p.surface2)
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("play-putts-plus")
+                        }
+                    }
+                    Text("Se guarda al pasar al hoyo siguiente.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
+                }
+            }
+            GCard(radius: 18, padding: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let pin = holeRecords[hole]?.pin {
+                        Text("Bandera marcada\(pin.accuracyM.map { " · GPS ±\(Int($0.rounded())) m" } ?? "")")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("play-pin-marked")
+                    } else {
+                        Text("¿Embocaste? Parate al lado del hoyo y tocá:")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Button {
+                        Task { await markPin() }
+                    } label: {
+                        Text(holeRecords[hole]?.pin == nil ? "Estoy en la bandera" : "Volver a marcar la bandera")
+                            .font(GType.headline)
+                            .foregroundStyle(holeRecords[hole]?.pin == nil ? p.onPrimary : p.ink)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(holeRecords[hole]?.pin == nil ? p.primary : p.surface2)
+                            .clipShape(Capsule())
+                            .minimumScaleFactor(0.7)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("play-pin")
+                    .disabled(location.coordinate == nil)
+                    Text("Con la bandera marcada medimos a cuántas yardas de la bandera quedan tus approaches. Si no la marcás, medimos al centro del green.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func adjustPutts(_ delta: Int) {
+        let gpsPutts = shots.filter { $0.hole == hole && isPutt($0) }.count
+        let current = displayedPutts ?? gpsPutts
+        draftPutts[hole] = min(10, max(0, current + delta))
+    }
+
+    private func setDriveDirection(_ value: String) async {
+        guard let tee = driveShot else { return }
+        let next = tee.direction == value ? NSNull() : value
+        await patch(["direction": next])
+    }
+
+    private func markPin() async {
+        guard let here = location.coordinate else { return }
+        do {
+            let record = try await model.api.putLiveRoundHole(
+                id: liveRound.id,
+                hole: hole,
+                putts: nil,
+                pin: LivePin(lat: here.lat, lng: here.lng, accuracyM: location.accuracyM)
+            )
+            holeRecords[hole] = record
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func savePuttsIfNeeded() async {
+        guard let value = draftPutts[hole], value != holeRecords[hole]?.putts else { return }
+        do {
+            let record = try await model.api.putLiveRoundHole(id: liveRound.id, hole: hole, putts: value, pin: nil)
+            holeRecords[record.number] = record
+            draftPutts[hole] = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func changeHole(_ next: Int) {
+        Task { await changeHoleAsync(next) }
+    }
+
+    private func changeHoleAsync(_ next: Int) async {
+        await savePuttsIfNeeded()
         let clamped = min(max(next, 1), max(course.holes.count, 1))
         hole = clamped
         lastManualChange = Date()
@@ -634,7 +823,11 @@ struct PlayHoleView: View {
             ShotQueue.update(clientId: client) { draft in
                 if let club = body["club"] as? String { draft.club = club }
                 if let result = body["result"] as? String { draft.result = result }
-                if let direction = body["direction"] as? String { draft.direction = direction }
+                if body["direction"] is NSNull {
+                    draft.direction = nil
+                } else if let direction = body["direction"] as? String {
+                    draft.direction = direction
+                }
                 if let length = body["length"] as? String { draft.length = length }
                 if let mishit = body["mishit"] as? Bool { draft.mishit = mishit }
             }
@@ -646,9 +839,13 @@ struct PlayHoleView: View {
             liveRound = detail.liveRound
             shots = detail.shots
         }
+        if let holes = try? await model.api.liveRoundHoles(id: liveRound.id) {
+            holeRecords = Dictionary(uniqueKeysWithValues: holes.map { ($0.number, $0) })
+        }
     }
 
     private func endRound() async {
+        await savePuttsIfNeeded()
         _ = try? await model.api.patchLiveRound(id: liveRound.id, body: ["ended": true])
         await model.endPlay(recapLiveRoundId: liveRound.id)
     }

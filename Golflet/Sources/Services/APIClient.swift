@@ -33,6 +33,9 @@ protocol GolfletAPI: Sendable {
     func clubStats(code: String) async throws -> ClubStatsDetail
     func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String, range: String) async throws -> MetricDrilldown?
     func metricsSummary(range: String) async throws -> MetricsSummary
+    func gameMetrics(range: String) async throws -> GameMetrics
+    func liveRoundHoles(id: String) async throws -> [LiveHoleRecord]
+    func putLiveRoundHole(id: String, hole: Int, putts: Int?, pin: LivePin?) async throws -> LiveHoleRecord
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy
 
     func profesores() async throws -> [Profesor]
