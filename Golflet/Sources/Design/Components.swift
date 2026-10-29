@@ -9,6 +9,7 @@ struct GProbe: View {
             .font(.system(size: 1))
             .foregroundStyle(.clear)
             .frame(width: 1, height: 1)
+            .allowsHitTesting(false)
             .accessibilityIdentifier(id)
             .accessibilityLabel(label ?? id)
     }
@@ -92,6 +93,8 @@ struct GTitle: View {
             .font(GFont.ui(size, weight: .semibold))
             .tracking(size >= 36 ? -1.9 : -1.2)
             .foregroundStyle(p.ink)
+            .lineLimit(2)
+            .minimumScaleFactor(0.72)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -461,5 +464,37 @@ struct GField<Content: View>: View {
                 .background(p.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+    }
+}
+
+struct AdaptiveTileGrid<Content: View>: View {
+    var spacing: CGFloat = 8
+    var defaultColumns: Int = TextPrefsLayout.defaultTileColumns
+    @ViewBuilder var content: () -> Content
+    @State private var width: CGFloat = TextPrefsLayout.narrowWidth + 1
+
+    var body: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: spacing),
+                count: TextPrefsLayout.tileColumnCount(forWidth: width, defaultCount: defaultColumns)
+            ),
+            spacing: spacing
+        ) {
+            content()
+        }
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: AdaptiveTileWidthKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(AdaptiveTileWidthKey.self) { width = $0 }
+    }
+}
+
+private struct AdaptiveTileWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

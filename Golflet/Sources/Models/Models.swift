@@ -486,6 +486,12 @@ enum RuntimeFlags {
         let args = ProcessInfo.processInfo.arguments
         return args.contains("-ui-testing") || args.contains("-ui-testing-auth")
     }
+
+    static var testingTextPrefs: TextPrefs? {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-ui-testing-text-xl-bold") else { return nil }
+        return TextPrefs(size: .extraLarge, weight: .marked)
+    }
 }
 
 
