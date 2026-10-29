@@ -128,7 +128,8 @@ final class NotificationsTests: XCTestCase {
 
         let opened = try await api.notification(id: "n-club-jockey")
         XCTAssertFalse(opened.isUnread)
-        XCTAssertEqual((try await api.unreadNotifications()).unreadCount, 1)
+        let remaining = try await api.unreadNotifications()
+        XCTAssertEqual(remaining.unreadCount, 1)
 
         try await api.markNotificationsRead(ids: [], all: true)
         let after = try await api.notifications()
