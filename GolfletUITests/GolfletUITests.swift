@@ -546,7 +546,7 @@ final class GolfletUITests: XCTestCase {
         assertFits(app, "metric-course-average")
         saveShot("50_texto_xl_cancha")
 
-        tapTab(app, "Bolsa")
+        tapTab(app, "Mi bolsa")
         XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
         saveShot("51_texto_xl_bolsa")
     }
