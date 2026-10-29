@@ -49,7 +49,7 @@ struct MetricRoundsView: View {
                     sortRow
                 }
                 ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 10) {
+                    LazyVStack(spacing: 10, pinnedViews: .sectionHeaders) {
                         if rows.isEmpty {
                             Text("No hay rondas con este filtro.")
                                 .font(GType.body)
@@ -57,12 +57,30 @@ struct MetricRoundsView: View {
                                 .padding(.top, 24)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, round in
-                            Button { model.presentedRound = round } label: {
-                                RoundRow(round: round, style: .list)
+                        ForEach(yearSections) { section in
+                            Section {
+                                ForEach(Array(section.rounds.enumerated()), id: \.element.id) { index, round in
+                                    Button { model.presentedRound = round } label: {
+                                        RoundRow(
+                                            round: round,
+                                            style: .list,
+                                            showYearUnderMonth: sort != .date && !section.isCurrent
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("metric-round-\(section.id)-\(index)")
+                                }
+                            } header: {
+                                if sort == .date, !section.isCurrent {
+                                    Text(section.id)
+                                        .font(GType.overline)
+                                        .foregroundStyle(p.ink3)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.vertical, 4)
+                                        .background(p.bg.opacity(0.94))
+                                        .accessibilityIdentifier("year-marker-\(section.id)")
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("metric-round-\(index)")
                         }
                     }
                     .padding(.bottom, 24)
@@ -93,38 +111,53 @@ struct MetricRoundsView: View {
     }
 
     private var sortRow: some View {
-        HStack(spacing: 8) {
-            ForEach(MetricSortField.allCases, id: \.self) { field in
-                Button {
-                    sort = field
-                } label: {
-                    Text(field.rawValue)
-                        .font(GType.headline)
-                        .foregroundStyle(sort == field ? p.ink : p.ink2)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(sort == field ? p.surface : Color.clear)
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("metric-sort-\(field.rawValue.lowercased())")
-            }
-            Spacer(minLength: 8)
-            Button { order = order.flipped } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: order == .bestFirst ? "arrow.up" : "arrow.down")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text(order.label(for: sort))
-                        .font(GType.label)
-                }
+        HStack {
+            Text(sortCaption)
+                .font(GType.label)
                 .foregroundStyle(p.ink2)
+            Spacer()
+            Menu {
+                Button("Recientes") { sort = .date; order = .bestFirst }
+                Button("Antiguas") { sort = .date; order = .worstFirst }
+                Button("Mejor gross") { sort = .gross; order = .bestFirst }
+                Button("Peor gross") { sort = .gross; order = .worstFirst }
+                Button("Mejor neto") { sort = .net; order = .bestFirst }
+                Button("Peor neto") { sort = .net; order = .worstFirst }
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(p.ink)
+                    .frame(width: 36, height: 36)
+                    .background(p.surface2)
+                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("metric-sort-order")
+            .accessibilityIdentifier("metric-sort-menu")
         }
-        .padding(4)
-        .background(p.surface2)
-        .clipShape(Capsule())
+    }
+
+    private var sortCaption: String {
+        switch (sort, order) {
+        case (.date, .bestFirst): return "Recientes"
+        case (.date, .worstFirst): return "Antiguas"
+        case (.gross, .bestFirst): return "Mejor"
+        case (.gross, .worstFirst): return "Peor"
+        case (.net, .bestFirst): return "Mejor neto"
+        case (.net, .worstFirst): return "Peor neto"
+        }
+    }
+
+    private var yearSections: [RoundYearSection] {
+        let current = Calendar.gregorian.component(.year, from: Date())
+        var order: [Int] = []
+        var buckets: [Int: [Round]] = [:]
+        for round in rows {
+            let year = Calendar.gregorian.component(.year, from: round.date)
+            if buckets[year] == nil { order.append(year) }
+            buckets[year, default: []].append(round)
+        }
+        return order.map { year in
+            RoundYearSection(id: String(year), isCurrent: year == current, rounds: buckets[year] ?? [])
+        }
     }
 
     private var rows: [Round] {

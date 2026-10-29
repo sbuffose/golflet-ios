@@ -164,6 +164,65 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(GolfletError.golfisticsAppDown.errorDescription, "La App de Golfistics no responde.")
     }
 
+    func testUsesFirstNameWithoutSplittingPlayerName() {
+        let json: [String: Any] = [
+            "user": ["id": "u1", "email": "vos@ejemplo.com", "name": "Sebastián Buffo Sempé", "first_name": "Sebastián"],
+            "player": ["name": "Buffo Sempé", "first_name": "Sebastián", "handicap_index": 3.1]
+        ]
+        let snap = LivePayloadMapper.snapshot(from: json)
+        XCTAssertEqual(snap.profile.firstName, "Sebastián")
+        XCTAssertEqual(snap.profile.greetingName, "Sebastián")
+        XCTAssertEqual(snap.profile.displayName, "Buffo Sempé")
+        XCTAssertFalse(snap.profile.greetingName.contains("Buffo"))
+    }
+
+    func testParsesCourseGroups() {
+        let groups = LivePayloadMapper.parseCourseGroups([
+            ["id": "jockey", "name": "Jockey Club", "courses": ["Azul", "Colorada"]],
+            ["name": "Mar del Plata", "courses": [["name": "Cancha Vieja"], ["label": "Cancha Nueva"]]]
+        ])
+        XCTAssertEqual(groups.count, 2)
+        XCTAssertEqual(groups[0].title, "Jockey Club")
+        XCTAssertEqual(groups[0].courseNames, ["Azul", "Colorada"])
+        XCTAssertEqual(groups[1].title, "Mar del Plata")
+        XCTAssertEqual(groups[1].courseNames, ["Cancha Vieja", "Cancha Nueva"])
+    }
+
+    func testParsesPerRoundAndHcpImpact() {
+        let summary = PlayParser.metricsSummary([
+            "range": "3m",
+            "eagles": 1,
+            "birdies": 12,
+            "pars": 40,
+            "bogeys": 20,
+            "per_round": [
+                "eagles": ["mean": 0.1, "median": 0, "n": 10],
+                "birdies": ["mean": 2.1, "median": 2, "rounds": 10],
+                "pars": ["avg": 8.2, "median": 8],
+                "bogeys": ["mean": 5.0, "median": 5],
+                "doubles": ["mean": 1.2, "median": 1]
+            ],
+            "hcp_impact": [
+                "delta": -0.3,
+                "start": 3.4,
+                "now": 3.1,
+                "estimated": true,
+                "best_8": [["round_id": "r1", "differential": 1.2, "course": "Azul"]],
+                "dropped": [["id": "r2", "differential": 8.8]]
+            ],
+            "course_groups": [
+                ["name": "Jockey Club", "courses": ["Azul", "Colorada"]]
+            ]
+        ])
+        XCTAssertEqual(summary.perRound.birdies.mean ?? 0, 2.1, accuracy: 0.01)
+        XCTAssertEqual(summary.perRound.birdies.median ?? 0, 2, accuracy: 0.01)
+        XCTAssertEqual(summary.hcpImpact?.delta ?? 0, -0.3, accuracy: 0.01)
+        XCTAssertEqual(summary.hcpImpact?.start ?? 0, 3.4, accuracy: 0.01)
+        XCTAssertEqual(summary.hcpImpact?.counting.count, 1)
+        XCTAssertEqual(summary.hcpImpact?.dropped.count, 1)
+        XCTAssertEqual(summary.courseGroups.first?.title, "Jockey Club")
+    }
+
     func testAuthErrorCopy() {
         XCTAssertEqual(
             LivePayloadMapper.authMessage(from: ["code": "INVALID_EMAIL_OR_PASSWORD"], fallback: "x"),

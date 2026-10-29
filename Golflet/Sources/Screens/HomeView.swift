@@ -6,41 +6,54 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shownCards: Int?
     @State private var cardsGold = false
+    @State private var showsHcpImpact = false
+    @State private var highlightPartners = false
 
     var body: some View {
         GScreen(id: "screen-inicio") {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 28) {
-                    if model.isLoaded {
-                        Text("home-ready")
-                            .font(.system(size: 1))
-                            .foregroundStyle(.clear)
-                            .frame(width: 1, height: 1)
-                            .accessibilityIdentifier("home-ready")
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 28) {
+                        if model.isLoaded {
+                            Text("home-ready")
+                                .font(.system(size: 1))
+                                .foregroundStyle(.clear)
+                                .frame(width: 1, height: 1)
+                                .accessibilityIdentifier("home-ready")
+                        }
+                        header(scroll: proxy)
+                        handicapCard
+                        lastRound
+                        teeTimesCard
+                        yearRow
+                        recurring
+                        groups
+                        clubs
                     }
-                    header
-                    handicapCard
-                    lastRound
-                    yearRow
-                    recurring
-                    groups
-                    clubs
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 96)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 96)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
         .metricDestinations()
+        .sheet(isPresented: $showsHcpImpact) {
+            if let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact {
+                NavigationStack {
+                    HcpImpactSheet(impact: impact)
+                }
+                .golfletChrome()
+            }
+        }
         .onChange(of: model.celebrateCards) { _, value in
             guard let value else { return }
             Task { await countUpCards(to: value) }
         }
     }
 
-    private var header: some View {
+    private func header(scroll: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center) {
                 GOverline(text: model.clubs.first?.name ?? "Golflet")
@@ -83,7 +96,23 @@ struct HomeView: View {
                 }
                 .padding(.top, 4)
             }
-            Text("Hola, \(model.profile.displayName.components(separatedBy: " ").first ?? model.profile.displayName)")
+            if let next = model.nextTeeTime {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 12)
+                    Button {
+                        revealPartners(scroll)
+                    } label: {
+                        TeeTimeTab(booking: next)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("home-tee-tab")
+                    .accessibilityLabel("Próximo tee time \(next.chipWhen)")
+                }
+                .padding(.trailing, -20)
+                .padding(.top, 2)
+            }
+            Text("Hola, \(model.profile.greetingName)")
                 .font(GType.largeTitle)
                 .tracking(-1.9)
                 .foregroundStyle(p.ink)
@@ -178,6 +207,14 @@ struct HomeView: View {
                     .accessibilityIdentifier("metric-average")
                     .accessibilityElement(children: .contain)
                     .overlay { GProbe(id: "metric-average", label: "Promedio") }
+                    if let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact {
+                        Spacer()
+                        Button { showsHcpImpact = true } label: {
+                            heroMini(hcpImpactLabel(impact), hcpImpactValue(impact), gold: impact.delta < 0)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("metric-hcp-impact")
+                    }
                 }
                 .padding(.top, 4)
             }
@@ -224,6 +261,74 @@ struct HomeView: View {
         try? await Task.sleep(for: .seconds(1.6))
         cardsGold = false
         model.celebrateCards = nil
+    }
+
+    private var teeTimesCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Próximos tee times")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            GCard(radius: 22, padding: 16) {
+                if model.upcomingTeeTimes.isEmpty {
+                    Text("No tenés reservas próximas en tu club")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("home-tee-empty")
+                } else {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(Array(model.upcomingTeeTimes.enumerated()), id: \.element.id) { index, booking in
+                            if index > 0 { Hairline() }
+                            teeTimeRow(booking)
+                        }
+                    }
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(p.accent.opacity(highlightPartners ? 0.9 : 0), lineWidth: 2)
+            }
+        }
+        .id("home-tee-times")
+        .accessibilityIdentifier("home-tee-times")
+        .accessibilityElement(children: .contain)
+    }
+
+    private func teeTimeRow(_ booking: TeeTime) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(booking.chipWhen)
+                .font(GType.headline)
+                .tabular()
+                .foregroundStyle(p.ink)
+            Text(booking.clubName)
+                .font(GType.body)
+                .foregroundStyle(p.ink)
+            if !booking.course.isEmpty {
+                Text(booking.course)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+            }
+            if let partners = booking.companionsLine {
+                Text(partners)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier("home-tee-partners-\(booking.id)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("home-tee-row-\(booking.id)")
+    }
+
+    private func revealPartners(_ proxy: ScrollViewProxy) {
+        withAnimation(.easeInOut(duration: 0.35)) {
+            proxy.scrollTo("home-tee-times", anchor: .center)
+            highlightPartners = true
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(1400))
+            withAnimation(.easeOut(duration: 0.4)) {
+                highlightPartners = false
+            }
+        }
     }
 
     private var lastRound: some View {
@@ -444,10 +549,10 @@ struct HomeView: View {
                                 .background(p.surface2)
                                 .clipShape(Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(model.clubs.isEmpty ? "Vincular Golfistics App" : "Tu cuenta de Golfistics")
+                                Text(model.clubs.isEmpty ? "Vincular mi ficha del club" : "Tu cuenta")
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
-                                Text(model.clubs.isEmpty ? "Matrícula y clave de la App" : "Actualizar trae todos tus clubes")
+                                Text(model.clubs.isEmpty ? "Matrícula y contraseña" : "Actualizar trae todos tus clubes")
                                     .font(GType.label)
                                     .foregroundStyle(p.ink3)
                             }
@@ -461,6 +566,30 @@ struct HomeView: View {
         }
     }
 
+    private var localHcpImpact: HcpImpact? {
+        let ranged = StatsEngine.eighteenHoleValid(StatsEngine.ranged(model.rounds, range: model.statsRange))
+        guard let first = ranged.last, let last = ranged.first else { return nil }
+        let delta = last.handicapIndex - first.handicapIndex
+        guard abs(delta) >= 0.05 else { return nil }
+        return HcpImpact(
+            delta: delta,
+            start: first.handicapIndex,
+            now: last.handicapIndex,
+            estimated: true,
+            counting: [],
+            dropped: []
+        )
+    }
+
+    private func hcpImpactLabel(_ impact: HcpImpact) -> String {
+        impact.estimated ? "Handicap estimado" : "Handicap"
+    }
+
+    private func hcpImpactValue(_ impact: HcpImpact) -> String {
+        let arrow = impact.delta < 0 ? "↓" : (impact.delta > 0 ? "↑" : "·")
+        return "\(arrow)\(FormatAR.one(abs(impact.delta)))"
+    }
+
     private func clubCountLine(_ club: LinkedClub) -> String {
         let n = model.rounds.filter { $0.clubCode == club.code }.count
         let cards = n > 0 ? n : club.cardCount
@@ -469,10 +598,57 @@ struct HomeView: View {
     }
 }
 
+struct TeeTimeTab: View {
+    let booking: TeeTime
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Próximo tee time")
+                .font(GType.overline)
+                .foregroundStyle(Color(hex: 0xC8A86A))
+                .lineLimit(1)
+            Text(booking.chipWhen)
+                .font(GType.headline)
+                .tabular()
+                .foregroundStyle(Color(hex: 0xF7F5F0))
+                .lineLimit(1)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 18)
+        .padding(.vertical, 9)
+        .frame(minHeight: 44, alignment: .leading)
+        .background(Color(hex: 0x0F3D2E))
+        .clipShape(
+            UnevenRoundedRectangle(
+                cornerRadii: RectangleCornerRadii(
+                    topLeading: 16,
+                    bottomLeading: 16,
+                    bottomTrailing: 0,
+                    topTrailing: 0
+                ),
+                style: .continuous
+            )
+        )
+        .shadow(color: Color.black.opacity(0.16), radius: 8, x: -2, y: 2)
+        .contentShape(
+            UnevenRoundedRectangle(
+                cornerRadii: RectangleCornerRadii(
+                    topLeading: 16,
+                    bottomLeading: 16,
+                    bottomTrailing: 0,
+                    topTrailing: 0
+                ),
+                style: .continuous
+            )
+        )
+    }
+}
+
 struct RoundRow: View {
     @Environment(\.palette) private var p
     let round: Round
     var style: Style = .list
+    var showYearUnderMonth = false
 
     enum Style { case home, list }
 
@@ -480,6 +656,8 @@ struct RoundRow: View {
         GCard(radius: 22, padding: 16) {
             HStack(alignment: .center, spacing: 14) {
                 let dm = FormatAR.dayMonth(round.date)
+                let year = Calendar.gregorian.component(.year, from: round.date)
+                let current = Calendar.gregorian.component(.year, from: Date())
                 VStack(spacing: 0) {
                     Text(dm.day)
                         .font(GFont.ui(22, weight: .semibold))
@@ -488,13 +666,18 @@ struct RoundRow: View {
                     Text(dm.month)
                         .font(GType.overline)
                         .foregroundStyle(p.ink3)
+                    if showYearUnderMonth, year != current {
+                        Text(String(year))
+                            .font(GType.overline)
+                            .foregroundStyle(p.ink3)
+                    }
                 }
                 .frame(width: 44)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(round.displayTitle)
                         .font(GType.headline)
                         .foregroundStyle(p.ink)
-                        .lineLimit(1)
+                        .lineLimit(2)
                     HStack(spacing: 6) {
                         if !round.isOtherCourse, !round.tee.isEmpty {
                             TeeDot(name: round.tee)
@@ -503,6 +686,19 @@ struct RoundRow: View {
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
                             .lineLimit(1)
+                    }
+                    if style == .list, !chips.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(chips, id: \.label) { chip in
+                                Text(chip.label)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(chip.ink)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(chip.fill)
+                                    .clipShape(Capsule())
+                            }
+                        }
                     }
                 }
                 Spacer(minLength: 8)
@@ -521,6 +717,21 @@ struct RoundRow: View {
                     .foregroundStyle(p.ink3)
             }
         }
+    }
+
+    private var chips: [(label: String, fill: Color, ink: Color)] {
+        var items: [(String, Color, Color)] = []
+        let eagles = max(round.counts.eagles, StatsEngine.count(.eagle, in: round).count)
+        if eagles > 0 { items.append(("\(eagles) Á", Color(hex: 0xC8A86A).opacity(0.22), Color(hex: 0x8A6D32))) }
+        if round.counts.birdies > 0 { items.append(("\(round.counts.birdies) B", p.positive.opacity(0.16), p.positive)) }
+        if round.counts.pars > 0 { items.append(("\(round.counts.pars) P", p.surface2, p.ink2)) }
+        if round.counts.bogeys > 0 { items.append(("\(round.counts.bogeys) G", Color(hex: 0xB4553F).opacity(0.14), Color(hex: 0xB4553F))) }
+        let doubles = round.counts.doubles + round.counts.triples + round.counts.worse
+        if doubles > 0 { items.append(("\(doubles)+", p.negative.opacity(0.14), p.negative)) }
+        if let putts = round.putts {
+            items.append(("\(putts) putts", p.surface2, p.ink2))
+        }
+        return items
     }
 
     private var meta: String {
@@ -551,10 +762,6 @@ extension Round {
         }
         title = title.replacingOccurrences(of: "  ", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        if title.count > 28 {
-            let words = title.split(separator: " ").prefix(4)
-            title = words.joined(separator: " ")
-        }
-        return title
+        return title.isEmpty ? "Ronda" : title
     }
 }

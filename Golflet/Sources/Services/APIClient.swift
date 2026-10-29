@@ -60,6 +60,7 @@ protocol GolfletAPI: Sendable {
     func markNotificationsRead(ids: [String], all: Bool) async throws
     func userSettings() async throws -> TextPrefs
     func saveUserSettings(_ prefs: TextPrefs) async throws -> TextPrefs
+    func teeTimes() async throws -> [TeeTime]
 }
 
 enum APIFactory {

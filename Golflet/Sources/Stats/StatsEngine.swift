@@ -52,9 +52,12 @@ enum StatsEngine {
             .sorted { $0.date > $1.date }
     }
 
-    static func apply(_ rounds: [Round], filter: CourseFilter) -> [Round] {
-        guard let name = filter.courseName else { return rounds }
-        return rounds.filter { $0.course.caseInsensitiveCompare(name) == .orderedSame }
+    static func apply(_ rounds: [Round], filter: CourseFilter, groupedNames: [String] = []) -> [Round] {
+        rounds.filter { filter.matches($0, groupedNames: groupedNames) }
+    }
+
+    static func groupedCourseNames(from filters: [CourseFilter]) -> [String] {
+        filters.filter { $0.kind == .group }.flatMap(\.courseNames)
     }
 
     static func home(rounds: [Round], now: Date = Date()) -> HomeSnapshot {
@@ -111,8 +114,8 @@ enum StatsEngine {
         return detailed.count * 4 >= valid.count * 3
     }
 
-    static func summary(rounds: [Round], filter: CourseFilter, range: StatsRange = .all, now: Date = Date()) -> SummarySnapshot {
-        let scoped = apply(ranged(rounds, range: range, now: now), filter: filter)
+    static func summary(rounds: [Round], filter: CourseFilter, range: StatsRange = .all, groupedNames: [String] = [], now: Date = Date()) -> SummarySnapshot {
+        let scoped = apply(ranged(rounds, range: range, now: now), filter: filter, groupedNames: groupedNames)
         let valid18 = eighteenHoleValid(scoped)
         let years = valid18.map { Calendar.gregorian.component(.year, from: $0.date) }
         let start2025 = Calendar.gregorian.date(from: DateComponents(year: 2025, month: 1, day: 1)) ?? Date.distantPast
@@ -168,12 +171,19 @@ enum StatsEngine {
         )
     }
 
-    static func hardestHoles(from stats: [CourseHoleStats], filter: CourseFilter, limit: Int = 4) -> [(CourseHoleStats, HoleStat)] {
+    static func hardestHoles(from stats: [CourseHoleStats], filter: CourseFilter, groupedNames: [String] = [], limit: Int = 4) -> [(CourseHoleStats, HoleStat)] {
         let scoped: [CourseHoleStats]
-        if let name = filter.courseName {
-            scoped = stats.filter { $0.course.caseInsensitiveCompare(name) == .orderedSame }
-        } else {
+        switch filter.kind {
+        case .all:
             scoped = stats.filter { !$0.course.hasPrefix("x:") }
+        case .group:
+            scoped = stats.filter { stat in
+                filter.courseNames.contains { stat.course.caseInsensitiveCompare($0) == .orderedSame }
+            }
+        case .other:
+            scoped = stats.filter { stat in
+                !groupedNames.contains { stat.course.caseInsensitiveCompare($0) == .orderedSame }
+            }
         }
         var pairs: [(CourseHoleStats, HoleStat)] = []
         for course in scoped {
@@ -274,7 +284,7 @@ enum StatsEngine {
         }
         switch kind {
         case .eagle:
-            return (0, false)
+            return (round.counts.eagles, false)
         case .birdie:
             return (round.counts.birdies, false)
         case .par:
@@ -371,8 +381,39 @@ enum StatsEngine {
         }
     }
 
-    static func hardestFromRounds(_ rounds: [Round], filter: CourseFilter, limit: Int = 4) -> [(String, HoleStat)] {
-        let scoped = apply(rounds, filter: filter)
+    static func perRound(
+        _ rounds: [Round],
+        filter: CourseFilter = .all,
+        range: StatsRange = .all,
+        groupedNames: [String] = [],
+        now: Date = Date()
+    ) -> PerRoundStats {
+        let scoped = apply(eighteenHoleValid(ranged(rounds, range: range, now: now)), filter: filter, groupedNames: groupedNames)
+        func series(_ pick: (Round) -> Int) -> PerRoundAverage {
+            let values = scoped.map { Double(pick($0)) }
+            return PerRoundAverage(mean: average(values), median: median(values), rounds: values.count)
+        }
+        return PerRoundStats(
+            eagles: series { count(.eagle, in: $0).count },
+            birdies: series { count(.birdie, in: $0).count },
+            pars: series { count(.par, in: $0).count },
+            bogeys: series { count(.bogey, in: $0).count },
+            doubles: series { $0.counts.doubles + $0.counts.triples + $0.counts.worse }
+        )
+    }
+
+    static func median(_ values: [Double]) -> Double? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let mid = sorted.count / 2
+        if sorted.count.isMultiple(of: 2) {
+            return (sorted[mid - 1] + sorted[mid]) / 2
+        }
+        return sorted[mid]
+    }
+
+    static func hardestFromRounds(_ rounds: [Round], filter: CourseFilter, groupedNames: [String] = [], limit: Int = 4) -> [(String, HoleStat)] {
+        let scoped = apply(rounds, filter: filter, groupedNames: groupedNames)
         let names = Set(scoped.map(\.course).filter { !$0.hasPrefix("x:") })
         var pairs: [(String, HoleStat)] = []
         for name in names {

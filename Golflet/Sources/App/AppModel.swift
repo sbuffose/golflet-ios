@@ -18,6 +18,7 @@ final class AppModel {
     var authFailure: AuthFailure?
     var selectedTab: AppTab = .inicio
     var courseFilter: CourseFilter = .all
+    var courseGroups: [CourseFilter] = []
     var statsRange: StatsRange = .all {
         didSet { statsRange.persist() }
     }
@@ -51,6 +52,7 @@ final class AppModel {
     var showsSharePrefs = false
     var showsGroups = false
     var inviteShare: InviteSharePayload?
+    var teeTimes: [TeeTime] = []
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -77,7 +79,19 @@ final class AppModel {
     var isAuthenticated: Bool { isSignedIn }
     var isLive: Bool { !api.persistsLocally }
     var home: HomeSnapshot { StatsEngine.home(rounds: rounds) }
-    var summary: SummarySnapshot { StatsEngine.summary(rounds: rounds, filter: courseFilter, range: statsRange) }
+    var groupedCourseNames: [String] { StatsEngine.groupedCourseNames(from: courseFilterOptions) }
+
+    var courseFilterOptions: [CourseFilter] {
+        var options = [CourseFilter.all]
+        let groups = courseGroups.isEmpty ? CourseFilterBuilder.from(courses: courses, clubs: clubs, rounds: rounds) : courseGroups
+        options.append(contentsOf: groups)
+        if !groups.isEmpty { options.append(.other) }
+        return options
+    }
+
+    var summary: SummarySnapshot {
+        StatsEngine.summary(rounds: rounds, filter: courseFilter, range: statsRange, groupedNames: groupedCourseNames)
+    }
     var rangeRoundCount: Int { metricsSummary?.roundsInRange ?? summary.validRoundCount }
 
     func courseSnapshot() -> CourseSnapshot {
@@ -88,8 +102,8 @@ final class AppModel {
         var scoped = StatsEngine.eighteenHoleValid(StatsEngine.ranged(rounds, range: statsRange))
         if let course {
             scoped = scoped.filter { $0.course.caseInsensitiveCompare(course) == .orderedSame }
-        } else if let name = courseFilter.courseName {
-            scoped = scoped.filter { $0.course.caseInsensitiveCompare(name) == .orderedSame }
+        } else {
+            scoped = scoped.filter { courseFilter.matches($0, groupedNames: groupedCourseNames) }
         }
         return scoped
     }
@@ -124,6 +138,7 @@ final class AppModel {
             await refreshGroups()
             await refreshNotifications()
             await refreshTextPrefs()
+            await refreshTeeTimes()
             isLoaded = true
             await consumeIntent()
         } catch {
@@ -143,6 +158,9 @@ final class AppModel {
             return
         }
         metricsSummary = try? await api.metricsSummary(range: statsRange.query)
+        if let groups = metricsSummary?.courseGroups, !groups.isEmpty {
+            courseGroups = groups
+        }
     }
 
     func metricChartPoints(_ query: MetricChartQuery) async -> [MetricPoint] {
@@ -496,6 +514,29 @@ final class AppModel {
         }
     }
 
+    var upcomingTeeTimes: [TeeTime] {
+        teeTimes.filter { $0.isUpcoming() }.sorted { $0.startsAt < $1.startsAt }
+    }
+
+    var nextTeeTime: TeeTime? { upcomingTeeTimes.first }
+
+    func refreshTeeTimes() async {
+        guard isSignedIn else {
+            teeTimes = []
+            return
+        }
+        if let remote = try? await api.teeTimes() {
+            teeTimes = remote
+        }
+        if let next = nextTeeTime {
+            publishWidgetSnapshot(next: NextRoundHint(
+                course: next.course.isEmpty ? next.clubName : next.course,
+                when: next.chipWhen,
+                deepLink: "golflet://inicio"
+            ))
+        }
+    }
+
     func refreshGroups() async {
         guard isSignedIn else { return }
         do {
@@ -843,6 +884,12 @@ final class AppModel {
         tees = snap.tees
         holeStats = snap.holeStats
         bag = snap.bag
+        if !snap.courseGroups.isEmpty {
+            courseGroups = snap.courseGroups
+        }
+        if !snap.teeTimes.isEmpty {
+            teeTimes = snap.teeTimes
+        }
         if let last = snap.rounds.sorted(by: { $0.date > $1.date }).first,
            last.course == "Azul" || last.course == "Colorada" {
             selectedCourseName = last.course

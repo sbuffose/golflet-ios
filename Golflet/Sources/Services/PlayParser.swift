@@ -314,8 +314,64 @@ enum PlayParser {
             eagles: JSONFlex.int(from: blob["eagles"]) ?? 0,
             birdies: JSONFlex.int(from: blob["birdies"]) ?? 0,
             pars: JSONFlex.int(from: blob["pars"]) ?? 0,
-            bogeys: JSONFlex.int(from: blob["bogeys"]) ?? 0
+            bogeys: JSONFlex.int(from: blob["bogeys"]) ?? 0,
+            perRound: perRound(from: json["per_round"] ?? json["per_round_metric"] ?? blob["per_round"]),
+            hcpImpact: hcpImpact(from: json["hcp_impact"] ?? blob["hcp_impact"]),
+            courseGroups: LivePayloadMapper.parseCourseGroups(json["course_groups"] ?? blob["course_groups"])
         )
+    }
+
+    private static func perRound(from raw: Any?) -> PerRoundStats {
+        guard let blob = raw as? [String: Any] else { return .empty }
+        return PerRoundStats(
+            eagles: perRoundAverage(blob["eagles"]),
+            birdies: perRoundAverage(blob["birdies"]),
+            pars: perRoundAverage(blob["pars"]),
+            bogeys: perRoundAverage(blob["bogeys"]),
+            doubles: perRoundAverage(blob["doubles"] ?? blob["double_plus"] ?? blob["double_bogeys"])
+        )
+    }
+
+    private static func perRoundAverage(_ raw: Any?) -> PerRoundAverage {
+        guard let blob = raw as? [String: Any] else {
+            if let value = JSONFlex.double(from: raw) {
+                return PerRoundAverage(mean: value, median: value, rounds: 0)
+            }
+            return .empty
+        }
+        return PerRoundAverage(
+            mean: JSONFlex.double(from: blob["mean"] ?? blob["avg"] ?? blob["average"]),
+            median: JSONFlex.double(from: blob["median"] ?? blob["p50"]),
+            rounds: JSONFlex.int(from: blob["rounds"] ?? blob["n"] ?? blob["count"]) ?? 0
+        )
+    }
+
+    private static func hcpImpact(from raw: Any?) -> HcpImpact? {
+        guard let blob = raw as? [String: Any] else { return nil }
+        guard let delta = JSONFlex.double(from: blob["delta"] ?? blob["change"] ?? blob["diff"]) else {
+            return nil
+        }
+        return HcpImpact(
+            delta: delta,
+            start: JSONFlex.double(from: blob["start"] ?? blob["from"] ?? blob["index_start"]),
+            now: JSONFlex.double(from: blob["now"] ?? blob["to"] ?? blob["index_now"]),
+            estimated: JSONFlex.bool(from: blob["estimated"] ?? blob["is_estimated"]) ?? false,
+            counting: hcpCards(blob["counting"] ?? blob["best_8"] ?? blob["best"]),
+            dropped: hcpCards(blob["dropped"] ?? blob["not_counting"])
+        )
+    }
+
+    private static func hcpCards(_ raw: Any?) -> [HcpImpactCard] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.enumerated().map { index, item in
+            HcpImpactCard(
+                id: string(item["id"] ?? item["round_id"]).isEmpty ? "hcp-\(index)" : string(item["id"] ?? item["round_id"]),
+                date: parseDate(item["date"]),
+                differential: JSONFlex.double(from: item["differential"] ?? item["diff"]),
+                course: optionalString(item["course"] ?? item["course_label"]),
+                counting: JSONFlex.bool(from: item["counting"]) ?? true
+            )
+        }
     }
 
     private static func series(from raw: Any?) -> [MetricSeriesPoint] {

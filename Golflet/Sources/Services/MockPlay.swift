@@ -442,7 +442,23 @@ extension MockAPIClient {
             eagles: eagles,
             birdies: birdies,
             pars: pars,
-            bogeys: bogeys
+            bogeys: bogeys,
+            perRound: StatsEngine.perRound(snap.rounds, range: StatsRange(rawValue: range) ?? .all),
+            hcpImpact: {
+                guard let start = valid.last?.handicapIndex, let now = valid.first?.handicapIndex else { return nil }
+                return HcpImpact(
+                    delta: now - start,
+                    start: start,
+                    now: now,
+                    estimated: true,
+                    counting: [],
+                    dropped: []
+                )
+            }(),
+            courseGroups: [
+                CourseFilter(id: "jockey", title: "Jockey Club", courseNames: ["Azul", "Colorada"], kind: .group),
+                CourseFilter(id: "mdp", title: "Mar del Plata", courseNames: ["Cancha Vieja", "Cancha Nueva"], kind: .group)
+            ]
         )
     }
 

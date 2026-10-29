@@ -41,6 +41,7 @@ struct ScoreKindDetailView: View {
                             )
                         )
                     }
+                    perRound(snap)
                     tally(snap)
                     rounds(snap)
                 }
@@ -123,6 +124,41 @@ struct ScoreKindDetailView: View {
                     .foregroundStyle(p.ink3)
             }
         }
+    }
+
+    private func perRound(_ snap: ScoreKindSnapshot) -> some View {
+        let stats = model.metricsSummary?.perRound.value(for: kind)
+            ?? StatsEngine.perRound(model.rounds, range: model.statsRange).value(for: kind)
+        return GCard(radius: 18, padding: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Por ronda")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                    .accessibilityIdentifier("per-round-title")
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Media")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                        Text(stats.mean.map(FormatAR.one) ?? "—")
+                            .font(GType.headline)
+                            .tabular()
+                            .foregroundStyle(p.ink)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Mediana")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                        Text(stats.median.map(FormatAR.one) ?? "—")
+                            .font(GType.headline)
+                            .tabular()
+                            .foregroundStyle(p.ink)
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier("per-round-\(kind.rawValue)")
     }
 
     private func tally(_ snap: ScoreKindSnapshot) -> some View {

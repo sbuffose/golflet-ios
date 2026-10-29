@@ -13,6 +13,10 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10), "Bootstrap del mock no terminó")
         XCTAssertTrue(waitFor(app, "handicap-card"))
+        XCTAssertTrue(first(app, "home-tee-tab").waitForExistence(timeout: 4), "Falta la pestaña de próximo tee time")
+        first(app, "home-tee-tab").tap()
+        XCTAssertTrue(waitFor(app, "home-tee-times", timeout: 4), "No scrolleó a la tarjeta de tee times")
+        XCTAssertTrue(first(app, "home-tee-partners-tt-jockey-1").waitForExistence(timeout: 3), "Faltan los compañeros")
         saveShot("01_inicio")
 
         if waitFor(app, "last-round-card", timeout: 4) {
@@ -624,7 +628,8 @@ final class GolfletUITests: XCTestCase {
             "Mínimo 8 caracteres",
             "Tu matrícula",
             "Tu número de matrícula",
-            "La misma que usás en Golfistics"
+            "La misma que usás en Golfistics",
+            "La misma que para entrar a tu club"
         ]
         if let current = element.value as? String,
            !current.isEmpty,
