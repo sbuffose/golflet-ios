@@ -250,7 +250,12 @@ struct MockAPIClient: GolfletAPI {
     private func loadRounds() async throws -> [Round] {
         let raw: [[String: Any]] = try FixtureLoader.array("rounds")
         let extra: [[String: Any]] = (try? FixtureLoader.array("other_course")) ?? []
-        return (raw + extra).compactMap(Self.parseRound)
+        return (raw + extra).compactMap(Self.parseRound).enumerated().map { index, round in
+            guard index == 0, !round.isCompetition else { return round }
+            var copy = round
+            copy.isCompetition = true
+            return copy
+        }
     }
 
     private func loadCourses() async throws -> [Course] {
@@ -586,7 +591,8 @@ struct MockAPIClient: GolfletAPI {
             sourceClubName: item["source_club_name"] as? String,
             courseLabel: item["course_label"] as? String,
             recapId: item["recap_id"] as? String,
-            gpsShots: JSONFlex.int(from: item["gps_shots"]) ?? 0
+            gpsShots: JSONFlex.int(from: item["gps_shots"]) ?? 0,
+            isCompetition: JSONFlex.bool(from: item["is_competition"] ?? item["competition"]) ?? false
         )
     }
 }

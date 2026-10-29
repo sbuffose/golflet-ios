@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 
 struct HandicapHistoryView: View {
@@ -5,6 +6,9 @@ struct HandicapHistoryView: View {
     @Environment(\.palette) private var p
 
     @State private var apiPoints: [TrendPoint]?
+    @State private var start: Date?
+    @State private var recordsTotal: Int?
+    @State private var monthlyScores: [MonthlyScoreBar] = []
 
     var body: some View {
         let points = apiPoints ?? StatsEngine.handicapSeries(model.rounds)
@@ -29,7 +33,7 @@ struct HandicapHistoryView: View {
                                 .foregroundStyle(p.ink2)
                             }
                         }
-                        Text("Cada punto es el índice que venía en la tarjeta. Golfistics no publica el historial oficial de las últimas 26 semanas.")
+                        Text(footnote)
                             .font(GType.label)
                             .foregroundStyle(p.ink3)
                     }
@@ -37,6 +41,11 @@ struct HandicapHistoryView: View {
                     GCard(radius: 22, padding: 16) {
                         Sparkline(values: points.map(\.handicap), color: p.primary)
                             .frame(height: 72)
+                            .accessibilityIdentifier("hcp-history-spark")
+                    }
+
+                    if showsMonthlyLegend {
+                        monthlyCard
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -88,17 +97,77 @@ struct HandicapHistoryView: View {
             if let drill = try? await model.api.metricDrilldown(
                 metric: "handicap",
                 scope: "all",
-                year: Calendar.gregorian.component(.year, from: Date()),
+                year: 2023,
                 course: "all",
                 sort: "date",
                 order: "desc",
-                range: model.statsRange.query
-            ), !drill.history.isEmpty {
-                apiPoints = drill.history.compactMap { item in
-                    guard let date = item.date else { return nil }
-                    return TrendPoint(date: date, handicap: item.hi, course: item.club ?? "")
-                }.reversed()
+                range: StatsRange.all.query
+            ) {
+                start = drill.start
+                recordsTotal = drill.recordsTotal ?? (drill.history.isEmpty ? nil : drill.history.count)
+                monthlyScores = drill.monthlyScores
+                if !drill.history.isEmpty {
+                    apiPoints = drill.history.compactMap { item in
+                        guard let date = item.date else { return nil }
+                        return TrendPoint(date: date, handicap: item.hi, course: item.club ?? "")
+                    }.reversed()
+                }
             }
+        }
+    }
+
+    private var showsMonthlyLegend: Bool {
+        monthlyScores.contains(where: \.hasBars)
+    }
+
+    private var footnote: String {
+        let count = recordsTotal ?? apiPoints?.count
+        if let start, let count {
+            return "\(count) registros semanales · desde \(FormatAR.monthYear(start))"
+        }
+        if let count, count > 0 {
+            return "\(count) registros semanales · desde 2023"
+        }
+        return "Cada punto es el índice que venía en la tarjeta. El historial oficial empieza en 2023."
+    }
+
+    private var monthlyCard: some View {
+        GCard(radius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Birdies y pares")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Chart {
+                    ForEach(monthlyScores) { row in
+                        BarMark(
+                            x: .value("Mes", FormatAR.dayMonth(row.date).month),
+                            y: .value("Birdies", row.birdies)
+                        )
+                        .foregroundStyle(Color(hex: 0xC8A86A))
+                        BarMark(
+                            x: .value("Mes", FormatAR.dayMonth(row.date).month),
+                            y: .value("Pares", row.pars)
+                        )
+                        .foregroundStyle(p.primary)
+                    }
+                }
+                .frame(height: 140)
+                .accessibilityIdentifier("hcp-monthly-bars")
+                HStack(spacing: 16) {
+                    legendDot(Color(hex: 0xC8A86A), "Birdies")
+                    legendDot(p.primary, "Pares")
+                }
+                .accessibilityIdentifier("hcp-monthly-legend")
+            }
+        }
+    }
+
+    private func legendDot(_ color: Color, _ label: String) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(label)
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
         }
     }
 }
