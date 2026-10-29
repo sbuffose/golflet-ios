@@ -804,6 +804,7 @@ struct HomeHcpPeople: View {
                 createGroup
             }
         }
+        .accessibilityElement(children: .contain)
     }
 
     private var profesorAvatarButton: some View {
