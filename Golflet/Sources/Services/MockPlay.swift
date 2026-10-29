@@ -6,6 +6,7 @@ extension MockAPIClient {
     private static var shotsByRound: [String: [Shot]] = [:]
     private static var recapsByKey: [String: Recap] = [:]
     private static var recapsByID: [String: Recap] = [:]
+    private static var paceAlertedIDs: Set<String> = []
 
     func gpsCourses(lat: Double?, lng: Double?) async throws -> GPSCourseList {
         let mine = Self.demoCourses
@@ -39,8 +40,11 @@ extension MockAPIClient {
         )
     }
 
-    func createLiveRound(courseId: String?, tee: String?) async throws -> LiveRound {
+    func createLiveRound(courseId: String?, tee: String?, players: Int, modality: String) async throws -> LiveRound {
         let summary = Self.demoCourses.first { $0.courseId == courseId }
+        let startedAt = ProcessInfo.processInfo.arguments.contains("-ui-testing-pace-late")
+            ? Date().addingTimeInterval(-3 * 3600)
+            : Date()
         let round = LiveRound(
             id: UUID().uuidString,
             courseId: courseId,
@@ -49,11 +53,13 @@ extension MockAPIClient {
             date: Self.todayStamp(),
             tee: tee ?? summary?.course,
             currentHole: 1,
-            startedAt: Date(),
+            startedAt: startedAt,
             endedAt: nil,
             roundId: nil,
             recapId: nil,
-            shots: 0
+            shots: 0,
+            players: PaceDefaults.clampPlayers(players),
+            modality: PaceDefaults.normalizeModality(modality)
         )
         Self.playLock.lock()
         Self.liveByID[round.id] = round
@@ -77,11 +83,68 @@ extension MockAPIClient {
         guard var round = Self.liveByID[id] else { throw GolfletError.decoding("live_round") }
         if let hole = JSONFlex.int(from: body["current_hole"]) { round.currentHole = hole }
         if let tee = body["tee"] as? String { round.tee = tee }
+        if let players = JSONFlex.int(from: body["players"]) {
+            round.players = PaceDefaults.clampPlayers(players)
+        }
+        if let modality = body["modality"] as? String, !modality.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            round.modality = PaceDefaults.normalizeModality(modality)
+        }
         if let ended = JSONFlex.bool(from: body["ended"]) {
             round.endedAt = ended ? Date() : nil
         }
         Self.liveByID[id] = round
         return round
+    }
+
+    func liveRoundPace(id: String) async throws -> LiveRoundPace {
+        Self.playLock.lock()
+        let round = Self.liveByID[id]
+        let alreadyAlerted = Self.paceAlertedIDs.contains(id)
+        Self.playLock.unlock()
+        guard let round else { throw GolfletError.decoding("live_round") }
+        let settings = try await playSettings()
+        let minutesPerHole = PaceConfig.fallbackMinutes
+        let hole = round.currentHole
+        let startedAt = round.startedAt ?? Date()
+        let elapsed = PaceEngine.elapsedMinutes(from: startedAt, now: Date())
+        let expected = PaceEngine.expectedMinutes(holesReached: hole, minutesPerHole: minutesPerHole)
+        let behind = elapsed - expected
+        let alertDue = settings.paceAlertEnabled
+            && !alreadyAlerted
+            && hole == PaceEngine.alertHole
+            && behind > PaceEngine.behindThresholdMinutes
+        return LiveRoundPace(
+            expectedMin: expected,
+            elapsedMin: elapsed,
+            behindMin: behind,
+            alertDue: alertDue,
+            alertText: alertDue ? PaceEngine.fallbackAlertText(elapsed: elapsed, expected: expected) : nil,
+            alertHole: PaceEngine.alertHole,
+            thresholdMin: PaceEngine.behindThresholdMinutes,
+            enabled: settings.paceAlertEnabled
+        )
+    }
+
+    func markPaceAlerted(id: String) async throws {
+        Self.playLock.lock()
+        defer { Self.playLock.unlock() }
+        guard Self.liveByID[id] != nil else { throw GolfletError.decoding("live_round") }
+        Self.paceAlertedIDs.insert(id)
+    }
+
+    func ageLiveRound(id: String, by interval: TimeInterval) {
+        Self.playLock.lock()
+        defer { Self.playLock.unlock() }
+        guard var round = Self.liveByID[id] else { return }
+        let start = round.startedAt ?? Date()
+        round.startedAt = start.addingTimeInterval(-abs(interval))
+        Self.liveByID[id] = round
+    }
+
+    static func resetPaceAlerts() {
+        playLock.lock()
+        paceAlertedIDs = []
+        playLock.unlock()
     }
 
     func postShots(liveRoundId: String, drafts: [ShotDraft]) async throws -> [Shot] {

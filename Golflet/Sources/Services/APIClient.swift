@@ -20,7 +20,7 @@ protocol GolfletAPI: Sendable {
 
     func gpsCourses(lat: Double?, lng: Double?) async throws -> GPSCourseList
     func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail
-    func createLiveRound(courseId: String?, tee: String?) async throws -> LiveRound
+    func createLiveRound(courseId: String?, tee: String?, players: Int, modality: String) async throws -> LiveRound
     func liveRound(id: String) async throws -> LiveRoundDetail
     func patchLiveRound(id: String, body: [String: Any]) async throws -> LiveRound
     func postShots(liveRoundId: String, drafts: [ShotDraft]) async throws -> [Shot]
@@ -67,6 +67,17 @@ protocol GolfletAPI: Sendable {
     func userSettings() async throws -> TextPrefs
     func saveUserSettings(_ prefs: TextPrefs) async throws -> TextPrefs
     func teeTimes() async throws -> [TeeTime]
+    func playSettings() async throws -> PlaySettings
+    func savePlaySettings(_ settings: PlaySettings) async throws -> PlaySettings
+    func paceConfig(courseId: String?, clubCode: String?, players: Int?, modality: String?) async throws -> PaceConfig
+    func liveRoundPace(id: String) async throws -> LiveRoundPace
+    func markPaceAlerted(id: String) async throws
+}
+
+extension GolfletAPI {
+    func createLiveRound(courseId: String?, tee: String?) async throws -> LiveRound {
+        try await createLiveRound(courseId: courseId, tee: tee, players: PaceDefaults.players, modality: PaceDefaults.modality)
+    }
 }
 
 enum APIFactory {

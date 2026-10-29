@@ -19,15 +19,22 @@ final class PlayLocation: NSObject, CLLocationManagerDelegate {
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = 2
         if RuntimeFlags.isUITesting {
-            coordinate = demo
+            coordinate = Self.testingCoordinate
             accuracyM = 4
             authorized = true
         }
     }
 
+    private static var testingCoordinate: GPSCoord {
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-far-gps") {
+            return GPSCoord(lat: -34.6037, lng: -58.3816)
+        }
+        return GPSCoord(lat: -34.485427, lng: -58.532351)
+    }
+
     func start() {
         if RuntimeFlags.isUITesting {
-            coordinate = demo
+            coordinate = Self.testingCoordinate
             accuracyM = 4
             authorized = true
             return
