@@ -44,6 +44,7 @@ final class AppModel {
     var groups: [GolfletGroup] = []
     var pendingInvites: [GroupInvitePreview] = []
     var sharePrefs = SharePrefs.allShared
+    var textPrefs = TextPrefs.default
     var presentedInvite: GroupInvitePreview?
     var presentedGroupID: String?
     var showsCreateGroup = false
@@ -63,6 +64,10 @@ final class AppModel {
             || ProcessInfo.processInfo.arguments.contains("-ui-testing-auth")
         self.statsRange = testing ? .all : StatsRange.persisted()
         if testing { PendingInviteStore.clear() }
+        MockAPIClient.resetTextPrefs()
+        let prefs = RuntimeFlags.testingTextPrefs ?? (testing ? .default : TextPrefsStore.load())
+        self.textPrefs = prefs
+        TextPrefsRuntime.current = prefs
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "-pending-invite"),
            ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
             PendingInviteStore.save(ProcessInfo.processInfo.arguments[index + 1])
@@ -118,6 +123,7 @@ final class AppModel {
             await refreshMetricsSummary()
             await refreshGroups()
             await refreshNotifications()
+            await refreshTextPrefs()
             isLoaded = true
             await consumeIntent()
         } catch {
@@ -463,6 +469,31 @@ final class AppModel {
         }
         unreadNotificationCount = notifications.filter(\.isUnread).count
         unreadBadge = NotificationBadge.text(unreadNotificationCount)
+    }
+
+    func setTextPrefs(_ prefs: TextPrefs) {
+        applyTextPrefs(prefs)
+        Task { await syncTextPrefs(prefs) }
+    }
+
+    func refreshTextPrefs() async {
+        guard isSignedIn else { return }
+        if let remote = try? await api.userSettings() {
+            applyTextPrefs(remote)
+        }
+    }
+
+    private func applyTextPrefs(_ prefs: TextPrefs) {
+        textPrefs = prefs
+        TextPrefsRuntime.current = prefs
+        TextPrefsStore.save(prefs)
+    }
+
+    private func syncTextPrefs(_ prefs: TextPrefs) async {
+        guard isSignedIn else { return }
+        if let remote = try? await api.saveUserSettings(prefs) {
+            applyTextPrefs(remote)
+        }
     }
 
     func refreshGroups() async {

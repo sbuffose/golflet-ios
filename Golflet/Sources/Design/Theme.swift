@@ -105,16 +105,36 @@ private struct PaletteKey: EnvironmentKey {
     static let defaultValue = Palette.light
 }
 
+private struct GolfletTypeTokenKey: EnvironmentKey {
+    static let defaultValue = TextPrefs.default.signature
+}
+
 extension EnvironmentValues {
     var palette: Palette {
         get { self[PaletteKey.self] }
         set { self[PaletteKey.self] = newValue }
     }
+
+    var golfletTypeToken: String {
+        get { self[GolfletTypeTokenKey.self] }
+        set { self[GolfletTypeTokenKey.self] = newValue }
+    }
 }
 
 enum GFont {
     static func ui(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        Font.custom(postScript(weight), size: size)
+        let prefs = TextPrefsRuntime.current
+        let scaled = prefs.scaledSize(size, dynamic: TextPrefsRuntime.dynamicMultiplier)
+        return Font.custom(postScript(resolvedWeight(weight, prefs: prefs)), size: scaled)
+    }
+
+    static func resolvedWeight(_ weight: Font.Weight, prefs: TextPrefs = TextPrefsRuntime.current) -> Font.Weight {
+        guard prefs.weight == .marked else { return weight }
+        switch weight {
+        case .regular, .light, .thin, .ultraLight: return .medium
+        case .medium: return .semibold
+        default: return .semibold
+        }
     }
 
     static func postScript(_ weight: Font.Weight) -> String {
@@ -127,16 +147,32 @@ enum GFont {
 }
 
 enum GType {
-    static let largeTitle = GFont.ui(42, weight: .semibold)
-    static let sheetTitle = GFont.ui(30, weight: .semibold)
-    static let section = GFont.ui(20, weight: .semibold)
-    static let headline = GFont.ui(15.5, weight: .semibold)
-    static let body = GFont.ui(16, weight: .regular)
-    static let label = GFont.ui(12.5, weight: .medium)
-    static let overline = GFont.ui(11, weight: .semibold)
-    static let statHero = GFont.ui(80, weight: .semibold)
-    static let statL = GFont.ui(32, weight: .semibold)
-    static let statM = GFont.ui(24, weight: .semibold)
+    static var largeTitle: Font { GFont.ui(42, weight: .semibold) }
+    static var sheetTitle: Font { GFont.ui(30, weight: .semibold) }
+    static var section: Font { GFont.ui(20, weight: .semibold) }
+    static var headline: Font { GFont.ui(15.5, weight: .semibold) }
+    static var body: Font { GFont.ui(16, weight: .regular) }
+    static var label: Font { GFont.ui(12.5, weight: .medium) }
+    static var overline: Font { GFont.ui(11, weight: .semibold) }
+    static var statHero: Font { GFont.ui(80, weight: .semibold) }
+    static var statL: Font { GFont.ui(32, weight: .semibold) }
+    static var statM: Font { GFont.ui(24, weight: .semibold) }
+}
+
+extension TextPrefs {
+    static func clampedDynamic(_ size: DynamicTypeSize) -> CGFloat {
+        let raw: CGFloat
+        switch size {
+        case .xSmall: raw = 0.94
+        case .small: raw = 0.97
+        case .medium, .large: raw = 1.00
+        case .xLarge: raw = 1.06
+        case .xxLarge: raw = 1.10
+        case .xxxLarge: raw = 1.14
+        default: raw = 1.16
+        }
+        return min(1.16, max(0.92, raw))
+    }
 }
 
 enum FormatAR {
@@ -213,9 +249,15 @@ enum FormatAR {
 
 struct PaletteInjector: ViewModifier {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var dynamicType
 
     func body(content: Content) -> some View {
-        content.environment(\.palette, Palette.make(scheme))
+        let dyn = TextPrefs.clampedDynamic(dynamicType)
+        TextPrefsRuntime.dynamicMultiplier = dyn
+        let token = "\(TextPrefsRuntime.current.signature)|\(String(format: "%.2f", dyn))"
+        return content
+            .environment(\.palette, Palette.make(scheme))
+            .environment(\.golfletTypeToken, token)
     }
 }
 

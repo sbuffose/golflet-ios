@@ -494,6 +494,61 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "perfil-notificaciones").waitForExistence(timeout: 3), "Falta la fila de Notificaciones")
         first(app, "perfil-notificaciones").tap()
         XCTAssertTrue(waitFor(app, "screen-notificaciones", timeout: 6))
+        saveShot("38_notificaciones_perfil")
+    }
+
+    func testTextPrefsLivePreview() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(openClubsSheet(app), "No abrió el perfil")
+        XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
+        reveal(app, first(app, "perfil-texto"))
+        XCTAssertTrue(first(app, "perfil-texto").waitForExistence(timeout: 4), "Falta Tamaño y grosor del texto")
+        first(app, "perfil-texto").tap()
+        XCTAssertTrue(waitFor(app, "screen-texto", timeout: 6))
+        XCTAssertTrue(first(app, "text-preview").waitForExistence(timeout: 3))
+        first(app, "text-size-xl").tap()
+        first(app, "text-weight-marked").tap()
+        XCTAssertTrue(first(app, "text-preview-hero").waitForExistence(timeout: 3))
+        saveShot("46_texto_prefs")
+        dismissIfPresent(app, "close-texto")
+    }
+
+    func testMainScreensAtLargestBoldStayOnScreen() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-text-xl-bold"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        assertFits(app, "home-greeting")
+        assertFits(app, "metric-handicap")
+        assertFits(app, "metric-tarjetas")
+        assertFits(app, "metric-best-gross")
+        saveShot("47_texto_xl_inicio")
+
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        assertFits(app, "range-count")
+        assertFits(app, "metric-summary-best")
+        saveShot("48_texto_xl_resumen")
+
+        tapTab(app, "Rondas")
+        XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6))
+        saveShot("49_texto_xl_rondas")
+
+        tapTab(app, "Cancha")
+        XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
+        assertFits(app, "metric-course-average")
+        saveShot("50_texto_xl_cancha")
+
+        tapTab(app, "Bolsa")
+        XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
+        saveShot("51_texto_xl_bolsa")
     }
 
     private func submitLogin(_ app: XCUIApplication) {
@@ -642,6 +697,17 @@ final class GolfletUITests: XCTestCase {
             app.swipeUp()
             attempts += 1
         }
+    }
+
+    private func assertFits(_ app: XCUIApplication, _ id: String) {
+        let element = first(app, id)
+        XCTAssertTrue(element.waitForExistence(timeout: 5), "Falta \(id)")
+        reveal(app, element)
+        let screen = app.frame
+        XCTAssertGreaterThan(element.frame.width, 8, "\(id) no tiene ancho")
+        XCTAssertLessThanOrEqual(element.frame.maxX, screen.maxX + 2, "\(id) se sale a la derecha: \(element.frame) vs \(screen)")
+        XCTAssertGreaterThanOrEqual(element.frame.minX, screen.minX - 2, "\(id) se sale a la izquierda: \(element.frame)")
+        XCTAssertFalse(element.label.hasSuffix("…") || element.label.hasSuffix("..."), "\(id) truncado: \(element.label)")
     }
 
     private func tapTab(_ app: XCUIApplication, _ name: String) {
