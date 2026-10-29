@@ -203,9 +203,11 @@ struct ClubStatsView: View {
                 Text(label)
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
+                    .lineLimit(1)
                 Text("\(pct)%")
                     .font(GType.statM)
                     .tabular()
+                    .lineLimit(1)
                     .foregroundStyle(p.ink)
             }
         }
@@ -226,13 +228,16 @@ struct ClubStatsView: View {
                 Text(label)
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
+                    .lineLimit(1)
                 Text(value.map { "\($0.pct)%" } ?? "—")
                     .font(GType.statM)
                     .tabular()
+                    .lineLimit(1)
                     .foregroundStyle(p.ink)
                 Text(value.map { "\($0.hit) de \($0.of)" } ?? "Sin datos")
                     .font(GType.label)
                     .foregroundStyle(p.ink3)
+                    .lineLimit(1)
             }
         }
     }

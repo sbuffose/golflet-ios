@@ -163,11 +163,13 @@ struct HomeView: View {
                 Text(label)
                     .font(GType.label)
                     .foregroundStyle(p.onPrimary.opacity(0.5))
+                    .lineLimit(1)
                 MetricChevron(color: p.onPrimary.opacity(0.35))
             }
             Text(value)
                 .font(GType.statM)
                 .tabular()
+                .lineLimit(1)
                 .foregroundStyle(gold ? p.accent : p.onPrimary)
         }
         .contentShape(Rectangle())

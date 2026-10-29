@@ -3,6 +3,7 @@ import SwiftUI
 struct CourseView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    @State private var holesWidth: CGFloat = 353
 
     var body: some View {
         GScreen(id: "screen-cancha") {
@@ -88,14 +89,20 @@ struct CourseView: View {
                 Button {
                     model.selectedCourseName = course.name
                 } label: {
-                    Text(title)
-                        .font(GType.headline)
-                        .foregroundStyle(selected ? p.ink : p.ink2)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(selected ? p.surface : Color.clear)
-                        .clipShape(Capsule())
-                        .shadow(color: selected ? Color.black.opacity(0.06) : .clear, radius: 8, y: 2)
+                    HStack(spacing: 6) {
+                        if let color = teeDot(for: title) {
+                            Circle().fill(color).frame(width: 8, height: 8)
+                        }
+                        Text(title)
+                            .font(GType.headline)
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(selected ? p.ink : p.ink2)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(selected ? p.surface : Color.clear)
+                    .clipShape(Capsule())
+                    .shadow(color: selected ? Color.black.opacity(0.06) : .clear, radius: 8, y: 2)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("filter-\(title.lowercased())")
@@ -104,6 +111,14 @@ struct CourseView: View {
         .padding(4)
         .background(p.surface2)
         .clipShape(Capsule())
+    }
+
+    private func teeDot(for title: String) -> Color? {
+        switch title.lowercased() {
+        case "azul": return p.teeColor("azul")
+        case "colorada": return p.teeColor("colorada")
+        default: return nil
+        }
     }
 
     private var hero: some View {
@@ -165,11 +180,13 @@ struct CourseView: View {
                 Text(label)
                     .font(GType.label)
                     .foregroundStyle(p.onPrimary.opacity(0.5))
+                    .lineLimit(1)
                 MetricChevron(color: p.onPrimary.opacity(0.35))
             }
             Text(value)
                 .font(GType.statM)
                 .tabular()
+                .lineLimit(1)
                 .foregroundStyle(p.onPrimary)
         }
         .contentShape(Rectangle())
@@ -199,79 +216,157 @@ struct CourseView: View {
 
     private var tees: some View {
         let snap = model.courseSnapshot()
-        let columns = [GridItem(.flexible()), GridItem(.flexible())]
-        return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(snap.tees.filter { ["Negro", "Rojo", "Blanco", "Amarillo", "Azul"].contains($0.tee) }) { tee in
-                HStack(spacing: 8) {
-                    TeeDot(name: tee.tee, size: 10)
-                    Text("\(tee.tee) \(FormatAR.one(tee.courseRating)) / \(tee.slope)")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                    Spacer()
-                }
-            }
-        }
+        let visible = snap.tees.filter { ["Negro", "Rojo", "Blanco", "Amarillo", "Azul"].contains($0.tee) }
+        return CourseTeeLegend(tees: visible)
     }
 
     private var holes: some View {
         let stats = model.holeStats.first { $0.course.caseInsensitiveCompare(model.selectedCourseName) == .orderedSame }
         let holes = stats?.holes.sorted { $0.number < $1.number } ?? []
-        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()),
-                       GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        let hardest = Set(holes.sorted { $0.averageToPar > $1.averageToPar }.prefix(3).map(\.number))
         return VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("Hoyos")
                     .font(GType.section)
                     .foregroundStyle(p.ink)
-                Spacer()
+                    .lineLimit(1)
+                    .fixedSize()
+                Spacer(minLength: 8)
                 HStack(spacing: 6) {
                     Circle().fill(p.negative).frame(width: 6, height: 6)
                     Text("golpes sobre el par")
                         .font(GType.label)
-                        .foregroundStyle(p.ink3)
+                        .foregroundStyle(p.ink2)
+                        .lineLimit(1)
                 }
             }
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(holes) { hole in
-                    Button { model.presentedHole = hole.number } label: {
-                        holeCell(hole)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("hole-\(hole.number)")
+            CourseHolesGrid(holes: holes, hardest: hardest, width: holesWidth) { number in
+                model.presentedHole = number
+            }
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(key: CourseHolesWidthKey.self, value: geo.size.width)
                 }
+            }
+            .onPreferenceChange(CourseHolesWidthKey.self) { width in
+                if width > 0 { holesWidth = width }
             }
             Text("En verde oscuro, tus tres hoyos más difíciles.")
                 .font(GType.label)
-                .foregroundStyle(p.ink3)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
+}
 
-    private func holeCell(_ hole: HoleStat) -> some View {
-        let hardest = Set(
-            (model.holeStats.first { $0.course.caseInsensitiveCompare(model.selectedCourseName) == .orderedSame }?
-                .holes.sorted { $0.averageToPar > $1.averageToPar }.prefix(3).map(\.number)) ?? []
+enum CourseLayout {
+    static let holeSpacing: CGFloat = 6
+    static let minSixColumnCell: CGFloat = 48
+
+    static func holeColumnCount(forWidth width: CGFloat) -> Int {
+        let cell = (width - holeSpacing * 5) / 6
+        return cell >= minSixColumnCell ? 6 : 3
+    }
+
+    static func holeColumns(forWidth width: CGFloat) -> [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: holeSpacing),
+            count: holeColumnCount(forWidth: width)
         )
-        let dark = hardest.contains(hole.number)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
+    }
+}
+
+private struct CourseHolesWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+struct CourseTeeLegend: View {
+    @Environment(\.palette) private var p
+    let tees: [TeeRating]
+
+    var body: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 148), spacing: 10)],
+            spacing: 10
+        ) {
+            ForEach(tees) { tee in
+                HStack(spacing: 8) {
+                    TeeDot(name: tee.tee, size: 10)
+                    Text("\(tee.tee) \(FormatAR.one(tee.courseRating)) / \(tee.slope)")
+                        .font(GType.label)
+                        .tabular()
+                        .foregroundStyle(p.ink2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("tee-\(tee.tee.lowercased())")
+            }
+        }
+        .accessibilityIdentifier("course-tee-legend")
+    }
+}
+
+struct CourseHolesGrid: View {
+    let holes: [HoleStat]
+    let hardest: Set<Int>
+    var width: CGFloat
+    var onSelect: ((Int) -> Void)?
+
+    var body: some View {
+        LazyVGrid(columns: CourseLayout.holeColumns(forWidth: width), spacing: CourseLayout.holeSpacing) {
+            ForEach(holes) { hole in
+                Button { onSelect?(hole.number) } label: {
+                    CourseHoleCell(hole: hole, dark: hardest.contains(hole.number))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("hole-\(hole.number)")
+            }
+        }
+    }
+}
+
+struct CourseHoleCell: View {
+    @Environment(\.palette) private var p
+    let hole: HoleStat
+    var dark: Bool
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("\(hole.number)")
+                    .font(GFont.ui(15, weight: .semibold))
+                    .tabular()
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Text(FormatAR.signedOne(hole.averageToPar))
                     .font(GFont.ui(16, weight: .semibold))
                     .tabular()
-                Spacer()
-                Circle()
-                    .fill(hole.averageToPar >= 0 ? p.negative : p.positive)
-                    .frame(width: 6, height: 6)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("P\(hole.par)")
+                    .font(GType.overline)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
-            Text("Par \(hole.par)")
-                .font(GType.label)
-            Text(FormatAR.signedOne(hole.averageToPar))
-                .font(GFont.ui(14, weight: .semibold))
-                .tabular()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Circle()
+                .fill(hole.averageToPar >= 0 ? p.negative : p.positive)
+                .frame(width: 6, height: 6)
+                .padding(.top, 1)
+                .accessibilityHidden(true)
         }
         .foregroundStyle(dark ? p.onPrimary : p.ink)
-        .padding(10)
-        .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(dark ? p.primary : p.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Hoyo \(hole.number), P\(hole.par), \(FormatAR.signedOne(hole.averageToPar))")
     }
 }
