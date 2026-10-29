@@ -36,18 +36,29 @@ struct SummaryView: View {
             selection: Binding(
                 get: { model.courseFilter.rawValue },
                 set: { model.courseFilter = CourseFilter(rawValue: $0) ?? .all }
-            )
+            ),
+            leadingDot: { option in
+                switch CourseFilter(rawValue: option) {
+                case .azul: return p.teeColor("azul")
+                case .colorada: return p.teeColor("colorada")
+                default: return nil
+                }
+            }
         )
     }
 
     private var grid: some View {
         let snap = model.summary
         let course = model.courseFilter.courseName
+        let scoped = StatsEngine.apply(StatsEngine.eighteenHoleValid(model.rounds), filter: model.courseFilter)
+        let start2025 = Calendar.gregorian.date(from: DateComponents(year: 2025, month: 1, day: 1)) ?? Date.distantPast
         return VStack(spacing: 10) {
             HStack(spacing: 10) {
                 NavigationLink(value: MetricRoute.roundList(.summaryBest(course: course))) {
-                    statBlock(
-                        label: "Mejor ronda",
+                    AccentStatCard(
+                        tint: .primary,
+                        icon: "trophy.fill",
+                        title: "Mejor ronda",
                         value: snap.best?.gross.map(String.init) ?? "—",
                         secondary: snap.best.flatMap { best in
                             guard let net = best.net else { return nil }
@@ -59,8 +70,10 @@ struct SummaryView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-best")
                 NavigationLink(value: MetricRoute.roundList(.summaryWorst(course: course))) {
-                    statBlock(
-                        label: "Peor (desde 2021)",
+                    AccentStatCard(
+                        tint: .danger,
+                        icon: "arrow.down.right",
+                        title: "Peor (desde 2021)",
                         value: snap.worstSince2021?.gross.map(String.init) ?? "—",
                         secondary: snap.worstSince2021.flatMap { w in w.net.map { "\($0) neto" } },
                         footnote: snap.worstSince2021.map { "\(FormatAR.longDate($0.date)) · \($0.displayCourse)" }
@@ -71,21 +84,26 @@ struct SummaryView: View {
             }
             HStack(spacing: 10) {
                 NavigationLink(value: MetricRoute.roundList(.average(yearOnly: false).locking(course: course))) {
-                    statBlock(
-                        label: "Promedio gross",
+                    AccentStatCard(
+                        tint: .primary,
+                        icon: "chart.xyaxis.line",
+                        title: "Promedio gross",
                         value: snap.averageGross.map(FormatAR.one) ?? "—",
                         secondary: snap.averageToPar.map { "neto · \(FormatAR.signedOne($0))" },
-                        footnote: "\(snap.validRoundCount) rondas · \(snap.averageToPar.map { FormatAR.signedOne($0) } ?? "—")"
+                        footnote: "\(snap.validRoundCount) rondas · \(snap.averageToPar.map { FormatAR.signedOne($0) } ?? "—")",
+                        sparkline: StatsEngine.recentGross(scoped)
                     )
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-average")
                 NavigationLink(value: MetricRoute.roundList(.since2025(course: course))) {
-                    statBlock(
-                        label: "Desde 2025",
+                    AccentStatCard(
+                        tint: .primary,
+                        icon: "calendar",
+                        title: "Desde 2025",
                         value: snap.since2025Average.map(FormatAR.one) ?? "—",
-                        secondary: nil,
-                        footnote: "\(snap.since2025Count) rondas · mejor dif. \(snap.since2025BestDifferential.map(FormatAR.one) ?? "—")"
+                        footnote: "\(snap.since2025Count) rondas · mejor dif. \(snap.since2025BestDifferential.map(FormatAR.one) ?? "—")",
+                        sparkline: StatsEngine.recentGross(scoped.filter { $0.date >= start2025 })
                     )
                 }
                 .buttonStyle(.plain)
@@ -125,60 +143,19 @@ struct SummaryView: View {
     }
 
     private func scoreTile(_ kind: ScoreKind, total: Int, query: RoundListQuery) -> some View {
-        NavigationLink(value: MetricRoute.scoreKind(kind, query)) {
-            GCard(radius: 16, padding: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(kind.title)
-                            .font(GType.label)
-                            .foregroundStyle(p.ink2)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Spacer(minLength: 0)
-                        MetricChevron(color: p.ink3)
-                    }
-                    Text("\(total)")
-                        .font(GType.statM)
-                        .tabular()
-                        .foregroundStyle(p.ink)
-                }
-            }
+        let scoped = StatsEngine.apply(StatsEngine.eighteenHoleValid(model.rounds), filter: model.courseFilter)
+        return NavigationLink(value: MetricRoute.scoreKind(kind, query)) {
+            AccentStatCard(
+                tint: kind.statTint,
+                icon: kind.symbolName,
+                title: kind.title,
+                value: "\(total)",
+                share: StatsEngine.holeShare(kind, in: scoped),
+                compact: true
+            )
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("metric-summary-\(kind.rawValue)")
-    }
-
-    private func statBlock(label: String, value: String, secondary: String?, footnote: String?) -> some View {
-        GCard(radius: 18, padding: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(label)
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    Spacer(minLength: 4)
-                    MetricChevron(color: p.ink3)
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(value)
-                        .font(GType.statL)
-                        .tabular()
-                        .foregroundStyle(p.ink)
-                    if let secondary {
-                        Text(secondary)
-                            .font(GType.label)
-                            .foregroundStyle(p.ink3)
-                    }
-                }
-                if let footnote {
-                    Text(footnote)
-                        .font(GType.label)
-                        .foregroundStyle(p.ink3)
-                        .lineLimit(2)
-                }
-            }
-        }
     }
 
     private var trend: some View {
@@ -190,27 +167,30 @@ struct SummaryView: View {
                 Spacer()
                 Text("Índice estimado")
                     .font(GType.label)
-                    .foregroundStyle(p.ink3)
+                    .foregroundStyle(p.ink2)
             }
             NavigationLink(value: MetricRoute.handicap) {
                 GCard(radius: 22, padding: 16) {
-                    TrendChart(points: model.summary.trend, current: model.home.handicapIndex)
-                        .frame(height: 180)
-                    HStack(spacing: 16) {
-                        legendDot(p.teeColor("azul"), "Azul")
-                        legendDot(p.teeColor("rojo"), "Colorada")
-                        legendDot(p.ink, "Índice")
+                    VStack(alignment: .leading, spacing: 12) {
+                        TrendChart(points: model.summary.trend, current: model.home.handicapIndex)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 180)
+                        HStack(spacing: 16) {
+                            legendDot(p.teeColor("azul"), "Azul")
+                            legendDot(p.teeColor("colorada"), "Colorada")
+                            legendDot(p.primary, "Índice")
+                            Spacer(minLength: 8)
+                            MetricChevron(color: p.ink3)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("trend-legend")
+                        Text("Diferencial calculado por Golflet · Golfistics no publica el HCP Index oficial")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("trend-footnote")
                     }
-                    .padding(.top, 8)
-                    Text("Cada punto es el diferencial calculado por Golflet (Golfistics no publica el HCP Index oficial de las últimas 26 semanas).")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink3)
-                        .padding(.top, 6)
-                    HStack {
-                        Spacer()
-                        MetricChevron(color: p.ink3)
-                    }
-                    .padding(.top, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .buttonStyle(.plain)
@@ -286,35 +266,134 @@ struct TrendChart: View {
     let current: Double
 
     var body: some View {
-        Canvas { context, size in
-            guard points.count > 1 else { return }
-            let values = points.map(\.handicap)
-            let minV = min(values.min() ?? 0, 0)
-            let maxV = max(values.max() ?? 10, current + 1)
-            let span = max(maxV - minV, 1)
-            func pt(_ index: Int, _ value: Double) -> CGPoint {
-                let x = size.width * CGFloat(index) / CGFloat(points.count - 1)
-                let y = size.height * 0.12 + (1 - CGFloat((value - minV) / span)) * (size.height * 0.76)
-                return CGPoint(x: x, y: y)
+        GeometryReader { geo in
+            let layout = TrendLayout(size: geo.size, points: points, current: current)
+            ZStack(alignment: .topLeading) {
+                Canvas { context, _ in
+                    drawPlot(context: context, layout: layout)
+                }
+                ForEach(Array(layout.yTicks.enumerated()), id: \.offset) { _, tick in
+                    Text(tick.label)
+                        .font(GType.label)
+                        .tabular()
+                        .foregroundStyle(p.ink2)
+                        .position(x: 16, y: tick.y)
+                        .accessibilityHidden(true)
+                }
+                if let badge = layout.badgeCenter {
+                    Text(FormatAR.one(current))
+                        .font(GFont.ui(12, weight: .semibold))
+                        .tabular()
+                        .foregroundStyle(p.onPrimary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(p.primary)
+                        .clipShape(Capsule())
+                        .position(x: badge.x, y: badge.y)
+                        .accessibilityHidden(true)
+                        .accessibilityIdentifier("trend-last-value")
+                }
             }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("trend-chart")
+        .accessibilityLabel("Tendencia, índice \(FormatAR.one(current))")
+    }
+
+    private func drawPlot(context: GraphicsContext, layout: TrendLayout) {
+        for tick in layout.yTicks {
+            var grid = Path()
+            grid.move(to: CGPoint(x: layout.plot.minX, y: tick.y))
+            grid.addLine(to: CGPoint(x: layout.plot.maxX, y: tick.y))
+            context.stroke(grid, with: .color(p.hairline), lineWidth: 1)
+        }
+        var baseline = Path()
+        baseline.move(to: CGPoint(x: layout.plot.minX, y: layout.plot.maxY))
+        baseline.addLine(to: CGPoint(x: layout.plot.maxX, y: layout.plot.maxY))
+        context.stroke(baseline, with: .color(p.ink3), lineWidth: 1)
+
+        if layout.plotPoints.count > 1 {
             var line = Path()
-            for (index, point) in points.enumerated() {
-                let point = pt(index, point.handicap)
-                if index == 0 { line.move(to: point) } else { line.addLine(to: point) }
-            }
-            for (index, point) in points.enumerated() {
-                let c = pt(index, point.handicap)
-                let color = point.course.lowercased() == "azul" ? Palette.light.teeColor("azul") : Palette.light.teeColor("rojo")
-                context.fill(Path(ellipseIn: CGRect(x: c.x - 2.2, y: c.y - 2.2, width: 4.4, height: 4.4)), with: .color(color.opacity(0.85)))
+            for (index, point) in layout.plotPoints.enumerated() {
+                if index == 0 { line.move(to: point.position) } else { line.addLine(to: point.position) }
             }
             context.stroke(line, with: .color(p.ink), lineWidth: 1.6)
-            let last = pt(points.count - 1, current)
-            context.fill(Path(ellipseIn: CGRect(x: last.x - 7, y: last.y - 7, width: 14, height: 14)), with: .color(p.primary))
-            let label = Text(FormatAR.one(current))
-                .font(GFont.ui(12, weight: .semibold))
-                .foregroundColor(p.onPrimary)
-            context.draw(label, at: last)
         }
-        .accessibilityIdentifier("trend-chart")
+        for point in layout.plotPoints {
+            let color = p.teeColor(point.course)
+            context.fill(
+                Path(ellipseIn: CGRect(x: point.position.x - 2.4, y: point.position.y - 2.4, width: 4.8, height: 4.8)),
+                with: .color(color)
+            )
+        }
+        if let last = layout.lastPoint {
+            context.fill(
+                Path(ellipseIn: CGRect(x: last.x - 6, y: last.y - 6, width: 12, height: 12)),
+                with: .color(p.primary)
+            )
+        }
+    }
+}
+
+private struct TrendLayout {
+    struct Tick {
+        var y: CGFloat
+        var label: String
+    }
+
+    struct PlotPoint {
+        var position: CGPoint
+        var course: String
+    }
+
+    let plot: CGRect
+    let yTicks: [Tick]
+    let plotPoints: [PlotPoint]
+    let lastPoint: CGPoint?
+    let badgeCenter: CGPoint?
+
+    init(size: CGSize, points: [TrendPoint], current: Double) {
+        let values = points.map(\.handicap) + [current]
+        let minV = min(values.min() ?? 0, current)
+        let maxV = max(values.max() ?? 10, current)
+        let span = max(maxV - minV, 1)
+        let plot = CGRect(x: 36, y: 16, width: max(size.width - 48, 8), height: max(size.height - 28, 8))
+        self.plot = plot
+
+        func y(for value: Double) -> CGFloat {
+            plot.maxY - CGFloat((value - minV) / span) * plot.height
+        }
+
+        let mid = (minV + maxV) / 2
+        yTicks = [
+            Tick(y: y(for: maxV), label: FormatAR.one(maxV)),
+            Tick(y: y(for: mid), label: FormatAR.one(mid)),
+            Tick(y: y(for: minV), label: FormatAR.one(minV))
+        ]
+
+        if points.isEmpty {
+            plotPoints = []
+            lastPoint = nil
+            badgeCenter = nil
+            return
+        }
+
+        let lastIndex = max(points.count - 1, 1)
+        plotPoints = points.enumerated().map { index, point in
+            let x = plot.minX + plot.width * CGFloat(index) / CGFloat(lastIndex)
+            return PlotPoint(position: CGPoint(x: x, y: y(for: point.handicap)), course: point.course)
+        }
+        let last = CGPoint(
+            x: plot.minX + plot.width,
+            y: y(for: current)
+        )
+        lastPoint = last
+
+        var badge = CGPoint(x: last.x - 28, y: last.y - 18)
+        if badge.x < plot.minX + 24 {
+            badge.x = min(last.x, plot.maxX - 24)
+            badge.y = last.y - 22
+        }
+        badgeCenter = badge
     }
 }

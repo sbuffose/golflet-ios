@@ -192,6 +192,8 @@ struct RoundDetailView: View {
                 Text(value)
                     .font(GType.label)
                     .tabular()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .foregroundStyle(p.ink2)
                     .frame(maxWidth: .infinity)
             }
