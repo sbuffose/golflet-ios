@@ -103,6 +103,7 @@ targets:
         embed: true
         codeSign: true
       - sdk: Charts.framework
+      - sdk: MapKit.framework
 
   GolfletKit:
     type: library.static

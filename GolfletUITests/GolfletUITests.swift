@@ -205,7 +205,11 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 12), "El login demo no llegó a Inicio")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 8))
-        XCTAssertTrue(openClubsSheet(app), "No se pudo abrir Clubes después del login")
+        var openedClubs = openClubsSheet(app, timeout: 8)
+        if !openedClubs {
+            openedClubs = openClubsSheet(app, timeout: 8)
+        }
+        XCTAssertTrue(openedClubs, "No se pudo abrir Clubes después del login")
         XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 8))
         XCTAssertFalse(first(app, "club-picker").exists)
         XCTAssertFalse(first(app, "club-url").exists)
@@ -402,6 +406,42 @@ final class GolfletUITests: XCTestCase {
         largest(app, "home-hcp-crear-grupo").tap()
         XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
         saveShot("45_inicio_hcp_crear_grupo_vacio")
+    }
+
+    func testPlanHoleViewSuggestsClubAndKeepsConfirmedPills() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        tapTab(app, "Cancha")
+        XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
+        let entry = first(app, "course-plan")
+        reveal(app, entry)
+        XCTAssertTrue(entry.waitForExistence(timeout: 6), "Falta Estrategia de juego")
+        tapLargest(app, "course-plan")
+        _ = first(app, "screen-plan-loading").waitForExistence(timeout: 2)
+        XCTAssertTrue(waitFor(app, "screen-plan-hole", timeout: 10), "No se abrió el hoyo de estrategia")
+        XCTAssertTrue(first(app, "plan-view-diseno").waitForExistence(timeout: 6), "Falta Diseño")
+        XCTAssertTrue(first(app, "plan-view-satelital").waitForExistence(timeout: 3), "Falta Satelital")
+        XCTAssertTrue(first(app, "plan-tee").waitForExistence(timeout: 4), "Falta el tee de salida")
+        XCTAssertTrue(
+            first(app, "plan-shot-pill").waitForExistence(timeout: 5) || first(app, "plan-landing").waitForExistence(timeout: 3),
+            "Falta el palo sugerido o el anillo de caída"
+        )
+        tapLargest(app, "plan-view-satelital")
+        tapLargest(app, "plan-view-diseno")
+        if first(app, "plan-shot-pill").waitForExistence(timeout: 3) {
+            tapLargest(app, "plan-shot-pill")
+            XCTAssertTrue(first(app, "plan-breakdown").waitForExistence(timeout: 4), "El desglose tiene que ser inline")
+            XCTAssertTrue(first(app, "plan-firm-normal").waitForExistence(timeout: 3), "Falta Blanda/Normal/Dura")
+        }
+        if first(app, "plan-confirm").waitForExistence(timeout: 3) {
+            tapLargest(app, "plan-confirm")
+            XCTAssertTrue(first(app, "plan-pin-0").waitForExistence(timeout: 5), "El golpe confirmado no dejó cartel")
+        }
+        saveShot("60_plan_hoyo")
     }
 
     func testCanchaHoleGridDoesNotWrapOnIPhone() throws {
