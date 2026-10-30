@@ -128,6 +128,13 @@ struct PlanHoleView: View {
         }
         .accessibilityIdentifier("screen-plan-hole")
         .accessibilityElement(children: .contain)
+        .overlay(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: 0) {
+                GProbe(id: "screen-plan-hole", label: "Hoyo \(hole)")
+                GProbe(id: "plan-view-diseno", label: "Diseño")
+                GProbe(id: "plan-view-satelital", label: "Satelital")
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { pickDefault() }
         .onChange(of: hole) { _, _ in
@@ -267,6 +274,7 @@ struct PlanHoleView: View {
             Spacer(minLength: 0)
         }
         .padding(10)
+        .accessibilityElement(children: .contain)
     }
 
     private var viewToggle: some View {
@@ -288,6 +296,9 @@ struct PlanHoleView: View {
             .clipShape(Capsule())
             .accessibilityIdentifier(id)
             .accessibilityAddTraits(mode == value ? .isSelected : [])
+            .overlay(alignment: .topLeading) {
+                GProbe(id: id, label: title)
+            }
     }
 
     private func teeChip(_ tee: PlanCardTee) -> some View {
@@ -393,6 +404,9 @@ struct PlanHoleView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("plan-shot-pill")
+                .overlay(alignment: .topLeading) {
+                    GProbe(id: "plan-shot-pill", label: "\(PlanCore.clubName(live.club)) \(live.shotYards)")
+                }
                 Button {
                     breakdown = breakdown == .remain ? nil : .remain
                 } label: {
@@ -413,6 +427,9 @@ struct PlanHoleView: View {
                     .background(p.primary)
                     .clipShape(Capsule())
                     .accessibilityIdentifier("plan-confirm")
+                    .overlay(alignment: .topLeading) {
+                        GProbe(id: "plan-confirm", label: "Confirmar")
+                    }
             } else if usable.isEmpty {
                 Text("Cargá tus distancias en Mi bolsa")
                     .font(GType.label)
@@ -508,6 +525,10 @@ struct PlanHoleView: View {
             .background(p.surface)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .accessibilityIdentifier("plan-breakdown")
+            .accessibilityElement(children: .contain)
+            .overlay(alignment: .topLeading) {
+                GProbe(id: "plan-breakdown", label: "Desglose")
+            }
         }
     }
 
@@ -528,6 +549,9 @@ struct PlanHoleView: View {
                 .background(firm == option ? p.primary : p.surface2)
                 .clipShape(Capsule())
                 .accessibilityIdentifier("plan-firm-\(option.rawValue)")
+                .overlay(alignment: .topLeading) {
+                    GProbe(id: "plan-firm-\(option.rawValue)", label: option.label)
+                }
             }
         }
         .accessibilityElement(children: .contain)

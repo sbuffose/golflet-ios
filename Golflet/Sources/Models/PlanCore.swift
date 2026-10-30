@@ -496,7 +496,7 @@ enum PlanCore {
     }
 
     static func holeSchedule(teeTime: String, startHole: Int, minPerHole: Double, pars: [Int?]) -> [(hole: Int, order: Int, minutes: Double, eta: String)] {
-        let n = max(pars.count, 18)
+        let n = pars.isEmpty ? 18 : pars.count
         let parts = teeTime.split(separator: ":")
         let t0 = (Int(parts.first ?? "0") ?? 0) * 60 + (Int(parts.dropFirst().first ?? "0") ?? 0)
         let order = (0..<n).map { (startHole - 1 + $0) % n + 1 }

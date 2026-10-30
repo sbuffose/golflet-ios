@@ -258,6 +258,10 @@ struct CourseView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("course-plan")
+        .accessibilityElement(children: .contain)
+        .overlay(alignment: .topLeading) {
+            GProbe(id: "course-plan", label: "Estrategia de juego")
+        }
     }
 
     private var tees: some View {
