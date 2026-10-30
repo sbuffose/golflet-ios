@@ -13,6 +13,7 @@ struct CourseView: View {
                     coursePills
                     hero
                     strategyCard
+                    planCard
                     tees
                     holes
                 }
@@ -235,6 +236,28 @@ struct CourseView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("course-strategy")
+    }
+
+    private var planCard: some View {
+        NavigationLink(value: MetricRoute.plan(clubCode: CourseIdentity.clubCode(for: model.selectedCourseName), course: model.selectedCourseName)) {
+            GCard(radius: 22, padding: 16) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        GOverline(text: "Estrategia de juego")
+                        Text("Hoyo en una pantalla")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        Text("Diseño o satelital, palo sugerido y yardas de hoy.")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    Spacer()
+                    MetricChevron(color: p.ink3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("course-plan")
     }
 
     private var tees: some View {
