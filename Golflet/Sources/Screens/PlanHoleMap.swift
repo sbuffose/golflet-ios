@@ -207,7 +207,7 @@ private struct PlanSatMap: View {
         MapReader { proxy in
             Map(position: $position, interactionModes: [.pan, .zoom]) {
                 if hole.line.count > 1 {
-                    MapPolyline(hole.line.map(\.clLocation))
+                    MapPolyline(MKPolyline(coordinates: hole.line.map(\.clLocation), count: hole.line.count))
                         .stroke(Color(hex: 0xC8A86A), lineWidth: 2)
                 }
                 Annotation("Salida", coordinate: start.clLocation) {

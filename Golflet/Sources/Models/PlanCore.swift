@@ -381,14 +381,14 @@ enum PlanCore {
         let aim = aimPoint(path: path, from: ball, meters: dd.yards * yardMeters)
         let comp = wind.map { windComp(bearing: bearingXY(ball, aim), wind: $0) }
         let baseLat = dd.kind == .oval ? (dd.mean?.lat ?? 0) : 0
-        let wp = comp.map { applyWind(fwd: dd.yards, lat: baseLat, comp: $0) } ?? (dd.yards, baseLat)
+        let wp = comp.map { applyWind(fwd: dd.yards, lat: baseLat, comp: $0) } ?? (fwd: dd.yards, lat: baseLat)
         var aimOff = aimYd ?? Int((-wp.lat).rounded())
         if aimYd == nil && abs(aimOff) < 3 { aimOff = 0 }
         let landing = offsetPoint(from: ball, aim: aim, fwdYd: wp.fwd, latYd: wp.lat + Double(aimOff))
         var riskMap: [String: Int] = [:]
         var tests = [landing]
         if dd.kind == .point, let carry = dd.carry, carry < dd.yards {
-            let cw = comp.map { applyWind(fwd: carry, lat: 0, comp: $0) } ?? (carry, 0.0)
+            let cw = comp.map { applyWind(fwd: carry, lat: 0, comp: $0) } ?? (fwd: carry, lat: 0)
             tests.append(offsetPoint(from: ball, aim: aim, fwdYd: cw.fwd, latYd: cw.lat + Double(aimOff)))
         }
         for point in tests {
