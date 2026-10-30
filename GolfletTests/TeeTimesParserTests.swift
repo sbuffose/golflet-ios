@@ -91,6 +91,39 @@ final class TeeTimesParserTests: XCTestCase {
         XCTAssertEqual(bookings.first?.companionsLine, "con Juan, Pedro")
     }
 
+    func testParsesTeeTimeCheckAndRespectsThrottle() async throws {
+        XCTAssertEqual(TeeTimesAPIPaths.check(limit: 4), "/api/tee-times/check?limit=4")
+        let parsed = TeeTimesParser.check(from: [
+            "status": "checked",
+            "new": ["tt-1"],
+            "changed": ["tt-2"],
+            "gone": ["tt-old"],
+            "next_in_s": 150,
+            "tee_times": [[
+                "id": "tt-1",
+                "starts_at": "2026-10-31T12:33:00-03:00",
+                "club_name": "Jockey Club Buenos Aires",
+                "course": "Azul",
+                "companions": ["Juan"]
+            ]]
+        ])
+        XCTAssertEqual(parsed.status, "checked")
+        XCTAssertEqual(parsed.newIDs, ["tt-1"])
+        XCTAssertEqual(parsed.changedIDs, ["tt-2"])
+        XCTAssertEqual(parsed.goneIDs, ["tt-old"])
+        XCTAssertEqual(parsed.nextInSeconds, 150)
+        XCTAssertTrue(parsed.hasUpdates)
+        XCTAssertEqual(parsed.teeTimes.first?.id, "tt-1")
+
+        let api = MockAPIClient(autoSession: true)
+        let first = try await api.checkTeeTimes(limit: 4)
+        XCTAssertEqual(first.status, "checked")
+        XCTAssertEqual(first.newIDs, ["tt-jockey-1"])
+        let second = try await api.checkTeeTimes(limit: 4)
+        XCTAssertEqual(second.status, "throttled")
+        XCTAssertTrue(second.newIDs.isEmpty)
+    }
+
     func testSnapshotReadsTeeTimesFromDataPayload() {
         let snap = LivePayloadMapper.snapshot(from: [
             "player": ["name": "Jugador Demo", "handicap_index": 3.1],

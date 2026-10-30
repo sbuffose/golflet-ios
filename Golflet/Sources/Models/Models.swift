@@ -555,6 +555,19 @@ struct TeeTime: Identifiable, Hashable, Sendable {
     }
 }
 
+struct TeeTimeCheck: Hashable, Sendable {
+    var status: String
+    var newIDs: [String]
+    var changedIDs: [String]
+    var goneIDs: [String]
+    var nextInSeconds: Int
+    var teeTimes: [TeeTime]
+
+    var hasUpdates: Bool {
+        !newIDs.isEmpty || !changedIDs.isEmpty || !goneIDs.isEmpty
+    }
+}
+
 struct PlayerProfile: Hashable, Sendable {
     var displayName: String
     var initials: String
