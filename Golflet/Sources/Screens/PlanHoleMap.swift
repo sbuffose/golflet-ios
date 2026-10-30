@@ -142,6 +142,9 @@ struct PlanHoleMap: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("plan-pin-\(index)")
+                .overlay(alignment: .topLeading) {
+                    GProbe(id: "plan-pin-\(index)", label: "\(PlanCore.clubName(live.club)) \(live.shotYards)")
+                }
                 .position(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
             }
         }
@@ -171,6 +174,9 @@ struct PlanHoleMap: View {
         }
         .position(point)
         .accessibilityIdentifier("plan-landing")
+        .overlay(alignment: .topLeading) {
+            GProbe(id: "plan-landing", label: name)
+        }
         .allowsHitTesting(false)
     }
 

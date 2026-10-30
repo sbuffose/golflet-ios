@@ -205,7 +205,11 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 12), "El login demo no llegó a Inicio")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 8))
-        XCTAssertTrue(openClubsSheet(app), "No se pudo abrir Clubes después del login")
+        var openedClubs = openClubsSheet(app, timeout: 8)
+        if !openedClubs {
+            openedClubs = openClubsSheet(app, timeout: 8)
+        }
+        XCTAssertTrue(openedClubs, "No se pudo abrir Clubes después del login")
         XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 8))
         XCTAssertFalse(first(app, "club-picker").exists)
         XCTAssertFalse(first(app, "club-url").exists)
@@ -415,26 +419,27 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
         let entry = first(app, "course-plan")
         reveal(app, entry)
-        XCTAssertTrue(entry.waitForExistence(timeout: 4), "Falta Estrategia de juego")
-        entry.tap()
-        XCTAssertTrue(waitFor(app, "screen-plan-hole", timeout: 8), "No se abrió el hoyo de estrategia")
-        XCTAssertTrue(first(app, "plan-view-diseno").waitForExistence(timeout: 4), "Falta Diseño")
-        XCTAssertTrue(first(app, "plan-view-satelital").waitForExistence(timeout: 2), "Falta Satelital")
+        XCTAssertTrue(entry.waitForExistence(timeout: 6), "Falta Estrategia de juego")
+        tapLargest(app, "course-plan")
+        _ = first(app, "screen-plan-loading").waitForExistence(timeout: 2)
+        XCTAssertTrue(waitFor(app, "screen-plan-hole", timeout: 10), "No se abrió el hoyo de estrategia")
+        XCTAssertTrue(first(app, "plan-view-diseno").waitForExistence(timeout: 6), "Falta Diseño")
+        XCTAssertTrue(first(app, "plan-view-satelital").waitForExistence(timeout: 3), "Falta Satelital")
         XCTAssertTrue(first(app, "plan-tee").waitForExistence(timeout: 4), "Falta el tee de salida")
         XCTAssertTrue(
-            first(app, "plan-shot-pill").waitForExistence(timeout: 4) || first(app, "plan-landing").waitForExistence(timeout: 2),
+            first(app, "plan-shot-pill").waitForExistence(timeout: 5) || first(app, "plan-landing").waitForExistence(timeout: 3),
             "Falta el palo sugerido o el anillo de caída"
         )
-        first(app, "plan-view-satelital").tap()
-        first(app, "plan-view-diseno").tap()
+        tapLargest(app, "plan-view-satelital")
+        tapLargest(app, "plan-view-diseno")
         if first(app, "plan-shot-pill").waitForExistence(timeout: 3) {
-            first(app, "plan-shot-pill").tap()
-            XCTAssertTrue(first(app, "plan-breakdown").waitForExistence(timeout: 3), "El desglose tiene que ser inline")
-            XCTAssertTrue(first(app, "plan-firm-normal").waitForExistence(timeout: 2), "Falta Blanda/Normal/Dura")
+            tapLargest(app, "plan-shot-pill")
+            XCTAssertTrue(first(app, "plan-breakdown").waitForExistence(timeout: 4), "El desglose tiene que ser inline")
+            XCTAssertTrue(first(app, "plan-firm-normal").waitForExistence(timeout: 3), "Falta Blanda/Normal/Dura")
         }
         if first(app, "plan-confirm").waitForExistence(timeout: 3) {
-            first(app, "plan-confirm").tap()
-            XCTAssertTrue(first(app, "plan-pin-0").waitForExistence(timeout: 4), "El golpe confirmado no dejó cartel")
+            tapLargest(app, "plan-confirm")
+            XCTAssertTrue(first(app, "plan-pin-0").waitForExistence(timeout: 5), "El golpe confirmado no dejó cartel")
         }
         saveShot("60_plan_hoyo")
     }

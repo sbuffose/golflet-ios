@@ -81,6 +81,7 @@ final class PlanCoreTests: XCTestCase {
         XCTAssertEqual(rows.map(\.hole), [1, 2, 3])
         XCTAssertEqual(rows[0].eta, "09:30")
         XCTAssertGreaterThan(rows[0].minutes, rows[2].minutes)
+        XCTAssertEqual(PlanCore.holeSchedule(teeTime: "09:30", startHole: 1, minPerHole: 14, pars: []).count, 18)
     }
 
     func testAimPointFollowsTheHoleLine() {
