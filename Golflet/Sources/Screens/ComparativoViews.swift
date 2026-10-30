@@ -202,7 +202,11 @@ struct ComparativoView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("comp-row-\(member.memberID)")
+        .overlay(alignment: .topLeading) {
+            GProbe(id: "comp-row-\(member.memberID)", label: out ? restLabel(data, state) : leaderSub(member))
+        }
     }
 
     private func tiles(_ data: ComparativoData) -> some View {
@@ -416,7 +420,9 @@ struct ComparativoStatView: View {
                     .foregroundStyle(p.ink)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("comp-stat-row-\(member.memberID)")
+        .overlay { GProbe(id: "comp-stat-row-\(member.memberID)", label: subtitle) }
     }
 
     private func footer(_ def: ComparativoStatDef) -> String {

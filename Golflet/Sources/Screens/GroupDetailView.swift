@@ -237,6 +237,7 @@ struct GroupDetailView: View {
                                 .foregroundStyle(p.primary)
                         }
                         .accessibilityIdentifier("group-profile-\(member.id)")
+                        GProbe(id: "group-profile-\(member.id)", label: "Ver perfil")
                         if group.isAdmin {
                             HStack(spacing: 10) {
                                 Button {
@@ -267,6 +268,7 @@ struct GroupDetailView: View {
                         }
                     }
                 }
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("group-member-\(member.id)")
             }
         }
@@ -307,8 +309,10 @@ struct GroupDetailView: View {
                     }
                     .accessibilityIdentifier("group-comp-mes")
                 }
+                GProbe(id: "group-comparativo", label: "Comparativo")
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("group-comparativo")
     }
 
