@@ -85,6 +85,9 @@ struct HomeView: View {
             guard let value else { return }
             Task { await countUpCards(to: value) }
         }
+        .onAppear {
+            Task { await model.checkTeeTimesIfNeeded() }
+        }
     }
 
     private func presentProfesor(_ profesor: Profesor) {
@@ -360,11 +363,19 @@ struct HomeView: View {
     }
 
     private func teeTimeRow(_ booking: TeeTime) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let isNew = model.highlightedTeeTimeIDs.contains(booking.id)
+        return VStack(alignment: .leading, spacing: 4) {
             Text(booking.chipWhen)
                 .font(GType.headline)
                 .tabular()
                 .foregroundStyle(p.ink)
+            if isNew {
+                Text("nueva")
+                    .font(GType.label)
+                    .foregroundStyle(p.accent)
+                    .accessibilityIdentifier("home-tee-new-\(booking.id)")
+                GProbe(id: "home-tee-new-\(booking.id)", label: "nueva")
+            }
             Text(booking.clubName)
                 .font(GType.body)
                 .foregroundStyle(p.ink)
@@ -381,6 +392,9 @@ struct HomeView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(isNew ? 10 : 0)
+        .background(isNew ? p.accentSoft : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-tee-row-\(booking.id)")
     }

@@ -62,6 +62,9 @@ final class AppModel {
     var lastLinkMatricula = ""
     var lastLinkClave = ""
     var lastLinkSavePassword = true
+    var highlightedTeeTimeIDs: Set<String> = []
+    private var teeCheckInFlight = false
+    private var teeCheckEarliest = Date.distantPast
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -153,6 +156,7 @@ final class AppModel {
             await refreshPlaySettings()
             isLoaded = true
             await consumeIntent()
+            await checkTeeTimesIfNeeded()
         } catch {
             errorMessage = error.localizedDescription
             isLoaded = true
@@ -286,6 +290,9 @@ final class AppModel {
             inviteShare = nil
             needsClub = nil
             pendingClubID = nil
+            highlightedTeeTimeIDs = []
+            teeCheckInFlight = false
+            teeCheckEarliest = .distantPast
             isLoaded = true
         }
     }
@@ -615,11 +622,38 @@ final class AppModel {
     func refreshTeeTimes() async {
         guard isSignedIn else {
             teeTimes = []
+            highlightedTeeTimeIDs = []
             return
         }
         if let remote = try? await api.teeTimes() {
             teeTimes = remote
         }
+        publishNextTeeHint()
+    }
+
+    func checkTeeTimesIfNeeded() async {
+        guard isSignedIn, isLoaded else { return }
+        guard Date() >= teeCheckEarliest else { return }
+        guard !teeCheckInFlight else { return }
+        teeCheckInFlight = true
+        defer { teeCheckInFlight = false }
+        guard let result = try? await api.checkTeeTimes(limit: 4) else {
+            teeCheckEarliest = Date().addingTimeInterval(150)
+            return
+        }
+        let wait = max(result.nextInSeconds, 1)
+        teeCheckEarliest = Date().addingTimeInterval(TimeInterval(wait))
+        if result.status == "throttled" || result.status == "no_account" { return }
+        if !result.teeTimes.isEmpty || result.hasUpdates {
+            teeTimes = result.teeTimes
+        }
+        if result.hasUpdates {
+            highlightedTeeTimeIDs = Set(result.newIDs + result.changedIDs)
+            publishNextTeeHint()
+        }
+    }
+
+    private func publishNextTeeHint() {
         if let next = nextTeeTime {
             publishWidgetSnapshot(next: NextRoundHint(
                 course: next.course.isEmpty ? next.clubName : next.course,
