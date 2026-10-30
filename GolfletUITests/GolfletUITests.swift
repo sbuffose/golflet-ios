@@ -730,6 +730,8 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-que-comparto", timeout: 6))
         XCTAssertTrue(first(app, "share-always-private").waitForExistence(timeout: 3))
         XCTAssertTrue(first(app, "share-scoring").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "share-profile").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "share-rounds_detail").waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["Notas de voz"].exists)
         XCTAssertFalse(app.staticTexts["Estrategia"].exists)
         saveShot("36_que_comparto")
@@ -754,6 +756,65 @@ final class GolfletUITests: XCTestCase {
         let hidden = first(app, "compare-handicap-ana").label
         XCTAssertTrue(hidden.contains("No compartido") || (first(app, "compare-handicap-ana").value as? String)?.contains("No compartido") == true)
         saveShot("37_grupo_comparacion")
+        reveal(app, first(app, "group-comparativo"))
+        XCTAssertTrue(first(app, "group-comparativo").waitForExistence(timeout: 4), "Falta la card Comparativo")
+        reveal(app, first(app, "group-profile-demo"))
+        XCTAssertTrue(first(app, "group-profile-demo").waitForExistence(timeout: 4), "Falta Ver perfil")
+        let semana = app.buttons["group-comp-semana"].exists ? app.buttons["group-comp-semana"] : first(app, "group-comp-semana")
+        reveal(app, semana)
+        if semana.isHittable {
+            semana.tap()
+        } else {
+            semana.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-comparativo", timeout: 6), "No se abrió el Comparativo")
+        XCTAssertTrue(first(app, "comp-row-demo").waitForExistence(timeout: 4))
+        XCTAssertTrue(first(app, "comp-row-ana").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "comp-row-ana").label.contains("No comparte") || (first(app, "comp-row-ana").value as? String)?.contains("No comparte") == true || first(app, "comp-who-ana").waitForExistence(timeout: 2))
+        let tile = app.buttons["comp-tile-best_net"].exists ? app.buttons["comp-tile-best_net"] : first(app, "comp-tile-best_net")
+        reveal(app, tile)
+        if tile.waitForExistence(timeout: 4), tile.isHittable {
+            tile.tap()
+        } else {
+            tile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-comparativo-stat", timeout: 6), "No se abrió el ranking")
+        XCTAssertTrue(first(app, "comp-stat-row-ana").waitForExistence(timeout: 4), "Falta Ana en el ranking")
+        let anaStat = first(app, "comp-stat-row-ana").label
+        XCTAssertTrue(
+            anaStat.contains("No comparte") || (first(app, "comp-stat-row-ana").value as? String)?.contains("No comparte") == true,
+            "Ana tenía que decir que no comparte: \(anaStat)"
+        )
+        dismissIfPresent(app, "close-comparativo-stat")
+        let who = app.buttons["comp-who-demo"].exists ? app.buttons["comp-who-demo"] : first(app, "comp-who-demo")
+        reveal(app, who)
+        if who.waitForExistence(timeout: 4), who.isHittable {
+            who.tap()
+        } else {
+            who.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-grupo-perfil", timeout: 6), "No se abrió el perfil")
+        XCTAssertTrue(first(app, "profile-asi-te-ven").waitForExistence(timeout: 4), "Falta Así te ven")
+        assertFits(app, "profile-asi-te-ven")
+        saveShot("57_comparativo")
+        dismissIfPresent(app, "close-grupo-perfil")
+        dismissIfPresent(app, "close-comparativo")
+    }
+
+    func testNeedsClubPicker() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-auth"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-login", timeout: 10))
+        type(app.textFields["auth-matricula"], "noclub")
+        type(app.secureTextFields["auth-clave"], "clave123")
+        submitLogin(app)
+        XCTAssertTrue(first(app, "club-picker").waitForExistence(timeout: 14), "Falta el picker NEEDS_CLUB")
+        XCTAssertTrue(first(app, "club-pick-124").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "club-pick-124").label.contains("San Isidro") || app.staticTexts["San Isidro Golf Club"].exists)
+        first(app, "club-pick-124").tap()
+        saveShot("58_needs_club")
     }
 
     func testNotificationsBadgeAndInbox() throws {

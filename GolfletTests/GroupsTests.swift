@@ -105,7 +105,7 @@ final class GroupsTests: XCTestCase {
         XCTAssertFalse(titles.contains("nota"))
         XCTAssertFalse(titles.contains("voz"))
         XCTAssertFalse(titles.contains("estrateg"))
-        XCTAssertEqual(ShareCategory.allCases.count, 9)
+        XCTAssertEqual(ShareCategory.allCases.count, 11)
         XCTAssertNil(SharePrefs.allShared.jsonBody["voice"])
         XCTAssertNil(SharePrefs.allShared.jsonBody["notes"])
         XCTAssertNil(SharePrefs.allShared.jsonBody["strategy"])
@@ -173,7 +173,96 @@ final class GroupsTests: XCTestCase {
         XCTAssertTrue(prefs.birdiesPars)
         XCTAssertFalse(prefs.gpsDistances)
         XCTAssertEqual((SharePrefs.allShared.jsonBody["prefs"] as? [String: Any])?["scores"] as? Bool, true)
+        XCTAssertEqual((SharePrefs.allShared.jsonBody["prefs"] as? [String: Any])?["profile"] as? Bool, true)
+        XCTAssertEqual((SharePrefs.allShared.jsonBody["prefs"] as? [String: Any])?["rounds_detail"] as? Bool, false)
         XCTAssertNil((SharePrefs.allShared.jsonBody["prefs"] as? [String: Any])?["voice"])
+
+        let periodPrefs = GroupsParser.sharePrefs(from: [
+            "prefs": ["profile": false, "rounds_detail": true]
+        ])
+        XCTAssertFalse(periodPrefs.profile)
+        XCTAssertTrue(periodPrefs.holeByHole)
+    }
+
+    func testGroupPeriodLeaderboardAndHiddenScores() async throws {
+        XCTAssertEqual(GroupsAPIPaths.period("g-jockey", kind: .semana, off: 0), "/api/groups/g-jockey/period?kind=semana&off=0")
+        XCTAssertEqual(GroupsAPIPaths.memberProfile("g1", memberID: "ana"), "/api/groups/g1/members/ana/profile")
+        XCTAssertTrue(GroupsAPIPaths.memberRound("g1", memberID: "ana", roundID: "r/1").contains("/rounds/"))
+
+        let api = MockAPIClient(autoSession: true)
+        let week = try await api.groupPeriod(groupID: "g-jockey", kind: .semana, off: 0)
+        XCTAssertEqual(week.leaderboard.rows.first?.memberID, MockGroupStore.meID)
+        XCTAssertEqual(week.leaderboard.rest.first?.state, .hidden)
+        XCTAssertEqual(week.leaderboard.rest.first?.memberID, MockGroupStore.anaID)
+        XCTAssertTrue(week.gpsOrCardsAny)
+        XCTAssertFalse(week.member(MockGroupStore.anaID)?.profileShared ?? true)
+
+        let empty = try await api.groupPeriod(groupID: "g-jockey", kind: .mes, off: 1)
+        XCTAssertTrue(empty.leaderboard.rows.isEmpty)
+        XCTAssertFalse(empty.gpsOrCardsAny)
+
+        let me = try await api.memberProfile(groupID: "g-jockey", memberID: MockGroupStore.meID)
+        XCTAssertTrue(me.member.isMe)
+        XCTAssertFalse(me.locked)
+        XCTAssertEqual(me.rounds?.count, 2)
+
+        let ana = try await api.memberProfile(groupID: "g-jockey", memberID: MockGroupStore.anaID)
+        XCTAssertTrue(ana.locked)
+        XCTAssertNil(ana.rounds)
+
+        let card = try await api.memberRound(groupID: "g-jockey", memberID: MockGroupStore.meID, roundID: "r-demo-1")
+        XCTAssertEqual(card.holes.count, 18)
+        XCTAssertEqual(card.gross, 76)
+
+        do {
+            _ = try await api.memberRound(groupID: "g-jockey", memberID: MockGroupStore.anaID, roundID: "x")
+            XCTFail("Ana no comparte tarjetas")
+        } catch let error as GolfletError {
+            XCTAssertEqual(error.httpStatus, 403)
+        }
+
+        let parsed = GroupsParser.period(from: [
+            "group": ["id": "g1", "name": "Birdies"],
+            "period": ["kind": "semana", "off": 0, "short": "esta", "label": "lun–dom", "in_progress": true, "prev_off": 1],
+            "members": [[
+                "member_id": "u1",
+                "name": "Ana Pérez",
+                "is_me": true,
+                "profile": true,
+                "stats": ["best_net": ["v": -3, "n": 1]]
+            ]],
+            "stats": [["key": "best_net", "short": "Neto", "label": "Mejor neto", "fmt": "tp", "low": true]],
+            "boards": ["best_net": ["leaders": ["u1"], "ranked": true, "rows": [["member_id": "u1", "pos": 1, "state": "ranked"]]]],
+            "leaderboard": ["rows": [["member_id": "u1", "pos": 1]], "rest": []],
+            "mins": ["r": 1, "gh": 9, "dr": 9],
+            "data": ["gps_or_cards_any": true]
+        ], fallbackKind: .mes, fallbackOff: 2)
+        XCTAssertEqual(parsed.groupName, "Birdies")
+        XCTAssertEqual(parsed.period.kind, .semana)
+        XCTAssertEqual(parsed.leaderboard.rows.first?.pos, 1)
+        XCTAssertEqual(parsed.member("u1")?.stats["best_net"]?.value, -3)
+    }
+
+    func testNeedsClubDoesNotStoreUntilSuccess() async throws {
+        let api = MockAPIClient(autoSession: false)
+        do {
+            _ = try await api.linkClub(matricula: "124", password: "clave123", savePassword: true, progressID: "p1")
+            XCTFail("Tenía que pedir club")
+        } catch let error as GolfletError {
+            XCTAssertEqual(error.needsClub?.clubs.first?.id, 124)
+            XCTAssertTrue(error.needsClub?.clubs.contains { $0.name.contains("San Isidro") } == true)
+        }
+        XCTAssertFalse(api.isAuthenticated)
+
+        do {
+            _ = try await api.linkClub(matricula: "124", password: "mala", savePassword: true, progressID: "p2", clubID: 124)
+            XCTFail("Clave mala")
+        } catch let error as GolfletError {
+            XCTAssertEqual(error, .wrongGolfisticsCredentials)
+        }
+
+        let ok = try await api.linkClub(matricula: "124", password: "clave123", savePassword: true, progressID: "p3", clubID: 124)
+        XCTAssertTrue(ok.ok)
     }
 
     func testRegenerateAndDisableInvite() async throws {

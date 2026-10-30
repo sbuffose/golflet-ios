@@ -159,6 +159,20 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(sync.cardCount, 98)
     }
 
+    func testNeedsClubPayload() {
+        let error = LivePayloadMapper.needsClub(status: 409, json: [
+            "code": "NEEDS_CLUB",
+            "message": "Elegí tu club.",
+            "matricula": "94506",
+            "clubs": [
+                ["id": 124, "name": "San Isidro Golf Club", "direct_login": true]
+            ]
+        ])
+        XCTAssertEqual(error?.needsClub?.matricula, "94506")
+        XCTAssertEqual(error?.needsClub?.clubs.first?.id, 124)
+        XCTAssertNil(LivePayloadMapper.needsClub(status: 401, json: ["code": "GOLFISTICS_REJECTED"]))
+    }
+
     func testAccountErrorCodes() {
         XCTAssertEqual(LivePayloadMapper.accountError(status: 422), .wrongGolfisticsCredentials)
         XCTAssertEqual(LivePayloadMapper.accountError(status: 502), .golfisticsAppDown)

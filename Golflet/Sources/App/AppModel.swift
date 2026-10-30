@@ -57,6 +57,11 @@ final class AppModel {
     var inviteShare: InviteSharePayload?
     var teeTimes: [TeeTime] = []
     var playSettings = PlaySettingsStore.load()
+    var needsClub: NeedsClubPayload?
+    var pendingClubID: Int?
+    var lastLinkMatricula = ""
+    var lastLinkClave = ""
+    var lastLinkSavePassword = true
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -234,16 +239,19 @@ final class AppModel {
     }
 
     func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async {
+        lastLinkMatricula = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
+        lastLinkClave = clave
+        lastLinkSavePassword = savePassword
         await run {
             let session = try await api.signInGolfistics(
-                matricula: matricula.trimmingCharacters(in: .whitespacesAndNewlines),
+                matricula: lastLinkMatricula,
                 clave: clave,
                 savePassword: savePassword
             )
             isSignedIn = true
             if session.needsFirstSync {
                 await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
-                    try await api.startFirstSync(progressID: progressID)
+                    try await api.startFirstSync(progressID: progressID, clubID: pendingClubID)
                 }
             } else {
                 await load()
@@ -276,17 +284,43 @@ final class AppModel {
             presentedInvite = nil
             presentedGroupID = nil
             inviteShare = nil
+            needsClub = nil
+            pendingClubID = nil
             isLoaded = true
         }
     }
 
     func addClub(matricula: String, clave: String, savePassword: Bool) async {
+        lastLinkMatricula = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
+        lastLinkClave = clave
+        lastLinkSavePassword = savePassword
         await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
             try await api.linkClub(
-                matricula: matricula,
+                matricula: lastLinkMatricula,
                 password: clave,
                 savePassword: savePassword,
-                progressID: progressID
+                progressID: progressID,
+                clubID: pendingClubID
+            )
+        }
+    }
+
+    func retryLinkWithClub(_ club: ClubCatalogEntry) async {
+        pendingClubID = club.id
+        if isSignedIn {
+            await addClub(matricula: lastLinkMatricula, clave: lastLinkClave, savePassword: lastLinkSavePassword)
+        } else {
+            await signInGolfistics(matricula: lastLinkMatricula, clave: lastLinkClave, savePassword: lastLinkSavePassword)
+        }
+    }
+
+    func revealClubPicker() async {
+        if let clubs = try? await api.clubCatalogue() {
+            let filtered = clubs.filter(\.directLogin)
+            needsClub = NeedsClubPayload(
+                message: "¿Tu club no aparece? Elegilo",
+                matricula: lastLinkMatricula.isEmpty ? nil : lastLinkMatricula,
+                clubs: filtered.isEmpty ? clubs : filtered
             )
         }
     }
@@ -915,6 +949,8 @@ final class AppModel {
         do {
             let result = try await work(progressID)
             if result.ok {
+                needsClub = nil
+                pendingClubID = nil
                 await load()
                 selectedTab = .inicio
                 showsClubs = false
@@ -929,6 +965,14 @@ final class AppModel {
                 await failSync(sessionID: session.id, kind: kind, message: result.message)
             }
         } catch {
+            if let payload = (error as? GolfletError)?.needsClub {
+                needsClub = payload
+                pendingClubID = nil
+                syncSession = nil
+                showsClubs = true
+                errorMessage = payload.message
+                return
+            }
             await failSync(sessionID: session.id, kind: kind, message: error.localizedDescription)
         }
     }
@@ -1015,7 +1059,10 @@ final class AppModel {
         do {
             try await work()
         } catch {
-            if let golf = error as? GolfletError, let failure = golf.authFailure {
+            if let golf = error as? GolfletError, let payload = golf.needsClub {
+                needsClub = payload
+                errorMessage = payload.message
+            } else if let golf = error as? GolfletError, let failure = golf.authFailure {
                 authFailure = failure
                 errorMessage = failure.message
             } else {
