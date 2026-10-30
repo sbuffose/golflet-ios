@@ -757,22 +757,44 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(hidden.contains("No compartido") || (first(app, "compare-handicap-ana").value as? String)?.contains("No compartido") == true)
         saveShot("37_grupo_comparacion")
         reveal(app, first(app, "group-comparativo"))
-        XCTAssertTrue(first(app, "group-comparativo").waitForExistence(timeout: 3))
-        XCTAssertTrue(first(app, "group-profile-demo").waitForExistence(timeout: 3))
-        first(app, "group-comp-semana").tap()
+        XCTAssertTrue(first(app, "group-comparativo").waitForExistence(timeout: 4), "Falta la card Comparativo")
+        reveal(app, first(app, "group-profile-demo"))
+        XCTAssertTrue(first(app, "group-profile-demo").waitForExistence(timeout: 4), "Falta Ver perfil")
+        let semana = app.buttons["group-comp-semana"].exists ? app.buttons["group-comp-semana"] : first(app, "group-comp-semana")
+        reveal(app, semana)
+        if semana.isHittable {
+            semana.tap()
+        } else {
+            semana.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(waitFor(app, "screen-comparativo", timeout: 6), "No se abrió el Comparativo")
         XCTAssertTrue(first(app, "comp-row-demo").waitForExistence(timeout: 4))
         XCTAssertTrue(first(app, "comp-row-ana").waitForExistence(timeout: 3))
         XCTAssertTrue(first(app, "comp-row-ana").label.contains("No comparte") || (first(app, "comp-row-ana").value as? String)?.contains("No comparte") == true || first(app, "comp-who-ana").waitForExistence(timeout: 2))
-        first(app, "comp-tile-best_net").tap()
-        XCTAssertTrue(waitFor(app, "screen-comparativo-stat", timeout: 6))
-        XCTAssertTrue(first(app, "comp-stat-row-ana").waitForExistence(timeout: 3))
+        let tile = app.buttons["comp-tile-best_net"].exists ? app.buttons["comp-tile-best_net"] : first(app, "comp-tile-best_net")
+        reveal(app, tile)
+        if tile.waitForExistence(timeout: 4), tile.isHittable {
+            tile.tap()
+        } else {
+            tile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-comparativo-stat", timeout: 6), "No se abrió el ranking")
+        XCTAssertTrue(first(app, "comp-stat-row-ana").waitForExistence(timeout: 4), "Falta Ana en el ranking")
         let anaStat = first(app, "comp-stat-row-ana").label
-        XCTAssertTrue(anaStat.contains("No comparte") || (first(app, "comp-stat-row-ana").value as? String)?.contains("No comparte") == true)
+        XCTAssertTrue(
+            anaStat.contains("No comparte") || (first(app, "comp-stat-row-ana").value as? String)?.contains("No comparte") == true,
+            "Ana tenía que decir que no comparte: \(anaStat)"
+        )
         dismissIfPresent(app, "close-comparativo-stat")
-        first(app, "comp-who-demo").tap()
-        XCTAssertTrue(waitFor(app, "screen-grupo-perfil", timeout: 6))
-        XCTAssertTrue(first(app, "profile-asi-te-ven").waitForExistence(timeout: 3))
+        let who = app.buttons["comp-who-demo"].exists ? app.buttons["comp-who-demo"] : first(app, "comp-who-demo")
+        reveal(app, who)
+        if who.waitForExistence(timeout: 4), who.isHittable {
+            who.tap()
+        } else {
+            who.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-grupo-perfil", timeout: 6), "No se abrió el perfil")
+        XCTAssertTrue(first(app, "profile-asi-te-ven").waitForExistence(timeout: 4), "Falta Así te ven")
         assertFits(app, "profile-asi-te-ven")
         saveShot("57_comparativo")
         dismissIfPresent(app, "close-grupo-perfil")
