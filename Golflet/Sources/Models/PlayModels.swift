@@ -577,6 +577,14 @@ enum CourseIdentity {
         default: return name
         }
     }
+
+    static func clubCode(for name: String) -> String {
+        switch name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased() {
+        case "azul", "colorada": return "118"
+        case "cancha nueva", "cancha vieja": return "209"
+        default: return ""
+        }
+    }
 }
 
 enum StrategyLevel: String, Hashable, CaseIterable, Sendable {

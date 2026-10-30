@@ -80,6 +80,13 @@ protocol GolfletAPI: Sendable {
     func paceConfig(courseId: String?, clubCode: String?, players: Int?, modality: String?) async throws -> PaceConfig
     func liveRoundPace(id: String) async throws -> LiveRoundPace
     func markPaceAlerted(id: String) async throws
+
+    func planSetup() async throws -> PlanSetup
+    func createPlan(clubCode: String, course: String, date: String, teeTime: String, startHole: Int?, teeTimeID: String?) async throws -> PlanDetail
+    func plan(id: String) async throws -> PlanDetail
+    func savePlanShots(id: String, hole: Int, shots: [PlanSavedShot]) async throws -> [PlanSavedShot]
+    func planClubs() async throws -> [PlanBagEntry]
+    func courseMap(clubCode: String, course: String) async throws -> CourseMap
 }
 
 extension GolfletAPI {
