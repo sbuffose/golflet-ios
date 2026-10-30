@@ -36,7 +36,7 @@ struct ClubsView: View {
                         sharedActions
                     }
 
-                    if model.clubs.isEmpty {
+                    if model.clubs.isEmpty || model.needsClub != nil {
                         linkForm
                     }
 
@@ -389,10 +389,26 @@ struct ClubsView: View {
             .tint(p.primary)
             .accessibilityIdentifier("club-save-password")
 
+            if let payload = model.needsClub {
+                ClubPickerBlock(payload: payload) { club in
+                    Task { await model.retryLinkWithClub(club) }
+                }
+            } else {
+                Button {
+                    Task { await model.revealClubPicker() }
+                } label: {
+                    Text("¿Tu club no aparece? Elegilo")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("club-picker-toggle")
+            }
+
             Button {
                 Task {
                     await model.addClub(matricula: matricula, clave: clave, savePassword: savePassword)
-                    if model.errorMessage == nil {
+                    if model.errorMessage == nil, model.needsClub == nil {
                         matricula = ""
                         clave = ""
                     }
@@ -408,6 +424,12 @@ struct ClubsView: View {
             }
             .disabled(matricula.isEmpty || clave.isEmpty || model.isBusy)
             .accessibilityIdentifier("club-connect")
+        }
+        .onAppear {
+            if matricula.isEmpty { matricula = model.lastLinkMatricula }
+            if let pending = model.needsClub?.matricula, matricula.isEmpty {
+                matricula = pending
+            }
         }
     }
 }

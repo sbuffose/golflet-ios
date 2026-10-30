@@ -131,6 +131,54 @@ extension LiveGolfletAPI {
         return GroupsParser.comparison(from: json, fallback: config)
     }
 
+    func groupPeriod(groupID: String, kind: ComparativoKind, off: Int) async throws -> ComparativoData {
+        do {
+            let json = try await request("GET", GroupsAPIPaths.period(groupID, kind: kind, off: off))
+            return GroupsParser.period(from: json, fallbackKind: kind, fallbackOff: off)
+        } catch let error as GolfletError {
+            if error.httpStatus == 404 {
+                throw GolfletError.server("No encontramos ese grupo.")
+            }
+            throw error
+        }
+    }
+
+    func memberProfile(groupID: String, memberID: String) async throws -> GroupMemberProfile {
+        do {
+            let json = try await request("GET", GroupsAPIPaths.memberProfile(groupID, memberID: memberID))
+            return GroupsParser.memberProfile(from: json, groupID: groupID, memberID: memberID)
+        } catch let error as GolfletError {
+            if error.httpStatus == 403 {
+                return GroupsParser.lockedProfile(groupID: groupID, groupName: "", memberID: memberID, name: "", isMe: false)
+            }
+            if error.httpStatus == 404 {
+                throw GolfletError.server("Esa persona no está en el grupo.")
+            }
+            if error == .notAuthenticated {
+                throw error
+            }
+            throw error
+        }
+    }
+
+    func memberRound(groupID: String, memberID: String, roundID: String) async throws -> SharedScorecard {
+        do {
+            let json = try await request("GET", GroupsAPIPaths.memberRound(groupID, memberID: memberID, roundID: roundID))
+            guard let card = GroupsParser.scorecard(from: json, groupID: groupID) else {
+                throw GolfletError.decoding("card")
+            }
+            return card
+        } catch let error as GolfletError {
+            if error.httpStatus == 403 {
+                throw GolfletError.server("No comparte sus tarjetas hoyo por hoyo.")
+            }
+            if error.httpStatus == 404 {
+                throw GolfletError.server("No encontramos esa tarjeta.")
+            }
+            throw error
+        }
+    }
+
     private func respond(to token: String, accept: Bool) async throws -> [String: Any] {
         if token.hasPrefix("group:") {
             let id = String(token.dropFirst(6))

@@ -78,8 +78,23 @@ enum LivePayloadMapper {
         let items = json["clubs"] as? [[String: Any]] ?? []
         return items.compactMap { item in
             guard let id = JSONFlex.int(from: item["id"]), let name = item["name"] as? String else { return nil }
-            return ClubCatalogEntry(id: id, name: name, baseURL: item["base_url"] as? String ?? "")
+            return ClubCatalogEntry(
+                id: id,
+                name: name,
+                baseURL: item["base_url"] as? String ?? "",
+                directLogin: JSONFlex.bool(from: item["direct_login"]) ?? false
+            )
         }
+    }
+
+    static func parseDayPublic(_ raw: String?) -> Date? {
+        parseDay(raw)
+    }
+
+    static func needsClub(status: Int, json: [String: Any]) -> GolfletError? {
+        let code = (json["code"] as? String) ?? ""
+        guard code == "NEEDS_CLUB" || (status == 409 && code.contains("CLUB")) else { return nil }
+        return .needsClub(GroupsParser.needsClub(from: json, fallback: "Elegí tu club para seguir."))
     }
 
     static func parseBag(_ raw: Any?) -> [BagClub] {

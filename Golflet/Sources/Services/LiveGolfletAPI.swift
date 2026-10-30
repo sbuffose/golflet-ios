@@ -24,11 +24,13 @@ struct LiveGolfletAPI: GolfletAPI {
         return LivePayloadMapper.golfisticsSession(from: json)
     }
 
-    func startFirstSync(progressID: String) async throws -> SyncResult {
+    func startFirstSync(progressID: String, clubID: Int?) async throws -> SyncResult {
+        var body: [String: Any] = ["progress_id": progressID]
+        if let clubID { body["club_id"] = clubID }
         let json = try await request(
             "POST",
             "/api/accounts/first-sync",
-            body: ["progress_id": progressID],
+            body: body,
             timeout: 180
         )
         return LivePayloadMapper.parseSync(json)
@@ -49,13 +51,14 @@ struct LiveGolfletAPI: GolfletAPI {
         return LivePayloadMapper.parseCatalogue(json)
     }
 
-    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String) async throws -> SyncResult {
-        let body: [String: Any] = [
+    func linkClub(matricula: String, password: String, savePassword: Bool, progressID: String, clubID: Int?) async throws -> SyncResult {
+        var body: [String: Any] = [
             "matricula": matricula,
             "password": password,
             "save_password": savePassword,
             "progress_id": progressID
         ]
+        if let clubID { body["club_id"] = clubID }
         let json = try await request("POST", "/api/accounts", body: body, timeout: 180)
         return LivePayloadMapper.parseSync(json)
     }
@@ -310,7 +313,7 @@ struct LiveGolfletAPI: GolfletAPI {
         } else {
             json = [:]
         }
-        if captureToken {
+        if captureToken, status < 400 {
             if let token = http?.value(forHTTPHeaderField: "set-auth-token"), !token.isEmpty {
                 try KeychainStore.saveToken(token)
             } else if let token = json["token"] as? String, !token.isEmpty {
@@ -322,6 +325,9 @@ struct LiveGolfletAPI: GolfletAPI {
     }
 
     private func throwIfFailed(status: Int, json: [String: Any], authorized: Bool, path: String) throws {
+        if let needsClub = LivePayloadMapper.needsClub(status: status, json: json) {
+            throw needsClub
+        }
         if path.hasPrefix("/api/auth/golfistics"), status >= 400 {
             throw GolfletError.auth(LivePayloadMapper.authFailure(status: status, json: json))
         }
@@ -334,7 +340,7 @@ struct LiveGolfletAPI: GolfletAPI {
         }
         if status >= 400 {
             let message = LivePayloadMapper.authMessage(from: json, fallback: "No se pudo completar.")
-            if status == 409 || status == 429 {
+            if status == 403 || status == 404 || status == 409 || status == 429 {
                 throw GolfletError.http(status: status, message: message)
             }
             throw GolfletError.server(message)
