@@ -613,9 +613,14 @@ struct PlanHoleView: View {
 
     private func pickDefault() {
         guard !autoPicked, pending == nil, !calc.done else { return }
+        let bag = usable
         let choice = PlanCore.autoSelect(
             suggestion: calc.suggestion,
-            clubs: calc.adjusted.map { (code: $0.code, dist: usable.first { $0.entry.code == $0.code }?.dist ?? PlanClubDist(kind: .point, yards: Double($0.yards), carry: nil, mean: nil, cov: nil, used: "libreto", note: nil, partial: $0.partial), adjusted: Double($0.yards)) },
+            clubs: calc.adjusted.map { item in
+                let dist = bag.first { $0.entry.code == item.code }?.dist
+                    ?? PlanClubDist(kind: .point, yards: Double(item.yards), carry: nil, mean: nil, cov: nil, used: "libreto", note: nil, partial: item.partial)
+                return (code: item.code, dist: dist, adjusted: Double(item.yards))
+            },
             remain: calc.remain
         )
         if let choice {
