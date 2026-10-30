@@ -288,14 +288,11 @@ final class AppModel {
             presentedInvite = nil
             presentedGroupID = nil
             inviteShare = nil
-<<<<<<< HEAD
             needsClub = nil
             pendingClubID = nil
-=======
             highlightedTeeTimeIDs = []
             teeCheckInFlight = false
             teeCheckEarliest = .distantPast
->>>>>>> cf7b29e (Reset tee-time check state on sign-out.)
             isLoaded = true
         }
     }
