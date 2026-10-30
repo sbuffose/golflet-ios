@@ -4,6 +4,10 @@ extension LiveGolfletAPI {
     func teeTimes() async throws -> [TeeTime] {
         TeeTimesParser.list(from: try await request("GET", TeeTimesAPIPaths.list))
     }
+
+    func checkTeeTimes(limit: Int) async throws -> TeeTimeCheck {
+        TeeTimesParser.check(from: try await request("POST", TeeTimesAPIPaths.check(limit: limit), body: [:]))
+    }
 }
 
 extension MockAPIClient {
@@ -13,6 +17,28 @@ extension MockAPIClient {
             return []
         }
         return Self.mockBookings()
+    }
+
+    func checkTeeTimes(limit: Int) async throws -> TeeTimeCheck {
+        _ = limit
+        guard isAuthenticated else { throw GolfletError.notAuthenticated }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-no-tee") {
+            return TeeTimeCheck(status: "no_account", newIDs: [], changedIDs: [], goneIDs: [], nextInSeconds: 150, teeTimes: [])
+        }
+        let bookings = Self.mockBookings()
+        let already = Self.mockTeeChecked
+        Self.mockTeeChecked = true
+        if already {
+            return TeeTimeCheck(status: "throttled", newIDs: [], changedIDs: [], goneIDs: [], nextInSeconds: 150, teeTimes: bookings)
+        }
+        return TeeTimeCheck(
+            status: "checked",
+            newIDs: [bookings[0].id],
+            changedIDs: [],
+            goneIDs: [],
+            nextInSeconds: 150,
+            teeTimes: bookings
+        )
     }
 
     private static func mockBookings() -> [TeeTime] {

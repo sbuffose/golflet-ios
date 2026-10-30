@@ -17,6 +17,7 @@ final class GolfletUITests: XCTestCase {
         first(app, "home-tee-tab").tap()
         XCTAssertTrue(waitFor(app, "home-tee-times", timeout: 4), "No scrolleó a la tarjeta de tee times")
         XCTAssertTrue(first(app, "home-tee-partners-tt-jockey-1").waitForExistence(timeout: 3), "Faltan los compañeros")
+        XCTAssertTrue(first(app, "home-tee-new-tt-jockey-1").waitForExistence(timeout: 5), "Falta el resaltado «nueva»")
         saveShot("01_inicio")
 
         if waitFor(app, "last-round-card", timeout: 4) {

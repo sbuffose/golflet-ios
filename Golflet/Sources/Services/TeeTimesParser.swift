@@ -3,9 +3,21 @@ import Foundation
 enum TeeTimesAPIPaths {
     static let list = "/api/tee-times"
     static let current = "/api/tee-times/current"
+    static func check(limit: Int) -> String { "/api/tee-times/check?limit=\(limit)" }
 }
 
 enum TeeTimesParser {
+    static func check(from json: [String: Any]) -> TeeTimeCheck {
+        TeeTimeCheck(
+            status: string(json["status"]).isEmpty ? "checked" : string(json["status"]),
+            newIDs: idList(json["new"]),
+            changedIDs: idList(json["changed"]),
+            goneIDs: idList(json["gone"]),
+            nextInSeconds: JSONFlex.int(from: json["next_in_s"] ?? json["next_in"]) ?? 150,
+            teeTimes: list(from: json)
+        )
+    }
+
     static func list(from json: [String: Any]) -> [TeeTime] {
         let raw = json["tee_times"]
             ?? json["teeTimes"]
@@ -138,6 +150,14 @@ enum TeeTimesParser {
         iso.formatOptions = [.withInternetDateTime]
         if let d = iso.date(from: text) { return d }
         return DayStamp.parse(text)
+    }
+
+    private static func idList(_ raw: Any?) -> [String] {
+        if let items = raw as? [Any] {
+            return items.compactMap { optionalString($0) }
+        }
+        if let text = optionalString(raw) { return [text] }
+        return []
     }
 
     private static func string(_ raw: Any?) -> String {

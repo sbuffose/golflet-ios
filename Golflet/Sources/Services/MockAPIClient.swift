@@ -16,6 +16,7 @@ struct MockAPIClient: GolfletAPI {
     private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
     static var pendingNeedsClub = false
+    static var mockTeeChecked = false
 
     init(autoSession: Bool = true) {
         self.autoSession = autoSession
@@ -41,6 +42,9 @@ struct MockAPIClient: GolfletAPI {
         Self.resetTextPrefs()
         Self.resetProfesores()
         Self.resetPlaySettings()
+        Self.sessionLock.lock()
+        Self.mockTeeChecked = false
+        Self.sessionLock.unlock()
     }
 
     var isAuthenticated: Bool {
