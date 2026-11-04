@@ -44,7 +44,7 @@ struct LiveHoleView: View {
 
     var body: some View {
         ZStack {
-            HoleMapView(
+            LiveHoleMapView(
                 hole: geo,
                 player: player,
                 pin: pin,
@@ -348,7 +348,7 @@ struct MarkedShot: Hashable {
     var penalty: Bool
 }
 
-struct HoleMapView: UIViewRepresentable {
+struct LiveHoleMapView: UIViewRepresentable {
     var hole: AzulHoleGeo
     var player: AzulCoord
     var pin: AzulCoord
