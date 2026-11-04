@@ -36,7 +36,7 @@ final class PlayAPITests: XCTestCase {
     }
 
     func testRecapPendingCopy() {
-        XCTAssertEqual(RecapCopy.pendingAI, "Audio guardado. La transcripción se hace en la app de iPhone…")
+        XCTAssertEqual(RecapCopy.pendingAI, "Audio guardado. La transcripción se hace en el dispositivo…")
         XCTAssertEqual(RecapCopy.category("estrategia"), "Estrategia / mental")
         XCTAssertEqual(RecapCopy.direction("right"), "Derecha")
         XCTAssertEqual(RecapCopy.length("short"), "Corto")

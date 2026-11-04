@@ -18,7 +18,7 @@ enum RecapSpeech {
         }
         let status = await requestAuthorization()
         guard status == .authorized else {
-            throw GolfletError.server("Golflet transcribe en el iPhone. Tenés que permitir el reconocimiento de voz en Ajustes.")
+            throw GolfletError.server("Golflet transcribe en el dispositivo. Tenés que permitir el reconocimiento de voz en Ajustes.")
         }
         guard let url else {
             throw GolfletError.server("No quedó el audio para transcribir.")
@@ -87,7 +87,7 @@ enum RecapSpeech {
         let supported = Array(SFSpeechRecognizer.supportedLocales())
         let locale = pickLocale(from: supported) ?? Locale(identifier: "es-ES")
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
-            throw GolfletError.server("Este iPhone no puede transcribir en español en el dispositivo.")
+            throw GolfletError.server("Este dispositivo no puede transcribir en español de forma local.")
         }
         let request = SFSpeechURLRecognitionRequest(url: url)
         request.requiresOnDeviceRecognition = true

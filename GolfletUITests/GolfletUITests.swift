@@ -104,6 +104,103 @@ final class GolfletUITests: XCTestCase {
             saveShot("15_club_stats")
             dismissIfPresent(app, "metric-back")
         }
+
+        tapTab(app, "Grupos")
+        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
+        saveShot("60_grupos")
+
+        tapTab(app, "Jugar")
+        XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
+        saveShot("61_jugar")
+
+        tapTab(app, "Academia")
+        XCTAssertTrue(waitFor(app, "screen-academia", timeout: 6))
+        saveShot("62_academia")
+    }
+
+    func testPrototypeOnboardingHoleAndSG() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-onboarding"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-onboarding", timeout: 8), "No abrió el onboarding de Roberto")
+        XCTAssertTrue(first(app, "roberto-guide").waitForExistence(timeout: 3))
+        saveShot("70_onboarding")
+        if first(app, "ob-skip").waitForExistence(timeout: 3) {
+            first(app, "ob-skip").tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 8))
+
+        tapTab(app, "Inicio")
+        if first(app, "home-mode-chip").waitForExistence(timeout: 4) {
+            first(app, "home-mode-chip").tap()
+            first(app, "home-mode-comp").tap()
+            saveShot("71_inicio_competitivo")
+            first(app, "home-mode-chip").tap()
+            first(app, "home-mode-mej").tap()
+            saveShot("72_inicio_mejorar")
+            first(app, "home-mode-chip").tap()
+            first(app, "home-mode-soc").tap()
+            saveShot("73_inicio_social")
+            first(app, "home-mode-chip").tap()
+            first(app, "home-mode-clasico").tap()
+        }
+
+        tapTab(app, "Jugar")
+        XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
+        if first(app, "jugar-ajustes").waitForExistence(timeout: 4) {
+            first(app, "jugar-ajustes").tap()
+            XCTAssertTrue(waitFor(app, "screen-antes", timeout: 6))
+            saveShot("74_antes_de_salir")
+            first(app, "antes-mode-clasico").tap()
+            first(app, "antes-start").tap()
+            XCTAssertTrue(waitFor(app, "screen-live-hole", timeout: 10), "No abrió el hoyo satelital")
+            XCTAssertTrue(first(app, "live-hole-title").waitForExistence(timeout: 4))
+            saveShot("75_hoyo_clasico")
+            if first(app, "live-menu").waitForExistence(timeout: 3) {
+                first(app, "live-menu").tap()
+                if first(app, "antes-mode-comp").waitForExistence(timeout: 4) {
+                    first(app, "antes-mode-comp").tap()
+                    if app.navigationBars.buttons.firstMatch.exists {
+                        app.navigationBars.buttons.firstMatch.tap()
+                    }
+                    saveShot("76_hoyo_competitivo")
+                    first(app, "live-menu").tap()
+                    first(app, "antes-mode-mej").tap()
+                    if app.navigationBars.buttons.firstMatch.exists {
+                        app.navigationBars.buttons.firstMatch.tap()
+                    }
+                    saveShot("77_hoyo_mejorar")
+                    first(app, "live-menu").tap()
+                    first(app, "antes-mode-soc").tap()
+                    if app.navigationBars.buttons.firstMatch.exists {
+                        app.navigationBars.buttons.firstMatch.tap()
+                    }
+                    saveShot("78_hoyo_social")
+                }
+            }
+            if first(app, "live-home").waitForExistence(timeout: 3) {
+                first(app, "live-home").tap()
+            }
+        }
+
+        tapTab(app, "Academia")
+        XCTAssertTrue(waitFor(app, "screen-academia", timeout: 6))
+        if first(app, "academia-plan").waitForExistence(timeout: 4) {
+            first(app, "academia-plan").tap()
+            XCTAssertTrue(waitFor(app, "screen-plan-practica", timeout: 6))
+            saveShot("79_plan_practica")
+            if app.navigationBars.buttons.firstMatch.exists {
+                app.navigationBars.buttons.firstMatch.tap()
+            }
+        }
+
+        tapTab(app, "Inicio")
+        if first(app, "home-more-sg").waitForExistence(timeout: 5) {
+            first(app, "home-more-sg").tap()
+            XCTAssertTrue(waitFor(app, "screen-sg", timeout: 6))
+            saveShot("80_sg")
+        }
     }
 
     func testPlayRecapAndRecurring() throws {
@@ -1160,9 +1257,54 @@ final class GolfletUITests: XCTestCase {
     }
 
     private func tapTab(_ app: XCUIApplication, _ name: String) {
+        popTowardTabs(app)
+        switch name {
+        case "Resumen":
+            tapVisibleTab(app, "Inicio")
+            XCTAssertTrue(first(app, "home-more-resumen").waitForExistence(timeout: 5), "Falta Más · Resumen")
+            first(app, "home-more-resumen").tap()
+        case "Rondas":
+            tapVisibleTab(app, "Inicio")
+            XCTAssertTrue(first(app, "home-more-rondas").waitForExistence(timeout: 5), "Falta Más · Rondas")
+            first(app, "home-more-rondas").tap()
+        case "Cancha":
+            tapVisibleTab(app, "Inicio")
+            XCTAssertTrue(first(app, "home-more-cancha").waitForExistence(timeout: 5), "Falta Más · Cancha")
+            first(app, "home-more-cancha").tap()
+        case "Mi bolsa":
+            tapVisibleTab(app, "Inicio")
+            XCTAssertTrue(first(app, "home-more-bolsa").waitForExistence(timeout: 5), "Falta Más · Bolsa")
+            first(app, "home-more-bolsa").tap()
+        default:
+            tapVisibleTab(app, name)
+        }
+    }
+
+    private func tapVisibleTab(_ app: XCUIApplication, _ name: String) {
         let tab = app.tabBars.buttons[name]
         XCTAssertTrue(tab.waitForExistence(timeout: 5), "Missing tab \(name)")
         tab.tap()
+    }
+
+    private func popTowardTabs(_ app: XCUIApplication) {
+        for _ in 0..<8 {
+            let onLegacy = first(app, "screen-resumen").exists
+                || first(app, "screen-rondas").exists
+                || first(app, "screen-cancha").exists
+                || first(app, "screen-bolsa").exists
+                || first(app, "screen-sg").exists
+                || first(app, "screen-antes").exists
+            if first(app, "screen-inicio").exists && !onLegacy { return }
+            if app.navigationBars.buttons.firstMatch.exists {
+                app.navigationBars.buttons.firstMatch.tap()
+                continue
+            }
+            if app.tabBars.buttons["Inicio"].exists {
+                app.tabBars.buttons["Inicio"].tap()
+                return
+            }
+            return
+        }
     }
 
     private func saveShot(_ name: String) {

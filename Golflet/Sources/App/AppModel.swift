@@ -62,6 +62,24 @@ final class AppModel {
     var lastLinkMatricula = ""
     var lastLinkClave = ""
     var lastLinkSavePassword = true
+    var homeMode: ProfileMode = PrototypeStore.loadMode()
+    var onboarding: OnboardingState = PrototypeStore.loadOnboarding()
+    var showsOnboarding = false
+    var roundSettings = PrototypeStore.loadSettings()
+    var showsAntesDeSalir = false
+    var showsLiveHole = false
+    var liveHoleNumber = 1
+    var liveShots: [SGShot] = []
+    var liveScores: [Int: Int] = [:]
+    var academiaPlanDone = PrototypeStore.loadPlanDone()
+    var protoGroups: [ProtoGroup] = []
+    var challenges: [String: [ProtoChallenge]] = [:]
+    var showsRoundsFromHome = false
+    var showsResumenFromHome = false
+    var showsCanchaFromHome = false
+    var showsBolsaFromHome = false
+    var showsSGFromHome = false
+    var liveShotList: [SGShot] { liveShots }
 
     let api: any GolfletAPI
     let notes: NotesStore
@@ -78,6 +96,7 @@ final class AppModel {
         MockAPIClient.resetTextPrefs()
         let prefs = RuntimeFlags.testingTextPrefs ?? (testing ? .default : TextPrefsStore.load())
         self.textPrefs = prefs
+        self.showsOnboarding = PrototypeStore.forceOnboarding || (!PrototypeStore.testing && !onboarding.done && api.isAuthenticated)
         TextPrefsRuntime.current = prefs
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "-pending-invite"),
            ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
@@ -249,6 +268,7 @@ final class AppModel {
                 savePassword: savePassword
             )
             isSignedIn = true
+            if !onboarding.done && !PrototypeStore.testing { showsOnboarding = true }
             if session.needsFirstSync {
                 await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
                     try await api.startFirstSync(progressID: progressID, clubID: pendingClubID)
@@ -1070,15 +1090,73 @@ final class AppModel {
             }
         }
     }
+
+    func setHomeMode(_ mode: ProfileMode) {
+        homeMode = mode
+        PrototypeStore.saveMode(mode)
+    }
+
+    func completeOnboarding(_ state: OnboardingState) {
+        onboarding = state
+        onboarding.done = true
+        PrototypeStore.saveOnboarding(onboarding)
+        showsOnboarding = false
+    }
+
+    func setFeature(_ feature: HoleFeature, on: Bool) {
+        roundSettings.set(feature, on: on)
+        PrototypeStore.saveSettings(roundSettings)
+    }
+
+    func startLiveHole() {
+        liveHoleNumber = roundSettings.startHole
+        showsAntesDeSalir = false
+        showsPlay = false
+        showsLiveHole = true
+    }
+
+    func addLiveShot(_ shot: SGShot) {
+        liveShots.append(shot)
+    }
+
+    func saveLiveScore(hole: Int, score: Int) {
+        liveScores[hole] = score
+    }
+
+    func togglePlanItem(_ id: String) {
+        if academiaPlanDone.contains(id) { academiaPlanDone.remove(id) }
+        else { academiaPlanDone.insert(id) }
+        PrototypeStore.savePlanDone(academiaPlanDone)
+    }
+
+    func addProtoGroup(_ group: ProtoGroup) {
+        protoGroups.insert(group, at: 0)
+    }
+
+    func addChallenge(groupID: String, _ challenge: ProtoChallenge) {
+        challenges[groupID, default: []].insert(challenge, at: 0)
+    }
+
+    func bumpChallenge(groupID: String, id: String, delta: Int) {
+        guard var list = challenges[groupID], let idx = list.firstIndex(where: { $0.id == id }) else { return }
+        list[idx].progress = max(0, min(50, list[idx].progress + delta))
+        challenges[groupID] = list
+    }
 }
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case inicio, resumen, rondas, cancha, bolsa
+    case inicio, grupos, jugar, academia
+    case resumen, rondas, cancha, bolsa
     var id: String { rawValue }
+
+    static var visible: [AppTab] { [.inicio, .grupos, .jugar, .academia] }
 
     var title: String {
         switch self {
         case .inicio: return "Inicio"
+        case .grupos: return "Grupos"
+        case .jugar: return "Jugar"
+        case .academia: return "Academia"
         case .resumen: return "Resumen"
         case .rondas: return "Rondas"
         case .cancha: return "Cancha"
@@ -1089,6 +1167,9 @@ enum AppTab: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .inicio: return "house"
+        case .grupos: return "person.2"
+        case .jugar: return "mappin.and.ellipse"
+        case .academia: return "book"
         case .resumen: return "chart.xyaxis.line"
         case .rondas: return "square.stack"
         case .cancha: return "flag"

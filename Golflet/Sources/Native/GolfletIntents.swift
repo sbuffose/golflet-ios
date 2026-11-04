@@ -159,14 +159,14 @@ struct EmpezarRondaIntent: AppIntent {
 
 struct GrabarResumenIntent: AppIntent {
     static var title: LocalizedStringResource = "Grabar resumen de la ronda"
-    static var description = IntentDescription("Abre el recap para grabar y transcribir en el iPhone.")
+    static var description = IntentDescription("Abre el recap para grabar y transcribir en el dispositivo.")
     static var openAppWhenRun = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await MainActor.run {
             IntentRouter.shared.post(.recordRecap)
         }
-        return .result(dialog: "Abrí el recap. La transcripción queda en el iPhone.")
+        return .result(dialog: "Abrí el recap. La transcripción queda en el dispositivo.")
     }
 }
 

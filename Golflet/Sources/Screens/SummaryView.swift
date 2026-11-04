@@ -274,7 +274,7 @@ struct SummaryView: View {
                     Button {
                         model.selectedCourseName = course
                         model.presentedHole = hole.number
-                        model.selectedTab = .cancha
+                        model.selectedTab = .jugar
                     } label: {
                         HStack(spacing: 12) {
                             Text("\(hole.number)")
