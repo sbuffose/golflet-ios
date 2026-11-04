@@ -93,7 +93,7 @@ enum ExampleRounds {
     ]
 
     static func simulate(seed: Int) -> [SGShot] {
-        var rng = SeededRNG(seed)
+        var rng = LessonSeededRNG(seed)
         var shots: [SGShot] = []
         for n in 1...18 {
             let hole = AzulCourse.hole(n)
@@ -150,7 +150,7 @@ enum ExampleRounds {
     }
 }
 
-struct SeededRNG {
+struct LessonSeededRNG {
     private var state: UInt32
     init(_ seed: Int) { state = UInt32(truncatingIfNeeded: seed) }
     mutating func next() -> Double {
