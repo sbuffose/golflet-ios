@@ -95,7 +95,7 @@ struct RecapView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(recorder.isRecording
                      ? "Grabando…"
-                     : (isTranscribing ? "Transcribiendo en el iPhone…" : "Grabá hasta 4 minutos. Lo transcribimos en el iPhone."))
+                     : (isTranscribing ? "Transcribiendo en el dispositivo…" : "Grabá hasta 4 minutos. Lo transcribimos en el dispositivo."))
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                     .accessibilityIdentifier(isTranscribing ? "recap-transcribing" : "recap-record-hint")

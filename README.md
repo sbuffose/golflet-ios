@@ -2,7 +2,7 @@
 
 App nativa SwiftUI (iOS 17+) para estadísticas de golf de jugadores argentinos cuyas tarjetas viven en los sitios Golfistics de cada club.
 
-La UI está en español rioplatense (es-AR, voseo) y sigue el sistema de diseño de [golflet.vercel.app](https://golflet.vercel.app): off-white `#F7F5F0`, verde `#0F3D2E`, acento oro `#C8A86A`, Geist upright con cifras tabulares.
+La UI está en español rioplatense (es-AR, voseo) y sigue el prototipo t338: paleta navy USGA (`#0B2545` / `#13315C`, acento `#C8102E`, fondo `#F6F7F9`), Geist upright con cifras tabulares, tabs Inicio · Grupos · Jugar · Academia.
 
 ## Qué hay hoy
 

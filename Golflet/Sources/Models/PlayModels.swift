@@ -497,7 +497,7 @@ enum RecapCopy {
         }
     }
 
-    static let pendingAI = "Audio guardado. La transcripción se hace en la app de iPhone…"
+    static let pendingAI = "Audio guardado. La transcripción se hace en el dispositivo…"
 
     static func direction(_ raw: String?) -> String {
         switch raw {
