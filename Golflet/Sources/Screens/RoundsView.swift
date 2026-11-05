@@ -4,9 +4,8 @@ struct RoundsView: View {
     var body: some View {
         MetricRoundsView(
             query: RoundListQuery(title: "Rondas", footnote: "Todas las tarjetas."),
-            showsBack: false,
+            showsBack: true,
             screenID: "screen-rondas"
         )
-            .metricDestinations()
     }
 }

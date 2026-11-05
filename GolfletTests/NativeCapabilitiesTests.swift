@@ -283,7 +283,7 @@ final class NativeCapabilitiesTests: XCTestCase {
     }
 
     func testRecapStaysOnDeviceCopy() {
-        XCTAssertTrue(RecapCopy.pendingAI.contains("iPhone"))
+        XCTAssertTrue(RecapCopy.pendingAI.contains("dispositivo"))
         XCTAssertEqual(RecapDraft(transcript: "x", structuredOnDevice: true).source, "ios_on_device")
     }
 
