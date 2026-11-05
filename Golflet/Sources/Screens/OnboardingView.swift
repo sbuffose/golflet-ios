@@ -86,14 +86,16 @@ struct OnboardingView: View {
                 .accessibilityIdentifier("ob-back")
             }
             Spacer()
-            Button("Saltar") { finish() }
-                .font(GType.headline)
-                .foregroundStyle(step >= 10 && step <= 11 ? Color.white : p.ink2)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-                .accessibilityIdentifier("ob-skip")
-                .accessibilityAddTraits(.isButton)
+            Button(action: finish) {
+                Text("Saltar")
+                    .font(GType.headline)
+                    .foregroundStyle(step >= 10 && step <= 11 ? Color.white : p.ink2)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("ob-skip")
         }
         .padding(.top, 8)
     }
@@ -117,6 +119,15 @@ struct OnboardingView: View {
             Spacer()
             Button { go(1) } label: { pill("Empezar") }
                 .accessibilityIdentifier("ob-start")
+            Button(action: finish) {
+                Text("Saltar")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink2)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("ob-skip")
         }
         .padding(.top, 20)
     }
