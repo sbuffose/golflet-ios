@@ -15,7 +15,7 @@ struct PlayHubView: View {
                     }
                     Text("Jugar").font(GType.largeTitle).foregroundStyle(p.ink)
 
-                    Button { model.showsAntesDeSalir = true } label: {
+                    NavigationLink { AntesDeSalirView() } label: {
                         ProtoHero {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Empezar una vuelta").font(GType.overline).opacity(0.7)
@@ -25,10 +25,9 @@ struct PlayHubView: View {
                             }
                         }
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("jugar-empezar")
 
-                    Button { model.showsAntesDeSalir = true } label: {
+                    NavigationLink { AntesDeSalirView() } label: {
                         Text("Configurar y empezar")
                             .font(GType.headline)
                             .foregroundStyle(p.onPrimary)
@@ -89,12 +88,6 @@ struct PlayHubView: View {
             }
         }
         .accessibilityIdentifier("screen-jugar")
-        .navigationDestination(isPresented: Binding(
-            get: { model.showsAntesDeSalir },
-            set: { model.showsAntesDeSalir = $0 }
-        )) {
-            AntesDeSalirView()
-        }
     }
 }
 
@@ -184,6 +177,8 @@ struct AntesDeSalirView: View {
                 .padding(20)
             }
         }
+        .accessibilityIdentifier("screen-antes")
+        .safeAreaInset(edge: .top) { MetricBackBar() }
         .navigationBarTitleDisplayMode(.inline)
     }
 

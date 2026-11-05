@@ -70,6 +70,7 @@ struct SGHomeView: View {
             }
         }
         .accessibilityIdentifier("screen-sg")
+        .safeAreaInset(edge: .top) { MetricBackBar() }
     }
 }
 

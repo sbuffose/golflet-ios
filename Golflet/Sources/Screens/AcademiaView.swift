@@ -207,6 +207,8 @@ struct PracticePlanView: View {
                 .padding(20)
             }
         }
+        .accessibilityIdentifier("screen-plan-practica")
+        .safeAreaInset(edge: .top) { MetricBackBar() }
     }
 
     private func session(_ title: String, _ lesson: GolfLesson?) -> some View {
