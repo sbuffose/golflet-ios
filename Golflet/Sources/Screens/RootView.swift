@@ -9,12 +9,10 @@ struct RootView: View {
         let _ = typeToken
         let _ = model.textPrefs
         Group {
-            if model.isSignedIn {
-                if model.showsOnboarding {
-                    NavigationStack { OnboardingView() }
-                } else {
-                    mainTabs
-                }
+            if model.showsOnboarding {
+                NavigationStack { OnboardingView() }
+            } else if model.isSignedIn {
+                mainTabs
             } else {
                 AuthView()
             }
