@@ -76,7 +76,7 @@ struct RoundDetailView: View {
                 if round.isCompetition {
                     Image(systemName: "trophy.fill")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Color(hex: 0x86672F))
+                        .foregroundStyle(p.accentInk)
                         .accessibilityIdentifier("round-trophy")
                 }
                 Text(round.displayTitle)
@@ -316,7 +316,7 @@ struct RoundDetailView: View {
                     }
                     Spacer()
                     Image(systemName: "mic.fill")
-                        .foregroundStyle(p.accent)
+                        .foregroundStyle(p.accentOnNavy)
                 }
             }
         }

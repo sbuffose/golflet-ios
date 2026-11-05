@@ -261,7 +261,7 @@ struct RecapView: View {
 
     private func dot(_ category: String) -> Color {
         switch category {
-        case "putt": return Color(hex: 0xC8D4C4)
+        case "putt": return p.primary.opacity(0.45)
         case "salida": return Color(hex: 0xE8C4B8)
         case "bunker": return p.sand
         case "estrategia": return Color(hex: 0xD4C8E0)

@@ -8,29 +8,29 @@ struct WidgetCardViews: View {
         VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             Text("GOLFLET")
                 .font(GType.overline)
-                .foregroundStyle(Color(hex: 0xC8A86A))
+                .foregroundStyle(Color(hex: BrandHex.red))
                 .accessibilityIdentifier("widget-brand")
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(snapshot.handicapLine)
                     .font(compact ? GType.statM : GType.statL)
                     .tabular()
-                    .foregroundStyle(Color(hex: 0x0F3D2E))
+                    .foregroundStyle(Color(hex: BrandHex.navy))
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
                     .accessibilityIdentifier("widget-handicap")
                 Text("HI")
                     .font(GType.label)
-                    .foregroundStyle(Color(hex: 0x5E6560))
+                    .foregroundStyle(Color(hex: BrandHex.ink2))
             }
             if let course = snapshot.lastCourse {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Última ronda")
                         .font(GType.label)
-                        .foregroundStyle(Color(hex: 0x5E6560))
+                        .foregroundStyle(Color(hex: BrandHex.ink2))
                     Text(snapshot.lastLine)
                         .font(GType.headline)
                         .tabular()
-                        .foregroundStyle(Color(hex: 0x121614))
+                        .foregroundStyle(Color(hex: BrandHex.ink))
                         .minimumScaleFactor(0.7)
                         .lineLimit(2)
                 }
@@ -41,15 +41,15 @@ struct WidgetCardViews: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Próxima")
                         .font(GType.label)
-                        .foregroundStyle(Color(hex: 0x5E6560))
+                        .foregroundStyle(Color(hex: BrandHex.ink2))
                     Text(next)
                         .font(GType.headline)
-                        .foregroundStyle(Color(hex: 0x121614))
+                        .foregroundStyle(Color(hex: BrandHex.ink))
                         .lineLimit(1)
                     if let when = snapshot.nextWhen {
                         Text(when)
                             .font(GType.label)
-                            .foregroundStyle(Color(hex: 0x9AA09B))
+                            .foregroundStyle(Color(hex: BrandHex.ink3))
                     }
                 }
                 .accessibilityIdentifier("widget-next-round")
@@ -57,7 +57,7 @@ struct WidgetCardViews: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(compact ? 12 : 16)
-        .background(Color(hex: 0xF7F5F0))
+        .background(Color(hex: BrandHex.paper))
         .accessibilityIdentifier("widget-card")
     }
 }
@@ -70,12 +70,12 @@ struct LiveIslandViews: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(state.holeLine)
                     .font(GType.headline)
-                    .foregroundStyle(Color(hex: 0xF7F5F0))
+                    .foregroundStyle(Color(hex: BrandHex.white))
                     .accessibilityIdentifier("live-hole")
                 Text(state.scoreLine)
                     .font(GType.label)
                     .tabular()
-                    .foregroundStyle(Color(hex: 0xC8A86A))
+                    .foregroundStyle(Color(hex: BrandHex.white))
                     .accessibilityIdentifier("live-score")
             }
             Spacer()
@@ -86,7 +86,7 @@ struct LiveIslandViews: View {
             }
         }
         .padding(12)
-        .background(Color(hex: 0x0F3D2E))
+        .background(Color(hex: BrandHex.navy))
         .accessibilityIdentifier("live-island")
     }
 
@@ -94,11 +94,11 @@ struct LiveIslandViews: View {
         VStack(spacing: 2) {
             Text(label)
                 .font(GType.overline)
-                .foregroundStyle(Color(hex: 0xC8A86A))
+                .foregroundStyle(Color.white.opacity(0.72))
             Text(value.map(String.init) ?? "—")
                 .font(GType.headline)
                 .tabular()
-                .foregroundStyle(Color(hex: 0xF7F5F0))
+                .foregroundStyle(Color(hex: BrandHex.white))
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
                 .accessibilityIdentifier(id)

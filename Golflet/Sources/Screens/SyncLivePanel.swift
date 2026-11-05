@@ -50,13 +50,13 @@ struct ClubCrestView: View {
             }
         }
         .frame(width: 56, height: 56)
-        .background(detecting ? Color(hex: 0xF7F5F0) : (url == nil ? Color(hex: 0x0F3D2E) : Color.white))
+        .background(detecting ? Color(hex: BrandHex.white) : (url == nil ? Color(hex: BrandHex.navy) : Color.white))
         .clipShape(Circle())
-        .shadow(color: Color(hex: 0xC8A86A, alpha: 0.55), radius: 0)
+        .shadow(color: Color(hex: BrandHex.red, alpha: 0.55), radius: 0)
         .overlay {
-            Circle().stroke(Color(hex: 0xC8A86A, alpha: 0.55), lineWidth: 1)
+            Circle().stroke(Color(hex: BrandHex.red, alpha: 0.55), lineWidth: 1)
         }
-        .shadow(color: Color(hex: 0x0F3D2E, alpha: 0.12), radius: 9, y: 4)
+        .shadow(color: Color(hex: BrandHex.navy, alpha: 0.12), radius: 9, y: 4)
         .accessibilityLabel(detecting ? "Buscando clubes" : (club ?? "Club"))
     }
 
@@ -64,20 +64,20 @@ struct ClubCrestView: View {
         Text(SyncClubIdentity.initials(name: club, provided: initials))
             .font(GFont.ui(19, weight: .semibold))
             .tracking(1.1)
-            .foregroundStyle(Color(hex: 0xF7F5F0))
+            .foregroundStyle(Color(hex: BrandHex.white))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(hex: 0x0F3D2E))
+            .background(Color(hex: BrandHex.navy))
             .overlay {
-                Circle().stroke(Color(hex: 0xC8A86A, alpha: 0.9), lineWidth: 1.6).padding(3)
+                Circle().stroke(Color(hex: BrandHex.red, alpha: 0.9), lineWidth: 1.6).padding(3)
             }
     }
 
     private var scan: some View {
         ZStack {
             Circle()
-                .stroke(Color(hex: 0xC8A86A, alpha: 0.9), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+                .stroke(Color(hex: BrandHex.red, alpha: 0.9), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
             SyncFlagMark()
-                .stroke(Color(hex: 0x0F3D2E), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                .stroke(Color(hex: BrandHex.navy), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
                 .frame(width: 22, height: 22)
                 .rotationEffect(.degrees(reduceMotion ? 0 : (spin ? -360 : 0)))
         }
@@ -140,13 +140,13 @@ struct SyncCompactStages: View {
                     .font(GFont.ui(11, weight: .semibold))
                     .tracking(1.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(state == .error || outcome == .failed ? Color(hex: 0xC46A4E) : Color(hex: 0x5E6560))
+                    .foregroundStyle(state == .error || outcome == .failed ? Color(hex: BrandHex.redDeep) : Color(hex: BrandHex.ink2))
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 if let count {
                     Text(count)
                         .font(GFont.ui(11, weight: .semibold))
-                        .foregroundStyle(Color(hex: 0xA88A50))
+                        .foregroundStyle(Color(hex: BrandHex.red))
                         .tabular()
                         .accessibilityIdentifier("sync-progress-count")
                 }
@@ -165,10 +165,10 @@ struct SyncCompactStages: View {
 
     private func segmentColor(_ state: SyncStepState) -> Color {
         switch state {
-        case .done: return Color(hex: 0xC8A86A)
-        case .active: return Color(hex: 0xC8A86A, alpha: 0.28)
-        case .error: return Color(hex: 0xC46A4E)
-        case .todo: return Color(hex: 0xE6E2D8)
+        case .done: return Color(hex: BrandHex.red)
+        case .active: return Color(hex: BrandHex.red, alpha: 0.28)
+        case .error: return Color(hex: BrandHex.redDeep)
+        case .todo: return Color(hex: BrandHex.hairline)
         }
     }
 }
@@ -197,21 +197,21 @@ private struct SyncLiveCounters: View {
                         .font(GFont.ui(22, weight: .semibold))
                         .tracking(-0.6)
                         .tabular()
-                        .foregroundStyle(item.kind == .birdie ? Color(hex: 0xF7F5F0) : (item.kind == .eagle && item.value == 0 ? Color(hex: 0x9AA09B) : Color(hex: 0x121614)))
+                        .foregroundStyle(item.kind == .birdie ? Color(hex: BrandHex.white) : (item.kind == .eagle && item.value == 0 ? Color(hex: BrandHex.ink3) : Color(hex: BrandHex.ink)))
                     Text(item.label)
                         .font(GFont.ui(9.5, weight: .semibold))
                         .tracking(1)
                         .textCase(.uppercase)
-                        .foregroundStyle(item.kind == .birdie ? Color(hex: 0xF7F5F0).opacity(0.62) : Color(hex: 0x9AA09B))
+                        .foregroundStyle(item.kind == .birdie ? Color(hex: BrandHex.white).opacity(0.62) : Color(hex: BrandHex.ink3))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
-                .background(item.kind == .birdie ? Color(hex: 0x0F3D2E) : Color.white)
+                .background(item.kind == .birdie ? Color(hex: BrandHex.navy) : Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay {
                     if item.kind != .birdie {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color(hex: 0xE6E2D8), lineWidth: 1)
+                            .stroke(Color(hex: BrandHex.hairline), lineWidth: 1)
                     }
                 }
                 .accessibilityIdentifier("sync-stat-\(item.key)")
@@ -230,23 +230,23 @@ private struct SyncMarkGlyph: View {
             let mid = CGPoint(x: size.width / 2, y: size.height / 2)
             switch kind {
             case .eagle:
-                strokeCircle(context, mid: mid, r: 6, color: Color(hex: 0xC8A86A))
-                strokeCircle(context, mid: mid, r: 3.6, color: Color(hex: 0xC8A86A))
+                strokeCircle(context, mid: mid, r: 6, color: Color(hex: BrandHex.red))
+                strokeCircle(context, mid: mid, r: 3.6, color: Color(hex: BrandHex.red))
             case .birdie:
-                strokeCircle(context, mid: mid, r: 6, color: Color(hex: 0xC8A86A))
+                strokeCircle(context, mid: mid, r: 6, color: Color(hex: BrandHex.white))
             case .par:
                 var path = Path()
                 path.move(to: CGPoint(x: 3, y: mid.y))
                 path.addLine(to: CGPoint(x: size.width - 3, y: mid.y))
-                context.stroke(path, with: .color(Color(hex: 0x0F3D2E)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+                context.stroke(path, with: .color(Color(hex: BrandHex.navy)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
             case .bogey:
                 let rect = CGRect(x: 1.5, y: 1.5, width: size.width - 3, height: size.height - 3)
-                context.stroke(Path(roundedRect: rect, cornerRadius: 1), with: .color(Color(hex: 0x0F3D2E, alpha: 0.55)), lineWidth: 1.4)
+                context.stroke(Path(roundedRect: rect, cornerRadius: 1), with: .color(Color(hex: BrandHex.navy, alpha: 0.55)), lineWidth: 1.4)
             case .double:
                 let outer = CGRect(x: 1, y: 1, width: size.width - 2, height: size.height - 2)
                 let inner = CGRect(x: 3.6, y: 3.6, width: size.width - 7.2, height: size.height - 7.2)
-                context.stroke(Path(roundedRect: outer, cornerRadius: 1), with: .color(Color(hex: 0x0F3D2E, alpha: 0.55)), lineWidth: 1.4)
-                context.stroke(Path(roundedRect: inner, cornerRadius: 0.6), with: .color(Color(hex: 0x0F3D2E, alpha: 0.55)), lineWidth: 1.4)
+                context.stroke(Path(roundedRect: outer, cornerRadius: 1), with: .color(Color(hex: BrandHex.navy, alpha: 0.55)), lineWidth: 1.4)
+                context.stroke(Path(roundedRect: inner, cornerRadius: 0.6), with: .color(Color(hex: BrandHex.navy, alpha: 0.55)), lineWidth: 1.4)
             }
         }
     }
@@ -268,10 +268,10 @@ private struct SyncLastCardView: View {
                         .font(GFont.ui(9.5, weight: .semibold))
                         .tracking(1.6)
                         .textCase(.uppercase)
-                        .foregroundStyle(Color(hex: 0xA88A50))
+                        .foregroundStyle(Color(hex: BrandHex.red))
                     Text(meta)
                         .font(GFont.ui(13, weight: .medium))
-                        .foregroundStyle(Color(hex: 0x121614))
+                        .foregroundStyle(Color(hex: BrandHex.ink))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
@@ -281,13 +281,13 @@ private struct SyncLastCardView: View {
                             .font(GFont.ui(26, weight: .semibold))
                             .tracking(-1)
                             .tabular()
-                            .foregroundStyle(Color(hex: 0x0F3D2E))
+                            .foregroundStyle(Color(hex: BrandHex.navy))
                     }
                     if let toPar = card.toPar {
                         Text(FormatAR.signedInt(toPar))
                             .font(GFont.ui(12, weight: .semibold))
                             .tabular()
-                            .foregroundStyle(Color(hex: 0x9AA09B))
+                            .foregroundStyle(Color(hex: BrandHex.ink3))
                     }
                 }
             }
@@ -304,7 +304,7 @@ private struct SyncLastCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(alignment: .top) {
             LinearGradient(
-                colors: [Color(hex: 0xA88A50), Color(hex: 0xE9CF95), Color(hex: 0xA88A50)],
+                colors: [Color(hex: BrandHex.red), Color(hex: BrandHex.white), Color(hex: BrandHex.red)],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -312,7 +312,7 @@ private struct SyncLastCardView: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color(hex: 0xE6E2D8), lineWidth: 1)
+                .stroke(Color(hex: BrandHex.hairline), lineWidth: 1)
         }
         .accessibilityIdentifier("sync-last-card")
     }
@@ -331,14 +331,14 @@ private struct SyncLastCardView: View {
                 .font(GFont.ui(9.5, weight: .semibold))
                 .tracking(1.4)
                 .textCase(.uppercase)
-                .foregroundStyle(Color(hex: 0x0F3D2E))
+                .foregroundStyle(Color(hex: BrandHex.navy))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(Color(hex: 0xC8A86A, alpha: 0.22))
+                .background(Color(hex: BrandHex.red, alpha: 0.22))
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             Text("Sin detalle hoyo por hoyo · cuenta en rondas, días y mejor gross")
                 .font(GFont.ui(12.5))
-                .foregroundStyle(Color(hex: 0x5E6560))
+                .foregroundStyle(Color(hex: BrandHex.ink2))
         }
         .padding(.vertical, 4)
         .accessibilityIdentifier("sync-other-course")
@@ -375,20 +375,20 @@ private struct SyncMiniScorecard: View {
             Text(label)
                 .font(GFont.ui(7.5, weight: .semibold))
                 .tracking(1.2)
-                .foregroundStyle(Color(hex: 0x9AA09B))
+                .foregroundStyle(Color(hex: BrandHex.ink3))
                 .frame(width: 34, alignment: .leading)
             ForEach(Array(values.enumerated()), id: \.offset) { _, value in
                 Text(value)
                     .font(GFont.ui(style == .caption ? 8.5 : 9, weight: .medium))
                     .tabular()
-                    .foregroundStyle(Color(hex: 0x9AA09B))
+                    .foregroundStyle(Color(hex: BrandHex.ink3))
                     .frame(maxWidth: .infinity)
             }
             Text(total)
                 .font(GFont.ui(style == .caption ? 7.5 : 9, weight: .semibold))
                 .tracking(style == .caption ? 1.2 : 0)
                 .tabular()
-                .foregroundStyle(Color(hex: 0x9AA09B))
+                .foregroundStyle(Color(hex: BrandHex.ink3))
                 .frame(width: 34)
         }
     }
@@ -405,20 +405,20 @@ private struct SyncMiniScorecard: View {
                     Text(hole.strokes.map(String.init) ?? "·")
                         .font(GFont.ui(12.5, weight: .semibold))
                         .tabular()
-                        .foregroundStyle(Color(hex: 0x0F3D2E))
+                        .foregroundStyle(Color(hex: BrandHex.navy))
                 }
                 .frame(maxWidth: .infinity, minHeight: 22)
             }
             Text(strokes > 0 ? "\(strokes)" : "")
                 .font(GFont.ui(15, weight: .semibold))
                 .tabular()
-                .foregroundStyle(Color(hex: 0x0F3D2E))
+                .foregroundStyle(Color(hex: BrandHex.navy))
                 .frame(width: 34)
         }
     }
 
     private var rule: some View {
-        Color(hex: 0xE6E2D8).frame(height: 0.8)
+        Color(hex: BrandHex.hairline).frame(height: 0.8)
     }
 }
 
@@ -429,18 +429,18 @@ private struct SyncHoleMark: View {
         Canvas { context, size in
             let mid = CGPoint(x: size.width / 2, y: size.height / 2)
             if toPar <= -2 {
-                strokeCircle(context, mid: mid, r: 9.2, color: Color(hex: 0xC8A86A), width: 1.5)
-                strokeCircle(context, mid: mid, r: 6.2, color: Color(hex: 0xC8A86A), width: 1.5)
+                strokeCircle(context, mid: mid, r: 9.2, color: Color(hex: BrandHex.red), width: 1.5)
+                strokeCircle(context, mid: mid, r: 6.2, color: Color(hex: BrandHex.red), width: 1.5)
             } else if toPar == -1 {
-                strokeCircle(context, mid: mid, r: 9.2, color: Color(hex: 0xC8A86A), width: 1.5)
+                strokeCircle(context, mid: mid, r: 9.2, color: Color(hex: BrandHex.red), width: 1.5)
             } else if toPar == 1 {
                 let rect = CGRect(x: mid.x - 8.5, y: mid.y - 8.5, width: 17, height: 17)
-                context.stroke(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(Color(hex: 0x0F3D2E, alpha: 0.5)), lineWidth: 1.25)
+                context.stroke(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(Color(hex: BrandHex.navy, alpha: 0.5)), lineWidth: 1.25)
             } else if toPar >= 2 {
                 let outer = CGRect(x: mid.x - 9.5, y: mid.y - 9.5, width: 19, height: 19)
                 let inner = CGRect(x: mid.x - 6.5, y: mid.y - 6.5, width: 13, height: 13)
-                context.stroke(Path(roundedRect: outer, cornerRadius: 1.5), with: .color(Color(hex: 0x0F3D2E, alpha: 0.5)), lineWidth: 1.25)
-                context.stroke(Path(roundedRect: inner, cornerRadius: 1), with: .color(Color(hex: 0x0F3D2E, alpha: 0.5)), lineWidth: 1.25)
+                context.stroke(Path(roundedRect: outer, cornerRadius: 1.5), with: .color(Color(hex: BrandHex.navy, alpha: 0.5)), lineWidth: 1.25)
+                context.stroke(Path(roundedRect: inner, cornerRadius: 1), with: .color(Color(hex: BrandHex.navy, alpha: 0.5)), lineWidth: 1.25)
             }
         }
         .frame(width: 22, height: 22)
@@ -463,16 +463,16 @@ private struct SyncLiveFooter: View {
                 TickingInt(target: stats.bestGross ?? 0, reduceMotion: reduceMotion, placeholder: stats.bestGross == nil ? "–" : nil)
                     .font(GFont.ui(18, weight: .semibold))
                     .tabular()
-                    .foregroundStyle(Color(hex: 0x121614))
+                    .foregroundStyle(Color(hex: BrandHex.ink))
                 Text("Mejor gross")
                     .font(GFont.ui(8.5, weight: .semibold))
                     .tracking(1.2)
                     .textCase(.uppercase)
-                    .foregroundStyle(Color(hex: 0x9AA09B))
+                    .foregroundStyle(Color(hex: BrandHex.ink3))
                 if let date = stats.bestGrossDate {
                     Text([FormatAR.syncDay(date), stats.bestGrossCourse].compactMap { $0 }.joined(separator: " · "))
                         .font(GFont.ui(8.5, weight: .medium))
-                        .foregroundStyle(Color(hex: 0x9AA09B))
+                        .foregroundStyle(Color(hex: BrandHex.ink3))
                         .lineLimit(1)
                 }
             }
@@ -487,12 +487,12 @@ private struct SyncLiveFooter: View {
             TickingInt(target: value, reduceMotion: reduceMotion)
                 .font(GFont.ui(18, weight: .semibold))
                 .tabular()
-                .foregroundStyle(Color(hex: 0x121614))
+                .foregroundStyle(Color(hex: BrandHex.ink))
             Text(label)
                 .font(GFont.ui(8.5, weight: .semibold))
                 .tracking(1.2)
                 .textCase(.uppercase)
-                .foregroundStyle(Color(hex: 0x9AA09B))
+                .foregroundStyle(Color(hex: BrandHex.ink3))
                 .lineLimit(1)
         }
     }
@@ -511,11 +511,11 @@ private struct SyncMonthStrip: View {
                 VStack(spacing: 3) {
                     Spacer(minLength: 0)
                     Capsule()
-                        .fill(point.rounds > 0 ? Color(hex: 0xC8A86A) : Color(hex: 0xE6E2D8))
+                        .fill(point.rounds > 0 ? Color(hex: BrandHex.red) : Color(hex: BrandHex.hairline))
                         .frame(width: 4, height: height)
                     Text(initial(for: point.month))
                         .font(GFont.ui(7.5, weight: .semibold))
-                        .foregroundStyle(Color(hex: 0x9AA09B))
+                        .foregroundStyle(Color(hex: BrandHex.ink3))
                 }
                 .frame(width: 7, height: 38)
             }

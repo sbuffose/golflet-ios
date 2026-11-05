@@ -123,10 +123,10 @@ struct ClubsView: View {
                     if let badge = model.unreadBadgeText {
                         Text(badge)
                             .font(GFont.ui(11, weight: .semibold))
-                            .foregroundStyle(Color(hex: 0xF7F5F0))
+                            .foregroundStyle(p.onPrimary)
                             .padding(.horizontal, badge.count > 1 ? 5 : 0)
                             .frame(minWidth: 18, minHeight: 18)
-                            .background(Color(hex: 0xB4553F))
+                            .background(p.accent)
                             .clipShape(Capsule())
                             .accessibilityIdentifier("perfil-notificaciones-badge")
                     }
@@ -159,7 +159,7 @@ struct ClubsView: View {
                                         .foregroundStyle(p.ink)
                                     Text("Invitación pendiente")
                                         .font(GType.label)
-                                        .foregroundStyle(p.accent)
+                                        .foregroundStyle(p.accentInk)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")

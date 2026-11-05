@@ -62,7 +62,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .padding(.horizontal, 20)
-            .background(step == 10 || step == 11 ? Color(hex: 0x0B2545) : p.bg)
+            .background(step == 10 || step == 11 ? Color(hex: BrandHex.navy) : p.bg)
         }
         .onAppear {
             draft = model.onboarding
@@ -219,10 +219,18 @@ struct OnboardingView: View {
             Text("Tocá dónde quedó. Sabés a cuánto quedaste del hoyo y qué te costó cada golpe.")
                 .font(GType.body)
                 .foregroundStyle(Color.white.opacity(0.8))
-            RoundedRectangle(cornerRadius: 18)
-                .fill(Color(hex: 0x4F8A5B))
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.12))
                 .frame(height: 220)
-                .overlay(Text("Mapa del hoyo").foregroundStyle(.white).font(GType.headline))
+                .overlay {
+                    VStack(spacing: 10) {
+                        Circle()
+                            .fill(Color(hex: BrandHex.red))
+                            .frame(width: 14, height: 14)
+                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                        Text("Mapa del hoyo").foregroundStyle(.white).font(GType.headline)
+                    }
+                }
             Spacer()
             Button { go(12) } label: { pill("Siguiente", light: true) }
                 .accessibilityIdentifier("ob-tour-next")
@@ -240,7 +248,7 @@ struct OnboardingView: View {
                 Spacer()
                 Text("\(draft.bag.count) / 14")
                     .font(GType.headline)
-                    .foregroundStyle(draft.bag.count >= 14 ? Color(hex: 0xC8102E) : p.ink)
+                    .foregroundStyle(draft.bag.count >= 14 ? p.accentInk : p.ink)
                     .tabular()
                     .accessibilityIdentifier("ob-bag-count")
             }
@@ -351,7 +359,7 @@ struct OnboardingView: View {
     private func pill(_ title: String, light: Bool = false) -> some View {
         Text(title)
             .font(GType.headline)
-            .foregroundStyle(light ? Color(hex: 0x0B2545) : p.onPrimary)
+            .foregroundStyle(light ? Color(hex: BrandHex.navy) : p.onPrimary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(light ? Color.white : p.primary)

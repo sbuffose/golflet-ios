@@ -12,7 +12,7 @@ struct YardageBookView: View {
     var body: some View {
         GeometryReader { _ in
             ZStack(alignment: .top) {
-                Color(hex: 0xF7F5F0)
+                Color(hex: BrandHex.paper)
                 scene
                 header
                 if !compact { footer }
@@ -35,7 +35,7 @@ struct YardageBookView: View {
                 .font(GType.overline)
                 .tracking(1.4)
                 .textCase(.uppercase)
-                .foregroundStyle(Color(hex: 0x0F3D2E).opacity(0.55))
+                .foregroundStyle(Color(hex: BrandHex.navy).opacity(0.55))
             Spacer()
         }
         .padding(.horizontal, 18)
@@ -50,12 +50,12 @@ struct YardageBookView: View {
                     .font(GType.overline)
                     .tracking(1.2)
                     .textCase(.uppercase)
-                    .foregroundStyle(Color(hex: 0x0F3D2E).opacity(0.72))
+                    .foregroundStyle(Color(hex: BrandHex.navy).opacity(0.72))
                 Spacer()
                 if let count {
                     Text(count)
                         .font(GFont.ui(12.5, weight: .semibold))
-                        .foregroundStyle(Color(hex: 0x0F3D2E).opacity(0.78))
+                        .foregroundStyle(Color(hex: BrandHex.navy).opacity(0.78))
                         .tabular()
                 }
             }
@@ -153,17 +153,17 @@ enum YardageBookRenderer {
             let w = YardageBook.hw(y) + 3
             let a = toScreen(YardageBook.cx(y) - w, y, camera: camera, size: size)
             let b = toScreen(YardageBook.cx(y) + w, y, camera: camera, size: size)
-            strokeLine(from: a, to: b, width: 0.8, color: Color(hex: 0xC8A86A, alpha: 0.85), in: &ctx)
-            fillDot(a, r: 1.6, color: Color(hex: 0xC8A86A, alpha: 0.95), in: &ctx)
-            fillDot(b, r: 1.6, color: Color(hex: 0xC8A86A, alpha: 0.95), in: &ctx)
+            strokeLine(from: a, to: b, width: 0.8, color: Color(hex: BrandHex.red, alpha: 0.85), in: &ctx)
+            fillDot(a, r: 1.6, color: Color(hex: BrandHex.red, alpha: 0.95), in: &ctx)
+            fillDot(b, r: 1.6, color: Color(hex: BrandHex.red, alpha: 0.95), in: &ctx)
             let label = toScreen(YardageBook.cx(y) + w + 7, y, camera: camera, size: size)
-            text("\(meters)", at: label, size: 9, color: Color(hex: 0x0F3D2E, alpha: 0.78), in: &ctx)
+            text("\(meters)", at: label, size: 9, color: Color(hex: BrandHex.navy, alpha: 0.78), in: &ctx)
         }
         let front = toScreen(YardageBook.green.x - 24, YardageBook.green.y - YardageBook.green.ry, camera: camera, size: size)
         let back = toScreen(YardageBook.green.x - 24, YardageBook.green.y + YardageBook.green.ry, camera: camera, size: size)
-        strokeLine(from: front, to: back, width: 0.7, color: Color(hex: 0xC8A86A, alpha: 0.7), in: &ctx)
+        strokeLine(from: front, to: back, width: 0.7, color: Color(hex: BrandHex.red, alpha: 0.7), in: &ctx)
         let mid = toScreen(YardageBook.green.x - 27, YardageBook.green.y, camera: camera, size: size)
-        text("34 M", at: CGPoint(x: mid.x - 10, y: mid.y), size: 9, color: Color(hex: 0x0F3D2E, alpha: 0.7), in: &ctx)
+        text("34 M", at: CGPoint(x: mid.x - 10, y: mid.y), size: 9, color: Color(hex: BrandHex.navy, alpha: 0.7), in: &ctx)
     }
 
     private static func drawArcs(_ frame: YardageBook.Frame, size: CGSize, in ctx: inout GraphicsContext) {
@@ -191,7 +191,7 @@ enum YardageBookRenderer {
                 ground.append(toScreen(p.x, p.y, camera: frame.camera, size: size))
                 air.append(lift(p, camera: frame.camera, size: size))
             }
-            dashed(ground, color: Color(hex: 0x0F3D2E, alpha: 0.32 * arc.alpha), in: &ctx)
+            dashed(ground, color: Color(hex: BrandHex.navy, alpha: 0.32 * arc.alpha), in: &ctx)
             glowPath(air, widths: [16, 8, 3.2, 1.8, 0.8], alphas: [0.07, 0.16, 0.55, 1, 0.95].map { $0 * arc.alpha }, in: &ctx)
         }
     }
@@ -204,10 +204,10 @@ enum YardageBookRenderer {
         let up = lifted * hgt * 0.9
         var hole = Path()
         hole.addEllipse(in: CGRect(x: q.x - (1 + z * 0.3), y: q.y - (0.7 + z * 0.2), width: (1 + z * 0.3) * 2, height: (0.7 + z * 0.2) * 2))
-        ctx.fill(hole, with: .color(Color(hex: 0x0F3D2E, alpha: 0.75)))
+        ctx.fill(hole, with: .color(Color(hex: BrandHex.navy, alpha: 0.75)))
         ctx.opacity = 1 - lifted * 0.9
         let top = CGPoint(x: q.x, y: q.y - hgt - up)
-        strokeLine(from: CGPoint(x: q.x, y: q.y - up), to: top, width: 1.2, color: Color(hex: 0x0F3D2E), in: &ctx)
+        strokeLine(from: CGPoint(x: q.x, y: q.y - up), to: top, width: 1.2, color: Color(hex: BrandHex.navy), in: &ctx)
         let fw = 5 + z * 1.2
         let fh = 3.4 + z * 0.75
         let wv = sin(frame.flagWave / 330) * 0.22
@@ -215,7 +215,7 @@ enum YardageBookRenderer {
         flag.move(to: top)
         flag.addQuadCurve(to: CGPoint(x: top.x + fw, y: top.y + fh * 0.5), control: CGPoint(x: top.x + fw * 0.5, y: top.y + fh * (0.12 + wv)))
         flag.addQuadCurve(to: CGPoint(x: top.x, y: top.y + fh), control: CGPoint(x: top.x + fw * 0.5, y: top.y + fh * (0.88 + wv)))
-        ctx.fill(flag, with: .color(Color(hex: 0xC8A86A)))
+        ctx.fill(flag, with: .color(Color(hex: BrandHex.red)))
         ctx.opacity = 1
     }
 
@@ -230,9 +230,9 @@ enum YardageBookRenderer {
             leader.move(to: CGPoint(x: q.x + 3, y: q.y - 2))
             leader.addLine(to: CGPoint(x: ex, y: ey))
             leader.addLine(to: CGPoint(x: ex + 52 * YardageBook.easeOut(a), y: ey))
-            ctx.stroke(leader, with: .color(Color(hex: 0xC8A86A, alpha: a)), lineWidth: 0.8)
-            text(note.text.uppercased(), at: CGPoint(x: ex + 2, y: ey - 12), size: 8.5, color: Color(hex: 0x0F3D2E, alpha: 0.8 * a), in: &ctx)
-            text("\(note.distance) m", at: CGPoint(x: ex + 2, y: ey + 2), size: 12, color: Color(hex: 0x0F3D2E, alpha: a), in: &ctx)
+            ctx.stroke(leader, with: .color(Color(hex: BrandHex.red, alpha: a)), lineWidth: 0.8)
+            text(note.text.uppercased(), at: CGPoint(x: ex + 2, y: ey - 12), size: 8.5, color: Color(hex: BrandHex.navy, alpha: 0.8 * a), in: &ctx)
+            text("\(note.distance) m", at: CGPoint(x: ex + 2, y: ey + 2), size: 12, color: Color(hex: BrandHex.navy, alpha: a), in: &ctx)
         }
     }
 
@@ -244,11 +244,11 @@ enum YardageBookRenderer {
         let r = CGFloat(YardageBook.clamp(1.1 + frame.camera.z * 0.2, 1.6, 3.2) * (1 + frame.ball.z * 0.012) * (1 - drop))
         var shadow = Path()
         shadow.addEllipse(in: CGRect(x: g.x + 1 - r * 1.1, y: g.y + 0.6 - r * 0.7, width: r * 2.2, height: r * 1.4))
-        ctx.fill(shadow, with: .color(Color(hex: 0x0F3D2E, alpha: 0.28)))
+        ctx.fill(shadow, with: .color(Color(hex: BrandHex.navy, alpha: 0.28)))
         var ball = Path()
         ball.addEllipse(in: CGRect(x: q.x - r, y: q.y - r, width: r * 2, height: r * 2))
         ctx.fill(ball, with: .color(.white))
-        ctx.stroke(ball, with: .color(Color(hex: 0x0F3D2E, alpha: 0.5)), lineWidth: 0.6)
+        ctx.stroke(ball, with: .color(Color(hex: BrandHex.navy, alpha: 0.5)), lineWidth: 0.6)
     }
 
     private static func drawHoled(_ frame: YardageBook.Frame, size: CGSize, in ctx: inout GraphicsContext) {
@@ -262,7 +262,7 @@ enum YardageBookRenderer {
             let ry = YardageBook.easeOut(kk) * 48
             var ring = Path()
             ring.addEllipse(in: CGRect(x: q.x - rx, y: q.y - ry, width: rx * 2, height: ry * 2))
-            ctx.stroke(ring, with: .color(Color(hex: 0xC8A86A, alpha: 0.8 * (1 - kk))), lineWidth: 1.1)
+            ctx.stroke(ring, with: .color(Color(hex: BrandHex.red, alpha: 0.8 * (1 - kk))), lineWidth: 1.1)
         }
         for spark in frame.sparks {
             let s = toScreen(spark.x, spark.y, camera: frame.camera, size: size)
@@ -275,27 +275,27 @@ enum YardageBookRenderer {
             star.addQuadCurve(to: CGPoint(x: s.x, y: s.y + R), control: s)
             star.addQuadCurve(to: CGPoint(x: s.x - R * 0.6, y: s.y), control: s)
             star.addQuadCurve(to: CGPoint(x: s.x, y: s.y - R), control: s)
-            ctx.fill(star, with: .color(Color(hex: 0xC8A86A, alpha: a)))
+            ctx.fill(star, with: .color(Color(hex: BrandHex.red, alpha: a)))
         }
     }
 
     private static func drawWashes(size: CGSize, fade: Double, in ctx: inout GraphicsContext) {
-        let top = Gradient(colors: [Color(hex: 0xF4F0E6, alpha: 0.88), Color(hex: 0xF4F0E6, alpha: 0)])
+        let top = Gradient(colors: [Color(hex: BrandHex.paper, alpha: 0.88), Color(hex: BrandHex.paper, alpha: 0)])
         ctx.fill(
             Path(CGRect(x: 0, y: 0, width: size.width, height: 84)),
             with: .linearGradient(top, startPoint: .zero, endPoint: CGPoint(x: 0, y: 84))
         )
         let foot = Gradient(stops: [
-            .init(color: Color(hex: 0xF4F0E6, alpha: 0), location: 0),
-            .init(color: Color(hex: 0xF4F0E6, alpha: 0), location: 0.8),
-            .init(color: Color(hex: 0xF7F5F0), location: 1)
+            .init(color: Color(hex: BrandHex.paper, alpha: 0), location: 0),
+            .init(color: Color(hex: BrandHex.paper, alpha: 0), location: 0.8),
+            .init(color: Color(hex: BrandHex.paper), location: 1)
         ])
         ctx.fill(
             Path(CGRect(origin: .zero, size: size)),
             with: .linearGradient(foot, startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height))
         )
         if fade > 0 {
-            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: 0xF4F0E6, alpha: fade)))
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: BrandHex.paper, alpha: fade)))
         }
     }
 
@@ -306,19 +306,19 @@ enum YardageBookRenderer {
             layer.rotate(by: .radians(-camera.r))
             var ring = Path()
             ring.addEllipse(in: CGRect(x: -9, y: -9, width: 18, height: 18))
-            layer.stroke(ring, with: .color(Color(hex: 0x0F3D2E, alpha: 0.55)), lineWidth: 0.8)
+            layer.stroke(ring, with: .color(Color(hex: BrandHex.navy, alpha: 0.55)), lineWidth: 0.8)
             var north = Path()
             north.move(to: CGPoint(x: 0, y: -12))
             north.addLine(to: CGPoint(x: 2.6, y: 0))
             north.addLine(to: CGPoint(x: -2.6, y: 0))
             north.closeSubpath()
-            layer.fill(north, with: .color(Color(hex: 0xC8A86A)))
+            layer.fill(north, with: .color(Color(hex: BrandHex.red)))
             var south = Path()
             south.move(to: CGPoint(x: 0, y: 12))
             south.addLine(to: CGPoint(x: 2.6, y: 0))
             south.addLine(to: CGPoint(x: -2.6, y: 0))
             south.closeSubpath()
-            layer.fill(south, with: .color(Color(hex: 0x0F3D2E, alpha: 0.5)))
+            layer.fill(south, with: .color(Color(hex: BrandHex.navy, alpha: 0.5)))
         }
         let meters: Double = camera.z > 5 ? 5 : camera.z > 2 ? 20 : 50
         let L = meters * camera.z
@@ -329,8 +329,8 @@ enum YardageBookRenderer {
         bar.addLine(to: CGPoint(x: size.width - 18 - L, y: 59))
         bar.move(to: CGPoint(x: size.width - 18, y: 53))
         bar.addLine(to: CGPoint(x: size.width - 18, y: 59))
-        ctx.stroke(bar, with: .color(Color(hex: 0x0F3D2E, alpha: 0.6)), lineWidth: 0.8)
-        text("\(Int(meters)) M", at: CGPoint(x: size.width - 46, y: 60), size: 8, color: Color(hex: 0x0F3D2E, alpha: 0.65), in: &ctx)
+        ctx.stroke(bar, with: .color(Color(hex: BrandHex.navy, alpha: 0.6)), lineWidth: 0.8)
+        text("\(Int(meters)) M", at: CGPoint(x: size.width - 46, y: 60), size: 8, color: Color(hex: BrandHex.navy, alpha: 0.65), in: &ctx)
     }
 
     private static func glowPath(_ pts: [CGPoint], widths: [CGFloat], alphas: [Double], in ctx: inout GraphicsContext) {
@@ -339,7 +339,7 @@ enum YardageBookRenderer {
         path.move(to: pts[0])
         for p in pts.dropFirst() { path.addLine(to: p) }
         for (width, alpha) in zip(widths, alphas) {
-            let color = width <= 1 ? Color(hex: 0xFFF6DE, alpha: alpha) : Color(hex: 0xC8A86A, alpha: alpha)
+            let color = width <= 1 ? Color(hex: BrandHex.white, alpha: alpha) : Color(hex: BrandHex.red, alpha: alpha)
             ctx.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
         }
     }
