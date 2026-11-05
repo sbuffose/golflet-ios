@@ -238,6 +238,14 @@ struct GroupInviteView: View {
     @State private var acceptedGroupID: String?
 
     var body: some View {
+        if let acceptedGroupID {
+            GroupDetailView(groupID: acceptedGroupID)
+        } else {
+            inviteContent
+        }
+    }
+
+    private var inviteContent: some View {
         GScreen(id: "screen-invitacion") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
@@ -296,18 +304,12 @@ struct GroupInviteView: View {
                 .padding(.bottom, 28)
             }
         }
-        .accessibilityIdentifier("screen-invitacion")
-        .navigationDestination(isPresented: Binding(
-            get: { acceptedGroupID != nil },
-            set: { if !$0 { acceptedGroupID = nil } }
-        )) {
-            GroupDetailView(groupID: acceptedGroupID ?? "")
-        }
         .safeAreaInset(edge: .top) { closeBar(action: { model.presentedInvite = nil }, id: "close-invitacion") }
         .safeAreaInset(edge: .bottom) {
             if !invite.alreadyMember {
                 VStack(spacing: 10) {
                     Button {
+                        acceptedGroupID = invite.groupID ?? "g-\(invite.token)"
                         Task {
                             if let id = await model.acceptInvite(invite, openGroup: false) {
                                 acceptedGroupID = id

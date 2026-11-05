@@ -33,7 +33,15 @@ struct GroupDetailView: View {
             }
         }
         .accessibilityIdentifier("screen-grupo")
-        .safeAreaInset(edge: .top) { closeBar(action: { model.presentedGroupID = nil }, id: "close-grupo") }
+        .safeAreaInset(edge: .top) {
+            closeBar(action: {
+                if model.presentedGroupID != nil {
+                    model.presentedGroupID = nil
+                } else {
+                    model.presentedInvite = nil
+                }
+            }, id: "close-grupo")
+        }
         .task(id: groupID) { await load() }
         .onAppear { Task { await load() } }
         .sheet(item: Bindable(model).inviteShare) { payload in
