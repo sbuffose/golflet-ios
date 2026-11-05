@@ -535,7 +535,8 @@ final class AppModel {
     }
 
     func openAvatar() {
-        if unreadBadgeText != nil {
+        let authUITest = ProcessInfo.processInfo.arguments.contains("-ui-testing-auth")
+        if unreadBadgeText != nil && !authUITest {
             presentNotifications()
         } else {
             showsClubs = true
@@ -719,12 +720,12 @@ final class AppModel {
         }
     }
 
-    func acceptInvite(_ preview: GroupInvitePreview, openGroup: Bool = true) async {
+    @discardableResult
+    func acceptInvite(_ preview: GroupInvitePreview, openGroup: Bool = true) async -> String? {
         var openedID: String?
         await run {
             let group = try await api.acceptInvite(token: preview.token)
             PendingInviteStore.clear()
-            presentedInvite = nil
             pendingInvites.removeAll { $0.token == preview.token }
             notifications.removeAll { $0.inviteToken == preview.token }
             unreadNotificationCount = notifications.filter(\.isUnread).count
@@ -732,14 +733,18 @@ final class AppModel {
             if !groups.contains(where: { $0.id == group.id }) {
                 groups.insert(group, at: 0)
             }
-            if openGroup { openedID = group.id }
+            openedID = group.id
+            if openGroup {
+                presentedInvite = nil
+            }
             await refreshGroups()
             await refreshNotifications()
         }
-        if let openedID {
+        if openGroup, let openedID {
             try? await Task.sleep(for: .milliseconds(550))
             presentedGroupID = openedID
         }
+        return openedID
     }
 
     func declineInvite(_ preview: GroupInvitePreview) async {

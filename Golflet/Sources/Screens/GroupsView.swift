@@ -235,6 +235,7 @@ struct GroupInviteView: View {
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
     let invite: GroupInvitePreview
+    @State private var acceptedGroupID: String?
 
     var body: some View {
         GScreen(id: "screen-invitacion") {
@@ -296,12 +297,22 @@ struct GroupInviteView: View {
             }
         }
         .accessibilityIdentifier("screen-invitacion")
+        .navigationDestination(isPresented: Binding(
+            get: { acceptedGroupID != nil },
+            set: { if !$0 { acceptedGroupID = nil } }
+        )) {
+            GroupDetailView(groupID: acceptedGroupID ?? "")
+        }
         .safeAreaInset(edge: .top) { closeBar(action: { model.presentedInvite = nil }, id: "close-invitacion") }
         .safeAreaInset(edge: .bottom) {
             if !invite.alreadyMember {
                 VStack(spacing: 10) {
                     Button {
-                        Task { await model.acceptInvite(invite) }
+                        Task {
+                            if let id = await model.acceptInvite(invite, openGroup: false) {
+                                acceptedGroupID = id
+                            }
+                        }
                     } label: {
                         Text(model.isBusy ? "Entrando…" : "Aceptar")
                             .font(GType.headline)
