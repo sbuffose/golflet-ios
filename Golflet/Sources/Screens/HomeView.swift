@@ -380,27 +380,39 @@ struct HomeView: View {
     }
 
     private func teeTimeRow(_ booking: TeeTime) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(booking.chipWhen)
-                .font(GType.headline)
-                .tabular()
-                .foregroundStyle(p.ink)
-            Text(booking.clubName)
-                .font(GType.body)
-                .foregroundStyle(p.ink)
-            if !booking.course.isEmpty {
-                Text(booking.course)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
+        NavigationLink {
+            TeeTimePrepView(booking: booking)
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(booking.chipWhen)
+                        .font(GType.headline)
+                        .tabular()
+                        .foregroundStyle(p.ink)
+                    Text(booking.clubName)
+                        .font(GType.body)
+                        .foregroundStyle(p.ink)
+                    if !booking.course.isEmpty {
+                        Text(booking.course)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    if let partners = booking.companionsLine {
+                        Text(partners)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                        GProbe(id: "home-tee-partners-\(booking.id)", label: partners)
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(p.ink3)
             }
-            if let partners = booking.companionsLine {
-                Text(partners)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-                GProbe(id: "home-tee-partners-\(booking.id)", label: partners)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-tee-row-\(booking.id)")
     }
@@ -478,19 +490,27 @@ struct HomeView: View {
 
     private var competitiveLead: some View {
         VStack(alignment: .leading, spacing: 12) {
-            NavigationLink { MatchLiveView() } label: {
-                ProtoCard {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Próximo partido").font(GType.overline).foregroundStyle(p.ink3)
-                            DemoPill(text: "Fourball · 85%")
+            if let booking = model.nextTeeTime {
+                NavigationLink {
+                    TeeTimePrepView(booking: booking)
+                } label: {
+                    ProtoCard {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Próximo tee time").font(GType.overline).foregroundStyle(p.ink3)
+                            Text(booking.chipWhen).font(GType.headline).foregroundStyle(p.ink)
+                            Text(booking.course.isEmpty ? booking.clubName : "\(booking.clubName) · \(booking.course)")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink3)
                         }
-                        Text("Vos y Tomi vs Fede y Lucas").font(GType.headline).foregroundStyle(p.ink)
-                        Text("Sáb 7-nov · 9:20 · Cancha Azul").font(GType.label).foregroundStyle(p.ink3)
                     }
                 }
+                .accessibilityIdentifier("home-comp-match")
+            } else {
+                Text("No hay un partido cargado.")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier("home-comp-match")
             }
-            .accessibilityIdentifier("home-comp-match")
         }
     }
 
@@ -507,7 +527,6 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Grupos").font(GType.overline).foregroundStyle(p.ink3)
                         Text("Quién juega cuándo y lo último de tus amigos").font(GType.headline)
-                        Text("7 amigos juegan esta semana").font(GType.label).foregroundStyle(p.ink3)
                         DemoPill()
                     }
                 }

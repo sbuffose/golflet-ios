@@ -552,6 +552,7 @@ struct TeeTime: Identifiable, Hashable, Sendable {
     var clubCode: String
     var course: String
     var companions: [String]
+    var forecast: String? = nil
 
     var chipWhen: String { FormatAR.teeChip(startsAt) }
 

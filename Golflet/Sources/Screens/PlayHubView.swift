@@ -39,28 +39,50 @@ struct PlayHubView: View {
                     .accessibilityIdentifier("jugar-ajustes")
 
                     Text("Partido en curso").font(GType.section).foregroundStyle(p.ink)
-                    NavigationLink { MatchLiveView() } label: {
+                    if let round = liveMatch {
                         ProtoCard {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Text("Fourball · ejemplo").font(GType.overline).foregroundStyle(p.ink3)
-                                        DemoPill()
-                                    }
-                                    Text("Vos y Tomi vs Fede y Lucas").font(GType.headline).foregroundStyle(p.ink)
-                                }
-                                Spacer()
-                                Text("+1 · hoyo 4").font(GType.label).foregroundStyle(p.primary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(PaceModality.parse(round.modality).label)
+                                    .font(GType.overline)
+                                    .foregroundStyle(p.ink3)
+                                Text(round.course?.isEmpty == false ? round.course! : "Ronda en curso")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                Text("Hoyo \(round.currentHole)")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink2)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .accessibilityIdentifier("jugar-partido")
+                    } else {
+                        Text("No hay un partido en curso.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("jugar-partido-empty")
                     }
-                    .accessibilityIdentifier("jugar-partido")
 
                     Text("Tee times del club").font(GType.section).foregroundStyle(p.ink)
-                    NavigationLink { TeeTimesHubView() } label: {
-                        ProtoCard { ProtoRow(title: "Sáb 7-nov · 9:20", subtitle: "Cancha Azul · Fourball") }
+                    if model.upcomingTeeTimes.isEmpty {
+                        Text("No tenés reservas próximas.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("jugar-tee-empty")
+                    } else {
+                        ProtoCard {
+                            VStack(spacing: 0) {
+                                ForEach(model.upcomingTeeTimes) { booking in
+                                    NavigationLink {
+                                        TeeTimePrepView(booking: booking)
+                                    } label: {
+                                        ProtoRow(title: booking.chipWhen, subtitle: playTeeSubtitle(booking))
+                                    }
+                                    .accessibilityIdentifier("jugar-tee-\(booking.id)")
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("jugar-tee")
                     }
-                    .accessibilityIdentifier("jugar-tee")
 
                     Text("Antes de salir").font(GType.section).foregroundStyle(p.ink)
                     ProtoCard {
@@ -73,15 +95,14 @@ struct PlayHubView: View {
                                 ProtoRow(title: "Estrategia", subtitle: "Dónde apuntar y qué palo usar en cada hoyo")
                             }
                             NavigationLink { BanderaHoyView() } label: {
-                                ProtoRow(title: "Bandera de hoy", subtitle: "Posiciones del día")
+                                ProtoRow(title: "Bandera de hoy", subtitle: "Posiciones de ejemplo")
                                     .accessibilityIdentifier("jugar-bandera")
                             }
                             NavigationLink { ClimaView() } label: {
-                                ProtoRow(title: "Clima", subtitle: "14 km/h SO · 19° · seco")
+                                ProtoRow(title: "Clima", subtitle: "Ejemplo. No es el pronóstico del día")
                             }
                         }
                     }
-                    ExampleNote(text: "Números de ejemplo. Los partidos no cuentan para tus tarjetas ni tu hándicap.")
                 }
                 .padding(20)
                 .padding(.bottom, 96)
@@ -89,6 +110,22 @@ struct PlayHubView: View {
         }
         .accessibilityIdentifier("screen-jugar")
         .metricDestinations()
+        .task { await model.refreshTeeTimes() }
+    }
+
+    private var liveMatch: LiveRound? {
+        guard let round = model.activeLiveRound, round.endedAt == nil else { return nil }
+        return round
+    }
+
+    private func playTeeSubtitle(_ booking: TeeTime) -> String {
+        var parts: [String] = []
+        if !booking.course.isEmpty { parts.append(booking.course) }
+        if booking.course.caseInsensitiveCompare(booking.clubName) != .orderedSame {
+            parts.append(booking.clubName)
+        }
+        if let line = booking.companionsLine { parts.append(line) }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -198,24 +235,36 @@ struct AntesDeSalirView: View {
 }
 
 struct TeeTimesHubView: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+
     var body: some View {
         GScreen(id: "screen-tee") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Tee times del club").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: "Solo lectura: Golflet no reserva ni cancela. Horarios de ejemplo.")
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            ProtoRow(title: "Sáb 7-nov · 9:20", subtitle: "Cancha Azul · Fede, Lucas y Tomi")
-                            ProtoRow(title: "Dom 15-nov · 8:40", subtitle: "Cancha Roja · Fede Ibarra")
+                    if model.upcomingTeeTimes.isEmpty {
+                        Text("No tenés reservas próximas.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                    } else {
+                        ProtoCard {
+                            VStack(spacing: 0) {
+                                ForEach(model.upcomingTeeTimes) { booking in
+                                    NavigationLink {
+                                        TeeTimePrepView(booking: booking)
+                                    } label: {
+                                        ProtoRow(title: booking.chipWhen, subtitle: booking.clubName)
+                                    }
+                                }
+                            }
                         }
                     }
-                    DemoPill()
                 }
                 .padding(20)
             }
         }
+        .task { await model.refreshTeeTimes() }
     }
 }
 
@@ -275,24 +324,28 @@ struct ClimaView: View {
 }
 
 struct MatchLiveView: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+
     var body: some View {
         GScreen(id: "screen-partido") {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Fourball").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ProtoHero {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Vos/Tomi vs Fede/Lucas").font(GType.overline).opacity(0.75)
-                            Text("Vos y Tomi 1 arriba").font(GType.sheetTitle)
-                            Text("3 jugados · quedan 15").font(GType.label).opacity(0.8)
-                        }
-                    }
-                    DemoPill()
-                    ExampleNote(text: "Los partidos no cuentan para tus tarjetas ni tu hándicap. No hay apuestas.")
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Partido").font(GType.largeTitle).foregroundStyle(p.ink)
+                if let round = model.activeLiveRound, round.endedAt == nil {
+                    Text(PaceModality.parse(round.modality).label)
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text("Hoyo \(round.currentHole)")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                } else {
+                    Text("No hay un partido en curso.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
                 }
-                .padding(20)
+                Spacer()
             }
+            .padding(20)
         }
     }
 }
