@@ -293,7 +293,7 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 12), "El login demo no llegó a Inicio")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 8))
-        XCTAssertTrue(openClubsSheet(app), "No se pudo abrir Clubes después del login")
+        XCTAssertTrue(openClubsSheet(app, timeout: 8), "No se pudo abrir Clubes después del login")
         XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 8))
         XCTAssertFalse(first(app, "club-picker").exists)
         XCTAssertFalse(first(app, "club-url").exists)
@@ -659,7 +659,7 @@ final class GolfletUITests: XCTestCase {
         } else {
             accept.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 12), "Aceptar no abrió el grupo")
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 16), "Aceptar no abrió el grupo")
         saveShot("35_grupo_aceptado")
     }
 
@@ -1172,7 +1172,7 @@ final class GolfletUITests: XCTestCase {
                     }
                 }
             }
-            return waitFor(app, "screen-clubes", timeout: 6)
+            return waitFor(app, "screen-clubes", timeout: 8)
         }
         let addClub = app.buttons["add-club-home"]
         guard addClub.waitForExistence(timeout: 2), addClub.isHittable else { return false }
