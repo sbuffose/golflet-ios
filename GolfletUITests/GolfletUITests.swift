@@ -107,6 +107,15 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Grupos")
         XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
+        let liveGroup = first(app, "hub-group-g-jockey")
+        reveal(app, liveGroup)
+        XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "El tab Grupos no muestra el grupo de la cuenta")
+        XCTAssertFalse(app.staticTexts["Miércoles 9 hoyos"].exists, "Sigue el segundo grupo de ejemplo")
+        XCTAssertFalse(first(app, "hub-groups-example").exists, "Hay un bloque de ejemplo junto a los grupos reales")
+        let tee = first(app, "hub-tee-tt-jockey-1")
+        reveal(app, tee)
+        XCTAssertTrue(tee.waitForExistence(timeout: 4), "Quién juega cuándo no usa los tee times")
+        XCTAssertFalse(first(app, "hub-tee-example").exists, "Hay un horario de ejemplo junto a los tee times reales")
         saveShot("60_grupos")
 
         tapTab(app, "Jugar")
