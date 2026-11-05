@@ -148,9 +148,10 @@ struct HomeView: View {
                         AvatarCircle(initials: model.profile.initials)
                     }
                     .buttonStyle(.plain)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("avatar-button")
                     .accessibilityLabel(model.unreadBadgeText.map { "Notificaciones, \($0) sin leer" } ?? "Tu cuenta")
-                    GProbe(id: "avatar-button", label: "Tu cuenta")
                     if let badge = model.unreadBadgeText {
                         Text(badge)
                             .font(GFont.ui(10, weight: .semibold))

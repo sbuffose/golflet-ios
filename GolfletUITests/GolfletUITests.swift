@@ -1148,36 +1148,38 @@ final class GolfletUITests: XCTestCase {
 
     @discardableResult
     private func openClubsSheet(_ app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
+        if first(app, "screen-clubes").exists { return true }
         if first(app, "screen-ronda").exists {
             dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
         }
-        for _ in 0..<4 { app.swipeDown() }
         let avatar = app.buttons["avatar-button"].exists ? app.buttons["avatar-button"] : first(app, "avatar-button")
         if avatar.waitForExistence(timeout: timeout) {
-            if !avatar.isHittable {
-                for _ in 0..<4 { app.swipeDown() }
-            }
-            if avatar.isHittable {
-                avatar.tap()
-            } else {
-                avatar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            }
-            if waitFor(app, "screen-notificaciones", timeout: 3) {
-                let cuenta = first(app, "notifications-cuenta")
-                if cuenta.waitForExistence(timeout: 4) {
-                    if cuenta.isHittable {
-                        cuenta.tap()
-                    } else {
-                        cuenta.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            for _ in 0..<2 {
+                if !avatar.isHittable { app.swipeDown() }
+                tapElement(avatar)
+                if waitFor(app, "screen-clubes", timeout: 4) { return true }
+                if waitFor(app, "screen-notificaciones", timeout: 2) {
+                    let cuenta = first(app, "notifications-cuenta")
+                    if cuenta.waitForExistence(timeout: 4) {
+                        tapElement(cuenta)
                     }
+                    if waitFor(app, "screen-clubes", timeout: 8) { return true }
                 }
             }
-            return waitFor(app, "screen-clubes", timeout: 8)
         }
-        let addClub = app.buttons["add-club-home"]
-        guard addClub.waitForExistence(timeout: 2), addClub.isHittable else { return false }
-        addClub.tap()
-        return true
+        reveal(app, first(app, "add-club-home"))
+        let addClub = app.buttons["add-club-home"].exists ? app.buttons["add-club-home"] : first(app, "add-club-home")
+        guard addClub.waitForExistence(timeout: 2) else { return false }
+        tapElement(addClub)
+        return waitFor(app, "screen-clubes", timeout: 8)
+    }
+
+    private func tapElement(_ element: XCUIElement) {
+        if element.isHittable {
+            element.tap()
+        } else {
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
     }
 
     private func revealHittable(_ app: XCUIApplication, _ element: XCUIElement) {
