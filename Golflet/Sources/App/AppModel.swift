@@ -539,7 +539,7 @@ final class AppModel {
         if unreadBadgeText != nil && !authUITest {
             presentNotifications()
         } else {
-            showsClubs = true
+            presentClubs()
         }
     }
 
