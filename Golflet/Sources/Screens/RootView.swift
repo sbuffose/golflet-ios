@@ -130,7 +130,7 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
-        .sheet(item: bindings.presentedInvite) { invite in
+        .fullScreenCover(item: bindings.presentedInvite) { invite in
             NavigationStack {
                 GroupInviteView(invite: invite)
             }
