@@ -610,6 +610,9 @@ final class GolfletUITests: XCTestCase {
 
         card.tap()
         XCTAssertTrue(waitFor(app, "screen-metric-handicap", timeout: 6), "La card no abre el detalle de tendencia")
+        let counting = first(app, "hcp-counting")
+        reveal(app, counting)
+        XCTAssertTrue(counting.waitForExistence(timeout: 4), "Falta el grupo de tarjetas del índice")
         dismissIfPresent(app, "metric-back")
     }
 
