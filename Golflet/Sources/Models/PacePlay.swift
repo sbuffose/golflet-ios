@@ -41,6 +41,35 @@ enum PaceModality: String, CaseIterable, Hashable, Sendable {
     }
 }
 
+struct MatchSetup: Equatable, Sendable {
+    var modality: PaceModality
+    var partners: [String]
+
+    var playerCount: Int { PaceDefaults.clampPlayers(1 + partners.count) }
+
+    static func partnerChoices(teeTimes: [TeeTime], groups: [GolfletGroup], me: [String]) -> [String] {
+        let selfNames = me
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var names: [String] = []
+        func add(_ raw: String) {
+            let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return }
+            if selfNames.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { return }
+            if names.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { return }
+            names.append(name)
+        }
+        for booking in teeTimes {
+            booking.companions.forEach(add)
+        }
+        for group in groups {
+            add(group.owner.name)
+            group.members.forEach { add($0.name) }
+        }
+        return names
+    }
+}
+
 struct PaceTimelineHole: Hashable, Sendable {
     var hole: Int
     var par: Int?

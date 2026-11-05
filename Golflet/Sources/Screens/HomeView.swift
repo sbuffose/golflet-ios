@@ -490,6 +490,27 @@ struct HomeView: View {
 
     private var competitiveLead: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let round = model.activeLiveRound, round.endedAt == nil {
+                Button { model.showsPlay = true } label: {
+                    ProtoCard {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(PaceModality.parse(round.modality).label)
+                                .font(GType.overline)
+                                .foregroundStyle(p.ink3)
+                            Text(round.course?.isEmpty == false ? round.course! : "Ronda en curso")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text("Hoyo \(round.currentHole)")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home-comp-match")
+            } else {
+                MatchStartPrompt()
+            }
             if let booking = model.nextTeeTime {
                 NavigationLink {
                     TeeTimePrepView(booking: booking)
@@ -504,12 +525,7 @@ struct HomeView: View {
                         }
                     }
                 }
-                .accessibilityIdentifier("home-comp-match")
-            } else {
-                Text("No hay un partido cargado.")
-                    .font(GType.body)
-                    .foregroundStyle(p.ink2)
-                    .accessibilityIdentifier("home-comp-match")
+                .accessibilityIdentifier("home-comp-tee")
             }
         }
     }
