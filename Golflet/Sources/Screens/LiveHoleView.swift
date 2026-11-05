@@ -131,8 +131,8 @@ struct LiveHoleView: View {
 
     private var reticle: some View {
         ZStack {
-            Circle().stroke(Color(hex: 0xC8102E), lineWidth: 3).frame(width: 22, height: 22).background(Circle().fill(Color.white))
-            Circle().fill(Color(hex: 0xC8102E)).frame(width: 3, height: 3)
+            Circle().stroke(Color(hex: BrandHex.red), lineWidth: 3).frame(width: 22, height: 22).background(Circle().fill(Color.white))
+            Circle().fill(Color(hex: BrandHex.red)).frame(width: 3, height: 3)
         }
         .accessibilityIdentifier("live-reticle")
     }

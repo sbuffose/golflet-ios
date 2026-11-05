@@ -55,7 +55,7 @@ enum YardageBookMap {
         for _ in 0..<speckles {
             let x = region.x0 + rng.next() * region.width
             let y = region.y0 + rng.next() * region.height
-            c.setFillColor(rng.next() < 0.5 ? CGColor.sRGB(0x0F3D2E, alpha: 0.035) : CGColor.sRGB(0xFFFFFF, alpha: 0.18))
+            c.setFillColor(rng.next() < 0.5 ? CGColor.sRGB(BrandHex.navy, alpha: 0.035) : CGColor.sRGB(0xFFFFFF, alpha: 0.18))
             c.fill(CGRect(x: x, y: y, width: 0.5 + rng.next() * 0.6, height: 0.5 + rng.next() * 0.6))
         }
 
@@ -80,12 +80,12 @@ enum YardageBookMap {
         }
         c.restoreGState()
         addEllipse(c, YardageBook.pond)
-        c.setStrokeColor(CGColor.sRGB(0x0F3D2E, alpha: 0.32))
+        c.setStrokeColor(CGColor.sRGB(BrandHex.navy, alpha: 0.32))
         c.setLineWidth(0.3)
         c.strokePath()
 
         c.setLineDash(phase: 0, lengths: [2.2, 1.6])
-        c.setStrokeColor(CGColor.sRGB(0x0F3D2E, alpha: 0.16))
+        c.setStrokeColor(CGColor.sRGB(BrandHex.navy, alpha: 0.16))
         c.setLineWidth(1.3)
         c.beginPath()
         var pathY = 8.0
@@ -107,7 +107,7 @@ enum YardageBookMap {
 
         c.saveGState()
         addPoly(c, YardageBook.fairway)
-        c.setShadow(offset: CGSize(width: 0, height: -0.8), blur: 2.2, color: CGColor.sRGB(0x0F3D2E, alpha: 0.18))
+        c.setShadow(offset: CGSize(width: 0, height: -0.8), blur: 2.2, color: CGColor.sRGB(BrandHex.navy, alpha: 0.18))
         c.setFillColor(YardageBook.fairwayA)
         c.fillPath()
         c.restoreGState()
@@ -129,16 +129,16 @@ enum YardageBookMap {
         let shade = CGGradient(
             colorsSpace: CGColorSpaceCreateDeviceRGB(),
             colors: [
-                CGColor.sRGB(0x0F3D2E, alpha: 0.07),
+                CGColor.sRGB(BrandHex.navy, alpha: 0.07),
                 CGColor.sRGB(0xFFFFFF, alpha: 0.08),
-                CGColor.sRGB(0x0F3D2E, alpha: 0.10)
+                CGColor.sRGB(BrandHex.navy, alpha: 0.10)
             ] as CFArray,
             locations: [0, 0.45, 1]
         )!
         c.drawLinearGradient(shade, start: CGPoint(x: -60, y: 0), end: CGPoint(x: 60, y: 0), options: [])
         c.restoreGState()
         addPoly(c, YardageBook.fairway)
-        c.setStrokeColor(CGColor.sRGB(0x0F3D2E, alpha: 0.38))
+        c.setStrokeColor(CGColor.sRGB(BrandHex.navy, alpha: 0.38))
         c.setLineWidth(max(0.22, 1.1 / scale))
         c.strokePath()
 
@@ -146,12 +146,12 @@ enum YardageBookMap {
             let rect = CGRect(x: YardageBook.cx(dy) - w / 2, y: dy - 2.6, width: w, height: 5.2)
             let path = UIBezierPath(roundedRect: rect, cornerRadius: 1.6)
             c.saveGState()
-            c.setShadow(offset: CGSize(width: 0, height: -0.5), blur: 1.2, color: CGColor.sRGB(0x0F3D2E, alpha: 0.18))
+            c.setShadow(offset: CGSize(width: 0, height: -0.5), blur: 1.2, color: CGColor.sRGB(BrandHex.navy, alpha: 0.18))
             c.setFillColor(YardageBook.fairwayA)
             c.addPath(path.cgPath)
             c.fillPath()
             c.restoreGState()
-            c.setStrokeColor(CGColor.sRGB(0x0F3D2E, alpha: 0.35))
+            c.setStrokeColor(CGColor.sRGB(BrandHex.navy, alpha: 0.35))
             c.setLineWidth(max(0.2, 1 / scale))
             c.addPath(path.cgPath)
             c.strokePath()
@@ -159,7 +159,7 @@ enum YardageBookMap {
 
         c.saveGState()
         addEllipse(c, YardageBook.green, grow: 3.2)
-        c.setShadow(offset: CGSize(width: 0, height: -0.8), blur: 2.5, color: CGColor.sRGB(0x0F3D2E, alpha: 0.2))
+        c.setShadow(offset: CGSize(width: 0, height: -0.8), blur: 2.5, color: CGColor.sRGB(BrandHex.navy, alpha: 0.2))
         c.setFillColor(YardageBook.fringe)
         c.fillPath()
         c.restoreGState()
@@ -190,14 +190,14 @@ enum YardageBookMap {
         }
         c.restoreGState()
         addEllipse(c, YardageBook.green)
-        c.setStrokeColor(CGColor.sRGB(0x0F3D2E, alpha: 0.42))
+        c.setStrokeColor(CGColor.sRGB(BrandHex.navy, alpha: 0.42))
         c.setLineWidth(max(0.2, 1.1 / scale))
         c.strokePath()
 
         for bunker in YardageBook.bunkers {
             c.saveGState()
             addBunker(c, bunker, grow: 0.9)
-            c.setFillColor(CGColor.sRGB(0x0F3D2E, alpha: 0.10))
+            c.setFillColor(CGColor.sRGB(BrandHex.navy, alpha: 0.10))
             c.fillPath()
             c.restoreGState()
 
@@ -228,7 +228,7 @@ enum YardageBookMap {
             }
             c.restoreGState()
             addBunker(c, bunker)
-            c.setStrokeColor(CGColor.sRGB(0x0F3D2E, alpha: 0.40))
+            c.setStrokeColor(CGColor.sRGB(BrandHex.navy, alpha: 0.40))
             c.setLineWidth(max(0.2, 1 / scale))
             c.strokePath()
         }
@@ -236,7 +236,7 @@ enum YardageBookMap {
         let forest = YardageBook.trees()
         for tree in forest {
             let R = tree.r * 1.45
-            c.setFillColor(CGColor.sRGB(0x0F3D2E, alpha: 0.16))
+            c.setFillColor(CGColor.sRGB(BrandHex.navy, alpha: 0.16))
             c.fillEllipse(in: CGRect(x: tree.x + tree.r * 0.6 - R, y: tree.y - tree.r * 0.6 - R, width: R * 2, height: R * 2))
         }
         for tree in forest {
@@ -258,7 +258,7 @@ enum YardageBookMap {
                 if k == 0 { c.move(to: p) } else { c.addLine(to: p) }
             }
             c.closePath()
-            c.setStrokeColor(CGColor.sRGB(0x0F3D2E, alpha: 0.35))
+            c.setStrokeColor(CGColor.sRGB(BrandHex.navy, alpha: 0.35))
             c.setLineWidth(max(0.15, 0.8 / scale))
             c.strokePath()
         }

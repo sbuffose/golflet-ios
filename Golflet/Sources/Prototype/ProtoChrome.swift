@@ -51,10 +51,10 @@ struct RobertoGuide: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color(hex: 0x13315C).opacity(0.16))
+                .fill(Color(hex: BrandHex.navyRaised).opacity(0.16))
                 .frame(width: small ? 88 : 140, height: small ? 88 : 140)
             Circle()
-                .stroke(Color(hex: 0x0B2545), style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
+                .stroke(Color(hex: BrandHex.navy), style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
                 .frame(width: small ? 72 : 112, height: small ? 72 : 112)
                 .rotationEffect(.degrees(thinking ? 180 : 0))
             RobertoGlyph()
@@ -78,14 +78,14 @@ struct RobertoGlyph: View {
             cap.move(to: p(18, 36)); cap.addQuadCurve(to: p(82, 36), control: p(50, 8))
             cap.addLine(to: p(78, 42)); cap.addQuadCurve(to: p(22, 42), control: p(50, 24))
             cap.closeSubpath()
-            ctx.fill(cap, with: .color(Color(hex: 0x0B2545)))
+            ctx.fill(cap, with: .color(Color(hex: BrandHex.navy)))
             ctx.fill(Path(ellipseIn: CGRect(x: 17 * s, y: 25 * s, width: 66 * s, height: 66 * s)), with: .color(Color(hex: 0xD9E0EA)))
-            ctx.stroke(Path(ellipseIn: CGRect(x: 17 * s, y: 25 * s, width: 66 * s, height: 66 * s)), with: .color(Color(hex: 0x0B2545)), lineWidth: 3)
-            ctx.fill(Path(ellipseIn: CGRect(x: 37 * s, y: 52 * s, width: 8 * s, height: 11 * s)), with: .color(Color(hex: 0x0B2545)))
-            ctx.fill(Path(ellipseIn: CGRect(x: 55 * s, y: 52 * s, width: 8 * s, height: 11 * s)), with: .color(Color(hex: 0x0B2545)))
+            ctx.stroke(Path(ellipseIn: CGRect(x: 17 * s, y: 25 * s, width: 66 * s, height: 66 * s)), with: .color(Color(hex: BrandHex.navy)), lineWidth: 3)
+            ctx.fill(Path(ellipseIn: CGRect(x: 37 * s, y: 52 * s, width: 8 * s, height: 11 * s)), with: .color(Color(hex: BrandHex.navy)))
+            ctx.fill(Path(ellipseIn: CGRect(x: 55 * s, y: 52 * s, width: 8 * s, height: 11 * s)), with: .color(Color(hex: BrandHex.navy)))
             var smile = Path()
             smile.move(to: p(42, 70)); smile.addQuadCurve(to: p(58, 70), control: p(50, 77))
-            ctx.stroke(smile, with: .color(Color(hex: 0x0B2545)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            ctx.stroke(smile, with: .color(Color(hex: BrandHex.navy)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
         }
     }
 }

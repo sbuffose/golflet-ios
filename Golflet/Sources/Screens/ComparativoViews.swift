@@ -728,7 +728,7 @@ struct MemberCardView: View {
 
     private func ink(for toPar: Int?) -> Color {
         guard let toPar else { return p.ink }
-        if toPar <= -1 { return p.accent }
+        if toPar <= -1 { return p.accentInk }
         if toPar == 0 { return p.primary }
         if toPar >= 2 { return p.negative }
         return p.ink

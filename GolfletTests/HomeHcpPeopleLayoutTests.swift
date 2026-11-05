@@ -9,7 +9,7 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(HomeHcpPeopleLayout.columnWidth(profesorCount: 0, groupCount: 0), width)
         XCTAssertLessThanOrEqual(HomeHcpPeopleLayout.columnWidth(profesorCount: 1, groupCount: 1), width)
         XCTAssertLessThanOrEqual(HomeHcpPeopleLayout.columnWidth(profesorCount: 4, groupCount: 5), width)
-        XCTAssertEqual(HomeHcpPeopleLayout.gold, 0xC8A86A)
+        XCTAssertEqual(HomeHcpPeopleLayout.accent, BrandHex.red)
         XCTAssertEqual(HomeHcpPeopleLayout.celeste, 0x75AADB)
         XCTAssertEqual(HomeHcpPeopleLayout.profesorAvatar, 28)
         XCTAssertNil(HomeHcpPeopleLayout.profesorCaption(0))
@@ -95,7 +95,7 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
                     onCreate: {}
                 )
                 .padding(20)
-                .background(Color(hex: 0x0F3D2E))
+                .background(Color(hex: BrandHex.navy))
                 .golfletChrome(),
                 width: content
             )
