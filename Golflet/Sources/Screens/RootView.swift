@@ -10,7 +10,11 @@ struct RootView: View {
         let _ = model.textPrefs
         Group {
             if model.isSignedIn {
-                mainTabs
+                if model.showsOnboarding {
+                    NavigationStack { OnboardingView() }
+                } else {
+                    mainTabs
+                }
             } else {
                 AuthView()
             }
@@ -66,26 +70,22 @@ struct RootView: View {
                 .tag(AppTab.inicio)
                 .accessibilityIdentifier("tab-inicio")
 
-            NavigationStack { SummaryView() }
-                .tabItem { Label(AppTab.resumen.title, systemImage: AppTab.resumen.systemImage) }
-                .tag(AppTab.resumen)
-                .accessibilityIdentifier("tab-resumen")
+            NavigationStack { GroupsHubView() }
+                .tabItem { Label(AppTab.grupos.title, systemImage: AppTab.grupos.systemImage) }
+                .tag(AppTab.grupos)
+                .accessibilityIdentifier("tab-grupos")
 
-            NavigationStack { RoundsView() }
-                .tabItem { Label(AppTab.rondas.title, systemImage: AppTab.rondas.systemImage) }
-                .tag(AppTab.rondas)
-                .accessibilityIdentifier("tab-rondas")
+            NavigationStack { PlayHubView() }
+                .tabItem { Label(AppTab.jugar.title, systemImage: AppTab.jugar.systemImage) }
+                .tag(AppTab.jugar)
+                .accessibilityIdentifier("tab-jugar")
 
-            NavigationStack { CourseView() }
-                .tabItem { Label(AppTab.cancha.title, systemImage: AppTab.cancha.systemImage) }
-                .tag(AppTab.cancha)
-                .accessibilityIdentifier("tab-cancha")
-
-            NavigationStack { BagView() }
-                .tabItem { Label(AppTab.bolsa.title, systemImage: AppTab.bolsa.systemImage) }
-                .tag(AppTab.bolsa)
-                .accessibilityIdentifier("tab-bolsa")
+            NavigationStack { AcademiaView() }
+                .tabItem { Label(AppTab.academia.title, systemImage: AppTab.academia.systemImage) }
+                .tag(AppTab.academia)
+                .accessibilityIdentifier("tab-academia")
         }
+        .toolbar(model.showsLiveHole ? .hidden : .visible, for: .tabBar)
         .tint(p.primary)
         .onAppear { configureTabBar() }
         .sheet(item: bindings.presentedRound) { round in
@@ -137,7 +137,7 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
-        .sheet(item: Binding(
+        .fullScreenCover(item: Binding(
             get: { model.presentedGroupID.map { GroupRef(id: $0) } },
             set: { model.presentedGroupID = $0?.id }
         )) { ref in
@@ -160,6 +160,13 @@ struct RootView: View {
         .fullScreenCover(isPresented: bindings.showsPlay) {
             NavigationStack {
                 PlayCourseView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .fullScreenCover(isPresented: bindings.showsLiveHole) {
+            NavigationStack {
+                LiveHoleView(start: model.liveHoleNumber)
             }
             .golfletChrome()
             .environment(model)

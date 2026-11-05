@@ -363,6 +363,9 @@ extension View {
                 GameMetricsGIRParView(par: par)
             }
         }
+        .navigationDestination(for: StrategyHoleRoute.self) { route in
+            StrategyHoleView(courseKey: route.courseKey, courseName: route.courseName, holeNumber: route.hole)
+        }
     }
 }
 

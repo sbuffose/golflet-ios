@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var showsHomeProfesores = false
     @State private var showsAgregarProfesor = false
     @State private var highlightPartners = false
+    @State private var modeOpen = false
     @State private var hcpCardWidth = HomeHcpPeopleLayout.cardInnerWidth(screenWidth: HomeHcpPeopleLayout.currentScreenWidth)
 
     var body: some View {
@@ -27,13 +28,21 @@ struct HomeView: View {
                                 .accessibilityIdentifier("home-ready")
                         }
                         header(scroll: proxy)
+                        modeChip
+                        if model.homeMode == .comp { competitiveLead }
+                        else if model.homeMode == .mej { improveLead }
+                        else if model.homeMode == .soc { socialLead }
                         handicapCard
+                        if model.homeMode == .mej {
+                            SGCard(shots: model.liveShots.isEmpty ? (ExampleRounds.all().last?.shots ?? []) : model.liveShots, example: model.liveShots.isEmpty)
+                        }
                         lastRound
                         teeTimesCard
                         yearRow
                         recurring
                         groups
                         clubs
+                        moreLegacy
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
@@ -43,6 +52,15 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
+        .navigationDestination(for: HomeMoreRoute.self) { route in
+            switch route {
+            case .resumen: SummaryView()
+            case .rondas: RoundsView()
+            case .cancha: CourseView()
+            case .bolsa: BagView()
+            case .sg: SGHomeView()
+            }
+        }
         .metricDestinations()
         .navigationDestination(for: Profesor.self) { profesor in
             ProfesorDetailView(profesor: profesor)
@@ -398,6 +416,140 @@ struct HomeView: View {
         }
     }
 
+    private var modeChip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: reduceMotion ? 0 : 0.28)) { modeOpen.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Inicio ·")
+                    Text(model.homeMode.title).fontWeight(.bold)
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(modeOpen ? 180 : 0))
+                }
+                .font(GType.headline)
+                .foregroundStyle(p.ink2)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .overlay(Capsule().stroke(p.hairline, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-mode-chip")
+            .accessibilityLabel("Modo del inicio: \(model.homeMode.title)")
+
+            if modeOpen {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(ProfileMode.allCases) { mode in
+                        Button { model.setHomeMode(mode); modeOpen = false } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack {
+                                        Text(mode.title).font(GType.headline).foregroundStyle(p.ink)
+                                        if mode == .clasico {
+                                            Text("Recomendado").font(GType.label).foregroundStyle(p.primary2)
+                                        }
+                                    }
+                                    Text(mode.blurb).font(GType.label).foregroundStyle(p.ink3)
+                                }
+                                Spacer()
+                                Image(systemName: model.homeMode == mode ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(model.homeMode == mode ? p.primary : p.ink3)
+                            }
+                            .padding(10)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-mode-\(mode.rawValue)")
+                    }
+                    NavigationLink { PerfilModoView() } label: {
+                        Text("También lo cambiás en tu perfil ›")
+                            .font(GType.label)
+                            .foregroundStyle(Color(hex: 0xC8102E))
+                    }
+                }
+                .padding(8)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(p.hairline, lineWidth: 1))
+            }
+        }
+    }
+
+    private var competitiveLead: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            NavigationLink { MatchLiveView() } label: {
+                ProtoCard {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Próximo partido").font(GType.overline).foregroundStyle(p.ink3)
+                            DemoPill(text: "Fourball · 85%")
+                        }
+                        Text("Vos y Tomi vs Fede y Lucas").font(GType.headline).foregroundStyle(p.ink)
+                        Text("Sáb 7-nov · 9:20 · Cancha Azul").font(GType.label).foregroundStyle(p.ink3)
+                    }
+                }
+            }
+            .accessibilityIdentifier("home-comp-match")
+        }
+    }
+
+    private var improveLead: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ExampleNote(text: "Modo Mejorar: primero lo que practicar.")
+        }
+    }
+
+    private var socialLead: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            NavigationLink { GroupsHubView() } label: {
+                ProtoCard {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Grupos").font(GType.overline).foregroundStyle(p.ink3)
+                        Text("Quién juega cuándo y lo último de tus amigos").font(GType.headline)
+                        Text("7 amigos juegan esta semana").font(GType.label).foregroundStyle(p.ink3)
+                        DemoPill()
+                    }
+                }
+            }
+        }
+    }
+
+    private var moreLegacy: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Más").font(GType.section).foregroundStyle(p.ink)
+            ProtoCard {
+                VStack(spacing: 0) {
+                    NavigationLink(value: HomeMoreRoute.resumen) {
+                        ProtoRow(title: "Resumen", subtitle: "Tendencia, métricas y gráfico")
+                    }
+                    .accessibilityIdentifier("home-more-resumen")
+                    NavigationLink(value: HomeMoreRoute.rondas) {
+                        ProtoRow(title: "Rondas", subtitle: "Todas tus tarjetas")
+                    }
+                    .accessibilityIdentifier("home-more-rondas")
+                    NavigationLink(value: HomeMoreRoute.cancha) {
+                        ProtoRow(title: "Cancha", subtitle: "Libreta y hoyo a hoyo")
+                    }
+                    .accessibilityIdentifier("home-more-cancha")
+                    NavigationLink(value: HomeMoreRoute.bolsa) {
+                        ProtoRow(title: "Mi bolsa", subtitle: "Palos y distancias")
+                    }
+                    .accessibilityIdentifier("home-more-bolsa")
+                    NavigationLink(value: HomeMoreRoute.sg) {
+                        ProtoRow(title: "Strokes gained", subtitle: "Broadie · PGA Tour")
+                    }
+                    .accessibilityIdentifier("home-more-sg")
+                    NavigationLink { BanderaHoyView() } label: {
+                        ProtoRow(title: "Bandera de hoy", subtitle: "Posiciones de ejemplo")
+                    }
+                    NavigationLink { CierreView() } label: {
+                        ProtoRow(title: "Cierre de vuelta", subtitle: "Sáb 31-oct · 84")
+                    }
+                }
+            }
+            ExampleNote(text: "Tu inicio está en modo \(model.homeMode.title): solo cambia qué ves primero.")
+        }
+    }
+
     private var lastRound: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -405,10 +557,12 @@ struct HomeView: View {
                     .font(GType.section)
                     .foregroundStyle(p.ink)
                 Spacer()
-                Button("Ver todas") { model.selectedTab = .rondas }
-                    .font(GType.headline)
-                    .foregroundStyle(p.ink2)
-                    .accessibilityIdentifier("ver-todas")
+                NavigationLink(value: HomeMoreRoute.rondas) {
+                    Text("Ver todas")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink2)
+                }
+                .accessibilityIdentifier("ver-todas")
             }
             if let round = model.home.lastRound {
                 Button { model.presentedRound = round } label: {
