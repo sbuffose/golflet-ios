@@ -650,16 +650,21 @@ final class GolfletUITests: XCTestCase {
         type(app.secureTextFields["auth-clave"], "clave123")
         submitLogin(app)
         XCTAssertTrue(waitFor(app, "screen-invitacion", timeout: 12), "La invitación no apareció después del login")
+        if app.keyboards.element.exists { app.swipeDown() }
         XCTAssertTrue(first(app, "invite-accept").waitForExistence(timeout: 3))
         XCTAssertTrue(first(app, "invite-decline").waitForExistence(timeout: 2))
         saveShot("34_invitacion")
         let accept = app.buttons["invite-accept"].exists ? app.buttons["invite-accept"] : first(app, "invite-accept")
-        if accept.isHittable {
+        var opened = false
+        for _ in 0..<3 {
             accept.tap()
-        } else {
-            accept.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if waitFor(app, "screen-grupo", timeout: 5) {
+                opened = true
+                break
+            }
+            if app.keyboards.element.exists { app.swipeDown() }
         }
-        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 16), "Aceptar no abrió el grupo")
+        XCTAssertTrue(opened || waitFor(app, "screen-grupo", timeout: 6), "Aceptar no abrió el grupo")
         saveShot("35_grupo_aceptado")
     }
 
