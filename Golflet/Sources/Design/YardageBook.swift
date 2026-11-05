@@ -3,10 +3,10 @@ import Foundation
 import simd
 
 enum YardageBook {
-    static let paper = CGColor.sRGB(0xF4F0E6)
-    static let sheet = CGColor.sRGB(0xF7F5F0)
-    static let ink = CGColor.sRGB(0x0F3D2E)
-    static let gold = CGColor.sRGB(0xC8A86A)
+    static let paper = CGColor.sRGB(BrandHex.paper)
+    static let sheet = CGColor.sRGB(BrandHex.white)
+    static let ink = CGColor.sRGB(BrandHex.navy)
+    static let accent = CGColor.sRGB(BrandHex.red)
     static let rough = CGColor.sRGB(0xDCE2CF)
     static let semi = CGColor.sRGB(0xCED8BF)
     static let fairwayA = CGColor.sRGB(0xB6CCA6)

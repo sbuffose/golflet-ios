@@ -16,7 +16,7 @@ struct LiveRoundActivity: Widget {
                             .foregroundStyle(WidgetChrome.paper)
                         Text(context.state.course)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(WidgetChrome.gold)
+                            .foregroundStyle(WidgetChrome.white)
                             .lineLimit(1)
                     }
                 }
@@ -28,7 +28,7 @@ struct LiveRoundActivity: Widget {
                             .foregroundStyle(WidgetChrome.paper)
                         Text("yd al centro")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(WidgetChrome.gold)
+                            .foregroundStyle(WidgetChrome.white)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -36,7 +36,7 @@ struct LiveRoundActivity: Widget {
                         Text(context.state.scoreLine)
                             .font(.system(size: 13, weight: .semibold))
                             .monospacedDigit()
-                            .foregroundStyle(WidgetChrome.gold)
+                            .foregroundStyle(WidgetChrome.white)
                         Spacer()
                         liveYards("F", context.state.frontYd)
                         liveYards("C", context.state.centerYd)
@@ -62,7 +62,7 @@ struct LiveRoundActivity: Widget {
         VStack(spacing: 1) {
             Text(label)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(WidgetChrome.gold)
+                .foregroundStyle(WidgetChrome.white)
             Text(value.map(String.init) ?? "—")
                 .font(.system(size: 14, weight: .semibold))
                 .monospacedDigit()
@@ -84,7 +84,7 @@ struct LiveIslandBanner: View {
                 Text(state.scoreLine)
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()
-                    .foregroundStyle(WidgetChrome.gold)
+                    .foregroundStyle(WidgetChrome.white)
             }
             Spacer()
             HStack(spacing: 10) {
@@ -94,7 +94,7 @@ struct LiveIslandBanner: View {
             }
         }
         .padding(12)
-        .activityBackgroundTint(WidgetChrome.green)
+        .activityBackgroundTint(WidgetChrome.navy)
         .activitySystemActionForegroundColor(WidgetChrome.paper)
         .widgetURL(URL(string: "golflet://play"))
     }
@@ -103,7 +103,7 @@ struct LiveIslandBanner: View {
         VStack(spacing: 2) {
             Text(label)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(WidgetChrome.gold)
+                .foregroundStyle(WidgetChrome.white)
             Text(value.map(String.init) ?? "—")
                 .font(.system(size: 15, weight: .semibold))
                 .monospacedDigit()

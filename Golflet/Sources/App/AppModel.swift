@@ -13,6 +13,8 @@ final class AppModel {
     var holeStats: [CourseHoleStats] = []
     var bag: [BagClub] = []
     var isLoaded = false
+    /// True only after a bootstrap snapshot replaces the placeholder profile.
+    var hasPlayerSnapshot = false
     var isBusy = false
     var errorMessage: String?
     var authFailure: AuthFailure?
@@ -96,7 +98,7 @@ final class AppModel {
         MockAPIClient.resetTextPrefs()
         let prefs = RuntimeFlags.testingTextPrefs ?? (testing ? .default : TextPrefsStore.load())
         self.textPrefs = prefs
-        self.showsOnboarding = PrototypeStore.forceOnboarding || (!PrototypeStore.testing && !onboarding.done && api.isAuthenticated)
+        self.showsOnboarding = PrototypeStore.forceOnboarding || (!PrototypeStore.testing && !onboarding.done)
         TextPrefsRuntime.current = prefs
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "-pending-invite"),
            ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
@@ -170,6 +172,7 @@ final class AppModel {
             await refreshProfesores()
             await refreshTeeTimes()
             await refreshPlaySettings()
+            hasPlayerSnapshot = true
             isLoaded = true
             await consumeIntent()
         } catch {
@@ -258,6 +261,7 @@ final class AppModel {
     }
 
     func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async {
+        if !isSignedIn { hasPlayerSnapshot = false }
         lastLinkMatricula = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
         lastLinkClave = clave
         lastLinkSavePassword = savePassword
@@ -306,6 +310,7 @@ final class AppModel {
             inviteShare = nil
             needsClub = nil
             pendingClubID = nil
+            hasPlayerSnapshot = false
             isLoaded = true
         }
     }

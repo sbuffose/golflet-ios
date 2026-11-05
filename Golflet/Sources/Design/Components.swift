@@ -175,13 +175,13 @@ struct ScrollFilterPills: View {
 
 enum StatTint: Equatable {
     case primary
-    case gold
+    case accent
     case danger
 
     func ink(_ p: Palette) -> Color {
         switch self {
         case .primary: return p.primary
-        case .gold: return p.accent
+        case .accent: return p.accentInk
         case .danger: return p.negative
         }
     }
@@ -189,7 +189,7 @@ enum StatTint: Equatable {
     func wash(_ p: Palette) -> Color {
         switch self {
         case .primary: return p.turf
-        case .gold: return p.accentSoft
+        case .accent: return p.accentSoft
         case .danger: return p.dangerSoft
         }
     }
@@ -207,7 +207,7 @@ extension ScoreKind {
 
     var statTint: StatTint {
         switch self {
-        case .eagle, .birdie: return .gold
+        case .eagle, .birdie: return .accent
         case .par: return .primary
         case .bogey: return .danger
         }
@@ -397,13 +397,13 @@ struct ScoreMark: View {
         case .birdie: return p.accent
         case .par, .unknown: return Color.clear
         case .bogey: return p.sand
-        case .doubleOrWorse: return Color(hex: 0xE0D2B0)
+        case .doubleOrWorse: return p.negative.opacity(0.2)
         }
     }
 
     private var foreground: Color {
         switch result {
-        case .eagleOrBetter, .birdie: return p.primary
+        case .eagleOrBetter, .birdie: return p.onPrimary
         default: return p.ink
         }
     }
