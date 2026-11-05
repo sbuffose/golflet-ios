@@ -6,6 +6,7 @@ import CoreLocation
 final class PlayLocation: NSObject, CLLocationManagerDelegate {
     var coordinate: GPSCoord?
     var accuracyM: Double?
+    var headingDeg: Double?
     var authorized = false
     var denied = false
     var errorMessage: String?
@@ -18,6 +19,7 @@ final class PlayLocation: NSObject, CLLocationManagerDelegate {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = 2
+        manager.headingFilter = 5
         if RuntimeFlags.isUITesting {
             coordinate = Self.testingCoordinate
             accuracyM = 4
@@ -43,6 +45,7 @@ final class PlayLocation: NSObject, CLLocationManagerDelegate {
         case .authorizedAlways, .authorizedWhenInUse:
             authorized = true
             manager.startUpdatingLocation()
+            manager.startUpdatingHeading()
         case .denied, .restricted:
             denied = true
         default:
@@ -52,6 +55,7 @@ final class PlayLocation: NSObject, CLLocationManagerDelegate {
 
     func stop() {
         manager.stopUpdatingLocation()
+        manager.stopUpdatingHeading()
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -60,6 +64,7 @@ final class PlayLocation: NSObject, CLLocationManagerDelegate {
             authorized = true
             denied = false
             manager.startUpdatingLocation()
+            manager.startUpdatingHeading()
         case .denied, .restricted:
             denied = true
         default:
@@ -71,6 +76,12 @@ final class PlayLocation: NSObject, CLLocationManagerDelegate {
         guard let last = locations.last else { return }
         coordinate = GPSCoord(lat: last.coordinate.latitude, lng: last.coordinate.longitude)
         accuracyM = last.horizontalAccuracy > 0 ? last.horizontalAccuracy : nil
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        let degrees = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        guard degrees >= 0 else { return }
+        headingDeg = degrees
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

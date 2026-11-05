@@ -11,6 +11,9 @@ public struct RoundActivityAttributes: ActivityAttributes {
         public var strokes: Int
         public var toPar: Int?
         public var course: String
+        public var strokeIndex: Int?
+        public var windLine: String?
+        public var matchLine: String?
 
         public init(
             hole: Int,
@@ -20,7 +23,10 @@ public struct RoundActivityAttributes: ActivityAttributes {
             backYd: Int? = nil,
             strokes: Int,
             toPar: Int? = nil,
-            course: String
+            course: String,
+            strokeIndex: Int? = nil,
+            windLine: String? = nil,
+            matchLine: String? = nil
         ) {
             self.hole = hole
             self.par = par
@@ -30,6 +36,9 @@ public struct RoundActivityAttributes: ActivityAttributes {
             self.strokes = strokes
             self.toPar = toPar
             self.course = course
+            self.strokeIndex = strokeIndex
+            self.windLine = windLine
+            self.matchLine = matchLine
         }
 
         public var holeLine: String { "Hoyo \(hole) · Par \(par)" }

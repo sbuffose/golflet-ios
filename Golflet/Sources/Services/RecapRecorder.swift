@@ -12,8 +12,10 @@ final class RecapRecorder {
 
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
-    private let limit: TimeInterval = 240
-    private let maxBytes = 4_000_000
+    static let maxDuration: TimeInterval = 10 * 60
+    private let limit: TimeInterval = RecapRecorder.maxDuration
+    /// 10 minutes at 40 kbps, with headroom so the file cap does not cut the timer short.
+    private let maxBytes = 6_000_000
 
     func start() throws {
         if RuntimeFlags.isUITesting {
