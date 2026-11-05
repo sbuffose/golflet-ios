@@ -207,6 +207,19 @@ enum StatsEngine {
         return points
     }
 
+    /// Oldest to newest. Drops consecutive rows that display the same index and keeps the latest date of each value.
+    static func handicapChanges(_ points: [TrendPoint]) -> [TrendPoint] {
+        var kept: [TrendPoint] = []
+        for point in points {
+            if let last = kept.last, FormatAR.one(last.handicap) == FormatAR.one(point.handicap) {
+                kept[kept.count - 1] = point
+            } else {
+                kept.append(point)
+            }
+        }
+        return kept
+    }
+
     static func average(_ values: [Int]) -> Double? {
         guard !values.isEmpty else { return nil }
         return Double(values.reduce(0, +)) / Double(values.count)
