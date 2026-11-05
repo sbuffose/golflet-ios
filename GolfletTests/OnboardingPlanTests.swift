@@ -41,6 +41,8 @@ final class OnboardingPlanTests: XCTestCase {
         XCTAssertTrue(spoken.contains("Jockey Club Buenos Aires"))
         XCTAssertTrue(spoken.contains(FormatAR.one(3.1)))
         XCTAssertTrue(spoken.contains("matrícula"))
+        XCTAssertTrue(spoken.contains("Solo me faltan unos datos más"))
+        XCTAssertFalse(spoken.contains("Te pregunto solo lo que la matrícula no sabe."))
         XCTAssertFalse(spoken.contains("¿Cuánto"))
         XCTAssertFalse(spoken.contains("¿Cada cuánto"))
         XCTAssertFalse(spoken.contains("años tenés"))
