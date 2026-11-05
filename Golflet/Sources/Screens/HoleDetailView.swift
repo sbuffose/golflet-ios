@@ -1,3 +1,4 @@
+import MapKit
 import SwiftUI
 
 struct HoleRef: Identifiable, Hashable {
@@ -28,7 +29,6 @@ struct HoleDetailView: View {
                     yardages
                     history
                     strategyCard
-                    placeholders
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
@@ -88,11 +88,22 @@ struct HoleDetailView: View {
     }
 
     private var map: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            GOverline(text: "Esquema · trazado real próximamente")
-            HoleMapView(course: course, hole: courseHole, tees: teeYardages)
-                .frame(height: 340)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        VStack(alignment: .leading, spacing: 8) {
+            if let geo = AzulCourse.layout(forCourse: courseName, hole: currentHole) {
+                HoleSatelliteMap(hole: geo)
+                    .frame(height: 340)
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .accessibilityIdentifier("hole-satellite-map")
+                Text(AzulCourse.credit)
+                    .font(GFont.ui(10))
+                    .foregroundStyle(p.ink3)
+            } else {
+                Text("Esta cancha todavía no tiene el mapa satelital.")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+                    .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+                    .accessibilityIdentifier("hole-map-unavailable")
+            }
         }
     }
 
@@ -254,31 +265,6 @@ struct HoleDetailView: View {
         }
     }
 
-    private var placeholders: some View {
-        Group {
-            if strategy?.hole(currentHole) == nil {
-                HStack(spacing: 10) {
-                    placeholder("Lectura de green", "Pendientes y profundidad del green, todavía sin relevar.")
-                    placeholder("Tiro recomendado", "Todavía sin plan para este hoyo.")
-                }
-            }
-        }
-    }
-
-    private func placeholder(_ title: String, _ body: String) -> some View {
-        GCard(radius: 18, padding: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                GOverline(text: "Próximamente")
-                Text(title)
-                    .font(GType.headline)
-                    .foregroundStyle(p.ink)
-                Text(body)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
-            }
-        }
-    }
-
     private var course: Course? {
         model.courses.first { $0.name.caseInsensitiveCompare(courseName) == .orderedSame }
     }
@@ -318,79 +304,95 @@ struct HoleDetailView: View {
     }
 }
 
-struct HoleMapView: View {
-    @Environment(\.palette) private var p
-    let course: Course?
-    let hole: CourseHole?
-    let tees: [(String, Int)]
+/// Read-only satellite of one Cancha Azul hole. Tee sits at the bottom, green at the top.
+private struct HoleSatelliteMap: UIViewRepresentable {
+    var hole: AzulHoleGeo
 
-    var body: some View {
-        Canvas { context, size in
-            let rect = CGRect(origin: .zero, size: size)
-            context.fill(Path(roundedRect: rect, cornerRadius: 28), with: .color(p.turf))
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
-            let centerX = size.width * 0.5
-            let greenY = size.height * 0.16
-            let teeY = size.height * 0.86
-            let maxYards = Double(tees.map(\.1).max() ?? 400)
+    func makeUIView(context: Context) -> MKMapView {
+        let map = MKMapView()
+        map.mapType = .satellite
+        map.isScrollEnabled = false
+        map.isZoomEnabled = false
+        map.isRotateEnabled = false
+        map.isPitchEnabled = false
+        map.showsCompass = false
+        map.pointOfInterestFilter = .excludingAll
+        map.delegate = context.coordinator
+        return map
+    }
 
-            // Distance rings from the green
-            let rings = [100, 150, 200, 250, 300]
-            for yards in rings {
-                let t = CGFloat(Double(yards) / max(maxYards, 320))
-                let y = greenY + (teeY - greenY) * t
-                var path = Path()
-                path.addEllipse(in: CGRect(x: centerX - 70, y: y - 10, width: 140, height: 20))
-                context.stroke(path, with: .color(p.primary.opacity(0.12)), lineWidth: 1)
-                let label = Text("\(yards)")
-                    .font(GFont.ui(10, weight: .medium))
-                    .foregroundColor(p.ink3)
-                context.draw(label, at: CGPoint(x: size.width - 28, y: y))
-            }
+    func updateUIView(_ map: MKMapView, context: Context) {
+        guard context.coordinator.drawnHole != hole.number else { return }
+        context.coordinator.drawnHole = hole.number
+        map.removeOverlays(map.overlays)
+        addOverlays(map)
+        let camera = MKMapCamera(
+            lookingAtCenter: focus,
+            fromDistance: altitude,
+            pitch: 0,
+            heading: hole.heading
+        )
+        map.setCamera(camera, animated: false)
+    }
 
-            // Fairway ribbon
-            var fairway = Path()
-            fairway.move(to: CGPoint(x: centerX - 22, y: teeY))
-            fairway.addCurve(
-                to: CGPoint(x: centerX - 18, y: greenY + 28),
-                control1: CGPoint(x: centerX - 50, y: (teeY + greenY) / 2),
-                control2: CGPoint(x: centerX - 8, y: greenY + 90)
-            )
-            fairway.addLine(to: CGPoint(x: centerX + 18, y: greenY + 28))
-            fairway.addCurve(
-                to: CGPoint(x: centerX + 22, y: teeY),
-                control1: CGPoint(x: centerX + 8, y: greenY + 90),
-                control2: CGPoint(x: centerX + 50, y: (teeY + greenY) / 2)
-            )
-            fairway.closeSubpath()
-            context.fill(fairway, with: .color(p.fairway))
+    private var focus: CLLocationCoordinate2D {
+        let tee = hole.tee
+        let pin = hole.pin
+        return CLLocationCoordinate2D(
+            latitude: (tee.lat + pin.lat) / 2,
+            longitude: (tee.lng + pin.lng) / 2
+        )
+    }
 
-            // Green
-            context.fill(Path(ellipseIn: CGRect(x: centerX - 22, y: greenY - 16, width: 44, height: 36)), with: .color(p.green))
-            context.fill(Path(ellipseIn: CGRect(x: centerX - 2.5, y: greenY - 2.5, width: 5, height: 5)), with: .color(p.primary))
+    private var altitude: CLLocationDistance {
+        let origin = AzulCoord(lat: focus.latitude, lng: focus.longitude)
+        let points = hole.line + hole.green + hole.features.flatMap(\.points)
+        let reach = points.map { hole.meters(from: origin, to: $0) }.max() ?? hole.meters / 2
+        let halfAngle = 14.0 * Double.pi / 180
+        return max(reach / tan(halfAngle) * 1.08, 280)
+    }
 
-            // Tees
-            let inset: CGFloat = 28
-            for (index, tee) in tees.enumerated() {
-                let t = 1 - CGFloat(Double(tee.1) / max(maxYards, 1))
-                let y = greenY + (teeY - greenY) * (0.72 + t * 0.22)
-                let x = inset + CGFloat(index) * CGFloat(18)
-                context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 8, height: 8)), with: .color(p.teeColor(tee.0)))
-            }
+    private func addOverlays(_ map: MKMapView) {
+        func poly(_ pts: [AzulCoord], kind: String) {
+            guard pts.count >= 3 else { return }
+            let overlay = MKPolygon(coordinates: pts.map(\.cl), count: pts.count)
+            overlay.title = kind
+            map.addOverlay(overlay)
         }
-        .overlay(alignment: .bottomLeading) {
-            HStack(spacing: 10) {
-                ForEach(tees, id: \.0) { name, yards in
-                    HStack(spacing: 4) {
-                        TeeDot(name: name, size: 7)
-                        Text("\(yards)")
-                            .font(GType.label)
-                            .tabular()
-                            .foregroundStyle(p.ink2)
-                    }
+        for feature in hole.features { poly(feature.points, kind: feature.kind) }
+        poly(hole.green, kind: "g")
+        guard hole.line.count >= 2 else { return }
+        let line = MKPolyline(coordinates: hole.line.map(\.cl), count: hole.line.count)
+        line.title = "line"
+        map.addOverlay(line)
+    }
+
+    final class Coordinator: NSObject, MKMapViewDelegate {
+        var drawnHole = 0
+
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let poly = overlay as? MKPolygon {
+                let renderer = MKPolygonRenderer(polygon: poly)
+                renderer.strokeColor = .white
+                renderer.lineWidth = 1.2
+                switch poly.title {
+                case "g": renderer.fillColor = UIColor(red: 0.35, green: 0.72, blue: 0.38, alpha: 0.28)
+                case "f": renderer.fillColor = UIColor(red: 0.45, green: 0.7, blue: 0.35, alpha: 0.18)
+                case "b": renderer.fillColor = UIColor(red: 0.86, green: 0.75, blue: 0.42, alpha: 0.45)
+                case "w": renderer.fillColor = UIColor(red: 0.15, green: 0.42, blue: 0.72, alpha: 0.4)
+                default: renderer.fillColor = UIColor.white.withAlphaComponent(0.08)
                 }
+                return renderer
             }
-            .padding(12)
+            if let line = overlay as? MKPolyline {
+                let renderer = MKPolylineRenderer(polyline: line)
+                renderer.strokeColor = .white
+                renderer.lineWidth = 2
+                return renderer
+            }
+            return MKOverlayRenderer(overlay: overlay)
         }
     }
 }
