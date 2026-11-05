@@ -77,7 +77,14 @@ struct PlayHoleView: View {
                 strategy = remote
                 CourseCache.save(detail: course, strategy: remote)
             }
-            RoundLiveActivity.start(course: course, liveRound: liveRound, here: location.coordinate, shots: shots)
+            RoundLiveActivity.start(
+                course: course,
+                liveRound: liveRound,
+                here: location.coordinate,
+                shots: shots,
+                practice: showsWind,
+                headingDeg: location.headingDeg
+            )
             beginPace()
             await loadPaceEstimate()
             await refreshLivePace()
@@ -92,6 +99,9 @@ struct PlayHoleView: View {
             }
             refreshLiveActivity()
             maybeAdvance()
+        }
+        .onChange(of: location.headingDeg) { _, _ in
+            refreshLiveActivity()
         }
         .alert(
             "¿Pasamos al hoyo \(pendingAdvance ?? (hole + 1))?",
@@ -805,8 +815,19 @@ struct PlayHoleView: View {
         pendingAdvance = nextNumber
     }
 
+    private var showsWind: Bool {
+        model.roundSettings.shows(.viento, mode: model.homeMode)
+    }
+
     private func refreshLiveActivity() {
-        RoundLiveActivity.update(course: course, hole: hole, here: location.coordinate, shots: shots)
+        RoundLiveActivity.update(
+            course: course,
+            hole: hole,
+            here: location.coordinate,
+            shots: shots,
+            practice: showsWind,
+            headingDeg: location.headingDeg
+        )
     }
 
     private func hit() async {

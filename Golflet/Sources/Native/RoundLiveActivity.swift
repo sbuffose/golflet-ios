@@ -5,10 +5,21 @@ import ActivityKit
 enum RoundLiveActivity {
     private static var currentID: String?
 
-    static func start(course: GPSCourseDetail, liveRound: LiveRound, here: GPSCoord?, shots: [Shot]) {
+    static func start(
+        course: GPSCourseDetail,
+        liveRound: LiveRound,
+        here: GPSCoord?,
+        shots: [Shot],
+        practice: Bool = false,
+        headingDeg: Double? = nil,
+        windKmh: Int? = nil,
+        windFromDeg: Double? = nil,
+        matchHonor: String? = nil,
+        matchStatus: String? = nil
+    ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         end()
-        let state = LiveRoundState.make(course: course, hole: liveRound.currentHole, here: here, shots: shots)
+        let state = LiveRoundState.make(course: course, hole: liveRound.currentHole, here: here, shots: shots, practice: practice, headingDeg: headingDeg, windKmh: windKmh, windFromDeg: windFromDeg, matchHonor: matchHonor, matchStatus: matchStatus)
         let attributes = RoundActivityAttributes(
             courseName: course.course,
             clubName: course.clubName,
@@ -26,8 +37,30 @@ enum RoundLiveActivity {
         }
     }
 
-    static func update(course: GPSCourseDetail, hole: Int, here: GPSCoord?, shots: [Shot]) {
-        let state = LiveRoundState.make(course: course, hole: hole, here: here, shots: shots)
+    static func update(
+        course: GPSCourseDetail,
+        hole: Int,
+        here: GPSCoord?,
+        shots: [Shot],
+        practice: Bool = false,
+        headingDeg: Double? = nil,
+        windKmh: Int? = nil,
+        windFromDeg: Double? = nil,
+        matchHonor: String? = nil,
+        matchStatus: String? = nil
+    ) {
+        let state = LiveRoundState.make(
+            course: course,
+            hole: hole,
+            here: here,
+            shots: shots,
+            practice: practice,
+            headingDeg: headingDeg,
+            windKmh: windKmh,
+            windFromDeg: windFromDeg,
+            matchHonor: matchHonor,
+            matchStatus: matchStatus
+        )
         let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(60 * 30))
         for activity in Activity<RoundActivityAttributes>.activities where activity.attributes.liveRoundId == currentLiveID() || currentID == activity.id {
             Task { await activity.update(content) }
