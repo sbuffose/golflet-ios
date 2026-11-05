@@ -1191,7 +1191,7 @@ final class GolfletUITests: XCTestCase {
     private func isOnScreen(_ app: XCUIApplication, _ element: XCUIElement) -> Bool {
         guard element.exists else { return false }
         let frame = element.frame
-        guard frame.width > 8, frame.height > 8 else { return false }
+        guard frame.width > 8, frame.height > 8, !frame.isNull, !frame.isInfinite else { return false }
         return app.frame.intersects(frame.insetBy(dx: 1, dy: 1))
     }
 
@@ -1223,8 +1223,8 @@ final class GolfletUITests: XCTestCase {
 
     private func assertCanchaHoleGrid(_ app: XCUIApplication) {
         let ten = first(app, "hole-10")
-        reveal(app, ten)
         XCTAssertTrue(ten.waitForExistence(timeout: 4), "Falta el hoyo 10")
+        reveal(app, ten)
         let one = first(app, "hole-1")
         let eleven = first(app, "hole-11")
         XCTAssertGreaterThan(app.frame.width, 300, "El test tiene que correr a ancho iPhone")
@@ -1248,9 +1248,13 @@ final class GolfletUITests: XCTestCase {
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
         var attempts = 0
         while !isOnScreen(app, element) && attempts < 8 {
-            let frame = element.frame
-            if frame.maxY < app.frame.midY {
-                app.swipeDown()
+            if element.exists {
+                let frame = element.frame
+                if frame.width > 1, frame.maxY < app.frame.midY {
+                    app.swipeDown()
+                } else {
+                    app.swipeUp()
+                }
             } else {
                 app.swipeUp()
             }
