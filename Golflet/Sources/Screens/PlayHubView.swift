@@ -88,6 +88,7 @@ struct PlayHubView: View {
             }
         }
         .accessibilityIdentifier("screen-jugar")
+        .metricDestinations()
     }
 }
 

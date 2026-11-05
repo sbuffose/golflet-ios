@@ -52,6 +52,15 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
+        .navigationDestination(for: HomeMoreRoute.self) { route in
+            switch route {
+            case .resumen: SummaryView()
+            case .rondas: RoundsView()
+            case .cancha: CourseView()
+            case .bolsa: BagView()
+            case .sg: SGHomeView()
+            }
+        }
         .metricDestinations()
         .navigationDestination(for: Profesor.self) { profesor in
             ProfesorDetailView(profesor: profesor)
@@ -509,23 +518,23 @@ struct HomeView: View {
             Text("Más").font(GType.section).foregroundStyle(p.ink)
             ProtoCard {
                 VStack(spacing: 0) {
-                    NavigationLink { SummaryView() } label: {
+                    NavigationLink(value: HomeMoreRoute.resumen) {
                         ProtoRow(title: "Resumen", subtitle: "Tendencia, métricas y gráfico")
                     }
                     .accessibilityIdentifier("home-more-resumen")
-                    NavigationLink { RoundsView() } label: {
+                    NavigationLink(value: HomeMoreRoute.rondas) {
                         ProtoRow(title: "Rondas", subtitle: "Todas tus tarjetas")
                     }
                     .accessibilityIdentifier("home-more-rondas")
-                    NavigationLink { CourseView() } label: {
+                    NavigationLink(value: HomeMoreRoute.cancha) {
                         ProtoRow(title: "Cancha", subtitle: "Libreta y hoyo a hoyo")
                     }
                     .accessibilityIdentifier("home-more-cancha")
-                    NavigationLink { BagView() } label: {
+                    NavigationLink(value: HomeMoreRoute.bolsa) {
                         ProtoRow(title: "Mi bolsa", subtitle: "Palos y distancias")
                     }
                     .accessibilityIdentifier("home-more-bolsa")
-                    NavigationLink { SGHomeView() } label: {
+                    NavigationLink(value: HomeMoreRoute.sg) {
                         ProtoRow(title: "Strokes gained", subtitle: "Broadie · PGA Tour")
                     }
                     .accessibilityIdentifier("home-more-sg")
@@ -548,7 +557,7 @@ struct HomeView: View {
                     .font(GType.section)
                     .foregroundStyle(p.ink)
                 Spacer()
-                NavigationLink { RoundsView() } label: {
+                NavigationLink(value: HomeMoreRoute.rondas) {
                     Text("Ver todas")
                         .font(GType.headline)
                         .foregroundStyle(p.ink2)

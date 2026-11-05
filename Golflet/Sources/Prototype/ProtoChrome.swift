@@ -59,10 +59,13 @@ struct RobertoGuide: View {
                 .rotationEffect(.degrees(thinking ? 180 : 0))
             RobertoGlyph()
                 .frame(width: small ? 56 : 88, height: small ? 62 : 96)
+            Text("roberto-guide")
+                .font(.system(size: 1))
+                .foregroundStyle(.clear)
+                .frame(width: 1, height: 1)
+                .accessibilityIdentifier("roberto-guide")
         }
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Roberto, tu caddie en Golflet")
-        .accessibilityIdentifier("roberto-guide")
     }
 }
 
