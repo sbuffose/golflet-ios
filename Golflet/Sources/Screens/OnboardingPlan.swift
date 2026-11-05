@@ -126,7 +126,7 @@ enum OnboardingPlan {
             lines.append(cadenceLine(cadence))
         }
         if facts.roundCount > 0 {
-            lines.append("Te pregunto solo lo que la matrícula no sabe.")
+            lines.append("Solo me faltan unos datos más")
         } else {
             lines.append("Te pregunto lo justo para armar tu inicio.")
         }
