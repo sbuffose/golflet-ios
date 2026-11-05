@@ -12,6 +12,7 @@ struct HandicapHistoryView: View {
 
     var body: some View {
         let points = apiPoints ?? StatsEngine.handicapSeries(model.rounds)
+        let changes = StatsEngine.handicapChanges(points)
         let home = model.home
         GScreen(id: "screen-metric-handicap") {
             ScrollView(showsIndicators: false) {
@@ -52,14 +53,14 @@ struct HandicapHistoryView: View {
                         Text("Cambios")
                             .font(GType.section)
                             .foregroundStyle(p.ink)
-                        if points.isEmpty {
+                        if changes.isEmpty {
                             Text("No hay historial de hándicap en las tarjetas.")
                                 .font(GType.label)
                                 .foregroundStyle(p.ink3)
                         } else {
                             GCard(radius: 18, padding: 14) {
                                 VStack(spacing: 10) {
-                                    ForEach(Array(points.reversed().enumerated()), id: \.offset) { index, point in
+                                    ForEach(Array(changes.reversed().enumerated()), id: \.offset) { index, point in
                                         HStack {
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text(FormatAR.longDate(point.date))
@@ -77,7 +78,7 @@ struct HandicapHistoryView: View {
                                                 .foregroundStyle(p.ink)
                                         }
                                         .accessibilityIdentifier("metric-hi-\(index)")
-                                        if index < points.count - 1 {
+                                        if index < changes.count - 1 {
                                             Hairline()
                                         }
                                     }
