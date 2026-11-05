@@ -732,7 +732,11 @@ final class AppModel {
                 groups.insert(group, at: 0)
             }
             if openGroup {
-                presentedGroupID = group.id
+                let id = group.id
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    presentedGroupID = id
+                }
             }
             await refreshGroups()
             await refreshNotifications()
@@ -1100,6 +1104,7 @@ final class AppModel {
         onboarding = state
         onboarding.done = true
         PrototypeStore.saveOnboarding(onboarding)
+        selectedTab = .inicio
         showsOnboarding = false
     }
 
