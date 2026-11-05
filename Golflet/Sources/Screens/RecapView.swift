@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RecapTarget: Identifiable, Hashable {
     var id: String { roundId ?? liveRoundId ?? "new" }
@@ -22,6 +23,7 @@ struct RecapView: View {
     @State private var isSaving = false
     @State private var isTranscribing = false
     @State private var showsTranscript = false
+    @State private var playback = RecapPlayback()
 
     var body: some View {
         GScreen(id: "screen-recap") {
@@ -33,9 +35,10 @@ struct RecapView: View {
                         statusCard(recap)
                         if recap.status == "ready" || recap.status == "error" || recap.transcript != nil {
                             editor
-                            mistakes(recap)
-                            positives(recap)
                         }
+                    }
+                    if !holeBeats.isEmpty {
+                        timeline(holeBeats)
                     }
                     if let message {
                         Text(message)
@@ -69,6 +72,26 @@ struct RecapView: View {
             _ = await RecapSpeech.requestAuthorization()
             await load()
         }
+        .onChange(of: recorder.isRecording) { _, _ in syncAwake() }
+        .onChange(of: playback.isPlaying) { _, _ in syncAwake() }
+        .onChange(of: isTranscribing) { _, _ in syncAwake() }
+        .onChange(of: recorder.finishedAudio) { _, data in
+            guard let data else { return }
+            recorder.finishedAudio = nil
+            isTranscribing = true
+            syncAwake()
+            Task { await finishRecording(audio: data) }
+        }
+        .onChange(of: transcript) { _, text in
+            guard recorder.isRecording || isTranscribing else { return }
+            if recorder.spokenText.isEmpty {
+                recorder.noteSpoken(text)
+            }
+        }
+        .onDisappear {
+            playback.stop()
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
     }
 
     private var header: some View {
@@ -99,12 +122,38 @@ struct RecapView: View {
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                     .accessibilityIdentifier(isTranscribing ? "recap-transcribing" : "recap-record-hint")
+                if let hole = liveHole {
+                    Text("Hoyo \(hole)")
+                        .font(GType.headline)
+                        .foregroundStyle(p.onPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(p.primary)
+                        .clipShape(Capsule())
+                        .accessibilityIdentifier("recap-live-hole")
+                }
                 HStack {
                     Text(timeLabel)
                         .font(GType.headline)
                         .tabular()
                         .foregroundStyle(p.ink)
                     Spacer()
+                    if recorder.lastURL != nil, !recorder.isRecording {
+                        Button {
+                            playback.toggle(url: recorder.lastURL)
+                            syncAwake()
+                        } label: {
+                            Text(playback.isPlaying ? "Pausa" : "Escuchar")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(p.surface2)
+                                .clipShape(Capsule())
+                        }
+                        .accessibilityIdentifier("recap-play")
+                        .disabled(isTranscribing || isSaving)
+                    }
                     Button {
                         toggleRecord()
                     } label: {
@@ -134,8 +183,10 @@ struct RecapView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("recap-edit")
                     Button {
+                        playback.stop()
                         recorder.cancel()
                         recap = nil
+                        syncAwake()
                     } label: {
                         Label("Grabar de nuevo", systemImage: "mic")
                             .font(GType.headline)
@@ -210,47 +261,121 @@ struct RecapView: View {
         }
     }
 
-    private func mistakes(_ recap: Recap) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Errores \(recap.mistakes.count)")
-                .font(GType.overline)
-                .foregroundStyle(p.ink3)
-            ForEach(recap.mistakes) { item in
-                HStack(alignment: .top, spacing: 10) {
-                    Circle().fill(dot(item.category)).frame(width: 10, height: 10).padding(.top, 6)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.label + (item.hole.map { " · Hoyo \($0)" } ?? ""))
-                            .font(GType.headline)
-                            .foregroundStyle(p.ink)
-                        Text(item.text)
-                            .font(GType.body)
-                            .foregroundStyle(p.ink2)
-                    }
-                }
-                .accessibilityIdentifier("recap-mistake-\(item.category)")
+    private var holeBeats: [RecapHoleBeat] {
+        let text: String
+        let mistakes: [RecapMistake]
+        let positives: [RecapPositive]
+        if recorder.isRecording || (isTranscribing && transcript.isEmpty) {
+            text = recorder.spokenText
+            mistakes = []
+            positives = []
+        } else {
+            text = transcript
+            mistakes = recap?.mistakes ?? []
+            positives = recap?.positives ?? []
+        }
+        return RecapTimeline.build(transcript: text, mistakes: mistakes, positives: positives, card: cardHoles)
+    }
+
+    private var cardHoles: [RecapCardHole] {
+        let round = model.rounds.first { $0.roundId == roundId }
+            ?? (model.presentedRound?.roundId == roundId ? model.presentedRound : nil)
+            ?? (model.home.lastRound?.roundId == roundId ? model.home.lastRound : nil)
+        return (round?.holes ?? []).map {
+            RecapCardHole(number: $0.number, par: $0.par, strokes: $0.strokes, toPar: $0.toPar, result: $0.result)
+        }
+    }
+
+    private var liveHole: Int? {
+        guard recorder.isRecording || isTranscribing else { return nil }
+        if !transcript.isEmpty, let hole = RecapTimeline.latestHole(in: transcript) { return hole }
+        if let hole = recorder.currentHole { return hole }
+        return RecapTimeline.latestHole(in: recorder.spokenText)
+    }
+
+    private func timeline(_ beats: [RecapHoleBeat]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Por hoyo")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+                .accessibilityIdentifier("recap-timeline")
+            ForEach(beats) { beat in
+                holeBeat(beat)
             }
         }
     }
 
-    private func positives(_ recap: Recap) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Lo que salió bien")
-                .font(GType.overline)
-                .foregroundStyle(p.ink3)
-            ForEach(recap.positives) { item in
-                HStack(alignment: .top, spacing: 10) {
-                    Circle().fill(p.positive).frame(width: 10, height: 10).padding(.top, 6)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Bien" + (item.hole.map { " · Hoyo \($0)" } ?? ""))
-                            .font(GType.headline)
-                            .foregroundStyle(p.ink)
-                        Text(item.text)
-                            .font(GType.body)
+    private func holeBeat(_ beat: RecapHoleBeat) -> some View {
+        let rail = toneColor(beat.tone)
+        return HStack(alignment: .top, spacing: 12) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(rail)
+                .frame(width: 4)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(beat.title)
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    if recorder.isRecording, beat.hole == liveHole {
+                        Text("Ahora")
+                            .font(GType.label)
+                            .foregroundStyle(p.onPrimary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(p.primary)
+                            .clipShape(Capsule())
+                    }
+                    Spacer(minLength: 8)
+                    if let score = beat.scoreLine {
+                        Text(score)
+                            .font(GType.label)
                             .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier(beat.hole.map { "recap-hole-\($0)-score" } ?? "recap-hole-general-score")
+                    }
+                    if let toPar = beat.toParLine {
+                        Text(toPar)
+                            .font(GType.headline)
+                            .tabular()
+                            .foregroundStyle(rail)
                     }
                 }
-                .accessibilityIdentifier("recap-positive")
+                ForEach(beat.lines) { line in
+                    HStack(alignment: .top, spacing: 8) {
+                        Circle()
+                            .fill(toneColor(line.kind))
+                            .frame(width: 8, height: 8)
+                            .padding(.top, 6)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(line.title)
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text(line.text)
+                                .font(GType.body)
+                                .foregroundStyle(p.ink2)
+                        }
+                    }
+                }
+                if let agreement = beat.agreement {
+                    Text(agreement.label)
+                        .font(GType.label)
+                        .foregroundStyle(agreement.coincides ? p.primary : p.negative)
+                        .accessibilityIdentifier(beat.hole.map { "recap-hole-\($0)-match" } ?? "recap-hole-general-match")
+                }
             }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(beat.tone == .bad ? p.accentSoft : p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(beat.hole.map { "recap-hole-\($0)" } ?? "recap-hole-general")
+    }
+
+    private func toneColor(_ tone: RecapTone) -> Color {
+        switch tone {
+        case .good: return p.primary
+        case .bad: return p.negative
+        case .even: return p.ink3
         }
     }
 
@@ -259,26 +384,27 @@ struct RecapView: View {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    private func dot(_ category: String) -> Color {
-        switch category {
-        case "putt": return p.primary.opacity(0.45)
-        case "salida": return Color(hex: 0xE8C4B8)
-        case "bunker": return p.sand
-        case "estrategia": return Color(hex: 0xD4C8E0)
-        default: return p.accent
-        }
+    private func syncAwake() {
+        UIApplication.shared.isIdleTimerDisabled = recorder.isRecording || playback.isPlaying || isTranscribing
     }
 
     private func toggleRecord() {
+        playback.stop()
         if recorder.isRecording {
             if let data = recorder.stop() {
+                isTranscribing = true
+                syncAwake()
                 Task { await finishRecording(audio: data) }
+            } else {
+                syncAwake()
             }
         } else {
             do {
                 try recorder.start()
+                syncAwake()
             } catch {
                 message = error.localizedDescription
+                syncAwake()
             }
         }
     }
@@ -300,6 +426,7 @@ struct RecapView: View {
         defer {
             isTranscribing = false
             isSaving = false
+            syncAwake()
         }
         do {
             var draft = try await RecapOnDevice.process(url: recorder.lastURL)
