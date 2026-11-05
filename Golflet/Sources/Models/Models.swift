@@ -9,17 +9,20 @@ enum HoleResult: String, Codable, Sendable {
     case unknown
 
     init(className: String?, toPar: Int?) {
-        let raw = className?.lowercased() ?? ""
+        let raw = (className ?? "")
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_AR"))
+            .replacingOccurrences(of: "_", with: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         switch raw {
-        case "eagle", "eagle-or-better", "albatross", "hole-in-one", "hoyoenuno":
+        case "eagle", "eagle-or-better", "albatross", "hole-in-one", "hoyoenuno", "aguila", "aguila-o-mejor":
             self = .eagleOrBetter
         case "birdie":
             self = .birdie
-        case "par":
+        case "par", "pare":
             self = .par
         case "bogey":
             self = .bogey
-        case "double-bogey", "double", "triple-bogey", "worse", "triple_plus":
+        case "double-bogey", "double", "triple-bogey", "worse", "triple-plus":
             self = .doubleOrWorse
         default:
             if let toPar {
@@ -55,6 +58,24 @@ struct ScoreCounts: Hashable, Sendable {
     var triples: Int
     var worse: Int
     var eagles: Int = 0
+
+    /// Uses the API count when it is present and higher. If the payload omits eagles, or sends 0 while a hole is eagle-or-better, the holes win.
+    static func resolvedEagles(reported: Int?, holes: [HoleScore]) -> Int {
+        let fromHoles = holes.reduce(into: 0) { count, hole in
+            if hole.result == .eagleOrBetter { count += 1 }
+        }
+        return max(reported ?? 0, fromHoles)
+    }
+}
+
+enum ScorecardSummary {
+    static func line(eagles: Int, birdies: Int, pars: Int, bogeys: Int, doubles: Int, differentialNote: String) -> String {
+        var parts = ["\(birdies) birdies", "\(pars) pares", "\(bogeys) bogeys", "\(doubles) dobles"]
+        if eagles > 0 {
+            parts.insert(eagles == 1 ? "1 águila" : "\(eagles) águilas", at: 0)
+        }
+        return parts.joined(separator: " · ") + ". " + differentialNote
+    }
 }
 
 struct Round: Identifiable, Hashable, Sendable {

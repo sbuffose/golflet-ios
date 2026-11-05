@@ -389,7 +389,17 @@ struct ScoreMark: View {
                     Circle().stroke(p.hairline, lineWidth: 1)
                 }
             }
+            .background {
+                if result == .eagleOrBetter {
+                    Circle()
+                        .stroke(p.accent, lineWidth: ringWidth)
+                        .padding(-(ringWidth + ringGap))
+                }
+            }
     }
+
+    private var ringWidth: CGFloat { max(1.25, diameter * 0.08) }
+    private var ringGap: CGFloat { max(1.25, diameter * 0.05) }
 
     private var background: Color {
         switch result {
