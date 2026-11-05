@@ -119,27 +119,16 @@ struct AntesDeSalirView: View {
 
                     Text("En el hoyo vas a ver").font(GType.headline).foregroundStyle(p.ink)
                     ProtoCard {
-                        VStack(spacing: 10) {
+                        VStack(spacing: 14) {
                             ForEach(HoleFeature.allCases) { feat in
-                                HStack {
-                                    Text(feat.title).font(GType.body).foregroundStyle(p.ink)
-                                    Spacer()
-                                    let on = model.roundSettings.shows(feat, mode: model.homeMode)
-                                    HStack(spacing: 6) {
-                                        Button("Sí") { model.setFeature(feat, on: true) }
-                                            .font(GType.label)
-                                            .padding(8)
-                                            .background(on ? p.primary : p.surface2)
-                                            .foregroundStyle(on ? p.onPrimary : p.ink2)
-                                            .clipShape(Capsule())
-                                        Button("No") { model.setFeature(feat, on: false) }
-                                            .font(GType.label)
-                                            .padding(8)
-                                            .background(!on ? p.primary : p.surface2)
-                                            .foregroundStyle(!on ? p.onPrimary : p.ink2)
-                                            .clipShape(Capsule())
-                                    }
+                                Toggle(isOn: featureBinding(feat)) {
+                                    Text(feat.title)
+                                        .font(GType.body)
+                                        .foregroundStyle(p.ink)
+                                        .multilineTextAlignment(.leading)
                                 }
+                                .toggleStyle(.switch)
+                                .tint(p.primary)
                                 .accessibilityIdentifier("antes-feat-\(feat.rawValue)")
                             }
                         }
@@ -181,6 +170,13 @@ struct AntesDeSalirView: View {
         .accessibilityIdentifier("screen-antes")
         .safeAreaInset(edge: .top) { MetricBackBar() }
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func featureBinding(_ feature: HoleFeature) -> Binding<Bool> {
+        Binding(
+            get: { model.roundSettings.shows(feature, mode: model.homeMode) },
+            set: { model.setFeature(feature, on: $0) }
+        )
     }
 
     private func setting(_ title: String, _ options: [String], _ current: String, _ set: @escaping (String) -> Void) -> some View {

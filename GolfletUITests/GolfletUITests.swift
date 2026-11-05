@@ -159,6 +159,16 @@ final class GolfletUITests: XCTestCase {
         if first(app, "jugar-ajustes").waitForExistence(timeout: 4) {
             first(app, "jugar-ajustes").tap()
             XCTAssertTrue(waitFor(app, "screen-antes", timeout: 6))
+            XCTAssertTrue(first(app, "antes-mode-clasico").waitForExistence(timeout: 2))
+            XCTAssertTrue(first(app, "antes-mode-comp").exists)
+            XCTAssertTrue(first(app, "antes-mode-mej").exists)
+            XCTAssertTrue(first(app, "antes-mode-soc").exists)
+            let track = app.switches["antes-feat-track"]
+            reveal(app, track)
+            XCTAssertTrue(track.waitForExistence(timeout: 4), "Falta el switch de golpe a golpe")
+            XCTAssertFalse(switchIsOn(track), "En Clásico el switch arranca apagado")
+            track.tap()
+            XCTAssertTrue(switchIsOn(track), "El switch no quedó prendido")
             saveShot("74_antes_de_salir")
             first(app, "antes-mode-clasico").tap()
             first(app, "antes-start").tap()
@@ -1260,6 +1270,16 @@ final class GolfletUITests: XCTestCase {
         if first(app, "tee-blanco").waitForExistence(timeout: 1) {
             XCTAssertLessThan(first(app, "tee-blanco").frame.height, 28, "Blanco wrappea: \(first(app, "tee-blanco").frame)")
         }
+    }
+
+    private func switchIsOn(_ element: XCUIElement) -> Bool {
+        if let text = element.value as? String {
+            return text == "1" || text == "on"
+        }
+        if let number = element.value as? NSNumber {
+            return number.intValue == 1
+        }
+        return false
     }
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
