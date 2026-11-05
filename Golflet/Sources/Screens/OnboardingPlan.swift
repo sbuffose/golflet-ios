@@ -29,6 +29,11 @@ struct OnboardingFacts: Equatable {
     }
 }
 
+enum OnboardingRoute: Equatable {
+    case matricula
+    case reveal
+}
+
 enum OnboardingAsk: String, Equatable, CaseIterable {
     case score
     case frec
@@ -68,6 +73,12 @@ enum OnboardingPlan {
             hasBag: !bag.isEmpty && !untouchedDefault,
             hasDistances: bag.contains { $0.carry != nil || $0.total != nil }
         )
+    }
+
+    /// After Golfistics returns. A missing snapshot stays on the form so the user can retry.
+    static func routeAfterSync(signedIn: Bool, hasSnapshot: Bool, needsClub: Bool, authFailed: Bool) -> OnboardingRoute {
+        if signedIn && hasSnapshot && !needsClub && !authFailed { return .reveal }
+        return .matricula
     }
 
     static func asks(for facts: OnboardingFacts) -> [OnboardingAsk] {

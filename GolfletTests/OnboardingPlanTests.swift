@@ -2,6 +2,25 @@ import XCTest
 @testable import Golflet
 
 final class OnboardingPlanTests: XCTestCase {
+    func testSyncWithoutASnapshotStaysOnMatricula() {
+        XCTAssertEqual(
+            OnboardingPlan.routeAfterSync(signedIn: true, hasSnapshot: false, needsClub: false, authFailed: false),
+            .matricula
+        )
+        XCTAssertEqual(
+            OnboardingPlan.routeAfterSync(signedIn: true, hasSnapshot: true, needsClub: true, authFailed: false),
+            .matricula
+        )
+        XCTAssertEqual(
+            OnboardingPlan.routeAfterSync(signedIn: false, hasSnapshot: false, needsClub: false, authFailed: true),
+            .matricula
+        )
+        XCTAssertEqual(
+            OnboardingPlan.routeAfterSync(signedIn: true, hasSnapshot: true, needsClub: false, authFailed: false),
+            .reveal
+        )
+    }
+
     func testFullFichaOnlyAsksWhatMatriculaCannotKnow() {
         let facts = OnboardingFacts(
             name: "Ana Pérez",

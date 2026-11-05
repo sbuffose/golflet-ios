@@ -1,12 +1,14 @@
 import SwiftUI
 import UserNotifications
 
+/// Matrícula is the first screen. Sync runs on its own. The ficha is shown only after it lands.
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
-    @State private var phase: Phase = .credentials
+    @State private var phase: Phase = .matricula
+    @State private var primed = false
     @State private var draft = OnboardingState()
     @State private var asks: [OnboardingAsk] = []
     @State private var matricula = ""
@@ -15,8 +17,9 @@ struct OnboardingView: View {
     @State private var wheel = 140
 
     private enum Phase: Equatable {
-        case credentials
-        case known
+        case matricula
+        case syncing
+        case reveal
         case ask(Int)
         case notifications
         case plan
@@ -28,8 +31,9 @@ struct OnboardingView: View {
                 topBar
                 Group {
                     switch phase {
-                    case .credentials: credentials
-                    case .known: known
+                    case .matricula: matriculaForm
+                    case .syncing: syncing
+                    case .reveal: reveal
                     case .ask(let index): question(index)
                     case .notifications: notifications
                     case .plan: plan
@@ -37,10 +41,10 @@ struct OnboardingView: View {
                 }
                 .id(phaseKey)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
             .padding(.horizontal, 22)
-            .background((phase == .known ? Color(hex: BrandHex.navy) : p.bg).ignoresSafeArea())
+            .background(p.bg.ignoresSafeArea())
         }
         .animation(motion, value: phaseKey)
         .onAppear(perform: prime)
@@ -48,8 +52,9 @@ struct OnboardingView: View {
 
     private var phaseKey: String {
         switch phase {
-        case .credentials: return "credentials"
-        case .known: return "known"
+        case .matricula: return "matricula"
+        case .syncing: return "syncing"
+        case .reveal: return "reveal"
         case .ask(let index): return "ask-\(index)"
         case .notifications: return "notifications"
         case .plan: return "plan"
@@ -59,14 +64,12 @@ struct OnboardingView: View {
     private var topBar: some View {
         HStack {
             if showsBack {
-                Button {
-                    goBack()
-                } label: {
+                Button(action: goBack) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(phase == .known ? Color.white : p.ink)
+                        .foregroundStyle(Color(hex: BrandHex.navy))
                         .frame(width: 40, height: 40)
-                        .background(Circle().fill(phase == .known ? Color.white.opacity(0.12) : p.surface))
+                        .background(Circle().fill(p.surface))
                 }
                 .accessibilityIdentifier("ob-back")
             }
@@ -74,7 +77,7 @@ struct OnboardingView: View {
             Button(action: finish) {
                 Text("Saltar")
                     .font(GType.headline)
-                    .foregroundStyle(phase == .known ? Color.white : p.ink2)
+                    .foregroundStyle(p.ink2)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())
@@ -87,22 +90,19 @@ struct OnboardingView: View {
 
     private var showsBack: Bool {
         switch phase {
-        case .credentials: return false
-        case .known: return !model.isSignedIn
+        case .matricula, .syncing: return false
         default: return true
         }
     }
 
-    private var credentials: some View {
+    private var matriculaForm: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
-                RobertoGuide()
-                    .frame(maxWidth: .infinity)
-                Text("Empecemos por tu matrícula")
+                Text("¿Cuál es tu matrícula?")
                     .font(GType.sheetTitle)
-                    .foregroundStyle(p.ink)
-                    .accessibilityIdentifier("ob-welcome-title")
-                Text("Con eso leo tu hándicap, tu club y tus tarjetas. Después te pregunto solo lo que falta.")
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+                    .accessibilityIdentifier("ob-matricula-title")
+                Text("La contraseña es la de Golfistics. Con eso traigo tu hándicap, tu club y tus tarjetas.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                 GField(label: "Matrícula") {
@@ -114,7 +114,7 @@ struct OnboardingView: View {
                         .accessibilityIdentifier("ob-matricula")
                 }
                 GField(label: "Contraseña") {
-                    SecureField("La de Golfistics App", text: $clave)
+                    SecureField("La de Golfistics", text: $clave)
                         .textContentType(RuntimeFlags.isUITesting ? nil : .password)
                         .accessibilityIdentifier("ob-clave")
                 }
@@ -126,17 +126,28 @@ struct OnboardingView: View {
                 .tint(Color(hex: BrandHex.red))
                 if let payload = model.needsClub {
                     ClubPickerBlock(payload: payload) { club in
-                        Task {
-                            await model.retryLinkWithClub(club)
-                            revealIfReady()
-                        }
+                        Task { await pick(club) }
                     }
+                } else {
+                    Button {
+                        Task { await model.revealClubPicker() }
+                    } label: {
+                        Text("¿Tu club no aparece? Elegilo")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                    }
+                    .buttonStyle(.plain)
                 }
                 if let failure = model.authFailure {
-                    Text(failure.message)
-                        .font(GType.body)
-                        .foregroundStyle(p.negative)
-                        .accessibilityIdentifier(failure.bannerID)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(failure.message)
+                            .font(GType.body)
+                            .foregroundStyle(p.negative)
+                            .accessibilityIdentifier(failure.bannerID)
+                        if let hint = failure.hint, !hint.isEmpty {
+                            Text(hint).font(GType.label).foregroundStyle(p.ink2)
+                        }
+                    }
                 } else if let error = model.errorMessage, !error.isEmpty {
                     Text(error)
                         .font(GType.label)
@@ -144,70 +155,72 @@ struct OnboardingView: View {
                         .accessibilityIdentifier("ob-auth-error")
                 }
                 Button {
-                    Task { await submitCredentials() }
+                    Task { await submit() }
                 } label: {
-                    pill(model.isBusy ? "Leyendo tu ficha…" : "Entrar")
+                    pill("Entrar")
                 }
                 .buttonStyle(.plain)
                 .disabled(submitDisabled)
                 .accessibilityIdentifier("ob-submit")
-                .padding(.bottom, 24)
+                RobertoGuide(small: true)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
             }
             .padding(.top, 12)
+            .padding(.bottom, 28)
         }
     }
 
     private var submitDisabled: Bool {
         if model.isBusy { return true }
-        if RuntimeFlags.isUITesting { return false }
         return matricula.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || clave.isEmpty
     }
 
-    private var known: some View {
+    private var syncing: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            ProgressView()
+                .controlSize(.large)
+                .tint(Color(hex: BrandHex.red))
+            Text("Trayendo tus tarjetas")
+                .font(GType.section)
+                .foregroundStyle(Color(hex: BrandHex.navy))
+            Text("Cuando entren, te muestro lo que ya tiene tu ficha.")
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 12)
+    }
+
+    private var reveal: some View {
         VStack(alignment: .leading, spacing: 18) {
-            RobertoGuide()
-                .background(Circle().fill(Color.white).frame(width: 148, height: 148))
-                .frame(maxWidth: .infinity)
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(headline)
-                        .font(GType.sheetTitle)
-                        .foregroundStyle(Color.white)
-                        .accessibilityIdentifier("ob-welcome-title")
-                    ProgressiveLines(lines: bodyLines, reduceMotion: reduceMotion || voiceOver)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            TypeLines(
+                lines: revealLines,
+                reduceMotion: reduceMotion || voiceOver,
+                ink: Color(hex: BrandHex.navy),
+                size: GType.section
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             Button {
                 beginQuestions()
             } label: {
-                pill("Seguir", light: true)
+                pill("Seguir")
             }
             .buttonStyle(.plain)
-            .disabled(!canLeaveReveal)
-            .accessibilityIdentifier("ob-known-next")
+            .accessibilityIdentifier("ob-reveal-next")
             .padding(.bottom, 12)
         }
-        .padding(.top, 8)
+        .padding(.top, 12)
     }
 
-    private var headline: String {
-        guard let facts else { return "Hola, soy Roberto." }
-        return OnboardingPlan.revealLines(for: facts).first ?? "Hola, soy Roberto."
-    }
-
-    private var bodyLines: [String] {
-        if let facts {
-            return Array(OnboardingPlan.revealLines(for: facts).dropFirst())
+    private var revealLines: [String] {
+        guard let facts else {
+            return ["Entré con tu matrícula."]
         }
-        if model.isLoaded, let error = model.errorMessage, !error.isEmpty {
-            return ["No pude leer la ficha. Seguimos con lo que falte."]
-        }
-        return ["Estoy leyendo tu ficha."]
-    }
-
-    private var canLeaveReveal: Bool {
-        model.hasPlayerSnapshot || (model.isLoaded && model.isSignedIn && model.errorMessage?.isEmpty == false)
+        return OnboardingPlan.revealLines(for: facts)
     }
 
     private var facts: OnboardingFacts? {
@@ -226,9 +239,13 @@ struct OnboardingView: View {
             let ask = asks[index]
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    RobertoGuide(small: true)
-                    ProgressiveLines(lines: [prompt(ask)], reduceMotion: reduceMotion || voiceOver, ink: p.ink, size: .title)
-                        .accessibilityIdentifier("ob-question")
+                    TypeLines(
+                        lines: [prompt(ask)],
+                        reduceMotion: reduceMotion || voiceOver,
+                        ink: Color(hex: BrandHex.navy),
+                        size: GType.section
+                    )
+                    .accessibilityIdentifier("ob-question")
                     if ask == .bag {
                         bagBody
                     } else if ask == .iron {
@@ -255,6 +272,7 @@ struct OnboardingView: View {
                                 .accessibilityIdentifier("ob-opt-\(option.0)")
                             }
                         }
+                        .transition(.opacity)
                     }
                 }
                 .padding(.bottom, 24)
@@ -317,12 +335,11 @@ struct OnboardingView: View {
 
     private var notifications: some View {
         VStack(alignment: .leading, spacing: 16) {
-            RobertoGuide(small: true)
-            ProgressiveLines(
+            TypeLines(
                 lines: ["Te aviso cuando tus amigos salgan y cuando sea hora de practicar."],
                 reduceMotion: reduceMotion || voiceOver,
-                ink: p.ink,
-                size: .title
+                ink: Color(hex: BrandHex.navy),
+                size: GType.section
             )
             Text("Solo tu próximo tee time, tus partidos y tu plan.")
                 .font(GType.body)
@@ -345,15 +362,14 @@ struct OnboardingView: View {
             .accessibilityIdentifier("ob-notif-no")
             .padding(.bottom, 12)
         }
-        .padding(.top, 8)
+        .padding(.top, 12)
     }
 
     private var plan: some View {
         VStack(alignment: .leading, spacing: 16) {
-            RobertoGuide()
             Text(planTitle)
                 .font(GType.sheetTitle)
-                .foregroundStyle(p.ink)
+                .foregroundStyle(Color(hex: BrandHex.navy))
                 .accessibilityIdentifier("ob-plan-title")
             VStack(alignment: .leading, spacing: 12) {
                 planRow(1, "Encontrá dónde se te escapan los golpes.")
@@ -387,13 +403,13 @@ struct OnboardingView: View {
         }
     }
 
-    private func pill(_ title: String, light: Bool = false) -> some View {
+    private func pill(_ title: String) -> some View {
         Text(title)
             .font(GType.headline)
-            .foregroundStyle(light ? Color(hex: BrandHex.navy) : Color.white)
+            .foregroundStyle(Color.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(light ? Color.white : Color(hex: BrandHex.red))
+            .background(Color(hex: BrandHex.red))
             .clipShape(Capsule())
     }
 
@@ -402,25 +418,37 @@ struct OnboardingView: View {
     }
 
     private func prime() {
+        guard !primed else { return }
+        primed = true
         draft = model.onboarding
         wheel = draft.i7 ?? 140
         if matricula.isEmpty { matricula = model.lastLinkMatricula }
-        phase = model.isSignedIn ? .known : .credentials
     }
 
-    private func submitCredentials() async {
+    private func submit() async {
+        go(.syncing)
         await model.signInGolfistics(matricula: matricula, clave: clave, savePassword: savePassword)
-        revealIfReady()
+        landAfterSync()
     }
 
-    private func revealIfReady() {
-        if model.isSignedIn, model.hasPlayerSnapshot, model.authFailure == nil, model.needsClub == nil {
-            go(.known)
-        }
+    private func pick(_ club: ClubCatalogEntry) async {
+        go(.syncing)
+        await model.retryLinkWithClub(club)
+        landAfterSync()
+    }
+
+    private func landAfterSync() {
+        let route = OnboardingPlan.routeAfterSync(
+            signedIn: model.isSignedIn,
+            hasSnapshot: model.hasPlayerSnapshot,
+            needsClub: model.needsClub != nil,
+            authFailed: model.authFailure != nil
+        )
+        go(route == .reveal ? .reveal : .matricula)
     }
 
     private func beginQuestions() {
-        let facts = self.facts ?? OnboardingFacts(
+        let known = facts ?? OnboardingFacts(
             name: "",
             handicap: nil,
             clubName: nil,
@@ -432,26 +460,18 @@ struct OnboardingView: View {
             hasDistances: false
         )
         if draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            draft.name = facts.name
+            draft.name = known.name
         }
-        if draft.score.isEmpty, let band = facts.scoreBand { draft.score = band }
-        if draft.frec.isEmpty, let cadence = facts.cadence { draft.frec = cadence }
-        asks = OnboardingPlan.asks(for: facts)
-        if asks.isEmpty {
-            go(.notifications)
-        } else {
-            go(.ask(0))
-        }
+        if draft.score.isEmpty, let band = known.scoreBand { draft.score = band }
+        if draft.frec.isEmpty, let cadence = known.cadence { draft.frec = cadence }
+        asks = OnboardingPlan.asks(for: known)
+        go(asks.isEmpty ? .notifications : .ask(0))
     }
 
     private func advance() {
         switch phase {
         case .ask(let index):
-            if index + 1 < asks.count {
-                go(.ask(index + 1))
-            } else {
-                go(.notifications)
-            }
+            go(index + 1 < asks.count ? .ask(index + 1) : .notifications)
         case .notifications:
             go(.plan)
         default:
@@ -461,17 +481,15 @@ struct OnboardingView: View {
 
     private func goBack() {
         switch phase {
-        case .known:
-            go(.credentials)
+        case .reveal:
+            go(.matricula)
         case .ask(let index):
-            if index == 0 { go(.known) }
-            else { go(.ask(index - 1)) }
+            go(index == 0 ? .reveal : .ask(index - 1))
         case .notifications:
-            if asks.isEmpty { go(.known) }
-            else { go(.ask(asks.count - 1)) }
+            go(asks.isEmpty ? .reveal : .ask(asks.count - 1))
         case .plan:
             go(.notifications)
-        case .credentials:
+        case .matricula, .syncing:
             break
         }
     }
@@ -557,20 +575,18 @@ struct OnboardingView: View {
     }
 }
 
-private struct ProgressiveLines: View {
+private struct TypeLines: View {
     var lines: [String]
     var reduceMotion: Bool
-    var ink: Color = .white
-    var size: Size = .body
+    var ink: Color
+    var size: Font
     @State private var shown = 0
 
-    enum Size { case body, title }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             ForEach(Array(lines.prefix(shown).enumerated()), id: \.offset) { _, line in
                 Text(line)
-                    .font(size == .title ? GType.section : GType.body)
+                    .font(size)
                     .foregroundStyle(ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity.combined(with: .offset(y: 10)))
@@ -585,7 +601,7 @@ private struct ProgressiveLines: View {
             }
             shown = 0
             for index in lines.indices {
-                try? await Task.sleep(for: .milliseconds(index == 0 ? 180 : 420))
+                try? await Task.sleep(for: .milliseconds(index == 0 ? 120 : 380))
                 shown = index + 1
             }
         }
