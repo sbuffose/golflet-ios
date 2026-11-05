@@ -12,6 +12,26 @@ extension Color {
     }
 }
 
+/// USGA-inspired brand. Navy is the primary surface and text color.
+/// Red is emphasis and CTAs on light surfaces. White is the light surface.
+enum BrandHex {
+    static let navy: UInt32 = 0x0B2545
+    static let navyRaised: UInt32 = 0x13315C
+    static let navyDeep: UInt32 = 0x07111C
+    static let red: UInt32 = 0xC8102E
+    static let redDeep: UInt32 = 0xA6192E
+    /// Lighter red so emphasis text stays readable on navy surfaces.
+    static let redOnDark: UInt32 = 0xFF8FA0
+    static let white: UInt32 = 0xFFFFFF
+    static let paper: UInt32 = 0xF6F7F9
+    static let ink: UInt32 = 0x0E1B2C
+    static let ink2: UInt32 = 0x3E4C62
+    static let ink3: UInt32 = 0x5C687B
+    static let hairline: UInt32 = 0xDCE1E8
+    static let mist: UInt32 = 0xE6ECF5
+    static let accentSoft: UInt32 = 0xFBE7EA
+}
+
 struct Palette: Equatable {
     let bg: Color
     let surface: Color
@@ -24,6 +44,8 @@ struct Palette: Equatable {
     let primary2: Color
     let onPrimary: Color
     let accent: Color
+    let accentInk: Color
+    let accentOnNavy: Color
     let accentSoft: Color
     let positive: Color
     let negative: Color
@@ -35,40 +57,44 @@ struct Palette: Equatable {
     let dangerSoft: Color
 
     static let light = Palette(
-        bg: Color(hex: 0xF6F7F9),
-        surface: Color(hex: 0xFFFFFF),
-        surface2: Color(hex: 0xE6ECF5),
-        ink: Color(hex: 0x0E1B2C),
-        ink2: Color(hex: 0x3E4C62),
-        ink3: Color(hex: 0x5C687B),
-        hairline: Color(hex: 0xDCE1E8),
-        primary: Color(hex: 0x0B2545),
-        primary2: Color(hex: 0x13315C),
-        onPrimary: Color(hex: 0xFFFFFF),
-        accent: Color(hex: 0xC8102E),
-        accentSoft: Color(hex: 0xFBE7EA),
-        positive: Color(hex: 0x13315C),
-        negative: Color(hex: 0xA6192E),
+        bg: Color(hex: BrandHex.paper),
+        surface: Color(hex: BrandHex.white),
+        surface2: Color(hex: BrandHex.mist),
+        ink: Color(hex: BrandHex.ink),
+        ink2: Color(hex: BrandHex.ink2),
+        ink3: Color(hex: BrandHex.ink3),
+        hairline: Color(hex: BrandHex.hairline),
+        primary: Color(hex: BrandHex.navy),
+        primary2: Color(hex: BrandHex.navyRaised),
+        onPrimary: Color(hex: BrandHex.white),
+        accent: Color(hex: BrandHex.red),
+        accentInk: Color(hex: BrandHex.red),
+        accentOnNavy: Color(hex: BrandHex.redOnDark),
+        accentSoft: Color(hex: BrandHex.accentSoft),
+        positive: Color(hex: BrandHex.navyRaised),
+        negative: Color(hex: BrandHex.redDeep),
         turf: Color(hex: 0xDCE6F3),
         fairway: Color(hex: 0xB5C7E0),
         green: Color(hex: 0x8DBE73),
         sand: Color(hex: 0xEFE3C6),
         water: Color(hex: 0xBBD7DE),
-        dangerSoft: Color(hex: 0xFBE7EA)
+        dangerSoft: Color(hex: BrandHex.accentSoft)
     )
 
     static let dark = Palette(
-        bg: Color(hex: 0x07111C),
+        bg: Color(hex: BrandHex.navyDeep),
         surface: Color(hex: 0x102033),
         surface2: Color(hex: 0x16304A),
         ink: Color(hex: 0xF2F5F8),
         ink2: Color(hex: 0xB4BECB),
         ink3: Color(hex: 0x7A8696),
         hairline: Color(hex: 0x24364A),
-        primary: Color(hex: 0x13315C),
+        primary: Color(hex: BrandHex.navyRaised),
         primary2: Color(hex: 0x1D4578),
-        onPrimary: Color(hex: 0xFFFFFF),
-        accent: Color(hex: 0xC8102E),
+        onPrimary: Color(hex: BrandHex.white),
+        accent: Color(hex: BrandHex.red),
+        accentInk: Color(hex: BrandHex.redOnDark),
+        accentOnNavy: Color(hex: BrandHex.redOnDark),
         accentSoft: Color(hex: 0x3A1A22),
         positive: Color(hex: 0x8AA4C8),
         negative: Color(hex: 0xE07A86),
@@ -88,7 +114,7 @@ struct Palette: Equatable {
         switch name.lowercased() {
         case "negro": return Color(hex: 0x1E1E1E)
         case "azul": return Color(hex: 0x2D5BA8)
-        case "blanco": return schemeIsDark ? Color(hex: 0xF7F5F0) : Color(hex: 0xFFFFFF)
+        case "blanco": return Color(hex: BrandHex.white)
         case "amarillo": return Color(hex: 0xE2B93B)
         case "rojo": return Color(hex: 0xB83A2E)
         case "celeste": return Color(hex: 0x8CC3DF)

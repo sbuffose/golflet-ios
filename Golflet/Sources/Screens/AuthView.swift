@@ -19,7 +19,7 @@ struct AuthView: View {
                             .overlay {
                                 Image(systemName: "flag.fill")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(p.accent)
+                                    .foregroundStyle(p.accentOnNavy)
                             }
                         Text("Golflet")
                             .font(GType.headline)
@@ -33,7 +33,7 @@ struct AuthView: View {
                             .foregroundStyle(p.ink2)
                         Text("ordenado")
                             .font(GType.largeTitle)
-                            .foregroundStyle(p.accent)
+                            .foregroundStyle(p.accentInk)
                     }
 
                     Text("Entrá con tu matrícula y tu contraseña.")

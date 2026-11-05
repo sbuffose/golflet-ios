@@ -170,7 +170,7 @@ struct AntesDeSalirView: View {
                             .foregroundStyle(p.onPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
-                            .background(Color(hex: 0xC8102E))
+                            .background(p.accent)
                             .clipShape(Capsule())
                     }
                     .accessibilityIdentifier("antes-start")

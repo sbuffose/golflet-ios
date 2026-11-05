@@ -143,7 +143,7 @@ struct HandicapHistoryView: View {
                             x: .value("Mes", FormatAR.dayMonth(row.date).month),
                             y: .value("Birdies", row.birdies)
                         )
-                        .foregroundStyle(Color(hex: 0xC8A86A))
+                        .foregroundStyle(p.accentInk)
                         BarMark(
                             x: .value("Mes", FormatAR.dayMonth(row.date).month),
                             y: .value("Pares", row.pars)
@@ -154,7 +154,7 @@ struct HandicapHistoryView: View {
                 .frame(height: 140)
                 .accessibilityIdentifier("hcp-monthly-bars")
                 HStack(spacing: 16) {
-                    legendDot(Color(hex: 0xC8A86A), "Birdies")
+                    legendDot(p.accentInk, "Birdies")
                     legendDot(p.primary, "Pares")
                 }
                 .accessibilityIdentifier("hcp-monthly-legend")

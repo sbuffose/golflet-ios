@@ -92,7 +92,7 @@ struct NotificationsView: View {
                             Text(item.kind.title.uppercased())
                                 .font(GType.overline)
                                 .tracking(0.8)
-                                .foregroundStyle(item.isUnread ? p.accent : p.ink3)
+                                .foregroundStyle(item.isUnread ? p.accentInk : p.ink3)
                             Text(item.title)
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
@@ -165,7 +165,7 @@ struct NotificationsView: View {
 
     private func unreadDot(_ unread: Bool) -> some View {
         Circle()
-            .fill(unread ? Color(hex: 0xB4553F) : Color.clear)
+            .fill(unread ? p.accent : Color.clear)
             .frame(width: 8, height: 8)
             .padding(.top, 6)
             .accessibilityHidden(!unread)

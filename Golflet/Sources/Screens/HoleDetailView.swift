@@ -182,10 +182,10 @@ struct HoleDetailView: View {
     private var distribution: some View {
         let dist = stat?.distribution
         let items: [(String, Double, Color)] = [
-            ("Birdie", dist?.percent(dist?.birdie ?? 0) ?? 0, p.accent),
+            ("Birdie", dist?.percent(dist?.birdie ?? 0) ?? 0, p.accentInk),
             ("Par", dist?.percent(dist?.par ?? 0) ?? 0, p.ink2),
             ("Bogey", dist?.percent(dist?.bogey ?? 0) ?? 0, p.sand),
-            ("Doble+", dist?.percent((dist?.double ?? 0) + (dist?.triplePlus ?? 0)) ?? 0, Color(hex: 0xC4B48A))
+            ("Doble+", dist?.percent((dist?.double ?? 0) + (dist?.triplePlus ?? 0)) ?? 0, p.negative)
         ]
         return VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geo in

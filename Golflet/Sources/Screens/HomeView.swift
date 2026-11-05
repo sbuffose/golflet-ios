@@ -155,10 +155,10 @@ struct HomeView: View {
                     if let badge = model.unreadBadgeText {
                         Text(badge)
                             .font(GFont.ui(10, weight: .semibold))
-                            .foregroundStyle(Color(hex: 0xF7F5F0))
+                            .foregroundStyle(p.onPrimary)
                             .padding(.horizontal, badge.count > 1 ? 4 : 0)
                             .frame(minWidth: 16, minHeight: 16)
-                            .background(Color(hex: 0xB4553F))
+                            .background(p.accent)
                             .clipShape(Capsule())
                             .offset(x: 6, y: -5)
                             .allowsHitTesting(false)
@@ -185,7 +185,7 @@ struct HomeView: View {
                     }
                     Spacer()
                     Image(systemName: "location.fill")
-                        .foregroundStyle(p.accent)
+                        .foregroundStyle(p.accentOnNavy)
                 }
                 .padding(16)
                 .background(p.primary)
@@ -323,7 +323,7 @@ struct HomeView: View {
                 .tabular()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .foregroundStyle(gold ? p.accent : p.onPrimary)
+                .foregroundStyle(gold ? p.accentOnNavy : p.onPrimary)
         }
         .contentShape(Rectangle())
     }
@@ -371,7 +371,7 @@ struct HomeView: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(p.accent.opacity(highlightPartners ? 0.9 : 0), lineWidth: 2)
+                    .stroke(p.accentInk.opacity(highlightPartners ? 0.9 : 0), lineWidth: 2)
             }
         }
         .id("home-tee-times")
@@ -465,7 +465,7 @@ struct HomeView: View {
                     NavigationLink { PerfilModoView() } label: {
                         Text("También lo cambiás en tu perfil ›")
                             .font(GType.label)
-                            .foregroundStyle(Color(hex: 0xC8102E))
+                            .foregroundStyle(p.accentInk)
                     }
                 }
                 .padding(8)
@@ -613,7 +613,7 @@ struct HomeView: View {
                 .accessibilityIdentifier("metric-year-best")
                 NavigationLink(value: MetricRoute.scoreKind(.birdie, .yearRounds)) {
                     AccentStatCard(
-                        tint: .gold,
+                        tint: .accent,
                         icon: ScoreKind.birdie.symbolName,
                         title: "Birdies",
                         value: "\(snap.yearBirdies)",
@@ -673,7 +673,7 @@ struct HomeView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "person.2.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(p.accent)
+                                .foregroundStyle(p.accentInk)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Invitación pendiente")
                                     .font(GType.headline)
@@ -828,19 +828,19 @@ struct TeeTimeTab: View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Próximo tee time")
                 .font(GType.overline)
-                .foregroundStyle(Color(hex: 0xC8A86A))
+                .foregroundStyle(Color.white.opacity(0.72))
                 .lineLimit(1)
             Text(booking.chipWhen)
                 .font(GType.headline)
                 .tabular()
-                .foregroundStyle(Color(hex: 0xF7F5F0))
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
         }
         .padding(.leading, 14)
         .padding(.trailing, 18)
         .padding(.vertical, 9)
         .frame(minHeight: 44, alignment: .leading)
-        .background(Color(hex: 0x0F3D2E))
+        .background(Color(hex: BrandHex.navy))
         .clipShape(
             UnevenRoundedRectangle(
                 cornerRadii: RectangleCornerRadii(
@@ -901,7 +901,7 @@ struct RoundRow: View {
                         if round.isCompetition {
                             Image(systemName: "trophy.fill")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Color(hex: 0x86672F))
+                                .foregroundStyle(p.accentInk)
                                 .accessibilityIdentifier("round-trophy")
                         }
                         Text(round.displayTitle)
@@ -953,10 +953,10 @@ struct RoundRow: View {
     private var chips: [(label: String, fill: Color, ink: Color)] {
         var items: [(String, Color, Color)] = []
         let eagles = max(round.counts.eagles, StatsEngine.count(.eagle, in: round).count)
-        if eagles > 0 { items.append(("\(eagles) Á", Color(hex: 0xC8A86A).opacity(0.22), Color(hex: 0x8A6D32))) }
-        if round.counts.birdies > 0 { items.append(("\(round.counts.birdies) B", p.positive.opacity(0.16), p.positive)) }
+        if eagles > 0 { items.append(("\(eagles) Á", p.accentSoft, p.accentInk)) }
+        if round.counts.birdies > 0 { items.append(("\(round.counts.birdies) B", p.primary.opacity(0.12), p.primary)) }
         if round.counts.pars > 0 { items.append(("\(round.counts.pars) P", p.surface2, p.ink2)) }
-        if round.counts.bogeys > 0 { items.append(("\(round.counts.bogeys) G", Color(hex: 0xB4553F).opacity(0.14), Color(hex: 0xB4553F))) }
+        if round.counts.bogeys > 0 { items.append(("\(round.counts.bogeys) G", p.sand, p.ink)) }
         let doubles = round.counts.doubles + round.counts.triples + round.counts.worse
         if doubles > 0 { items.append(("\(doubles)+", p.negative.opacity(0.14), p.negative)) }
         if let putts = round.putts {
@@ -1104,7 +1104,7 @@ struct HomeHcpPeople: View {
             VStack(alignment: .trailing, spacing: 6) {
                 Text("+")
                     .font(GFont.ui(22, weight: .semibold))
-                    .foregroundStyle(p.primary)
+                    .foregroundStyle(p.onPrimary)
                     .frame(width: groupAvatar, height: groupAvatar)
                     .background(p.accent)
                     .clipShape(Circle())
@@ -1131,7 +1131,7 @@ struct HomeHcpPeople: View {
                     url: profesor.photoURL,
                     initials: profesor.initials,
                     size: profesorAvatar,
-                    fill: Color(hex: 0x1E5440),
+                    fill: p.primary,
                     ink: p.onPrimary,
                     ring: ring,
                     verified: profesor.verified
@@ -1145,7 +1145,7 @@ struct HomeHcpPeople: View {
     private var groupStack: some View {
         let shown = Array(groups.prefix(HomeHcpPeopleLayout.groupVisible))
         let extra = groups.count - shown.count
-        let ring = Color(hex: HomeHcpPeopleLayout.gold)
+        let ring = Color(hex: HomeHcpPeopleLayout.accent)
         return HStack(spacing: -HomeHcpPeopleLayout.groupOverlap) {
             ForEach(shown) { group in
                 HomeHcpAvatar(
@@ -1162,7 +1162,7 @@ struct HomeHcpPeople: View {
                 text: extra > 0 ? "+\(extra)" : "\(groups.count)",
                 size: groupAvatar,
                 fill: p.accent,
-                ink: p.primary,
+                ink: p.onPrimary,
                 ring: ring
             )
         }
@@ -1191,7 +1191,7 @@ enum HomeHcpPeopleLayout {
     static let profesorOverlap: CGFloat = 7
     static let groupOverlap: CGFloat = 12
     static let numberPeopleGap: CGFloat = 12
-    static let gold: UInt32 = 0xC8A86A
+    static let accent: UInt32 = BrandHex.red
     static let celeste: UInt32 = 0x75AADB
     static let seWidth: CGFloat = 320
     static let seContentWidth: CGFloat = 280
@@ -1301,7 +1301,7 @@ struct HomeHcpAvatar: View {
                         .foregroundStyle(.white)
                 }
                 .frame(width: badge, height: badge)
-                .overlay(Circle().stroke(Color(hex: 0x0F3D2E), lineWidth: 1.5))
+                .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
                 .offset(x: 2, y: 2)
                 .accessibilityLabel("Verificado")
             }

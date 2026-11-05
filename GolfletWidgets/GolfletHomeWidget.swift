@@ -70,7 +70,7 @@ struct HomeWidgetView: View {
         VStack(alignment: .leading, spacing: family == .systemSmall ? 8 : 12) {
             Text("GOLFLET")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(WidgetChrome.gold)
+                .foregroundStyle(WidgetChrome.red)
             if snapshot.isPlaceholder {
                 Text("Entrá en Golflet para ver tu HI")
                     .font(.system(size: 15, weight: .semibold))
@@ -82,7 +82,7 @@ struct HomeWidgetView: View {
                     Text(snapshot.handicapLine)
                         .font(.system(size: family == .systemSmall ? 24 : 32, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(WidgetChrome.green)
+                        .foregroundStyle(WidgetChrome.navy)
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
                     Text("HI")
@@ -142,9 +142,10 @@ struct HomeWidgetView: View {
 }
 
 enum WidgetChrome {
-    static let paper = Color(red: 247 / 255, green: 245 / 255, blue: 240 / 255)
-    static let green = Color(red: 15 / 255, green: 61 / 255, blue: 46 / 255)
-    static let gold = Color(red: 200 / 255, green: 168 / 255, blue: 106 / 255)
-    static let ink = Color(red: 18 / 255, green: 22 / 255, blue: 20 / 255)
-    static let ink2 = Color(red: 94 / 255, green: 101 / 255, blue: 96 / 255)
+    static let paper = Color(red: 246 / 255, green: 247 / 255, blue: 249 / 255)
+    static let white = Color.white
+    static let navy = Color(red: 11 / 255, green: 37 / 255, blue: 69 / 255)
+    static let red = Color(red: 200 / 255, green: 16 / 255, blue: 46 / 255)
+    static let ink = Color(red: 14 / 255, green: 27 / 255, blue: 44 / 255)
+    static let ink2 = Color(red: 62 / 255, green: 76 / 255, blue: 98 / 255)
 }
