@@ -64,7 +64,6 @@ struct OnboardingView: View {
             .padding(.horizontal, 20)
             .background(step == 10 || step == 11 ? Color(hex: 0x0B2545) : p.bg)
         }
-        .accessibilityIdentifier("screen-onboarding")
         .onAppear {
             draft = model.onboarding
             wheel = draft.i7 ?? 140
@@ -95,7 +94,6 @@ struct OnboardingView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("ob-skip")
         }
         .padding(.top, 8)
     }

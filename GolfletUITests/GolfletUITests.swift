@@ -126,15 +126,8 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-onboarding", timeout: 8), "No abrió el onboarding de Roberto")
         XCTAssertTrue(first(app, "roberto-guide").waitForExistence(timeout: 6), "Falta Roberto en el onboarding")
         saveShot("70_onboarding")
-        let skip = app.buttons["ob-skip"].waitForExistence(timeout: 3)
-            ? app.buttons["ob-skip"]
-            : (app.buttons["Saltar"].waitForExistence(timeout: 3) ? app.buttons["Saltar"] : first(app, "ob-skip"))
-        XCTAssertTrue(skip.waitForExistence(timeout: 5), "Falta Saltar")
-        if skip.isHittable {
-            skip.tap()
-        } else {
-            skip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        XCTAssertTrue(first(app, "ob-skip").waitForExistence(timeout: 6), "Falta Saltar")
+        tapLargest(app, "ob-skip")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 10), "Saltar no llegó a Inicio")
 
         tapTab(app, "Inicio")
