@@ -62,7 +62,8 @@ enum TeeTimesParser {
             clubName: club.isEmpty ? "Club" : club,
             clubCode: firstNonEmpty(string(item["club_code"]), string(item["clubCode"]), string((item["club"] as? [String: Any])?["code"])),
             course: course,
-            companions: companions(from: item["companions"] ?? item["partners"] ?? item["players"] ?? item["playing_partners"])
+            companions: companions(from: item["companions"] ?? item["partners"] ?? item["players"] ?? item["playing_partners"]),
+            forecast: optionalString(item["forecast"] ?? item["weather"] ?? item["pronostico"] ?? item["conditions"])
         )
     }
 

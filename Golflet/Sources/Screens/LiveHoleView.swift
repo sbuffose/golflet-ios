@@ -95,7 +95,7 @@ struct LiveHoleView: View {
             .accessibilityIdentifier("live-mode")
 
             if model.roundSettings.shows(.partido, mode: model.homeMode) || showMore {
-                chip("Fourball · Vos y Tomi +1", id: "live-partido")
+                chip("Partido · cuando haya resultado", id: "live-partido")
             }
             if model.roundSettings.shows(.ritmo, mode: model.homeMode) || showMore {
                 chip("Ritmo 1:58 · ejemplo", id: "live-ritmo")

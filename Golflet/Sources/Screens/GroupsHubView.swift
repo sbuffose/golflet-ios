@@ -116,8 +116,12 @@ struct GroupsHubView: View {
                         ProtoCard {
                             VStack(spacing: 0) {
                                 ForEach(model.upcomingTeeTimes) { booking in
-                                    ProtoRow(title: booking.chipWhen, subtitle: teeSubtitle(booking))
-                                        .accessibilityIdentifier("hub-tee-\(booking.id)")
+                                    NavigationLink {
+                                        TeeTimePrepView(booking: booking)
+                                    } label: {
+                                        ProtoRow(title: booking.chipWhen, subtitle: teeSubtitle(booking))
+                                    }
+                                    .accessibilityIdentifier("hub-tee-\(booking.id)")
                                 }
                             }
                         }

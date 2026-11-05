@@ -17,6 +17,19 @@ final class GolfletUITests: XCTestCase {
         first(app, "home-tee-tab").tap()
         XCTAssertTrue(waitFor(app, "home-tee-times", timeout: 4), "No scrolleó a la tarjeta de tee times")
         XCTAssertTrue(first(app, "home-tee-partners-tt-jockey-1").waitForExistence(timeout: 3), "Faltan los compañeros")
+        first(app, "home-tee-row-tt-jockey-1").tap()
+        XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "El tee time no abre el detalle")
+        let cancha = first(app, "tee-prep-cancha")
+        XCTAssertTrue(cancha.waitForExistence(timeout: 3), "Falta la cancha")
+        XCTAssertTrue(cancha.label.contains("Azul"), "La cancha no es la de la reserva: \(cancha.label)")
+        let forecast = first(app, "tee-prep-forecast")
+        XCTAssertTrue(forecast.waitForExistence(timeout: 3))
+        XCTAssertTrue(forecast.label.contains("pronóstico"), "Apareció un pronóstico inventado: \(forecast.label)")
+        let strategy = first(app, "tee-prep-strategy")
+        XCTAssertTrue(strategy.waitForExistence(timeout: 6), "Falta la estrategia")
+        XCTAssertFalse(strategy.label.contains("Todavía no hay"), "La estrategia de Azul no cargó: \(strategy.label)")
+        dismissIfPresent(app, "metric-back")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         saveShot("01_inicio")
 
         if waitFor(app, "last-round-card", timeout: 4) {
@@ -120,6 +133,8 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Jugar")
         XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
+        XCTAssertFalse(app.staticTexts["Vos y Tomi vs Fede y Lucas"].exists, "Sigue el partido inventado")
+        XCTAssertFalse(app.staticTexts["Sáb 7-nov · 9:20"].exists, "Sigue el tee time inventado")
         saveShot("61_jugar")
 
         tapTab(app, "Academia")
