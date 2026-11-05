@@ -150,6 +150,7 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("avatar-button")
                     .accessibilityLabel(model.unreadBadgeText.map { "Notificaciones, \($0) sin leer" } ?? "Tu cuenta")
+                    GProbe(id: "avatar-button", label: "Tu cuenta")
                     if let badge = model.unreadBadgeText {
                         Text(badge)
                             .font(GFont.ui(10, weight: .semibold))
