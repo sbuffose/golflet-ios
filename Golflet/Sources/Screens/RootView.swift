@@ -137,7 +137,7 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
-        .sheet(item: Binding(
+        .fullScreenCover(item: Binding(
             get: { model.presentedGroupID.map { GroupRef(id: $0) } },
             set: { model.presentedGroupID = $0?.id }
         )) { ref in

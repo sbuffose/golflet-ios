@@ -720,6 +720,7 @@ final class AppModel {
     }
 
     func acceptInvite(_ preview: GroupInvitePreview, openGroup: Bool = true) async {
+        var openedID: String?
         await run {
             let group = try await api.acceptInvite(token: preview.token)
             PendingInviteStore.clear()
@@ -731,15 +732,13 @@ final class AppModel {
             if !groups.contains(where: { $0.id == group.id }) {
                 groups.insert(group, at: 0)
             }
-            if openGroup {
-                let id = group.id
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(400))
-                    presentedGroupID = id
-                }
-            }
+            if openGroup { openedID = group.id }
             await refreshGroups()
             await refreshNotifications()
+        }
+        if let openedID {
+            try? await Task.sleep(for: .milliseconds(550))
+            presentedGroupID = openedID
         }
     }
 
