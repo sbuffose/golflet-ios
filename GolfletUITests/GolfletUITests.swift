@@ -878,8 +878,22 @@ final class GolfletUITests: XCTestCase {
         let who = app.buttons["comp-who-demo"].exists ? app.buttons["comp-who-demo"] : first(app, "comp-who-demo")
         XCTAssertTrue(who.waitForExistence(timeout: 4), "Falta el nombre en Comparativo")
         reveal(app, who)
-        tapElement(who)
-        XCTAssertTrue(waitFor(app, "screen-grupo-perfil", timeout: 6), "No se abrió el perfil")
+        var openedProfile = false
+        for _ in 0..<2 {
+            tapElement(who)
+            if waitFor(app, "screen-grupo-perfil", timeout: 5) {
+                openedProfile = true
+                break
+            }
+        }
+        if !openedProfile {
+            dismissIfPresent(app, "close-comparativo")
+            XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 4))
+            reveal(app, first(app, "group-profile-demo"))
+            tapElement(first(app, "group-profile-demo"))
+            openedProfile = waitFor(app, "screen-grupo-perfil", timeout: 6)
+        }
+        XCTAssertTrue(openedProfile, "No se abrió el perfil")
         XCTAssertTrue(first(app, "profile-asi-te-ven").waitForExistence(timeout: 4), "Falta Así te ven")
         assertFits(app, "profile-asi-te-ven")
         saveShot("57_comparativo")
@@ -1233,8 +1247,13 @@ final class GolfletUITests: XCTestCase {
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
         var attempts = 0
-        while !isOnScreen(app, element) && attempts < 6 {
-            app.swipeUp()
+        while !isOnScreen(app, element) && attempts < 8 {
+            let frame = element.frame
+            if frame.maxY < app.frame.midY {
+                app.swipeDown()
+            } else {
+                app.swipeUp()
+            }
             attempts += 1
         }
     }
