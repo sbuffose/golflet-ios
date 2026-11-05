@@ -85,6 +85,21 @@ enum AzulCourse {
         )
     }
 
+    /// Real Cancha Azul geometry for the hole-detail map. Other courses return nil.
+    static func layout(forCourse name: String, hole number: Int) -> AzulHoleGeo? {
+        guard isJockeyAzul(name), let geo = all()[number] else { return nil }
+        guard geo.green.count >= 3 || geo.line.count >= 2 else { return nil }
+        return geo
+    }
+
+    static func isJockeyAzul(_ name: String) -> Bool {
+        let folded = name
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_AR"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return folded == "azul" || folded == "cancha azul" || folded.hasSuffix(" azul")
+    }
+
     static func all() -> [Int: AzulHoleGeo] {
         if let cache { return cache }
         let loaded = load()
