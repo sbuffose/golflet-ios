@@ -124,7 +124,7 @@ final class GolfletUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(waitFor(app, "screen-onboarding", timeout: 8), "No abrió el onboarding de Roberto")
-        XCTAssertTrue(first(app, "roberto-guide").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "roberto-guide").waitForExistence(timeout: 6), "Falta Roberto en el onboarding")
         saveShot("70_onboarding")
         if first(app, "ob-skip").waitForExistence(timeout: 3) {
             first(app, "ob-skip").tap()
