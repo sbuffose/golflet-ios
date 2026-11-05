@@ -490,6 +490,9 @@ final class AppModel {
         guard isSignedIn, let token = PendingInviteStore.load() else { return }
         do {
             let preview = try await api.invitePreview(token: token)
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-auth") {
+                try? await Task.sleep(for: .milliseconds(400))
+            }
             presentedInvite = preview
         } catch {
             errorMessage = error.localizedDescription

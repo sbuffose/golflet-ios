@@ -45,8 +45,12 @@ struct ComparativoView: View {
         .accessibilityIdentifier("screen-comparativo")
         .safeAreaInset(edge: .top) { closeBar(dismiss: dismiss, id: "close-comparativo") }
         .task(id: "\(kind.rawValue)-\(off)") { await load() }
-        .navigationDestination(item: $profileRoute) { route in
-            MemberProfileView(groupID: route.groupID, memberID: route.memberID)
+        .fullScreenCover(item: $profileRoute) { route in
+            NavigationStack {
+                MemberProfileView(groupID: route.groupID, memberID: route.memberID)
+            }
+            .golfletChrome()
+            .environment(model)
         }
         .navigationDestination(item: Binding(
             get: { statKey.map { ComparativoRoute(groupID: groupID, kind: kind, off: off, stat: $0) } },
@@ -296,6 +300,8 @@ struct ComparativoView: View {
             }
         }
         .buttonStyle(.plain)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
         .disabled(!member.profileShared && !member.isMe)
         .accessibilityIdentifier("comp-who-\(member.memberID)")
     }

@@ -298,54 +298,56 @@ struct GroupInviteView: View {
                             .foregroundStyle(p.negative)
                     }
 
+                    if !invite.alreadyMember {
+                        VStack(spacing: 10) {
+                            Button(action: acceptInvite) {
+                                Text(model.isBusy ? "Entrando…" : "Aceptar")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.onPrimary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(p.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .contentShape(Rectangle())
+                            .disabled(model.isBusy)
+                            .accessibilityIdentifier("invite-accept")
+
+                            Button {
+                                Task { await model.declineInvite(invite) }
+                            } label: {
+                                Text("Rechazar")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.negative)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(p.surface)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(model.isBusy)
+                            .accessibilityIdentifier("invite-decline")
+                        }
+                        .padding(.top, 8)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .padding(.bottom, 28)
             }
         }
+        .onAppear {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .safeAreaInset(edge: .top) { closeBar(action: { model.presentedInvite = nil }, id: "close-invitacion") }
-        .safeAreaInset(edge: .bottom) {
-            if !invite.alreadyMember {
-                VStack(spacing: 10) {
-                    Button {
-                        acceptedGroupID = invite.groupID ?? "g-\(invite.token)"
-                        Task {
-                            if let id = await model.acceptInvite(invite, openGroup: false) {
-                                acceptedGroupID = id
-                            }
-                        }
-                    } label: {
-                        Text(model.isBusy ? "Entrando…" : "Aceptar")
-                            .font(GType.headline)
-                            .foregroundStyle(p.onPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(p.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(model.isBusy)
-                    .accessibilityIdentifier("invite-accept")
+    }
 
-                    Button {
-                        Task { await model.declineInvite(invite) }
-                    } label: {
-                        Text("Rechazar")
-                            .font(GType.headline)
-                            .foregroundStyle(p.negative)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(p.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(model.isBusy)
-                    .accessibilityIdentifier("invite-decline")
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(p.bg)
+    private func acceptInvite() {
+        acceptedGroupID = invite.groupID ?? "g-\(invite.token)"
+        Task {
+            if let id = await model.acceptInvite(invite, openGroup: false) {
+                acceptedGroupID = id
             }
         }
     }

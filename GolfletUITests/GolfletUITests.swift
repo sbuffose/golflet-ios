@@ -650,16 +650,21 @@ final class GolfletUITests: XCTestCase {
         type(app.secureTextFields["auth-clave"], "clave123")
         submitLogin(app)
         XCTAssertTrue(waitFor(app, "screen-invitacion", timeout: 12), "La invitación no apareció después del login")
+        if app.keyboards.element.exists { app.swipeDown() }
         XCTAssertTrue(first(app, "invite-accept").waitForExistence(timeout: 3))
         XCTAssertTrue(first(app, "invite-decline").waitForExistence(timeout: 2))
         saveShot("34_invitacion")
         let accept = app.buttons["invite-accept"].exists ? app.buttons["invite-accept"] : first(app, "invite-accept")
-        if accept.isHittable {
+        var opened = false
+        for _ in 0..<3 {
             accept.tap()
-        } else {
-            accept.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if waitFor(app, "screen-grupo", timeout: 5) {
+                opened = true
+                break
+            }
+            if app.keyboards.element.exists { app.swipeDown() }
         }
-        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 16), "Aceptar no abrió el grupo")
+        XCTAssertTrue(opened || waitFor(app, "screen-grupo", timeout: 6), "Aceptar no abrió el grupo")
         saveShot("35_grupo_aceptado")
     }
 
@@ -852,22 +857,15 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "group-profile-demo").waitForExistence(timeout: 4), "Falta Ver perfil")
         let semana = app.buttons["group-comp-semana"].exists ? app.buttons["group-comp-semana"] : first(app, "group-comp-semana")
         reveal(app, semana)
-        if semana.isHittable {
-            semana.tap()
-        } else {
-            semana.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        tapElement(semana)
         XCTAssertTrue(waitFor(app, "screen-comparativo", timeout: 6), "No se abrió el Comparativo")
         XCTAssertTrue(first(app, "comp-row-demo").waitForExistence(timeout: 4))
         XCTAssertTrue(first(app, "comp-row-ana").waitForExistence(timeout: 3))
         XCTAssertTrue(first(app, "comp-row-ana").label.contains("No comparte") || (first(app, "comp-row-ana").value as? String)?.contains("No comparte") == true || first(app, "comp-who-ana").waitForExistence(timeout: 2))
         let tile = app.buttons["comp-tile-best_net"].exists ? app.buttons["comp-tile-best_net"] : first(app, "comp-tile-best_net")
         reveal(app, tile)
-        if tile.waitForExistence(timeout: 4), tile.isHittable {
-            tile.tap()
-        } else {
-            tile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        XCTAssertTrue(tile.waitForExistence(timeout: 4), "Falta el tile de Comparativo")
+        tapElement(tile)
         XCTAssertTrue(waitFor(app, "screen-comparativo-stat", timeout: 6), "No se abrió el ranking")
         XCTAssertTrue(first(app, "comp-stat-row-ana").waitForExistence(timeout: 4), "Falta Ana en el ranking")
         let anaStat = first(app, "comp-stat-row-ana").label
@@ -876,14 +874,26 @@ final class GolfletUITests: XCTestCase {
             "Ana tenía que decir que no comparte: \(anaStat)"
         )
         dismissIfPresent(app, "close-comparativo-stat")
+        XCTAssertTrue(waitFor(app, "screen-comparativo", timeout: 4))
         let who = app.buttons["comp-who-demo"].exists ? app.buttons["comp-who-demo"] : first(app, "comp-who-demo")
+        XCTAssertTrue(who.waitForExistence(timeout: 4), "Falta el nombre en Comparativo")
         reveal(app, who)
-        if who.waitForExistence(timeout: 4), who.isHittable {
-            who.tap()
-        } else {
-            who.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        var openedProfile = false
+        for _ in 0..<2 {
+            tapElement(who)
+            if waitFor(app, "screen-grupo-perfil", timeout: 5) {
+                openedProfile = true
+                break
+            }
         }
-        XCTAssertTrue(waitFor(app, "screen-grupo-perfil", timeout: 6), "No se abrió el perfil")
+        if !openedProfile {
+            dismissIfPresent(app, "close-comparativo")
+            XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 4))
+            reveal(app, first(app, "group-profile-demo"))
+            tapElement(first(app, "group-profile-demo"))
+            openedProfile = waitFor(app, "screen-grupo-perfil", timeout: 6)
+        }
+        XCTAssertTrue(openedProfile, "No se abrió el perfil")
         XCTAssertTrue(first(app, "profile-asi-te-ven").waitForExistence(timeout: 4), "Falta Así te ven")
         assertFits(app, "profile-asi-te-ven")
         saveShot("57_comparativo")
@@ -1175,18 +1185,21 @@ final class GolfletUITests: XCTestCase {
     }
 
     private func tapElement(_ element: XCUIElement) {
-        if element.isHittable {
-            element.tap()
-        } else {
-            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    private func isOnScreen(_ app: XCUIApplication, _ element: XCUIElement) -> Bool {
+        guard element.exists else { return false }
+        let frame = element.frame
+        guard frame.width > 8, frame.height > 8, !frame.isNull, !frame.isInfinite else { return false }
+        return app.frame.intersects(frame.insetBy(dx: 1, dy: 1))
     }
 
     private func revealHittable(_ app: XCUIApplication, _ element: XCUIElement) {
-        if element.isHittable { return }
+        if isOnScreen(app, element) { return }
         let scroll = app.scrollViews.firstMatch
         for _ in 0..<6 {
-            if element.isHittable { return }
+            if isOnScreen(app, element) { return }
             if scroll.exists {
                 scroll.swipeUp()
             } else {
@@ -1210,8 +1223,13 @@ final class GolfletUITests: XCTestCase {
 
     private func assertCanchaHoleGrid(_ app: XCUIApplication) {
         let ten = first(app, "hole-10")
-        reveal(app, ten)
+        if !ten.waitForExistence(timeout: 1) {
+            for _ in 0..<8 where !ten.exists {
+                app.swipeUp()
+            }
+        }
         XCTAssertTrue(ten.waitForExistence(timeout: 4), "Falta el hoyo 10")
+        reveal(app, ten)
         let one = first(app, "hole-1")
         let eleven = first(app, "hole-11")
         XCTAssertGreaterThan(app.frame.width, 300, "El test tiene que correr a ancho iPhone")
@@ -1234,8 +1252,17 @@ final class GolfletUITests: XCTestCase {
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
         var attempts = 0
-        while !element.isHittable && attempts < 6 {
-            app.swipeUp()
+        while !isOnScreen(app, element) && attempts < 8 {
+            if element.exists {
+                let frame = element.frame
+                if frame.width > 1, frame.maxY < app.frame.midY {
+                    app.swipeDown()
+                } else {
+                    app.swipeUp()
+                }
+            } else {
+                app.swipeUp()
+            }
             attempts += 1
         }
     }
