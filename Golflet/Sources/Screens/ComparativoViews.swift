@@ -296,6 +296,8 @@ struct ComparativoView: View {
             }
         }
         .buttonStyle(.plain)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
         .disabled(!member.profileShared && !member.isMe)
         .accessibilityIdentifier("comp-who-\(member.memberID)")
     }

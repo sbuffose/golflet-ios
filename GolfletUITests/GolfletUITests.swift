@@ -857,22 +857,15 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "group-profile-demo").waitForExistence(timeout: 4), "Falta Ver perfil")
         let semana = app.buttons["group-comp-semana"].exists ? app.buttons["group-comp-semana"] : first(app, "group-comp-semana")
         reveal(app, semana)
-        if semana.isHittable {
-            semana.tap()
-        } else {
-            semana.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        tapElement(semana)
         XCTAssertTrue(waitFor(app, "screen-comparativo", timeout: 6), "No se abrió el Comparativo")
         XCTAssertTrue(first(app, "comp-row-demo").waitForExistence(timeout: 4))
         XCTAssertTrue(first(app, "comp-row-ana").waitForExistence(timeout: 3))
         XCTAssertTrue(first(app, "comp-row-ana").label.contains("No comparte") || (first(app, "comp-row-ana").value as? String)?.contains("No comparte") == true || first(app, "comp-who-ana").waitForExistence(timeout: 2))
         let tile = app.buttons["comp-tile-best_net"].exists ? app.buttons["comp-tile-best_net"] : first(app, "comp-tile-best_net")
         reveal(app, tile)
-        if tile.waitForExistence(timeout: 4), tile.isHittable {
-            tile.tap()
-        } else {
-            tile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        XCTAssertTrue(tile.waitForExistence(timeout: 4), "Falta el tile de Comparativo")
+        tapElement(tile)
         XCTAssertTrue(waitFor(app, "screen-comparativo-stat", timeout: 6), "No se abrió el ranking")
         XCTAssertTrue(first(app, "comp-stat-row-ana").waitForExistence(timeout: 4), "Falta Ana en el ranking")
         let anaStat = first(app, "comp-stat-row-ana").label
@@ -881,13 +874,11 @@ final class GolfletUITests: XCTestCase {
             "Ana tenía que decir que no comparte: \(anaStat)"
         )
         dismissIfPresent(app, "close-comparativo-stat")
+        XCTAssertTrue(waitFor(app, "screen-comparativo", timeout: 4))
         let who = app.buttons["comp-who-demo"].exists ? app.buttons["comp-who-demo"] : first(app, "comp-who-demo")
+        XCTAssertTrue(who.waitForExistence(timeout: 4), "Falta el nombre en Comparativo")
         reveal(app, who)
-        if who.waitForExistence(timeout: 4), who.isHittable {
-            who.tap()
-        } else {
-            who.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        tapElement(who)
         XCTAssertTrue(waitFor(app, "screen-grupo-perfil", timeout: 6), "No se abrió el perfil")
         XCTAssertTrue(first(app, "profile-asi-te-ven").waitForExistence(timeout: 4), "Falta Así te ven")
         assertFits(app, "profile-asi-te-ven")
@@ -1180,18 +1171,21 @@ final class GolfletUITests: XCTestCase {
     }
 
     private func tapElement(_ element: XCUIElement) {
-        if element.isHittable {
-            element.tap()
-        } else {
-            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    private func isOnScreen(_ app: XCUIApplication, _ element: XCUIElement) -> Bool {
+        guard element.exists else { return false }
+        let frame = element.frame
+        guard frame.width > 8, frame.height > 8 else { return false }
+        return app.frame.intersects(frame.insetBy(dx: 1, dy: 1))
     }
 
     private func revealHittable(_ app: XCUIApplication, _ element: XCUIElement) {
-        if element.isHittable { return }
+        if isOnScreen(app, element) { return }
         let scroll = app.scrollViews.firstMatch
         for _ in 0..<6 {
-            if element.isHittable { return }
+            if isOnScreen(app, element) { return }
             if scroll.exists {
                 scroll.swipeUp()
             } else {
@@ -1239,7 +1233,7 @@ final class GolfletUITests: XCTestCase {
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
         var attempts = 0
-        while !element.isHittable && attempts < 6 {
+        while !isOnScreen(app, element) && attempts < 6 {
             app.swipeUp()
             attempts += 1
         }
