@@ -1223,6 +1223,11 @@ final class GolfletUITests: XCTestCase {
 
     private func assertCanchaHoleGrid(_ app: XCUIApplication) {
         let ten = first(app, "hole-10")
+        if !ten.waitForExistence(timeout: 1) {
+            for _ in 0..<8 where !ten.exists {
+                app.swipeUp()
+            }
+        }
         XCTAssertTrue(ten.waitForExistence(timeout: 4), "Falta el hoyo 10")
         reveal(app, ten)
         let one = first(app, "hole-1")
