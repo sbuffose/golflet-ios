@@ -89,7 +89,11 @@ struct OnboardingView: View {
             Button("Saltar") { finish() }
                 .font(GType.headline)
                 .foregroundStyle(step >= 10 && step <= 11 ? Color.white : p.ink2)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
                 .accessibilityIdentifier("ob-skip")
+                .accessibilityAddTraits(.isButton)
         }
         .padding(.top, 8)
     }

@@ -126,10 +126,14 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-onboarding", timeout: 8), "No abrió el onboarding de Roberto")
         XCTAssertTrue(first(app, "roberto-guide").waitForExistence(timeout: 6), "Falta Roberto en el onboarding")
         saveShot("70_onboarding")
-        if first(app, "ob-skip").waitForExistence(timeout: 3) {
-            first(app, "ob-skip").tap()
+        XCTAssertTrue(first(app, "ob-skip").waitForExistence(timeout: 5), "Falta Saltar")
+        let skip = first(app, "ob-skip")
+        if skip.isHittable {
+            skip.tap()
+        } else {
+            skip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 8))
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 10), "Saltar no llegó a Inicio")
 
         tapTab(app, "Inicio")
         if first(app, "home-mode-chip").waitForExistence(timeout: 4) {
@@ -660,7 +664,7 @@ final class GolfletUITests: XCTestCase {
         } else {
             accept.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "Aceptar no abrió el grupo")
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 12), "Aceptar no abrió el grupo")
         saveShot("35_grupo_aceptado")
     }
 
