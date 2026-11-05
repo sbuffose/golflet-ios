@@ -161,21 +161,15 @@ final class GolfletUITests: XCTestCase {
                 first(app, "live-menu").tap()
                 if first(app, "antes-mode-comp").waitForExistence(timeout: 4) {
                     first(app, "antes-mode-comp").tap()
-                    if app.navigationBars.buttons.firstMatch.exists {
-                        app.navigationBars.buttons.firstMatch.tap()
-                    }
+                    tapMetricBack(app)
                     saveShot("76_hoyo_competitivo")
                     first(app, "live-menu").tap()
                     first(app, "antes-mode-mej").tap()
-                    if app.navigationBars.buttons.firstMatch.exists {
-                        app.navigationBars.buttons.firstMatch.tap()
-                    }
+                    tapMetricBack(app)
                     saveShot("77_hoyo_mejorar")
                     first(app, "live-menu").tap()
                     first(app, "antes-mode-soc").tap()
-                    if app.navigationBars.buttons.firstMatch.exists {
-                        app.navigationBars.buttons.firstMatch.tap()
-                    }
+                    tapMetricBack(app)
                     saveShot("78_hoyo_social")
                 }
             }
@@ -190,14 +184,12 @@ final class GolfletUITests: XCTestCase {
             first(app, "academia-plan").tap()
             XCTAssertTrue(waitFor(app, "screen-plan-practica", timeout: 6))
             saveShot("79_plan_practica")
-            if app.navigationBars.buttons.firstMatch.exists {
-                app.navigationBars.buttons.firstMatch.tap()
-            }
+            tapMetricBack(app)
         }
 
         tapTab(app, "Inicio")
         if first(app, "home-more-sg").waitForExistence(timeout: 5) {
-            first(app, "home-more-sg").tap()
+            tapHomeMore(app, "home-more-sg", "Falta Más · Strokes gained")
             XCTAssertTrue(waitFor(app, "screen-sg", timeout: 6))
             saveShot("80_sg")
         }
@@ -407,6 +399,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
         assertRangeMenu(app)
         XCTAssertTrue(first(app, "metric-summary-average").waitForExistence(timeout: 4))
+        reveal(app, first(app, "metric-summary-average"))
         first(app, "metric-summary-average").tap()
         XCTAssertTrue(waitFor(app, "screen-metric-chart", timeout: 6), "El promedio no abrió el gráfico")
         XCTAssertTrue(first(app, "metric-chart").waitForExistence(timeout: 3))
@@ -682,6 +675,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
         XCTAssertTrue(first(app, "metric-game").waitForExistence(timeout: 4), "Falta Métricas como primera tarjeta")
         XCTAssertTrue(first(app, "resumen-gps-count").waitForExistence(timeout: 3))
+        reveal(app, first(app, "metric-game"))
         first(app, "metric-game").tap()
         XCTAssertTrue(waitFor(app, "screen-metricas", timeout: 6), "No se abrió Métricas")
         XCTAssertTrue(first(app, "met-tabs").waitForExistence(timeout: 3))
@@ -1261,22 +1255,44 @@ final class GolfletUITests: XCTestCase {
         switch name {
         case "Resumen":
             tapVisibleTab(app, "Inicio")
-            XCTAssertTrue(first(app, "home-more-resumen").waitForExistence(timeout: 5), "Falta Más · Resumen")
-            first(app, "home-more-resumen").tap()
+            tapHomeMore(app, "home-more-resumen", "Falta Más · Resumen")
         case "Rondas":
             tapVisibleTab(app, "Inicio")
-            XCTAssertTrue(first(app, "home-more-rondas").waitForExistence(timeout: 5), "Falta Más · Rondas")
-            first(app, "home-more-rondas").tap()
+            tapHomeMore(app, "home-more-rondas", "Falta Más · Rondas")
         case "Cancha":
             tapVisibleTab(app, "Inicio")
-            XCTAssertTrue(first(app, "home-more-cancha").waitForExistence(timeout: 5), "Falta Más · Cancha")
-            first(app, "home-more-cancha").tap()
+            tapHomeMore(app, "home-more-cancha", "Falta Más · Cancha")
         case "Mi bolsa":
             tapVisibleTab(app, "Inicio")
-            XCTAssertTrue(first(app, "home-more-bolsa").waitForExistence(timeout: 5), "Falta Más · Bolsa")
-            first(app, "home-more-bolsa").tap()
+            tapHomeMore(app, "home-more-bolsa", "Falta Más · Bolsa")
         default:
             tapVisibleTab(app, name)
+        }
+    }
+
+    private func tapMetricBack(_ app: XCUIApplication) {
+        if first(app, "metric-back").waitForExistence(timeout: 2) {
+            let back = first(app, "metric-back")
+            if back.isHittable { back.tap() } else {
+                back.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+        } else if app.navigationBars.buttons.firstMatch.exists {
+            app.navigationBars.buttons.firstMatch.tap()
+        }
+    }
+
+    private func tapHomeMore(_ app: XCUIApplication, _ id: String, _ message: String) {
+        let item = first(app, id)
+        XCTAssertTrue(item.waitForExistence(timeout: 5), message)
+        var attempts = 0
+        while !item.isHittable && attempts < 12 {
+            app.swipeUp()
+            attempts += 1
+        }
+        if item.isHittable {
+            item.tap()
+        } else {
+            item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
     }
 
@@ -1294,7 +1310,16 @@ final class GolfletUITests: XCTestCase {
                 || first(app, "screen-bolsa").exists
                 || first(app, "screen-sg").exists
                 || first(app, "screen-antes").exists
-            if first(app, "screen-inicio").exists && !onLegacy { return }
+                || first(app, "screen-metricas").exists
+                || first(app, "screen-metric-chart").exists
+            if first(app, "screen-inicio").waitForExistence(timeout: 0.2) && !onLegacy { return }
+            if first(app, "metric-back").exists {
+                let back = first(app, "metric-back")
+                if back.isHittable { back.tap() } else {
+                    back.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                }
+                continue
+            }
             if app.navigationBars.buttons.firstMatch.exists {
                 app.navigationBars.buttons.firstMatch.tap()
                 continue

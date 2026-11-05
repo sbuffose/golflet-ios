@@ -60,6 +60,7 @@ struct RobertoGuide: View {
             RobertoGlyph()
                 .frame(width: small ? 56 : 88, height: small ? 62 : 96)
         }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Roberto, tu caddie en Golflet")
         .accessibilityIdentifier("roberto-guide")
     }

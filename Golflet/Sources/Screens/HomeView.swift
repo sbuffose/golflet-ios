@@ -52,26 +52,6 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
-        .navigationDestination(isPresented: Binding(
-            get: { model.showsResumenFromHome },
-            set: { model.showsResumenFromHome = $0 }
-        )) { SummaryView() }
-        .navigationDestination(isPresented: Binding(
-            get: { model.showsRoundsFromHome },
-            set: { model.showsRoundsFromHome = $0 }
-        )) { RoundsView() }
-        .navigationDestination(isPresented: Binding(
-            get: { model.showsCanchaFromHome },
-            set: { model.showsCanchaFromHome = $0 }
-        )) { CourseView() }
-        .navigationDestination(isPresented: Binding(
-            get: { model.showsBolsaFromHome },
-            set: { model.showsBolsaFromHome = $0 }
-        )) { BagView() }
-        .navigationDestination(isPresented: Binding(
-            get: { model.showsSGFromHome },
-            set: { model.showsSGFromHome = $0 }
-        )) { SGHomeView() }
         .metricDestinations()
         .navigationDestination(for: Profesor.self) { profesor in
             ProfesorDetailView(profesor: profesor)
@@ -529,30 +509,25 @@ struct HomeView: View {
             Text("Más").font(GType.section).foregroundStyle(p.ink)
             ProtoCard {
                 VStack(spacing: 0) {
-                    Button { model.showsResumenFromHome = true } label: {
+                    NavigationLink { SummaryView() } label: {
                         ProtoRow(title: "Resumen", subtitle: "Tendencia, métricas y gráfico")
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("home-more-resumen")
-                    Button { model.showsRoundsFromHome = true } label: {
+                    NavigationLink { RoundsView() } label: {
                         ProtoRow(title: "Rondas", subtitle: "Todas tus tarjetas")
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("home-more-rondas")
-                    Button { model.showsCanchaFromHome = true } label: {
+                    NavigationLink { CourseView() } label: {
                         ProtoRow(title: "Cancha", subtitle: "Libreta y hoyo a hoyo")
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("home-more-cancha")
-                    Button { model.showsBolsaFromHome = true } label: {
+                    NavigationLink { BagView() } label: {
                         ProtoRow(title: "Mi bolsa", subtitle: "Palos y distancias")
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("home-more-bolsa")
-                    Button { model.showsSGFromHome = true } label: {
+                    NavigationLink { SGHomeView() } label: {
                         ProtoRow(title: "Strokes gained", subtitle: "Broadie · PGA Tour")
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("home-more-sg")
                     NavigationLink { BanderaHoyView() } label: {
                         ProtoRow(title: "Bandera de hoy", subtitle: "Posiciones de ejemplo")
@@ -573,10 +548,12 @@ struct HomeView: View {
                     .font(GType.section)
                     .foregroundStyle(p.ink)
                 Spacer()
-                Button("Ver todas") { model.showsRoundsFromHome = true }
-                    .font(GType.headline)
-                    .foregroundStyle(p.ink2)
-                    .accessibilityIdentifier("ver-todas")
+                NavigationLink { RoundsView() } label: {
+                    Text("Ver todas")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink2)
+                }
+                .accessibilityIdentifier("ver-todas")
             }
             if let round = model.home.lastRound {
                 Button { model.presentedRound = round } label: {

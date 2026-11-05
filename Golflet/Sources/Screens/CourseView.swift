@@ -22,6 +22,7 @@ struct CourseView: View {
             }
         }
         .accessibilityIdentifier("screen-cancha")
+        .safeAreaInset(edge: .top) { MetricBackBar() }
         .metricDestinations()
     }
 
