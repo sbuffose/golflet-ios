@@ -1,10 +1,42 @@
 import SwiftUI
 import UIKit
 
+/// Live membership and tee times win. Example copy is only for the list that is still empty.
+struct GroupsHubContent: Equatable {
+    var usesLiveGroups: Bool
+    var usesLiveTeeTimes: Bool
+
+    var showsExampleGroups: Bool { !usesLiveGroups }
+    var showsExampleTeeTimes: Bool { !usesLiveTeeTimes }
+
+    static func resolve(groupCount: Int, teeTimeCount: Int) -> GroupsHubContent {
+        GroupsHubContent(
+            usesLiveGroups: groupCount > 0,
+            usesLiveTeeTimes: teeTimeCount > 0
+        )
+    }
+}
+
 struct GroupsHubView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
-    @State private var toast: String?
+
+    private var content: GroupsHubContent {
+        GroupsHubContent.resolve(
+            groupCount: model.groups.count,
+            teeTimeCount: model.upcomingTeeTimes.count
+        )
+    }
+
+    private var exampleGroup: ProtoGroup {
+        ProtoGroup(
+            id: "ejemplo",
+            name: "Los del sábado",
+            kind: "Amigos",
+            members: ["Fede Ibarra", "Lucas Brandsen", "Tomi Lagos"],
+            example: true
+        )
+    }
 
     var body: some View {
         GScreen(id: "screen-grupos") {
@@ -23,28 +55,50 @@ struct GroupsHubView: View {
                         .foregroundStyle(p.ink)
                     ExampleNote(text: "Tus grupos de juego y tus clubes. No es un muro: solo la gente con la que jugás.")
 
-                    Text("Tus grupos").font(GType.section).foregroundStyle(p.ink)
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            NavigationLink {
-                                GroupDetailHub(group: ProtoGroup(id: "sabado", name: "Los del sábado", kind: "Amigos", members: DemoPeople.rivals.map(\.name) + ["Nico Paz"], example: true))
-                            } label: {
-                                ProtoRow(title: "Los del sábado", subtitle: "6 jugadores · próxima salida sáb 9:20", trailing: "2º")
-                                    .accessibilityIdentifier("group-sabado")
-                            }
-                            NavigationLink {
-                                GroupDetailHub(group: ProtoGroup(id: "mie", name: "Miércoles 9 hoyos", kind: "Amigos", members: ["Tomi Lagos", "Juan Ferro", "Santi Ocampo"], example: true))
-                            } label: {
-                                ProtoRow(title: "Miércoles 9 hoyos", subtitle: "4 jugadores · ejemplo")
-                            }
-                            ForEach(model.protoGroups) { group in
-                                NavigationLink { GroupDetailHub(group: group) } label: {
-                                    ProtoRow(title: group.name, subtitle: "\(group.members.count + 1) jugadores · \(group.kind)")
+                    if !model.pendingInvites.isEmpty {
+                        Text("Invitaciones").font(GType.section).foregroundStyle(p.ink)
+                        ProtoCard {
+                            VStack(spacing: 0) {
+                                ForEach(model.pendingInvites) { invite in
+                                    Button { model.presentInvite(invite) } label: {
+                                        ProtoRow(title: invite.name, subtitle: "Te invita \(invite.ownerName)")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("hub-pending-\(invite.token)")
                                 }
                             }
                         }
                     }
-                    NavigationLink { CreateGroupHub() } label: {
+
+                    Text("Tus grupos").font(GType.section).foregroundStyle(p.ink)
+                    if content.usesLiveGroups {
+                        ProtoCard {
+                            VStack(spacing: 0) {
+                                ForEach(model.groups) { group in
+                                    Button { model.presentGroupDetail(group.id) } label: {
+                                        ProtoRow(
+                                            title: group.name,
+                                            subtitle: "\(group.memberCount) \(group.memberCount == 1 ? "miembro" : "miembros") · \(group.myRole.title)"
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("hub-group-\(group.id)")
+                                }
+                            }
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            DemoPill()
+                            ProtoCard {
+                                NavigationLink { GroupDetailHub(group: exampleGroup) } label: {
+                                    ProtoRow(title: exampleGroup.name, subtitle: "\(exampleGroup.members.count + 1) jugadores · ejemplo")
+                                }
+                            }
+                            ExampleNote(text: "No es un grupo tuyo. Cuando entres a uno, este ejemplo se va.")
+                        }
+                        .accessibilityIdentifier("hub-groups-example")
+                    }
+                    Button { model.presentCreateGroup() } label: {
                         Text("+ Crear grupo")
                             .font(GType.headline)
                             .foregroundStyle(p.primary)
@@ -54,22 +108,30 @@ struct GroupsHubView: View {
                     }
                     .accessibilityIdentifier("group-create")
 
-                    Text("Quién juega cuándo").font(GType.section).foregroundStyle(p.ink)
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            ProtoRow(title: "Sáb 7-nov", subtitle: "9:20 · Vos, Fede, Lucas, Tomi")
-                            ProtoRow(title: "Sáb 7-nov", subtitle: "10:10 · Santi Ocampo y 3 más")
-                            Button {
-                                toast = "Sumarme es solo de ejemplo: Golflet no le escribe a nadie."
-                            } label: {
-                                ProtoRow(title: "Mié 11-nov", subtitle: "17:30 · Tomi Lagos (9 hoyos)", trailing: "Sumarme")
+                    HStack(spacing: 8) {
+                        Text("Quién juega cuándo").font(GType.section).foregroundStyle(p.ink)
+                        if content.showsExampleTeeTimes { DemoPill() }
+                    }
+                    if content.usesLiveTeeTimes {
+                        ProtoCard {
+                            VStack(spacing: 0) {
+                                ForEach(model.upcomingTeeTimes) { booking in
+                                    ProtoRow(title: booking.chipWhen, subtitle: teeSubtitle(booking))
+                                        .accessibilityIdentifier("hub-tee-\(booking.id)")
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("group-sumarme")
+                        }
+                    } else {
+                        ProtoCard {
+                            ProtoRow(title: "Sáb 7-nov", subtitle: "9:20 · ejemplo")
+                                .accessibilityIdentifier("hub-tee-example")
                         }
                     }
 
-                    Text("Amigos").font(GType.section).foregroundStyle(p.ink)
+                    HStack(spacing: 8) {
+                        Text("Amigos").font(GType.section).foregroundStyle(p.ink)
+                        DemoPill()
+                    }
                     ProtoCard {
                         VStack(spacing: 0) {
                             ForEach(DemoPeople.rivals) { r in
@@ -86,21 +148,21 @@ struct GroupsHubView: View {
             }
         }
         .accessibilityIdentifier("screen-grupos")
-        .overlay(alignment: .bottom) {
-            if let toast {
-                Text(toast)
-                    .font(GType.headline)
-                    .foregroundStyle(p.onPrimary)
-                    .padding(14)
-                    .background(p.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.bottom, 90)
-                    .task(id: toast) {
-                        try? await Task.sleep(for: .seconds(2.2))
-                        self.toast = nil
-                    }
-            }
+        .task {
+            await model.refreshGroups()
+            await model.refreshTeeTimes()
         }
+    }
+
+    private func teeSubtitle(_ booking: TeeTime) -> String {
+        var parts = [booking.clubName]
+        if !booking.course.isEmpty, booking.course.caseInsensitiveCompare(booking.clubName) != .orderedSame {
+            parts.append(booking.course)
+        }
+        if let line = booking.companionsLine {
+            parts.append(line)
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
