@@ -204,8 +204,13 @@ struct PlayCourseView: View {
     }
 
     private func prepareStart(_ summary: GPSCourseSummary) {
-        startPlayers = PaceDefaults.players
-        startModality = .medal
+        if let pending = model.pendingMatch {
+            startModality = pending.modality
+            startPlayers = pending.playerCount
+        } else {
+            startPlayers = PaceDefaults.players
+            startModality = .medal
+        }
         pendingStart = summary
     }
 
@@ -340,6 +345,7 @@ struct PlayCourseView: View {
                 modality: startModality.rawValue
             )
             model.rememberPlay(course: detail, round: round)
+            model.pendingMatch = nil
             live = round
             selected = detail
             pendingStart = nil
@@ -352,6 +358,7 @@ struct PlayCourseView: View {
                     modality: startModality.rawValue
                 )
                 model.rememberPlay(course: cached.detail, round: round)
+                model.pendingMatch = nil
                 live = round
                 selected = cached.detail
                 pendingStart = nil

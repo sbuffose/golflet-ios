@@ -40,26 +40,13 @@ struct PlayHubView: View {
 
                     Text("Partido en curso").font(GType.section).foregroundStyle(p.ink)
                     if let round = liveMatch {
-                        ProtoCard {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(PaceModality.parse(round.modality).label)
-                                    .font(GType.overline)
-                                    .foregroundStyle(p.ink3)
-                                Text(round.course?.isEmpty == false ? round.course! : "Ronda en curso")
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                Text("Hoyo \(round.currentHole)")
-                                    .font(GType.label)
-                                    .foregroundStyle(p.ink2)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button { model.showsPlay = true } label: {
+                            liveMatchCard(round)
                         }
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("jugar-partido")
                     } else {
-                        Text("No hay un partido en curso.")
-                            .font(GType.body)
-                            .foregroundStyle(p.ink2)
-                            .accessibilityIdentifier("jugar-partido-empty")
+                        MatchStartPrompt(identify: true)
                     }
 
                     Text("Tee times del club").font(GType.section).foregroundStyle(p.ink)
@@ -116,6 +103,28 @@ struct PlayHubView: View {
     private var liveMatch: LiveRound? {
         guard let round = model.activeLiveRound, round.endedAt == nil else { return nil }
         return round
+    }
+
+    private func liveMatchCard(_ round: LiveRound) -> some View {
+        ProtoCard {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(PaceModality.parse(round.modality).label)
+                    .font(GType.overline)
+                    .foregroundStyle(p.ink3)
+                Text(round.course?.isEmpty == false ? round.course! : "Ronda en curso")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Text("Hoyo \(round.currentHole)")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                if !model.matchPartners.isEmpty {
+                    Text(model.matchPartners.joined(separator: ", "))
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func playTeeSubtitle(_ booking: TeeTime) -> String {
@@ -323,30 +332,267 @@ struct ClimaView: View {
     }
 }
 
+struct MatchStartPrompt: View {
+    @Environment(\.palette) private var p
+    var identify: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("No hay un partido en curso.")
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+                .accessibilityIdentifier(identify ? "jugar-partido-empty" : "home-partido-empty")
+            Text("Elegí el formato para armarlo.")
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    formatLink(.medal)
+                    formatLink(.stableford)
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 8) {
+                    formatLink(.match)
+                    formatLink(.fourball)
+                    Spacer(minLength: 0)
+                }
+            }
+            NavigationLink {
+                MatchLiveView()
+            } label: {
+                Text("Empezar partido")
+                    .font(GType.headline)
+                    .foregroundStyle(p.onPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(p.primary)
+                    .clipShape(Capsule())
+            }
+            .accessibilityIdentifier(identify ? "empezar-partido" : "home-empezar-partido")
+        }
+        .accessibilityIdentifier(identify ? "match-start" : "home-match-start")
+    }
+
+    private func formatLink(_ mode: PaceModality) -> some View {
+        NavigationLink {
+            MatchLiveView(modality: mode)
+        } label: {
+            Text(mode.label)
+                .font(GType.label)
+                .foregroundStyle(p.ink)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(p.surface)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(p.hairline, lineWidth: 1))
+        }
+        .accessibilityIdentifier((identify ? "match-format-" : "home-match-format-") + mode.rawValue)
+    }
+}
+
 struct MatchLiveView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    var modality: PaceModality
+    @State private var chosen: PaceModality
+    @State private var partners: [String] = []
+    @State private var typed = ""
+
+    init(modality: PaceModality = .medal) {
+        self.modality = modality
+        _chosen = State(initialValue: modality)
+    }
 
     var body: some View {
         GScreen(id: "screen-partido") {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Partido").font(GType.largeTitle).foregroundStyle(p.ink)
-                if let round = model.activeLiveRound, round.endedAt == nil {
-                    Text(PaceModality.parse(round.modality).label)
-                        .font(GType.headline)
-                        .foregroundStyle(p.ink)
-                    Text("Hoyo \(round.currentHole)")
-                        .font(GType.body)
-                        .foregroundStyle(p.ink2)
-                } else {
-                    Text("No hay un partido en curso.")
-                        .font(GType.body)
-                        .foregroundStyle(p.ink2)
+            VStack(spacing: 0) {
+                MetricBackBar()
+                ScrollView(showsIndicators: false) {
+                    if let round = model.activeLiveRound, round.endedAt == nil {
+                        active(round)
+                    } else {
+                        setup
+                    }
                 }
-                Spacer()
             }
-            .padding(20)
         }
+    }
+
+    private func active(_ round: LiveRound) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Partido").font(GType.largeTitle).foregroundStyle(p.ink)
+            Text(PaceModality.parse(round.modality).label)
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+            Text(round.course?.isEmpty == false ? round.course! : "Ronda en curso")
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+            Text("Hoyo \(round.currentHole)")
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+            if !model.matchPartners.isEmpty {
+                Text(model.matchPartners.joined(separator: ", "))
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+            }
+            Button { model.showsPlay = true } label: {
+                Text("Seguir partido")
+                    .font(GType.headline)
+                    .foregroundStyle(p.onPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(p.primary)
+                    .clipShape(Capsule())
+            }
+            .accessibilityIdentifier("seguir-partido")
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var setup: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Empezar partido").font(GType.largeTitle).foregroundStyle(p.ink)
+            Text("No hay un partido en curso.")
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+            Text("Elegí el formato, los compañeros y la cancha. No inventamos el resultado.")
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+
+            Text("Formato").font(GType.section).foregroundStyle(p.ink)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    formatChip(.medal)
+                    formatChip(.stableford)
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 8) {
+                    formatChip(.match)
+                    formatChip(.fourball)
+                    Spacer(minLength: 0)
+                }
+            }
+
+            Text("Compañeros").font(GType.section).foregroundStyle(p.ink)
+            if choices.isEmpty {
+                Text("No hay compañeros en tus grupos ni en tus reservas. Podés agregar uno.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(choices, id: \.self) { name in
+                        Button { toggle(name) } label: {
+                            HStack {
+                                Text(name)
+                                    .font(GType.body)
+                                    .foregroundStyle(partners.contains(name) ? p.onPrimary : p.ink)
+                                Spacer()
+                                if partners.contains(name) {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(p.onPrimary)
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(partners.contains(name) ? p.primary : p.surface)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("match-partner-\(name)")
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("Nombre", text: $typed)
+                    .textInputAutocapitalization(.words)
+                    .font(GType.body)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(p.surface)
+                    .clipShape(Capsule())
+                    .accessibilityIdentifier("match-partner-field")
+                Button("Agregar") { addTyped() }
+                    .font(GType.label)
+                    .foregroundStyle(p.onPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(partners.count >= 3 ? p.ink3 : p.primary)
+                    .clipShape(Capsule())
+                    .accessibilityIdentifier("match-partner-add")
+            }
+
+            if !partners.isEmpty {
+                Text(partners.joined(separator: ", "))
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier("match-partners-line")
+            }
+
+            Button {
+                model.pendingMatch = MatchSetup(modality: chosen, partners: partners)
+                model.showsPlay = true
+            } label: {
+                Text("Empezar partido")
+                    .font(GType.headline)
+                    .foregroundStyle(p.onPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(p.primary)
+                    .clipShape(Capsule())
+            }
+            .accessibilityIdentifier("empezar-partido-confirm")
+            Text("Después elegís la cancha y arranca la ronda.")
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+        }
+        .padding(20)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var choices: [String] {
+        MatchSetup.partnerChoices(
+            teeTimes: model.upcomingTeeTimes,
+            groups: model.groups,
+            me: [model.profile.greetingName, model.profile.displayName]
+        )
+    }
+
+    private func formatChip(_ mode: PaceModality) -> some View {
+        let on = chosen == mode
+        return Button { chosen = mode } label: {
+            Text(mode.label)
+                .font(GType.label)
+                .foregroundStyle(on ? p.onPrimary : p.ink)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(on ? p.primary : p.surface)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(on ? p.primary : p.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("match-setup-format-\(mode.rawValue)")
+    }
+
+    private func toggle(_ name: String) {
+        if let index = partners.firstIndex(of: name) {
+            partners.remove(at: index)
+        } else if partners.count < 3 {
+            partners.append(name)
+        }
+    }
+
+    private func addTyped() {
+        let name = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        typed = ""
+        guard !name.isEmpty, partners.count < 3 else { return }
+        let selfNames = [model.profile.greetingName, model.profile.displayName]
+        if selfNames.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { return }
+        if partners.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { return }
+        partners.append(name)
     }
 }
 
