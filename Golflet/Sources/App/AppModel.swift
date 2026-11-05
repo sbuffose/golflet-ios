@@ -1144,6 +1144,10 @@ final class AppModel {
     }
 }
 
+enum HomeMoreRoute: String, Hashable {
+    case resumen, rondas, cancha, bolsa, sg
+}
+
 enum AppTab: String, CaseIterable, Identifiable {
     case inicio, grupos, jugar, academia
     case resumen, rondas, cancha, bolsa

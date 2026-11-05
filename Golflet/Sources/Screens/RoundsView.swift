@@ -7,6 +7,5 @@ struct RoundsView: View {
             showsBack: true,
             screenID: "screen-rondas"
         )
-            .metricDestinations()
     }
 }

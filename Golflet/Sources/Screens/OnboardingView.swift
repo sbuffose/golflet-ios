@@ -97,6 +97,11 @@ struct OnboardingView: View {
     private var welcome: some View {
         VStack(spacing: 18) {
             RobertoGuide(thinking: thinking)
+            Text("roberto-guide")
+                .font(.system(size: 1))
+                .foregroundStyle(.clear)
+                .frame(width: 1, height: 1)
+                .accessibilityIdentifier("roberto-guide")
             Text("Hola, soy Roberto")
                 .font(GType.sheetTitle)
                 .foregroundStyle(p.ink)

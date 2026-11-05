@@ -36,9 +36,6 @@ struct StrategyCourseView: View {
             }
         }
         .accessibilityIdentifier("screen-strategy")
-        .navigationDestination(for: StrategyHoleRoute.self) { route in
-            StrategyHoleView(courseKey: route.courseKey, courseName: route.courseName, holeNumber: route.hole)
-        }
         .safeAreaInset(edge: .top) { MetricBackBar() }
         .task { await load() }
     }
