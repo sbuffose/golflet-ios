@@ -168,7 +168,7 @@ struct ProtoChallenge: Identifiable, Hashable, Codable {
 
 enum PrototypeStore {
     private static let modeKey = "golflet.proto.mode"
-    private static let onboardingKey = "golflet.proto.onboarding"
+    private static let onboardingKey = "golflet.proto.onboarding.v2"
     private static let settingsKey = "golflet.proto.round"
     private static let planKey = "golflet.proto.plan"
     private static let groupsKey = "golflet.proto.groups"
