@@ -156,7 +156,7 @@ final class OnboardingPlanTests: XCTestCase {
         XCTAssertFalse(paced.joined().contains(where: \.isNumber))
 
         let early = OnboardingSyncCopy.lines(progress: nil, elapsedStages: 1)
-        XCTAssertEqual(early, ["Estoy entrando a Golfistics."])
+        XCTAssertEqual(early, ["Estoy entrando a tu club."])
 
         let cards = OnboardingSyncCopy.lines(
             progress: SyncAPIProgress(stage: .cards, done: 4, total: 12),
@@ -177,6 +177,19 @@ final class OnboardingPlanTests: XCTestCase {
             elapsedStages: 1
         )
         XCTAssertEqual(named.first, "Conectando con Jockey.")
+
+        let placeholder = OnboardingSyncCopy.lines(
+            progress: SyncAPIProgress(club: "Golfistics App", stage: .connect),
+            elapsedStages: 1
+        )
+        XCTAssertEqual(placeholder.first, "Conectando con tu club.")
+        XCTAssertFalse(placeholder.joined().localizedCaseInsensitiveContains("golfistics"))
+
+        let several = OnboardingSyncCopy.lines(
+            progress: SyncAPIProgress(club: "Golfistics App", clubCount: 3, stage: .connect),
+            elapsedStages: 1
+        )
+        XCTAssertEqual(several.first, "Conectando con tus clubes.")
 
         let done = OnboardingSyncCopy.lines(
             progress: SyncAPIProgress(stage: .done),

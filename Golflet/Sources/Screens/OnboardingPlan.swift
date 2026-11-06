@@ -160,7 +160,7 @@ enum OnboardingPlan {
 /// `SyncAPIProgress` ya lo trajo.
 enum OnboardingSyncCopy {
     static let waiting: [String] = [
-        "Estoy entrando a Golfistics.",
+        "Estoy entrando a tu club.",
         "Busco tu hándicap y tu club.",
         "Traigo las tarjetas que el club tenga.",
         "Cuando entren, armo tu ficha."
@@ -191,10 +191,13 @@ enum OnboardingSyncCopy {
     static func liveLine(_ progress: SyncAPIProgress) -> String {
         switch progress.stage {
         case .connect:
-            if let club = progress.club?.trimmingCharacters(in: .whitespacesAndNewlines), !club.isEmpty {
+            let count = progress.clubCount ?? 0
+            if let club = progress.club?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !club.isEmpty,
+               !SyncClubIdentity.isDetecting(club) {
                 return "Conectando con \(club)."
             }
-            return "Conectando con Golfistics."
+            return count > 1 ? "Conectando con tus clubes." : "Conectando con tu club."
         case .list:
             if let count = progress.listTotal, count > 0 {
                 return "El club lista \(count) tarjetas."

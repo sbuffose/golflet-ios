@@ -37,7 +37,7 @@ extension MockAPIClient {
             holeCount: 18,
             holes: Self.demoHoles(for: summary.courseId),
             warnings: [],
-            attribution: "Greens: Golfistics. Tees y obstáculos: © OpenStreetMap contributors (ODbL)."
+            attribution: "Tees y obstáculos: © OpenStreetMap contributors (ODbL)."
         )
     }
 

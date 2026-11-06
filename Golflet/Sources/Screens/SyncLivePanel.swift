@@ -110,7 +110,7 @@ struct SyncCompactStages: View {
     let progress: SyncAPIProgress
 
     var body: some View {
-        let club = session?.clubName ?? progress.club ?? "tu club"
+        let club = SyncClubIdentity.spokenName(session?.clubName ?? progress.club, count: progress.clubCount)
         let outcome = session?.outcome ?? .running
         let active = SyncStage.visible.first {
             SyncStepCopy.state(for: $0, progress: progress, outcome: outcome) == .active

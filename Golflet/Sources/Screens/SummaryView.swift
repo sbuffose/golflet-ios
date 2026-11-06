@@ -233,7 +233,7 @@ struct SummaryView: View {
                         }
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("trend-legend")
-                        Text("Diferencial calculado por Golflet · Golfistics no publica el HCP Index oficial")
+                        Text("Diferencial calculado por Golflet · tu club no publica el índice oficial")
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
                             .fixedSize(horizontal: false, vertical: true)
