@@ -1,19 +1,5 @@
 import SwiftUI
 
-struct DemoPill: View {
-    @Environment(\.palette) private var p
-    var text = "Datos de ejemplo"
-    var body: some View {
-        Text(text)
-            .font(GFont.ui(11.5, weight: .semibold))
-            .foregroundStyle(p.primary2)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(p.surface2)
-            .clipShape(Capsule())
-    }
-}
-
 struct ProtoCard<Content: View>: View {
     @Environment(\.palette) private var p
     var content: Content
@@ -55,17 +41,6 @@ struct RobertoGuide: View {
             .frame(height: small ? 132 : 200)
             .accessibilityIdentifier("roberto-guide")
             .accessibilityLabel(thinking ? "Roberto está pensando" : "Roberto, tu caddie en Golflet")
-    }
-}
-
-struct ExampleNote: View {
-    @Environment(\.palette) private var p
-    var text: String
-    var body: some View {
-        Text(text)
-            .font(GType.label)
-            .foregroundStyle(p.ink3)
-            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

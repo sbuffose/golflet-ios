@@ -1199,7 +1199,7 @@ final class GolfletUITests: XCTestCase {
             "Tu número de matrícula",
             "La misma que usás en Golfistics",
             "La misma que para entrar a tu club",
-            "Empezá a escribir, por ejemplo Manu"
+            "Nombre o matrícula"
         ]
         if let current = element.value as? String,
            !current.isEmpty,

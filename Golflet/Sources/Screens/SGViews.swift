@@ -10,16 +10,15 @@ struct SGHomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Strokes gained").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: "Cuántos golpes ganás o perdés contra el promedio del PGA Tour (Mark Broadie, 2011). Sale de los golpes que marcás en el hoyo.")
+                    Text("Contra el promedio del PGA Tour, con los golpes que marcás.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
 
                     if mine.isEmpty {
-                        ProtoCard {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Todavía no hay golpes marcados").font(GType.headline)
-                                ExampleNote(text: "Marcá la vuelta en el hoyo. Acá no hay números de ejemplo.")
-                            }
-                        }
-                        .accessibilityIdentifier("sg-empty")
+                        Text("Todavía no hay golpes. Marcalos en el hoyo.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("sg-empty")
                     } else {
                         let tot = StrokesGained.totals(mine)
                         NavigationLink { SGRoundView(title: "Tu vuelta", shots: mine) } label: {
@@ -41,12 +40,6 @@ struct SGHomeView: View {
                                     .accessibilityIdentifier("sg-cat-\(cat.rawValue)")
                                 }
                             }
-                        }
-                    }
-                    ProtoCard {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Contra tu nivel de hándicap").font(GType.headline)
-                            ExampleNote(text: "Todavía no: necesitamos una tabla publicada por hándicap para no inventar números.")
                         }
                     }
                 }
@@ -97,7 +90,9 @@ struct SGRoundView: View {
                             }
                         }
                     }
-                    ExampleNote(text: "Base: PGA Tour (Broadie, 2011). Un approach desde 150 m al fairway se interpola en la Tabla 9.")
+                    Text("Contra el promedio del PGA Tour.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
                 }
                 .padding(20)
             }
@@ -148,10 +143,9 @@ struct SGCategoryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(category.title).font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: category.detail + ".")
                     if shots.isEmpty {
                         ProtoCard {
-                            Text("No hay golpes de \(category.title.lowercased()) en tus vueltas marcadas.")
+                            Text("Todavía no hay golpes de \(category.title.lowercased()). Marcalos en el hoyo.")
                                 .font(GType.body)
                                 .foregroundStyle(p.ink2)
                         }

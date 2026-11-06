@@ -258,6 +258,7 @@ struct PlayHoleView: View {
                     .background(Capsule().fill(Color.white.opacity(0.96)))
             }
             .accessibilityIdentifier("play-track")
+            .accessibilityLabel(markMode == .track ? "AIM. Apuntar." : "TRACK. Marcar el golpe.")
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
@@ -299,7 +300,7 @@ struct PlayHoleView: View {
                     .font(GType.statM)
                     .tabular()
                     .foregroundStyle(p.ink)
-                Text("\(markLie?.rawValue ?? "sin lie") · \(toPin) yd al hoyo")
+                Text(markLie.map { "\($0.rawValue) · \(toPin) yd al hoyo" } ?? "\(toPin) yd al hoyo")
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
             }

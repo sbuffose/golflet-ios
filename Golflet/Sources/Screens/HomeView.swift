@@ -30,7 +30,6 @@ struct HomeView: View {
                         header(scroll: proxy)
                         modeChip
                         if model.homeMode == .comp { competitiveLead }
-                        else if model.homeMode == .mej { improveLead }
                         else if model.homeMode == .soc { socialLead }
                         handicapCard
                         if model.homeMode == .mej, !model.liveShots.isEmpty {
@@ -547,19 +546,13 @@ struct HomeView: View {
         }
     }
 
-    private var improveLead: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ExampleNote(text: "Modo Mejorar: primero lo que practicar.")
-        }
-    }
-
     private var socialLead: some View {
         VStack(alignment: .leading, spacing: 10) {
             NavigationLink { GroupsHubView() } label: {
                 ProtoCard {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Grupos").font(GType.overline).foregroundStyle(p.ink3)
-                        Text("Quién juega cuándo y lo último de tus amigos").font(GType.headline)
+                        Text("Tus grupos y tus tee times").font(GType.headline)
                     }
                 }
             }
@@ -588,18 +581,17 @@ struct HomeView: View {
                     }
                     .accessibilityIdentifier("home-more-bolsa")
                     NavigationLink(value: HomeMoreRoute.sg) {
-                        ProtoRow(title: "Strokes gained", subtitle: "Broadie · PGA Tour")
+                        ProtoRow(title: "Strokes gained", subtitle: "Solo con golpes marcados")
                     }
                     .accessibilityIdentifier("home-more-sg")
                     NavigationLink { BanderaHoyView() } label: {
                         ProtoRow(title: "Bandera de hoy", subtitle: "Si el club las cargó")
                     }
                     NavigationLink { CierreView() } label: {
-                        ProtoRow(title: "Cierre de vuelta", subtitle: "Sáb 31-oct · 84")
+                        ProtoRow(title: "Cierre de vuelta", subtitle: "Al terminar la vuelta")
                     }
                 }
             }
-            ExampleNote(text: "Tu inicio está en modo \(model.homeMode.title): solo cambia qué ves primero.")
         }
     }
 
