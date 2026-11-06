@@ -167,7 +167,9 @@ struct AntesDeSalirView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Antes de salir").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: "Ajustes de esta vuelta. Los podés cambiar durante el juego.")
+                    Text("Elegí qué vas a ver en el hoyo.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
                     Text("Tu modo").font(GType.headline).foregroundStyle(p.ink)
                     HStack {
                         ForEach(ProfileMode.allCases) { mode in
@@ -181,7 +183,6 @@ struct AntesDeSalirView: View {
                                 .accessibilityIdentifier("antes-mode-\(mode.rawValue)")
                         }
                     }
-                    ExampleNote(text: "Es el mismo modo del chip de Inicio. Decide qué ves en el hoyo.")
 
                     Text("En el hoyo vas a ver").font(GType.headline).foregroundStyle(p.ink)
                     ProtoCard {
@@ -199,23 +200,11 @@ struct AntesDeSalirView: View {
                             }
                         }
                     }
-                    ExampleNote(text: "Lo que apagues sigue en «Más», en el costado del mapa. Desnivel, 3D y Pendiente no se muestran: no hay datos.")
 
                     setting("Cancha", ["Azul", "Roja"], model.roundSettings.cancha) { model.roundSettings.cancha = $0 }
                     setting("Salida", ["Negras", "Azules", "Blancas", "Rojas"], model.roundSettings.tee) { model.roundSettings.tee = $0 }
                     setting("Hoyos", ["18", "Primeros 9", "Últimos 9"], model.roundSettings.hoyos) { model.roundSettings.hoyos = $0 }
                     setting("Formato", ["Medal", "Stableford", "Match play"], model.roundSettings.formato) { model.roundSettings.formato = $0 }
-
-                    ProtoCard {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("HI 12,4 · Cancha \(model.roundSettings.cancha) · \(model.roundSettings.tee)").font(GType.overline).foregroundStyle(p.ink3)
-                                DemoPill()
-                            }
-                            Text("Recibís 14 golpes").font(GType.section).foregroundStyle(p.ink)
-                            ExampleNote(text: "Calculado con slope y rating de ejemplo")
-                        }
-                    }
 
                     Button {
                         model.startLiveHole()
@@ -512,12 +501,9 @@ struct MatchLiveView: View {
     private var setup: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Empezar partido").font(GType.largeTitle).foregroundStyle(p.ink)
-            Text("No hay un partido en curso.")
+            Text("Todavía no hay un partido. Elegí formato y cancha.")
                 .font(GType.body)
                 .foregroundStyle(p.ink2)
-            Text("Elegí el formato, los compañeros y la cancha. No inventamos el resultado.")
-                .font(GType.label)
-                .foregroundStyle(p.ink3)
 
             Text("Formato").font(GType.section).foregroundStyle(p.ink)
             VStack(alignment: .leading, spacing: 8) {
@@ -662,17 +648,10 @@ struct CierreView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Cierre de vuelta").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ProtoHero {
-                        VStack(alignment: .leading) {
-                            Text("Tarjeta del club").font(GType.overline).opacity(0.75)
-                            Text("84").font(GType.statHero).tabular()
-                            Text("neto 71 · dif. 11,6").font(GType.label).opacity(0.8)
-                        }
-                    }
-                    DemoPill()
-                    NavigationLink { SGHomeView() } label: {
-                        ProtoCard { ProtoRow(title: "Strokes gained", subtitle: "Contra el PGA Tour (Broadie, 2011)") }
-                    }
+                    Text("Todavía no hay una vuelta para cerrar. Jugá una con GPS.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("cierre-empty")
                 }
                 .padding(20)
             }
@@ -688,14 +667,20 @@ struct PerfilModoView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Modo del inicio").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: "¿Qué buscás en el golf? Elegí qué querés ver primero. Las tabs son las mismas en todos los modos.")
+                    Text("Elegí qué ves primero. Las tabs no cambian.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
                     ForEach(ProfileMode.allCases) { mode in
                         Button { model.setHomeMode(mode) } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack {
                                         Text(mode.title).font(GType.headline).foregroundStyle(p.ink)
-                                        if mode == .clasico { DemoPill(text: "Recomendado") }
+                                        if mode == .clasico {
+                                            Text("Recomendado")
+                                                .font(GFont.ui(11.5, weight: .semibold))
+                                                .foregroundStyle(p.primary2)
+                                        }
                                     }
                                     Text(mode.blurb).font(GType.label).foregroundStyle(p.ink3)
                                 }

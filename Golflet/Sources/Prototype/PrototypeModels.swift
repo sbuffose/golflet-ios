@@ -41,11 +41,11 @@ enum HoleFeature: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .track: return "Registrar golpe a golpe"
         case .palo: return "Palo sugerido, mira y dispersión"
-        case .viento: return "Viento (ejemplo)"
+        case .viento: return "Viento"
         case .verde: return "Vista del green"
         case .herram: return "Mover bandera y salida, ubicación"
         case .partido: return "Partido del grupo"
-        case .ritmo: return "Ritmo de juego (ejemplo)"
+        case .ritmo: return "Ritmo de juego"
         case .ideas: return "Ideas de swing"
         case .stats: return "Estadísticas"
         case .compartir: return "Compartir la vuelta"

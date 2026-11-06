@@ -14,7 +14,6 @@ struct AcademiaView: View {
                         Button { model.showsClubs = true } label: { AvatarCircle(initials: model.profile.initials) }
                     }
                     Text("Academia").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: "Qué practicar según tus golpes, lecciones cortas y los profes de tu club.")
 
                     NavigationLink { PracticePlanView() } label: {
                         planCard
@@ -36,42 +35,39 @@ struct AcademiaView: View {
                         }
                     }
 
-                    Text("Errores que se repiten").font(GType.section).foregroundStyle(p.ink)
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            NavigationLink { SGCategoryView(category: .putt) } label: {
-                                ProtoRow(title: "3 putts", subtitle: "2,1 por vuelta · 2,4 golpes")
+                    Text("Tus golpes").font(GType.section).foregroundStyle(p.ink)
+                    if model.liveShots.isEmpty {
+                        Text("Todavía no hay golpes. Jugá una vuelta con GPS.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("academia-empty")
+                    } else {
+                        let tot = StrokesGained.totals(model.liveShots)
+                        ProtoCard {
+                            VStack(spacing: 0) {
+                                ForEach(SGCategory.allCases) { cat in
+                                    NavigationLink { SGCategoryView(category: cat, shots: model.liveShots.filter { $0.category == cat }) } label: {
+                                        ProtoRow(title: cat.title, trailing: StrokesGained.format(tot[cat]))
+                                    }
+                                }
                             }
-                            NavigationLink { SGCategoryView(category: .app) } label: {
-                                ProtoRow(title: "Doble en par 3", subtitle: "1 de cada 3")
-                            }
-                            NavigationLink { SGCategoryView(category: .tee) } label: {
-                                ProtoRow(title: "Salida a la derecha", subtitle: "42% de los fallados")
-                            }
-                        }
-                    }
-                    DemoPill()
-
-                    Text("Objetivos").font(GType.section).foregroundStyle(p.ink)
-                    ProtoCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Bajar a 10,9 antes de marzo").font(GType.headline)
-                                Spacer()
-                                Text("63%").font(GType.label).foregroundStyle(p.ink3)
-                            }
-                            ProgressView(value: 0.63)
                         }
                     }
 
                     Text("Profesores").font(GType.section).foregroundStyle(p.ink)
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            ProtoRow(title: "Profesor del club A", subtitle: "Swing y hierros · ejemplo")
-                            ProtoRow(title: "Profesora del club B", subtitle: "Juego corto y putt · ejemplo")
+                    if model.profesores.isEmpty {
+                        Text("Todavía no hay profesores. Sumalos desde Inicio.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                    } else {
+                        ProtoCard {
+                            VStack(spacing: 0) {
+                                ForEach(model.profesores) { profesor in
+                                    ProtoRow(title: profesor.name, subtitle: profesor.locationsLine)
+                                }
+                            }
                         }
                     }
-                    ExampleNote(text: "Profes de ejemplo.")
                 }
                 .padding(20)
                 .padding(.bottom, 96)
@@ -81,19 +77,24 @@ struct AcademiaView: View {
     }
 
     private var planCard: some View {
-        let weak = LessonsCatalog.weakCategories(from: ExampleRounds.all().map { StrokesGained.totals($0.shots) })
+        let shots = model.liveShots
         let done = model.academiaPlanDone.count
         return ProtoCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Plan de práctica · esta semana").font(GType.overline).foregroundStyle(p.ink3)
-                    Spacer()
-                    Text("\(min(done, 9)) de 9").font(GType.label).foregroundStyle(p.ink3)
+                Text("Plan de práctica").font(GType.overline).foregroundStyle(p.ink3)
+                if shots.isEmpty {
+                    Text("Todavía no hay golpes. Jugá una vuelta con GPS.")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                } else {
+                    let weak = LessonsCatalog.weakCategories(from: [StrokesGained.totals(shots)])
+                    Text("Foco: \(weak[0].title) y \(weak[1].title)")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text("\(done) ejercicios hechos")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
                 }
-                Text("Foco: \(weak[0].title) y \(weak[1].title)")
-                    .font(GType.headline)
-                    .foregroundStyle(p.ink)
-                ProgressView(value: Double(min(done, 9)), total: 9)
             }
         }
     }
@@ -170,7 +171,9 @@ struct LessonDetailView: View {
                             }
                         }
                     }
-                    ExampleNote(text: "Texto propio de Golflet. Lo que tildás queda en este dispositivo.")
+                    Text("Lo que tildás queda en este teléfono.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
                 }
                 .padding(20)
             }
@@ -184,25 +187,25 @@ struct PracticePlanView: View {
     @Environment(\.palette) private var p
 
     var body: some View {
-        let weak = LessonsCatalog.weakCategories(from: ExampleRounds.all().map { StrokesGained.totals($0.shots) })
+        let shots = model.liveShots
         GScreen(id: "screen-plan-practica") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Plan de práctica").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: "Esta semana. Armado con las dos categorías donde más golpes perdés.")
-                    DemoPill()
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            ForEach(weak) { cat in
-                                NavigationLink { SGCategoryView(category: cat) } label: {
-                                    ProtoRow(title: cat.title, subtitle: "Strokes gained por vuelta")
-                                }
-                            }
-                        }
+                    if shots.isEmpty {
+                        Text("Todavía no hay golpes. Jugá una vuelta con GPS.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("plan-empty")
+                    } else {
+                        let weak = LessonsCatalog.weakCategories(from: [StrokesGained.totals(shots)])
+                        Text("Donde más golpes perdés: \(weak[0].title) y \(weak[1].title).")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                        session("Sesión 1 · \(weak[0].title)", LessonsCatalog.all.filter { $0.category == weak[0].rawValue }.first)
+                        session("Sesión 2 · \(weak[1].title)", LessonsCatalog.all.filter { $0.category == weak[1].rawValue }.first)
+                        session("Sesión 3 · En la cancha", LessonsCatalog.lesson("est-1"))
                     }
-                    session("Sesión 1 · \(weak[0].title)", LessonsCatalog.all.filter { $0.category == weak[0].rawValue }.first)
-                    session("Sesión 2 · \(weak[1].title)", LessonsCatalog.all.filter { $0.category == weak[1].rawValue }.first)
-                    session("Sesión 3 · En la cancha", LessonsCatalog.lesson("est-1"))
                 }
                 .padding(20)
             }

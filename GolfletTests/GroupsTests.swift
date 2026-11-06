@@ -8,7 +8,7 @@ final class GroupsTests: XCTestCase {
         MockAPIClient.resetGroups()
     }
 
-    func testHubUsesLiveListsAndASingleExampleFallback() {
+    func testHubUsesLiveListsAndNeverShowsExamples() {
         let live = GroupsHubContent.resolve(groupCount: 1, teeTimeCount: 2)
         XCTAssertTrue(live.usesLiveGroups)
         XCTAssertFalse(live.showsExampleGroups)
@@ -16,11 +16,10 @@ final class GroupsTests: XCTestCase {
         XCTAssertFalse(live.showsExampleTeeTimes)
 
         let empty = GroupsHubContent.resolve(groupCount: 0, teeTimeCount: 0)
-        XCTAssertTrue(empty.showsExampleGroups)
-        XCTAssertTrue(empty.showsExampleTeeTimes)
+        XCTAssertFalse(empty.showsExampleGroups)
+        XCTAssertFalse(empty.showsExampleTeeTimes)
         XCTAssertFalse(empty.usesLiveGroups)
-        XCTAssertFalse(empty.usesLiveGroups && empty.showsExampleGroups)
-        XCTAssertFalse(empty.usesLiveTeeTimes && empty.showsExampleTeeTimes)
+        XCTAssertFalse(empty.usesLiveTeeTimes)
     }
 
     func testInviteUniversalAndCustomScheme() {

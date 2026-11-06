@@ -97,7 +97,7 @@ struct AgregarProfesorSheet: View {
                     }
 
                     GField(label: "Nombre o matrícula") {
-                        TextField("Empezá a escribir, por ejemplo Manu", text: $query)
+                        TextField("Nombre o matrícula", text: $query)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
                             .accessibilityIdentifier("profesor-search")
