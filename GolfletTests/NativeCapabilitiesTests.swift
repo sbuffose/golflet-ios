@@ -47,16 +47,65 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertEqual(state.strokes, 1)
         XCTAssertEqual(state.toPar, 1 - 5)
         XCTAssertNotNil(state.centerYd)
+        XCTAssertEqual(state.strokeIndex, 9)
         XCTAssertEqual(state.holeLine, "Hoyo 1 · Par 5")
+        XCTAssertNil(state.windLine)
         let far = LiveRoundState.make(
             course: course,
             hole: 1,
             here: GPSCoord(lat: -34.6037, lng: -58.3816),
             shots: shots
         )
-        XCTAssertNil(far.centerYd)
-        XCTAssertNil(far.frontYd)
-        XCTAssertNil(far.backYd)
+        XCTAssertGreaterThan(far.centerYd ?? 0, 1000)
+        let blank = LiveRoundState.make(
+            course: GPSCourseDetail(
+                courseId: course.courseId,
+                clubCode: course.clubCode,
+                clubName: course.clubName,
+                course: course.course,
+                courseKey: course.courseKey,
+                par: course.par,
+                holeCount: 1,
+                holes: [GPSHole(number: 1, par: 4, hcp: nil, yards: [:], green: GPSGreen(front: nil, center: nil, back: nil), tee: tee)],
+                warnings: [],
+                attribution: nil
+            ),
+            hole: 1,
+            here: tee,
+            shots: shots
+        )
+        XCTAssertNil(blank.frontYd)
+        XCTAssertNil(blank.centerYd)
+        XCTAssertNil(blank.backYd)
+    }
+
+    func testPracticeWindFollowsPhoneHeading() {
+        let tee = GPSCoord(lat: -34.485427, lng: -58.532351)
+        let course = GPSCourseDetail(
+            courseId: "c",
+            clubCode: "118",
+            clubName: "Jockey",
+            course: "Azul",
+            courseKey: "1:Azul",
+            par: 72,
+            holeCount: 1,
+            holes: [GPSHole(number: 1, par: 4, hcp: 7, yards: [:], green: GPSGreen(front: tee, center: tee, back: tee), tee: tee)],
+            warnings: [],
+            attribution: nil
+        )
+        let quiet = LiveRoundState.make(course: course, hole: 1, here: tee, shots: [], practice: false, headingDeg: 0, windKmh: 18, windFromDeg: 0)
+        XCTAssertNil(quiet.windLine)
+        let facing = LiveRoundState.make(course: course, hole: 1, here: tee, shots: [], practice: true, headingDeg: 0, windKmh: 18, windFromDeg: 0)
+        XCTAssertEqual(facing.windLine, "Viento 18 km/h · de frente")
+        XCTAssertEqual(facing.strokeIndex, 7)
+        let fromRight = WindFacing.relative(windFromDeg: 90, headingDeg: 0)
+        XCTAssertEqual(fromRight, "de la derecha")
+        XCTAssertEqual(MatchCard.line(honor: "Vos", status: "1 arriba"), "Golpe: Vos · 1 arriba")
+        XCTAssertNil(MatchCard.line(honor: "  ", status: nil))
+    }
+
+    func testRecapRecordingAllowsTenMinutes() {
+        XCTAssertEqual(RecapRecorder.maxDuration, 10 * 60)
     }
 
     func testWidgetSnapshotHidesMissingNextRound() {

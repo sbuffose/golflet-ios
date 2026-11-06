@@ -46,9 +46,64 @@ struct GolfletGroup: Identifiable, Hashable, Sendable {
     var members: [GroupMember]
     var myRole: GroupRole
     var invite: GroupInviteLink?
+    /// Total from the API (`member_count` or a numeric `members`). The member list can be shorter.
+    var reportedMemberCount: Int? = nil
+    var matchRecords: [MatchFormatRecord] = []
+    var recentMatches: [PlayedMatch] = []
 
     var isAdmin: Bool { myRole == .admin }
-    var memberCount: Int { members.count }
+    var memberCount: Int { reportedMemberCount ?? members.count }
+}
+
+struct MatchFormatRecord: Identifiable, Hashable, Sendable {
+    var format: String
+    var wins: Int
+    var losses: Int
+    var halves: Int?
+    var id: String { format }
+
+    var title: String {
+        let known = PaceModality(rawValue: format.lowercased())
+        return known?.label ?? format
+    }
+
+    var line: String {
+        if let halves {
+            return "\(wins)-\(losses)-\(halves)"
+        }
+        return "\(wins)-\(losses)"
+    }
+
+    var detail: String {
+        if let halves {
+            return "\(wins) ganados · \(losses) perdidos · \(halves) empates"
+        }
+        return "\(wins) ganados · \(losses) perdidos"
+    }
+}
+
+struct PlayedMatch: Identifiable, Hashable, Sendable {
+    var id: String
+    var format: String
+    var result: String
+    var opponent: String
+    var summary: String?
+    var dateLabel: String
+    var photoURL: String?
+    var allowsPhoto: Bool
+
+    var formatTitle: String {
+        PaceModality(rawValue: format.lowercased())?.label ?? format
+    }
+
+    var resultTitle: String {
+        switch result.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
+        case "W", "G", "WIN", "GANADO": return "Ganado"
+        case "L", "P", "LOSS", "PERDIDO": return "Perdido"
+        case "H", "E", "HALVE", "HALVED", "EMPATE": return "Empate"
+        default: return result
+        }
+    }
 }
 
 struct GroupInvitePreview: Identifiable, Hashable, Sendable {

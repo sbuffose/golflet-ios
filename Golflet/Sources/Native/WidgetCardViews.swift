@@ -66,42 +66,65 @@ struct LiveIslandViews: View {
     var state: RoundActivityAttributes.ContentState
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(state.holeLine)
-                    .font(GType.headline)
+                    .font(GType.section)
                     .foregroundStyle(Color(hex: BrandHex.white))
                     .accessibilityIdentifier("live-hole")
                 Text(state.scoreLine)
-                    .font(GType.label)
+                    .font(GType.headline)
                     .tabular()
                     .foregroundStyle(Color(hex: BrandHex.white))
                     .accessibilityIdentifier("live-score")
+                if let hcp = state.strokeIndex {
+                    Text("Hcp \(hcp)")
+                        .font(GType.label)
+                        .foregroundStyle(Color(hex: BrandHex.white))
+                        .accessibilityIdentifier("live-hcp")
+                }
+                if let wind = state.windLine {
+                    Text(wind)
+                        .font(GType.label)
+                        .foregroundStyle(Color(hex: BrandHex.white))
+                        .accessibilityIdentifier("live-wind")
+                }
+                if let match = state.matchLine {
+                    Text(match)
+                        .font(GType.label)
+                        .foregroundStyle(Color(hex: BrandHex.white))
+                        .accessibilityIdentifier("live-match")
+                }
             }
-            Spacer()
-            HStack(spacing: 10) {
-                liveYards("F", state.frontYd, "live-front")
-                liveYards("C", state.centerYd, "live-center")
-                liveYards("B", state.backYd, "live-back")
+            Spacer(minLength: 8)
+            HStack(spacing: 12) {
+                liveYards("Ent", "entrada", state.frontYd, "live-front")
+                liveYards("Cen", "centro", state.centerYd, "live-center")
+                liveYards("Fon", "fondo", state.backYd, "live-back")
             }
         }
-        .padding(12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .background(Color(hex: BrandHex.navy))
         .accessibilityIdentifier("live-island")
     }
 
-    private func liveYards(_ label: String, _ value: Int?, _ id: String) -> some View {
+    private func liveYards(_ label: String, _ caption: String, _ value: Int?, _ id: String) -> some View {
         VStack(spacing: 2) {
             Text(label)
                 .font(GType.overline)
                 .foregroundStyle(Color.white.opacity(0.72))
             Text(value.map(String.init) ?? "—")
-                .font(GType.headline)
+                .font(GType.section)
                 .tabular()
                 .foregroundStyle(Color(hex: BrandHex.white))
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
                 .accessibilityIdentifier(id)
+            Text(caption)
+                .font(GType.label)
+                .foregroundStyle(Color.white.opacity(0.72))
         }
+        .frame(minWidth: 52)
     }
 }

@@ -161,6 +161,37 @@ extension LiveGolfletAPI {
         }
     }
 
+    func uploadMatchPhoto(groupID: String, matchID: String, jpeg: Data) async throws -> String {
+        guard let url = URL(string: GroupsAPIPaths.matchPhoto(groupID, matchID: matchID), relativeTo: baseURL) else {
+            throw GolfletError.invalidClub
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 45
+        guard let token = KeychainStore.loadToken() else { throw GolfletError.notAuthenticated }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = jpeg
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 45
+        config.timeoutIntervalForResource = 45
+        let (data, response) = try await URLSession(configuration: config).data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        if status == 401 {
+            KeychainStore.deleteToken()
+            throw GolfletError.notAuthenticated
+        }
+        if status >= 400 {
+            throw GolfletError.server(LivePayloadMapper.authMessage(from: json, fallback: "No se pudo guardar la foto."))
+        }
+        if let photo = json["photo_url"] as? String ?? json["url"] as? String, !photo.isEmpty {
+            return photo
+        }
+        return GroupsAPIPaths.matchPhoto(groupID, matchID: matchID)
+    }
+
     func memberRound(groupID: String, memberID: String, roundID: String) async throws -> SharedScorecard {
         do {
             let json = try await request("GET", GroupsAPIPaths.memberRound(groupID, memberID: memberID, roundID: roundID))

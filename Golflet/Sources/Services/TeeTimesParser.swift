@@ -56,13 +56,22 @@ enum TeeTimesParser {
             string(item["reservation_id"]),
             "\(club)-\(Int(startsAt.timeIntervalSince1970))"
         )
+        let weather = item["weather"] as? [String: Any] ?? item["conditions"] as? [String: Any]
+        let forecastText = optionalString(item["forecast"] ?? item["pronostico"])
+            ?? (item["weather"] is String ? optionalString(item["weather"]) : nil)
+            ?? (item["conditions"] is String ? optionalString(item["conditions"]) : nil)
         return TeeTime(
             id: id,
             startsAt: startsAt,
             clubName: club.isEmpty ? "Club" : club,
             clubCode: firstNonEmpty(string(item["club_code"]), string(item["clubCode"]), string((item["club"] as? [String: Any])?["code"])),
             course: course,
-            companions: companions(from: item["companions"] ?? item["partners"] ?? item["players"] ?? item["playing_partners"])
+            companions: companions(from: item["companions"] ?? item["partners"] ?? item["players"] ?? item["playing_partners"]),
+            forecast: forecastText,
+            windKmh: JSONFlex.int(from: weather?["wind_kmh"] ?? weather?["viento_kmh"] ?? item["wind_kmh"] ?? item["viento_kmh"]),
+            windFrom: optionalString(weather?["wind_from"] ?? weather?["direction"] ?? item["wind_from"] ?? item["viento_desde"]),
+            tempC: JSONFlex.int(from: weather?["temp_c"] ?? weather?["temperature_c"] ?? item["temp_c"] ?? item["temperature_c"]),
+            rainMm: JSONFlex.double(from: weather?["rain_mm"] ?? weather?["lluvia_mm"] ?? item["rain_mm"] ?? item["lluvia_mm"])
         )
     }
 

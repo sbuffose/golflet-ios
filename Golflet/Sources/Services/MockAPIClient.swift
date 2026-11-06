@@ -591,7 +591,11 @@ struct MockAPIClient: GolfletAPI {
                 bogeys: JSONFlex.int(from: counts["bogeys"]) ?? 0,
                 doubles: JSONFlex.int(from: counts["double_bogeys"]) ?? 0,
                 triples: JSONFlex.int(from: counts["triple_bogeys"]) ?? 0,
-                worse: JSONFlex.int(from: counts["worse"]) ?? 0
+                worse: JSONFlex.int(from: counts["worse"]) ?? 0,
+                eagles: ScoreCounts.resolvedEagles(
+                    reported: JSONFlex.int(from: counts["eagles"] ?? counts["eagle_or_better"]),
+                    holes: holes
+                )
             ),
             holes: holes,
             holesPlayed: JSONFlex.int(from: item["holes_played"]) ?? holes.count,

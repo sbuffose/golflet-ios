@@ -4,6 +4,9 @@ struct CourseView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @State private var holesWidth: CGFloat = 353
+    @State private var strategy: CourseStrategy?
+    @State private var handbookFile: HandbookFile?
+    @State private var handbookNote: String?
 
     var body: some View {
         GScreen(id: "screen-cancha") {
@@ -13,6 +16,7 @@ struct CourseView: View {
                     coursePills
                     hero
                     strategyCard
+                    handbookCard
                     tees
                     holes
                 }
@@ -22,7 +26,40 @@ struct CourseView: View {
             }
         }
         .accessibilityIdentifier("screen-cancha")
+        .metricDestinations()
         .safeAreaInset(edge: .top) { MetricBackBar() }
+        .task(id: model.selectedCourseName) {
+            let name = model.selectedCourseName
+            strategy = try? await model.api.courseStrategy(courseKey: CourseIdentity.key(for: name), courseId: nil)
+        }
+        .sheet(item: $handbookFile) { file in
+            NavigationStack {
+                VStack(spacing: 16) {
+                    Text(file.title)
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    ShareLink(item: file.url) {
+                        Text("Compartir PDF")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .accessibilityIdentifier("handbook-share")
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(p.bg)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cerrar") { handbookFile = nil }
+                            .accessibilityIdentifier("handbook-close")
+                    }
+                }
+            }
+        }
     }
 
     private var header: some View {
@@ -216,7 +253,12 @@ struct CourseView: View {
     }
 
     private var strategyCard: some View {
-        NavigationLink(value: MetricRoute.strategy(courseKey: CourseIdentity.key(for: model.selectedCourseName), courseName: model.selectedCourseName)) {
+        NavigationLink {
+            StrategyCourseView(
+                courseKey: CourseIdentity.key(for: model.selectedCourseName),
+                courseName: model.selectedCourseName
+            )
+        } label: {
             GCard(radius: 22, padding: 16) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
@@ -235,6 +277,72 @@ struct CourseView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("course-strategy")
+    }
+
+    private var bookedSlot: TeeTime? {
+        let name = model.selectedCourseName
+        return model.upcomingTeeTimes.first { $0.course.caseInsensitiveCompare(name) == .orderedSame } ?? model.nextTeeTime
+    }
+
+    private var handbookCard: some View {
+        let level = StrategyLevel.from(handicap: model.profile.currentHandicap)
+        return GCard(radius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                GOverline(text: "Libreta")
+                Text("Descargar cómo jugarla")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Text("Un PDF con el plan publicado. El de viento usa solo el del horario reservado.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                Button("Descargar sin viento") {
+                    shareHandbook(includeWind: false, level: level)
+                }
+                .buttonStyle(.plain)
+                .font(GType.headline)
+                .foregroundStyle(p.onPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityIdentifier("handbook-download")
+                Button("Descargar con viento") {
+                    shareHandbook(includeWind: true, level: level)
+                }
+                .buttonStyle(.plain)
+                .font(GType.headline)
+                .foregroundStyle(p.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(p.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityIdentifier("handbook-download-wind")
+                if let handbookNote {
+                    Text(handbookNote)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("handbook-ready")
+                }
+            }
+        }
+    }
+
+    private func shareHandbook(includeWind: Bool, level: StrategyLevel) {
+        let document = CourseHandbook.make(
+            courseName: model.selectedCourseName,
+            strategy: strategy,
+            booking: bookedSlot,
+            includeWind: includeWind,
+            level: level
+        )
+        #if canImport(UIKit)
+        if let url = try? CourseHandbookPDF.write(document) {
+            handbookNote = document.title
+            handbookFile = HandbookFile(url: url, title: document.title)
+            return
+        }
+        #endif
+        handbookNote = document.plainText
     }
 
     private var tees: some View {
@@ -274,7 +382,7 @@ struct CourseView: View {
             .onPreferenceChange(CourseHolesWidthKey.self) { width in
                 if width > 0 { holesWidth = width }
             }
-            Text("En verde oscuro, tus tres hoyos más difíciles.")
+            Text("En azul marino, tus tres hoyos más difíciles.")
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
                 .fixedSize(horizontal: false, vertical: true)

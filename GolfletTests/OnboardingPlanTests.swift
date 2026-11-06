@@ -2,6 +2,25 @@ import XCTest
 @testable import Golflet
 
 final class OnboardingPlanTests: XCTestCase {
+    func testSyncWithoutASnapshotStaysOnMatricula() {
+        XCTAssertEqual(
+            OnboardingPlan.routeAfterSync(signedIn: true, hasSnapshot: false, needsClub: false, authFailed: false),
+            .matricula
+        )
+        XCTAssertEqual(
+            OnboardingPlan.routeAfterSync(signedIn: true, hasSnapshot: true, needsClub: true, authFailed: false),
+            .matricula
+        )
+        XCTAssertEqual(
+            OnboardingPlan.routeAfterSync(signedIn: false, hasSnapshot: false, needsClub: false, authFailed: true),
+            .matricula
+        )
+        XCTAssertEqual(
+            OnboardingPlan.routeAfterSync(signedIn: true, hasSnapshot: true, needsClub: false, authFailed: false),
+            .reveal
+        )
+    }
+
     func testFullFichaOnlyAsksWhatMatriculaCannotKnow() {
         let facts = OnboardingFacts(
             name: "Ana Pérez",
@@ -22,6 +41,8 @@ final class OnboardingPlanTests: XCTestCase {
         XCTAssertTrue(spoken.contains("Jockey Club Buenos Aires"))
         XCTAssertTrue(spoken.contains(FormatAR.one(3.1)))
         XCTAssertTrue(spoken.contains("matrícula"))
+        XCTAssertTrue(spoken.contains("Solo me faltan unos datos más"))
+        XCTAssertFalse(spoken.contains("Te pregunto solo lo que la matrícula no sabe."))
         XCTAssertFalse(spoken.contains("¿Cuánto"))
         XCTAssertFalse(spoken.contains("¿Cada cuánto"))
         XCTAssertFalse(spoken.contains("años tenés"))

@@ -49,44 +49,12 @@ struct RobertoGuide: View {
     var small = false
     var thinking = false
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color(hex: BrandHex.navyRaised).opacity(0.16))
-                .frame(width: small ? 88 : 140, height: small ? 88 : 140)
-            Circle()
-                .stroke(Color(hex: BrandHex.navy), style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
-                .frame(width: small ? 72 : 112, height: small ? 72 : 112)
-                .rotationEffect(.degrees(thinking ? 180 : 0))
-            RobertoGlyph()
-                .frame(width: small ? 56 : 88, height: small ? 62 : 96)
-            Text("roberto-guide")
-                .font(.system(size: 1))
-                .foregroundStyle(.clear)
-                .frame(width: 1, height: 1)
-                .accessibilityIdentifier("roberto-guide")
-        }
-        .accessibilityLabel("Roberto, tu caddie en Golflet")
-    }
-}
-
-struct RobertoGlyph: View {
-    var body: some View {
-        Canvas { ctx, size in
-            let s = min(size.width, size.height) / 100
-            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * s, y: y * s) }
-            var cap = Path()
-            cap.move(to: p(18, 36)); cap.addQuadCurve(to: p(82, 36), control: p(50, 8))
-            cap.addLine(to: p(78, 42)); cap.addQuadCurve(to: p(22, 42), control: p(50, 24))
-            cap.closeSubpath()
-            ctx.fill(cap, with: .color(Color(hex: BrandHex.navy)))
-            ctx.fill(Path(ellipseIn: CGRect(x: 17 * s, y: 25 * s, width: 66 * s, height: 66 * s)), with: .color(Color(hex: 0xD9E0EA)))
-            ctx.stroke(Path(ellipseIn: CGRect(x: 17 * s, y: 25 * s, width: 66 * s, height: 66 * s)), with: .color(Color(hex: BrandHex.navy)), lineWidth: 3)
-            ctx.fill(Path(ellipseIn: CGRect(x: 37 * s, y: 52 * s, width: 8 * s, height: 11 * s)), with: .color(Color(hex: BrandHex.navy)))
-            ctx.fill(Path(ellipseIn: CGRect(x: 55 * s, y: 52 * s, width: 8 * s, height: 11 * s)), with: .color(Color(hex: BrandHex.navy)))
-            var smile = Path()
-            smile.move(to: p(42, 70)); smile.addQuadCurve(to: p(58, 70), control: p(50, 77))
-            ctx.stroke(smile, with: .color(Color(hex: BrandHex.navy)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-        }
+        Image("OnboardingCaddie")
+            .resizable()
+            .scaledToFit()
+            .frame(height: small ? 132 : 200)
+            .accessibilityIdentifier("roberto-guide")
+            .accessibilityLabel(thinking ? "Roberto está pensando" : "Roberto, tu caddie en Golflet")
     }
 }
 

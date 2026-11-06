@@ -143,6 +143,19 @@ struct HomeView: View {
                     .accessibilityLabel("Actualizar")
                     .accessibilityIdentifier("home-sync-\(club.accountId)")
                 }
+                if let major = ProMajor.current(on: Date()) {
+                    Link(destination: major.url) {
+                        Text(major.short)
+                            .font(GFont.ui(11, weight: .bold))
+                            .foregroundStyle(Color(hex: major.foreground))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: major.background))
+                            .clipShape(Capsule())
+                    }
+                    .accessibilityLabel(major.name)
+                    .accessibilityIdentifier("major-badge")
+                }
                 ZStack(alignment: .topTrailing) {
                     Button { model.openAvatar() } label: {
                         AvatarCircle(initials: model.profile.initials)
@@ -380,29 +393,45 @@ struct HomeView: View {
     }
 
     private func teeTimeRow(_ booking: TeeTime) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(booking.chipWhen)
-                .font(GType.headline)
-                .tabular()
-                .foregroundStyle(p.ink)
-            Text(booking.clubName)
-                .font(GType.body)
-                .foregroundStyle(p.ink)
-            if !booking.course.isEmpty {
-                Text(booking.course)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
+        ZStack(alignment: .topLeading) {
+            NavigationLink {
+                TeeTimePrepView(booking: booking)
+            } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(booking.chipWhen)
+                            .font(GType.headline)
+                            .tabular()
+                            .foregroundStyle(p.ink)
+                        Text(booking.clubName)
+                            .font(GType.body)
+                            .foregroundStyle(p.ink)
+                        if !booking.course.isEmpty {
+                            Text(booking.course)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                        if let partners = booking.companionsLine {
+                            Text(partners)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(p.ink3)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-tee-row-\(booking.id)")
             if let partners = booking.companionsLine {
-                Text(partners)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
                 GProbe(id: "home-tee-partners-\(booking.id)", label: partners)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("home-tee-row-\(booking.id)")
     }
 
     private func revealPartners(_ proxy: ScrollViewProxy) {
@@ -478,19 +507,43 @@ struct HomeView: View {
 
     private var competitiveLead: some View {
         VStack(alignment: .leading, spacing: 12) {
-            NavigationLink { MatchLiveView() } label: {
-                ProtoCard {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Próximo partido").font(GType.overline).foregroundStyle(p.ink3)
-                            DemoPill(text: "Fourball · 85%")
+            if let round = model.activeLiveRound, round.endedAt == nil {
+                Button { model.showsPlay = true } label: {
+                    ProtoCard {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(PaceModality.parse(round.modality).label)
+                                .font(GType.overline)
+                                .foregroundStyle(p.ink3)
+                            Text(round.course?.isEmpty == false ? round.course! : "Ronda en curso")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text("Hoyo \(round.currentHole)")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
                         }
-                        Text("Vos y Tomi vs Fede y Lucas").font(GType.headline).foregroundStyle(p.ink)
-                        Text("Sáb 7-nov · 9:20 · Cancha Azul").font(GType.label).foregroundStyle(p.ink3)
                     }
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home-comp-match")
+            } else {
+                MatchStartPrompt()
             }
-            .accessibilityIdentifier("home-comp-match")
+            if let booking = model.nextTeeTime {
+                NavigationLink {
+                    TeeTimePrepView(booking: booking)
+                } label: {
+                    ProtoCard {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Próximo tee time").font(GType.overline).foregroundStyle(p.ink3)
+                            Text(booking.chipWhen).font(GType.headline).foregroundStyle(p.ink)
+                            Text(booking.course.isEmpty ? booking.clubName : "\(booking.clubName) · \(booking.course)")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink3)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("home-comp-tee")
+            }
         }
     }
 
@@ -507,8 +560,6 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Grupos").font(GType.overline).foregroundStyle(p.ink3)
                         Text("Quién juega cuándo y lo último de tus amigos").font(GType.headline)
-                        Text("7 amigos juegan esta semana").font(GType.label).foregroundStyle(p.ink3)
-                        DemoPill()
                     }
                 }
             }
@@ -541,7 +592,7 @@ struct HomeView: View {
                     }
                     .accessibilityIdentifier("home-more-sg")
                     NavigationLink { BanderaHoyView() } label: {
-                        ProtoRow(title: "Bandera de hoy", subtitle: "Posiciones de ejemplo")
+                        ProtoRow(title: "Bandera de hoy", subtitle: "Si el club las cargó")
                     }
                     NavigationLink { CierreView() } label: {
                         ProtoRow(title: "Cierre de vuelta", subtitle: "Sáb 31-oct · 84")
@@ -1340,6 +1391,20 @@ struct HomeGroupsSheet: View {
                         GOverline(text: "Tus grupos")
                         GTitle(text: "Grupos", size: 34)
                     }
+                    Button {
+                        dismiss()
+                        model.presentCreateGroup()
+                    } label: {
+                        Text("Crear grupo")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(p.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home-groups-create-cta")
                     ForEach(model.groups) { group in
                         Button {
                             dismiss()

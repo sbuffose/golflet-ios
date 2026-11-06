@@ -549,6 +549,14 @@ struct MemberProfileView: View {
             }
         }
         cards(profile)
+        MatchHistorySection(
+            records: profile.matchRecords,
+            matches: profile.recentMatches,
+            canAttach: profile.member.isMe,
+            onPhoto: { matchID, data in
+                _ = await model.saveMatchPhoto(groupID: groupID, matchID: matchID, jpeg: data)
+            }
+        )
         let hidden = ["scores": "Rondas y scores", "handicap": "Hándicap", "score_types": "Águilas, birdies, pares y bogeys", "holes": "Promedios por par", "gir_fir": "Greens y fairways", "putting": "Putts", "rounds_detail": "Tarjetas hoyo por hoyo"]
             .compactMap { key, label in profile.shares[key] == false ? label : nil }
         Text(hidden.isEmpty
