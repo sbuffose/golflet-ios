@@ -591,7 +591,7 @@ private struct OnboardingSyncWait: View {
     var body: some View {
         let lines = OnboardingSyncCopy.lines(progress: progress, elapsedStages: stage)
         VStack(alignment: .leading, spacing: 18) {
-            RobertoGuide(thinking: true, small: true)
+            RobertoGuide(small: true, thinking: true)
                 .frame(maxWidth: .infinity)
             SyncStatusLines(lines: lines, reduceMotion: reduceMotion)
             Spacer(minLength: 0)
