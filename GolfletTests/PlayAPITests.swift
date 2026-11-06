@@ -320,6 +320,14 @@ final class PlayAPITests: XCTestCase {
         )
         XCTAssertEqual(emptyRemote.holes.count, 18)
 
+        let tee = GPSCoord(lat: 0, lng: 0)
+        let north = GPSCoord(lat: 0.01, lng: 0)
+        let heading = HoleGeoMath.heading(from: tee, to: north)
+        XCTAssertEqual(heading, 0, accuracy: 1)
+        XCTAssertNil(HoleGeoMath.lie(course: GPSCourseDetail(courseId: "209-mdp-nueva", clubCode: "209", clubName: "MdP", course: "Nueva", courseKey: "7:Cancha Nueva", par: 72, holeCount: 18, holes: [], warnings: [], attribution: nil), hole: 1, at: tee))
+        let azulLie = HoleGeoMath.azul(course: GPSCourseDetail(courseId: "118-jockey-azul", clubCode: "118", clubName: "Jockey", course: "Azul", courseKey: "1:Azul", par: 72, holeCount: 18, holes: [], warnings: [], attribution: nil), hole: 7)
+        XCTAssertNotNil(azulLie)
+
         XCTAssertEqual(
             RecapSpeech.pickLocale(from: [
                 Locale(identifier: "en-US"),

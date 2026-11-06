@@ -67,7 +67,7 @@ struct PlayCourseView: View {
             VStack(alignment: .leading, spacing: 6) {
                 GOverline(text: "Ronda con GPS")
                 GTitle(text: "Jugar", size: 34)
-                Text("Elegí la cancha. Después caminás, ves la distancia y tocás Ya pegué.")
+                Text("Elegí la cancha. Después marcás cada golpe en el mapa.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
             }
@@ -221,7 +221,7 @@ struct PlayCourseView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         GOverline(text: "Ronda con GPS")
                         GTitle(text: CourseDisplay.courseTitle(summary), size: 34)
-                        Text("Elegí cuántos juegan y la modalidad. Después caminás, ves la distancia y tocás Ya pegué.")
+                        Text("Elegí cuántos juegan y la modalidad. Después marcás cada golpe en el mapa.")
                             .font(GType.body)
                             .foregroundStyle(p.ink2)
                     }
