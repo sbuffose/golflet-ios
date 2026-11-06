@@ -14,7 +14,8 @@ enum WidgetTimelineAPI {
     static let snapshotEndpoint = URL(string: "https://golflet.vercel.app/api/widget/snapshot")!
 
     static func fetch() async -> WidgetSnapshot {
-        if let shared = sharedSnapshot(), !shared.isPlaceholder {
+        let shared = sharedSnapshot()
+        if let shared, !shared.isPlaceholder {
             return shared
         }
         if let remote = await fetchDeviceSnapshot(), !remote.isPlaceholder {
