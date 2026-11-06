@@ -274,8 +274,14 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
 
         if first(app, "home-recurring").waitForExistence(timeout: 4) {
-            first(app, "home-recurring").tap()
-            XCTAssertTrue(waitFor(app, "screen-recurring", timeout: 6))
+            let card = first(app, "home-recurring")
+            if !card.isHittable { app.swipeUp() }
+            if card.isHittable {
+                card.tap()
+            } else {
+                card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+            }
+            XCTAssertTrue(waitFor(app, "screen-recurring", timeout: 6), "No abrió errores que se repiten")
             saveShot("18_recurring")
             dismissIfPresent(app, "metric-back")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
