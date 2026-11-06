@@ -34,7 +34,7 @@ struct HomeView: View {
                         else if model.homeMode == .soc { socialLead }
                         handicapCard
                         if model.homeMode == .mej, !model.liveShots.isEmpty {
-                            SGCard(shots: model.liveShots, example: false)
+                            SGCard(shots: model.liveShots)
                         }
                         lastRound
                         teeTimesCard
