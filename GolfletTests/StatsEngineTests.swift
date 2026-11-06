@@ -172,6 +172,17 @@ final class StatsEngineTests: XCTestCase {
         XCTAssertFalse(profile.displayName.localizedCaseInsensitiveContains("Sebastián"))
     }
 
+    func testHandicapChangesOmitUnchangedWeeks() {
+        let flat = (0..<6).map { offset in
+            TrendPoint(date: date("2026-09-23").addingTimeInterval(Double(offset) * 7 * 24 * 3600), handicap: 3.1, course: "Mar del Plata Golf Club")
+        }
+        let jump = flat + [TrendPoint(date: date("2026-11-04"), handicap: 3.7, course: "Mar del Plata Golf Club")]
+        let changes = StatsEngine.handicapChanges(jump)
+        XCTAssertEqual(changes.map(\.handicap), [3.1, 3.7])
+        XCTAssertEqual(changes.map(\.date), [flat.last?.date, date("2026-11-04")])
+        XCTAssertEqual(StatsEngine.handicapChanges(flat).map(\.date), [flat.last?.date])
+    }
+
     private func sampleRound(
         id: String,
         date iso: String,

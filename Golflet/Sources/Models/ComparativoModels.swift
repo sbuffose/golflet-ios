@@ -183,6 +183,8 @@ struct GroupMemberProfile: Hashable, Sendable {
     var year: ProfileYear?
     var hiHistory: [HIPoint]
     var rounds: [ProfileRound]?
+    var matchRecords: [MatchFormatRecord] = []
+    var recentMatches: [PlayedMatch] = []
 }
 
 struct ProfileYear: Hashable, Sendable {

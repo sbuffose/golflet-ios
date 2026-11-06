@@ -217,7 +217,7 @@ struct ClubStatsView: View {
         HStack(spacing: 8) {
             rate("Greens", club?.greensHit)
             rate("Fairways", club?.fairwaysHit)
-            rate("Feo", club?.mishit)
+            rate("Rough", club?.mishit)
         }
         .accessibilityIdentifier("club-rates")
     }

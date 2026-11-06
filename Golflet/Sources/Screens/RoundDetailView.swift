@@ -365,8 +365,16 @@ struct RoundDetailView: View {
 
     private var caption: String {
         let b = round.counts
+        let eagles = ScoreCounts.resolvedEagles(reported: b.eagles, holes: round.holes)
         let dif = differential.map { "Diferencial estimado por Golflet: \(FormatAR.one($0))." } ?? ""
-        return "\(b.birdies) birdies · \(b.pars) pares · \(b.bogeys) bogeys · \(b.doubles) dobles. \(dif)"
+        return ScorecardSummary.line(
+            eagles: eagles,
+            birdies: b.birdies,
+            pars: b.pars,
+            bogeys: b.bogeys,
+            doubles: b.doubles,
+            differentialNote: dif
+        )
     }
 
     private func persistNotes() {

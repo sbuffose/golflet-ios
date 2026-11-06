@@ -67,6 +67,7 @@ protocol GolfletAPI: Sendable {
     func groupPeriod(groupID: String, kind: ComparativoKind, off: Int) async throws -> ComparativoData
     func memberProfile(groupID: String, memberID: String) async throws -> GroupMemberProfile
     func memberRound(groupID: String, memberID: String, roundID: String) async throws -> SharedScorecard
+    func uploadMatchPhoto(groupID: String, matchID: String, jpeg: Data) async throws -> String
 
     func notifications() async throws -> NotificationsInbox
     func unreadNotifications() async throws -> UnreadNotifications

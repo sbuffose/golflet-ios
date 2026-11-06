@@ -105,4 +105,44 @@ final class TeeTimesParserTests: XCTestCase {
         XCTAssertEqual(snap.teeTimes.count, 1)
         XCTAssertEqual(snap.teeTimes.first?.companionsLine, "con Juan, Pedro")
     }
+
+    func testKeepsAForecastWhenTheBookingSendsOne() {
+        let bookings = TeeTimesParser.list(from: [
+            "tee_times": [[
+                "id": "tt-wx",
+                "starts_at": "2026-11-07T12:20:00-03:00",
+                "club_name": "Mar del Plata Golf Club",
+                "course": "Cancha Vieja",
+                "forecast": "Viento 18 km/h del sudeste"
+            ]]
+        ])
+        XCTAssertEqual(bookings.first?.forecast, "Viento 18 km/h del sudeste")
+        XCTAssertEqual(TeeTimePrep.forecastLine(bookings.first?.forecast), "Viento 18 km/h del sudeste")
+        XCTAssertEqual(TeeTimePrep.forecastLine(nil), "Este horario no trae pronóstico.")
+        XCTAssertEqual(TeeTimePrep.canchaLine(course: "Cancha Vieja"), "Cancha Vieja")
+        XCTAssertEqual(TeeTimePrep.canchaLine(course: "  "), "La reserva no trae el nombre de la cancha.")
+    }
+
+    func testPrepStrategyUsesTheCourseTextAndNothingInvented() {
+        let strategy = CourseStrategy(
+            courseId: "209-mdp-vieja",
+            courseKey: "7:Cancha Vieja",
+            overview: "Salí con hierro en los hoyos cortos.",
+            overviewPublishedAt: nil,
+            publishedHoles: [1],
+            holes: []
+        )
+        XCTAssertEqual(
+            TeeTimePrep.strategyLine(course: "Cancha Vieja", strategy: strategy),
+            "Salí con hierro en los hoyos cortos."
+        )
+        XCTAssertEqual(
+            TeeTimePrep.strategyLine(course: "Cancha Vieja", strategy: nil),
+            "Todavía no hay estrategia cargada para esta cancha."
+        )
+        XCTAssertEqual(
+            TeeTimePrep.strategyLine(course: "", strategy: strategy),
+            "Sin el nombre de la cancha no hay estrategia para preparar."
+        )
+    }
 }

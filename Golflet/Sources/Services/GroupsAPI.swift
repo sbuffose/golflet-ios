@@ -26,8 +26,56 @@ enum GroupsAPIPaths {
         let encoded = roundID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? roundID
         return "/api/groups/\(groupID)/members/\(memberID)/rounds/\(encoded)"
     }
+    static func matchPhoto(_ groupID: String, matchID: String) -> String {
+        let encoded = matchID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? matchID
+        return "/api/groups/\(groupID)/matches/\(encoded)/photo"
+    }
     static func join(_ token: String) -> String {
         "/api/groups/join/\(token)"
+    }
+}
+
+enum MatchHistory {
+    static func read(from json: [String: Any]) -> (records: [MatchFormatRecord], recent: [PlayedMatch]) {
+        let recordsRaw = json["records"] as? [Any]
+            ?? json["formats"] as? [Any]
+            ?? json["by_format"] as? [Any]
+            ?? []
+        let recentRaw = json["recent"] as? [Any]
+            ?? json["matches"] as? [Any]
+            ?? json["partidos"] as? [Any]
+            ?? []
+        return (recordsRaw.compactMap(record(from:)), recentRaw.compactMap(played(from:)))
+    }
+
+    static func record(from raw: Any?) -> MatchFormatRecord? {
+        guard let item = raw as? [String: Any] else { return nil }
+        let format = GroupsParser.string(item["format"] ?? item["modality"] ?? item["kind"])
+        guard !format.isEmpty else { return nil }
+        guard let wins = JSONFlex.int(from: item["wins"] ?? item["w"] ?? item["won"] ?? item["ganados"]) else { return nil }
+        let losses = JSONFlex.int(from: item["losses"] ?? item["l"] ?? item["lost"] ?? item["perdidos"]) ?? 0
+        let halves = JSONFlex.int(from: item["halves"] ?? item["h"] ?? item["halved"] ?? item["empates"] ?? item["ties"])
+        return MatchFormatRecord(format: format, wins: wins, losses: losses, halves: halves)
+    }
+
+    static func played(from raw: Any?) -> PlayedMatch? {
+        guard let item = raw as? [String: Any] else { return nil }
+        let id = GroupsParser.string(item["id"] ?? item["match_id"])
+        let result = GroupsParser.string(item["result"] ?? item["outcome"])
+        guard !id.isEmpty, !result.isEmpty else { return nil }
+        let photo = GroupsParser.optionalString(item["photo_url"] ?? item["memory_photo"] ?? item["photo"])
+        let allows = JSONFlex.bool(from: item["can_photo"])
+            ?? item.keys.contains { ["photo_url", "memory_photo", "photo", "can_photo"].contains($0) }
+        return PlayedMatch(
+            id: id,
+            format: GroupsParser.string(item["format"] ?? item["modality"] ?? item["kind"]),
+            result: result,
+            opponent: GroupsParser.string(item["opponent"] ?? item["rival"] ?? item["against"]),
+            summary: GroupsParser.optionalString(item["summary"] ?? item["score"] ?? item["detail"]),
+            dateLabel: GroupsParser.string(item["date_label"] ?? item["when"] ?? item["date"]),
+            photoURL: photo,
+            allowsPhoto: allows
+        )
     }
 }
 
@@ -43,7 +91,11 @@ enum GroupsParser {
         let id = string(blob["id"] ?? blob["group_id"])
         let name = string(blob["name"] ?? blob["title"])
         guard !id.isEmpty, !name.isEmpty else { return nil }
-        let members = members(from: blob["members"] ?? blob["member_list"] ?? item["members"])
+        let memberBlob = (blob["members"] as? [String: Any]) ?? (item["members"] as? [String: Any])
+        let memberSource = blob["member_list"] ?? item["member_list"] ?? memberBlob?["list"] ?? memberBlob?["items"] ?? blob["members"] ?? item["members"]
+        let members = members(from: memberSource)
+        let reportedCount = JSONFlex.int(from: blob["member_count"] ?? blob["members_count"] ?? blob["integrantes"] ?? item["member_count"] ?? memberBlob?["count"] ?? memberBlob?["total"])
+            ?? ((memberSource as? [Any]) == nil ? JSONFlex.int(from: memberSource) : nil)
         let isAdmin = JSONFlex.bool(from: blob["is_admin"] ?? item["is_admin"]) ?? false
         let owner = member(from: blob["owner"])
             ?? members.first(where: \.isOwner)
@@ -59,14 +111,18 @@ enum GroupsParser {
         let myRole = role(blob["my_role"] ?? blob["role"])
             ?? (isAdmin ? .admin : members.first { $0.id == string(blob["me_id"]) }?.role)
             ?? .member
+        let history = MatchHistory.read(from: (blob["matches"] as? [String: Any]) ?? (blob["partidos"] as? [String: Any]) ?? blob)
         return GolfletGroup(
             id: id,
             name: name,
             photoURL: optionalString(blob["photo_url"] ?? blob["photo"] ?? blob["image_url"]),
             owner: owner,
-            members: members.isEmpty ? [owner] : members,
+            members: members,
             myRole: myRole,
-            invite: inviteLink(from: blob["invite"] ?? blob["invite_link"] ?? blob["link"])
+            invite: inviteLink(from: blob["invite"] ?? blob["invite_link"] ?? blob["link"]),
+            reportedMemberCount: reportedCount,
+            matchRecords: history.records,
+            recentMatches: history.recent
         )
     }
 
@@ -298,6 +354,11 @@ enum GroupsParser {
             rounds = (json["rounds"] as? [Any] ?? []).compactMap(profileRound(from:))
         }
         let resolvedID = string(group["id"] ?? json["group_id"])
+        let matchBlob = (json["matches"] as? [String: Any])
+            ?? (json["head_to_head"] as? [String: Any])
+            ?? (json["partidos"] as? [String: Any])
+            ?? [:]
+        let matches = MatchHistory.read(from: matchBlob.isEmpty ? json : matchBlob)
         return GroupMemberProfile(
             groupID: resolvedID.isEmpty ? groupID : resolvedID,
             groupName: string(group["name"]),
@@ -307,7 +368,9 @@ enum GroupsParser {
             shares: shares,
             year: yearBlob.map(profileYear(from:)),
             hiHistory: history,
-            rounds: rounds
+            rounds: rounds,
+            matchRecords: matches.records,
+            recentMatches: matches.recent
         )
     }
 
@@ -537,13 +600,13 @@ enum GroupsParser {
         GroupRole(rawValue: string(raw).lowercased())
     }
 
-    private static func string(_ raw: Any?) -> String {
+    fileprivate static func string(_ raw: Any?) -> String {
         if let value = raw as? String { return value }
         if let value = raw as? Int { return String(value) }
         return ""
     }
 
-    private static func optionalString(_ raw: Any?) -> String? {
+    fileprivate static func optionalString(_ raw: Any?) -> String? {
         let value = string(raw)
         return value.isEmpty ? nil : value
     }
