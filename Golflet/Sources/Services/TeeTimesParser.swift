@@ -46,7 +46,9 @@ enum TeeTimesParser {
             string(item["course"]),
             string(item["course_name"]),
             string(item["course_label"]),
-            string(item["courseName"])
+            string(item["courseName"]),
+            nestedName(item["course"]),
+            nestedName(item["cancha"])
         )
         guard let startsAt = parseStarts(item) else { return nil }
         let id = firstNonEmpty(
@@ -56,7 +58,10 @@ enum TeeTimesParser {
             string(item["reservation_id"]),
             "\(club)-\(Int(startsAt.timeIntervalSince1970))"
         )
-        let weather = item["weather"] as? [String: Any] ?? item["conditions"] as? [String: Any]
+        let weather = item["weather"] as? [String: Any]
+            ?? item["conditions"] as? [String: Any]
+            ?? item["forecast"] as? [String: Any]
+            ?? item["pronostico"] as? [String: Any]
         let forecastText = optionalString(item["forecast"] ?? item["pronostico"])
             ?? (item["weather"] is String ? optionalString(item["weather"]) : nil)
             ?? (item["conditions"] is String ? optionalString(item["conditions"]) : nil)
@@ -147,6 +152,17 @@ enum TeeTimesParser {
         iso.formatOptions = [.withInternetDateTime]
         if let d = iso.date(from: text) { return d }
         return DayStamp.parse(text)
+    }
+
+    private static func nestedName(_ raw: Any?) -> String {
+        guard let map = raw as? [String: Any] else { return "" }
+        return firstNonEmpty(
+            string(map["name"]),
+            string(map["label"]),
+            string(map["course"]),
+            string(map["course_name"]),
+            string(map["title"])
+        )
     }
 
     private static func string(_ raw: Any?) -> String {

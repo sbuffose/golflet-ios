@@ -34,7 +34,9 @@ struct RootView: View {
             }
         }
         .overlay {
-            if model.syncSession != nil {
+            // En el onboarding la espera es la de Roberto (Saltar sigue ahí).
+            // Este panel queda para un sync que arranca ya dentro de la app.
+            if model.syncSession != nil, !model.showsOnboarding {
                 SyncProgressView()
                     .golfletChrome()
                     .environment(model)
