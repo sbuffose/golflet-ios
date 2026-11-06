@@ -93,7 +93,7 @@ final class NativeCapabilitiesTests: XCTestCase {
             warnings: [],
             attribution: nil
         )
-        let quiet = LiveRoundState.make(course: course, hole: 1, here: tee, shots: [], practice: false, windKmh: 18, windFromDeg: 0, headingDeg: 0)
+        let quiet = LiveRoundState.make(course: course, hole: 1, here: tee, shots: [], practice: false, headingDeg: 0, windKmh: 18, windFromDeg: 0)
         XCTAssertNil(quiet.windLine)
         let facing = LiveRoundState.make(course: course, hole: 1, here: tee, shots: [], practice: true, headingDeg: 0, windKmh: 18, windFromDeg: 0)
         XCTAssertEqual(facing.windLine, "Viento 18 km/h · de frente")
