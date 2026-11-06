@@ -745,8 +745,12 @@ extension MockAPIClient {
     }
 
     func courseStrategy(courseKey: String?, courseId: String?) async throws -> CourseStrategy {
-        let key = courseKey ?? Self.demoCourses.first { $0.courseId == courseId }?.courseKey ?? "1:Azul"
-        if let bundled = JockeyPlans.strategy(matching: key) { return bundled }
+        let explicit = [courseKey, courseId].compactMap { $0 }.filter { !$0.isEmpty }
+        for candidate in explicit {
+            if let bundled = JockeyPlans.strategy(matching: candidate) { return bundled }
+        }
+        let key = explicit.first ?? Self.demoCourses.first { $0.courseId == courseId }?.courseKey ?? "1:Azul"
+        if explicit.isEmpty, let bundled = JockeyPlans.strategy(matching: key) { return bundled }
         let summary = Self.demoCourses.first { $0.courseKey == key } ?? Self.demoCourses[0]
         return CourseStrategy(
             courseId: summary.courseId,
