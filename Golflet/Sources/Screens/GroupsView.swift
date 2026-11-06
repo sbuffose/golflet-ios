@@ -185,7 +185,7 @@ struct CreateGroupView: View {
                     .accessibilityIdentifier("group-photo-picker")
 
                     GField(label: "Nombre del grupo") {
-                        TextField("Los del sábado", text: $name)
+                        TextField("Nombre del grupo", text: $name)
                             .textInputAutocapitalization(.words)
                             .accessibilityIdentifier("group-name")
                     }

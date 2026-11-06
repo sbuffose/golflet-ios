@@ -45,7 +45,7 @@ final class OnboardingPlanTests: XCTestCase {
                 "Tu index es \(FormatAR.one(3.1)).",
                 "La primera tarjeta es de \(FormatAR.monthYear(facts.firstRound!)).",
                 "Salís algunas veces por mes.",
-                "Me faltan un par de cosas para armarte el inicio."
+                "Solo me faltan unos datos más"
             ]
         )
         XCTAssertTrue(spoken.contains("Ana"))

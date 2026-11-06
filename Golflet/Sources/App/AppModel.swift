@@ -277,7 +277,7 @@ final class AppModel {
             isSignedIn = true
             if !onboarding.done && !PrototypeStore.testing { showsOnboarding = true }
             if session.needsFirstSync {
-                await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
+                await performClubSync(clubName: "tu club", accountId: nil, knownCards: nil, kind: .link) { progressID in
                     try await api.startFirstSync(progressID: progressID, clubID: pendingClubID)
                 }
             } else {
@@ -324,7 +324,7 @@ final class AppModel {
         lastLinkMatricula = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
         lastLinkClave = clave
         lastLinkSavePassword = savePassword
-        await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
+        await performClubSync(clubName: "tu club", accountId: nil, knownCards: nil, kind: .link) { progressID in
             try await api.linkClub(
                 matricula: lastLinkMatricula,
                 password: clave,

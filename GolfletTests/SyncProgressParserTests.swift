@@ -50,7 +50,7 @@ final class SyncProgressParserTests: XCTestCase {
         )
         XCTAssertEqual(
             SyncStepCopy.label(stage: .list, state: .done, club: club, progress: SyncAPIProgress(stage: .cards, listTotal: 97)),
-            "97 tarjetas en tu club"
+            "97 tarjetas encontradas"
         )
         XCTAssertEqual(
             SyncStepCopy.label(stage: .cards, state: .done, club: club, progress: SyncAPIProgress(stage: .handicap, cardsTotal: 97)),
