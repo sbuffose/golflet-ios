@@ -66,7 +66,7 @@ struct SyncProgressView: View {
     }
 
     private func overline(_ session: SyncSession?, _ progress: SyncAPIProgress) -> String {
-        let club = progress.club ?? session?.clubName ?? "Golflet"
+        let club = SyncClubIdentity.spokenName(progress.club ?? session?.clubName, count: progress.clubCount)
         if let ordinal = progress.clubOrdinal {
             return "\(club) · \(ordinal)"
         }

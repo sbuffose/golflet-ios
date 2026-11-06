@@ -65,7 +65,7 @@ struct NotificationsView: View {
                         Text("Tu cuenta")
                             .font(GType.headline)
                             .foregroundStyle(p.ink)
-                        Text("Clubes y Golfistics App")
+                        Text("Clubes de tu cuenta")
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
                     }

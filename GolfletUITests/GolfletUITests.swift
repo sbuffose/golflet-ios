@@ -1207,7 +1207,7 @@ final class GolfletUITests: XCTestCase {
             "Mínimo 8 caracteres",
             "Tu matrícula",
             "Tu número de matrícula",
-            "La misma que usás en Golfistics",
+            "La de tu club",
             "La misma que para entrar a tu club",
             "Nombre o matrícula"
         ]

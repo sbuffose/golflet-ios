@@ -178,7 +178,7 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(LivePayloadMapper.accountError(status: 502), .golfisticsAppDown)
         XCTAssertNil(LivePayloadMapper.accountError(status: 400))
         XCTAssertEqual(GolfletError.wrongGolfisticsCredentials.errorDescription, "Matrícula o clave incorrecta.")
-        XCTAssertEqual(GolfletError.golfisticsAppDown.errorDescription, "La App de Golfistics no responde.")
+        XCTAssertEqual(GolfletError.golfisticsAppDown.errorDescription, "El sistema de tu club no responde.")
     }
 
     func testUsesFirstNameWithoutSplittingPlayerName() {

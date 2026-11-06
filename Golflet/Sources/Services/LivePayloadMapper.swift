@@ -179,10 +179,12 @@ enum LivePayloadMapper {
     static func authFailure(status: Int, json: [String: Any]) -> AuthFailure {
         let code = (json["code"] as? String) ?? defaultAuthCode(status)
         let url = (json["golfistics_url"] as? String).flatMap(URL.init(string:))
+        let rawMessage = (json["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawHint = (json["hint"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         return AuthFailure(
             code: code,
-            message: (json["message"] as? String) ?? fallbackMessage(for: code),
-            hint: json["hint"] as? String,
+            message: rawMessage.flatMap { $0.isEmpty ? nil : PlayerCopy.hidingBrand($0) } ?? fallbackMessage(for: code),
+            hint: rawHint.flatMap { $0.isEmpty ? nil : PlayerCopy.hidingBrand($0) },
             golfisticsURL: url,
             retryAfterS: JSONFlex.int(from: json["retry_after_s"])
         )

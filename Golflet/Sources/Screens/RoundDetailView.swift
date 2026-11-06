@@ -112,7 +112,7 @@ struct RoundDetailView: View {
                 Text("Otra cancha")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Text("Esta tarjeta se jugó en \(round.displayCourse). Golfistics no trae el detalle por hoyo.")
+                Text("Esta tarjeta se jugó en \(round.displayCourse). El sistema de tu club no trae el detalle por hoyo.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                 if let source = round.sourceClubName, !source.isEmpty {
