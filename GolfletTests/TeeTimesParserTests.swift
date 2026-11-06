@@ -145,4 +145,107 @@ final class TeeTimesParserTests: XCTestCase {
             "Sin el nombre de la cancha no hay estrategia para preparar."
         )
     }
+
+    func testReadsCourseWhenThePayloadNestsIt() {
+        let bookings = TeeTimesParser.list(from: [
+            "tee_times": [[
+                "id": "tt-nested",
+                "starts_at": "2026-11-07T12:20:00-03:00",
+                "club_name": "Mar del Plata Golf Club",
+                "club_code": "209",
+                "course": ["name": "Cancha Vieja"]
+            ]]
+        ])
+        XCTAssertEqual(bookings.first?.course, "Cancha Vieja")
+    }
+
+    func testMdpWithoutACourseUsesTheClubAndBothCanchas() {
+        let booking = TeeTime(
+            id: "tt-mdp",
+            startsAt: Date(timeIntervalSince1970: 1_762_527_600),
+            clubName: "Mar del Plata Golf Club",
+            clubCode: "209",
+            course: "",
+            companions: ["Buffo Agustin"]
+        )
+        let place = TeeCourseResolve.place(booking: booking, rounds: [], courses: [])
+        XCTAssertEqual(place.canchaTitle, "Mar del Plata Golf Club")
+        XCTAssertEqual(place.strategyCourses.map(\.name), ["Cancha Vieja", "Cancha Nueva"])
+        XCTAssertEqual(place.strategyCourses.map(\.key), ["7:Cancha Vieja", "7:Cancha Nueva"])
+        let summary = TeeTimePrep.strategySummary(place: place, strategy: nil)
+        XCTAssertTrue(summary.contains("Cancha Vieja"))
+        XCTAssertTrue(summary.contains("Cancha Nueva"))
+        XCTAssertFalse(summary.contains("Sin el nombre"))
+        XCTAssertEqual(TeeTimePrep.forecastText(booking: booking, rounds: [], bag: []), "Este horario no trae pronóstico.")
+    }
+
+    func testMdpUsesTheCourseFromHisCards() {
+        let booking = TeeTime(
+            id: "tt-mdp",
+            startsAt: Date(timeIntervalSince1970: 1_762_527_600),
+            clubName: "Mar del Plata Golf Club",
+            clubCode: "209",
+            course: " ",
+            companions: []
+        )
+        let older = sampleRound(course: "Cancha Vieja", date: Date(timeIntervalSince1970: 1_700_000_000))
+        let newer = sampleRound(course: "Cancha Nueva", date: Date(timeIntervalSince1970: 1_750_000_000))
+        let place = TeeCourseResolve.place(booking: booking, rounds: [older, newer], courses: [])
+        XCTAssertEqual(place.canchaTitle, "Cancha Nueva")
+        XCTAssertEqual(place.strategyCourses.map(\.name), ["Cancha Nueva"])
+        XCTAssertEqual(place.strategyCourses.first?.courseId, "209-mdp-nueva")
+    }
+
+    func testForecastUsesRealWindAndDoesNotInventTheRest() {
+        var booking = TeeTime(
+            id: "tt-wx",
+            startsAt: Date(timeIntervalSince1970: 1_762_527_600),
+            clubName: "Mar del Plata Golf Club",
+            clubCode: "209",
+            course: "Cancha Vieja",
+            companions: []
+        )
+        booking.windKmh = 22
+        booking.windFrom = "sudeste"
+        let text = TeeTimePrep.forecastText(booking: booking, rounds: [], bag: [])
+        XCTAssertTrue(text.contains("22 km/h"))
+        XCTAssertTrue(text.contains("sudeste"))
+        XCTAssertFalse(text.contains("19°"))
+        XCTAssertFalse(text.contains("0 mm"))
+    }
+
+    private func sampleRound(course: String, date: Date) -> Round {
+        Round(
+            roundId: course,
+            date: date,
+            weekday: "Sáb",
+            tournament: "Test",
+            clubName: "Mar del Plata Golf Club",
+            clubCode: "209",
+            course: course,
+            tee: "Caballeros",
+            category: nil,
+            weather: nil,
+            courseRating: 71,
+            slope: 125,
+            position: nil,
+            fieldSize: nil,
+            handicapIndex: 3.1,
+            playingHandicap: nil,
+            outScore: nil,
+            inScore: nil,
+            gross: 78,
+            net: nil,
+            cardStatus: "OK",
+            counts: ScoreCounts(birdies: 0, pars: 0, bogeys: 0, doubles: 0, triples: 0, worse: 0),
+            holes: [],
+            holesPlayed: 18,
+            isNineHoles: false,
+            isValid: true,
+            differential: nil,
+            adjustedGross: nil,
+            courseHandicap: nil,
+            hcpAllowancePct: nil
+        )
+    }
 }

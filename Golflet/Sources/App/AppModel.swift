@@ -1202,6 +1202,9 @@ final class AppModel {
         PrototypeStore.saveOnboarding(onboarding)
         selectedTab = .inicio
         showsOnboarding = false
+        if syncSession?.outcome == .succeeded {
+            finishSuccessfulSync()
+        }
     }
 
     func setFeature(_ feature: HoleFeature, on: Bool) {
