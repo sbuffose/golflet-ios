@@ -1,3 +1,4 @@
+import MapKit
 import SwiftUI
 
 struct PlayHubView: View {
@@ -166,7 +167,9 @@ struct AntesDeSalirView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Antes de salir").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: "Ajustes de esta vuelta. Los podés cambiar durante el juego.")
+                    Text("Elegí qué vas a ver en el hoyo.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
                     Text("Tu modo").font(GType.headline).foregroundStyle(p.ink)
                     HStack {
                         ForEach(ProfileMode.allCases) { mode in
@@ -180,7 +183,6 @@ struct AntesDeSalirView: View {
                                 .accessibilityIdentifier("antes-mode-\(mode.rawValue)")
                         }
                     }
-                    ExampleNote(text: "Es el mismo modo del chip de Inicio. Decide qué ves en el hoyo.")
 
                     Text("En el hoyo vas a ver").font(GType.headline).foregroundStyle(p.ink)
                     ProtoCard {
@@ -198,23 +200,11 @@ struct AntesDeSalirView: View {
                             }
                         }
                     }
-                    ExampleNote(text: "Lo que apagues sigue en «Más», en el costado del mapa. Desnivel, 3D y Pendiente no se muestran: no hay datos.")
 
                     setting("Cancha", ["Azul", "Roja"], model.roundSettings.cancha) { model.roundSettings.cancha = $0 }
                     setting("Salida", ["Negras", "Azules", "Blancas", "Rojas"], model.roundSettings.tee) { model.roundSettings.tee = $0 }
                     setting("Hoyos", ["18", "Primeros 9", "Últimos 9"], model.roundSettings.hoyos) { model.roundSettings.hoyos = $0 }
                     setting("Formato", ["Medal", "Stableford", "Match play"], model.roundSettings.formato) { model.roundSettings.formato = $0 }
-
-                    ProtoCard {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("HI 12,4 · Cancha \(model.roundSettings.cancha) · \(model.roundSettings.tee)").font(GType.overline).foregroundStyle(p.ink3)
-                                DemoPill()
-                            }
-                            Text("Recibís 14 golpes").font(GType.section).foregroundStyle(p.ink)
-                            ExampleNote(text: "Calculado con slope y rating de ejemplo")
-                        }
-                    }
 
                     Button {
                         model.startLiveHole()
@@ -317,24 +307,76 @@ struct BanderaHoyView: View {
 struct ClimaView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    @State private var forecast: TeeForecast.Window?
 
     var body: some View {
-        let report = WeatherPlay.report(booking: model.nextTeeTime, rounds: model.rounds, bag: model.bag)
+        let booking = model.nextTeeTime
+        let report = WeatherPlay.report(booking: booking, rounds: model.rounds, bag: model.bag)
+        let pin = booking.flatMap { CoursePin.coordinate(club: $0.clubName, course: $0.course) }
+        let live = forecast.flatMap { window in
+            booking.map { TeeForecast.playText(window: window, booking: $0, rounds: model.rounds, bag: model.bag) }
+        }
         GScreen(id: "screen-clima") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Clima").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ForEach(Array(report.lines.enumerated()), id: \.offset) { _, line in
+                    if let pin {
+                        CoursePinMap(lat: pin.lat, lng: pin.lng, title: pin.title)
+                            .frame(height: 220)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .accessibilityIdentifier("clima-map")
+                        Text(pin.title)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    let lines = live?.split(separator: "\n").map(String.init) ?? report.lines
+                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                         Text(line)
                             .font(GType.body)
                             .foregroundStyle(p.ink)
                             .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier(index == 0 ? "clima-hour" : "clima-line-\(index)")
+                    }
+                    if forecast?.failed == true {
+                        Text("No pude leer el pronóstico. El mapa es el del club.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("clima-forecast-error")
                     }
                 }
                 .padding(20)
             }
         }
-        .accessibilityIdentifier(report.hasNumbers ? "clima-real" : "clima-empty")
+        .accessibilityIdentifier(report.hasNumbers || (forecast?.hours.isEmpty == false) ? "clima-real" : "clima-empty")
+        .task(id: booking?.id) {
+            forecast = nil
+            guard let booking else { return }
+            forecast = await TeeForecast.load(booking: booking)
+        }
+    }
+}
+
+struct CoursePinMap: UIViewRepresentable {
+    var lat: Double
+    var lng: Double
+    var title: String
+
+    func makeUIView(context: Context) -> MKMapView {
+        let map = MKMapView()
+        map.isRotateEnabled = false
+        map.pointOfInterestFilter = .excludingAll
+        return map
+    }
+
+    func updateUIView(_ map: MKMapView, context: Context) {
+        let center = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+        let region = MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02))
+        map.setRegion(region, animated: false)
+        map.removeAnnotations(map.annotations)
+        let pin = MKPointAnnotation()
+        pin.coordinate = center
+        pin.title = title
+        map.addAnnotation(pin)
     }
 }
 
@@ -459,12 +501,9 @@ struct MatchLiveView: View {
     private var setup: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Empezar partido").font(GType.largeTitle).foregroundStyle(p.ink)
-            Text("No hay un partido en curso.")
+            Text("Todavía no hay un partido. Elegí formato y cancha.")
                 .font(GType.body)
                 .foregroundStyle(p.ink2)
-            Text("Elegí el formato, los compañeros y la cancha. No inventamos el resultado.")
-                .font(GType.label)
-                .foregroundStyle(p.ink3)
 
             Text("Formato").font(GType.section).foregroundStyle(p.ink)
             VStack(alignment: .leading, spacing: 8) {
@@ -609,17 +648,10 @@ struct CierreView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Cierre de vuelta").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ProtoHero {
-                        VStack(alignment: .leading) {
-                            Text("Tarjeta del club").font(GType.overline).opacity(0.75)
-                            Text("84").font(GType.statHero).tabular()
-                            Text("neto 71 · dif. 11,6").font(GType.label).opacity(0.8)
-                        }
-                    }
-                    DemoPill()
-                    NavigationLink { SGHomeView() } label: {
-                        ProtoCard { ProtoRow(title: "Strokes gained", subtitle: "Contra el PGA Tour (Broadie, 2011)") }
-                    }
+                    Text("Todavía no hay una vuelta para cerrar. Jugá una con GPS.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("cierre-empty")
                 }
                 .padding(20)
             }
@@ -635,14 +667,20 @@ struct PerfilModoView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Modo del inicio").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ExampleNote(text: "¿Qué buscás en el golf? Elegí qué querés ver primero. Las tabs son las mismas en todos los modos.")
+                    Text("Elegí qué ves primero. Las tabs no cambian.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
                     ForEach(ProfileMode.allCases) { mode in
                         Button { model.setHomeMode(mode) } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack {
                                         Text(mode.title).font(GType.headline).foregroundStyle(p.ink)
-                                        if mode == .clasico { DemoPill(text: "Recomendado") }
+                                        if mode == .clasico {
+                                            Text("Recomendado")
+                                                .font(GFont.ui(11.5, weight: .semibold))
+                                                .foregroundStyle(p.primary2)
+                                        }
                                     }
                                     Text(mode.blurb).font(GType.label).foregroundStyle(p.ink3)
                                 }

@@ -35,8 +35,17 @@ public struct WidgetSnapshot: Hashable, Codable, Sendable {
 
     public static let placeholder = WidgetSnapshot(handicap: 0)
 
+    /// A logged-in index is enough. A dash on the lock screen only when we know nothing.
     public var isPlaceholder: Bool {
-        lastCourse == nil && nextCourse == nil && lastGross == nil
+        handicap < 0.05 && lastCourse == nil && nextCourse == nil && lastGross == nil
+    }
+
+    public var lockDetail: String {
+        if let when = nextWhen, let course = nextCourse, !course.isEmpty {
+            return "\(when) · \(course)"
+        }
+        if lastCourse != nil { return lastLine }
+        return "Golflet"
     }
 
     public var lastLine: String {
@@ -69,6 +78,19 @@ public struct WidgetSnapshot: Hashable, Codable, Sendable {
     public static func parseAPI(_ data: Data) -> WidgetSnapshot? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
+        }
+        if json["player"] == nil, json["handicap"] != nil || json["handicap_index"] != nil {
+            return WidgetSnapshot(
+                handicap: jsonNumber(json["handicap"] ?? json["handicap_index"]) ?? 0,
+                lastGross: jsonInt(json["last_gross"]),
+                lastNet: jsonInt(json["last_net"]),
+                lastCourse: string(json["last_course"]),
+                lastRoundId: string(json["last_round_id"]),
+                lastDate: string(json["last_date"]),
+                nextCourse: string(json["next_course"]),
+                nextWhen: string(json["next_when"]),
+                nextDeepLink: string(json["next_deep_link"])
+            )
         }
         let player = json["player"] as? [String: Any]
         let handicap = jsonNumber(player?["handicap_index"])

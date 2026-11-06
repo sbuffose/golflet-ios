@@ -278,6 +278,20 @@ struct AuthFailure: Hashable, Sendable {
     var cardID: String { "\(bannerID)-card" }
 }
 
+enum PlayerCopy {
+    /// Saca la marca del sistema del club de cualquier texto que vaya a verse.
+    static func hidingBrand(_ text: String) -> String {
+        var out = text
+        for token in ["Golfistics App", "golfistics app", "Golfistics", "golfistics"] {
+            out = out.replacingOccurrences(of: token, with: "tu club")
+        }
+        if out.hasPrefix("tu club") {
+            out.replaceSubrange(out.startIndex...out.startIndex, with: "T")
+        }
+        return out
+    }
+}
+
 enum AuthCopy {
     static let golfisticsURL = URL(string: "https://app.golfistics.com/golf/golfisticsapp_login.php")!
 
@@ -669,9 +683,9 @@ enum GolfletError: LocalizedError, Equatable {
         switch self {
         case .notImplemented: return "El API en vivo todavía no está conectado."
         case .notAuthenticated: return "Tenés que entrar a tu cuenta de Golflet."
-        case .invalidClub: return "No reconocimos esa URL de Golfistics."
+        case .invalidClub: return "No reconocimos la URL de tu club."
         case .wrongGolfisticsCredentials: return "Matrícula o clave incorrecta."
-        case .golfisticsAppDown: return "La App de Golfistics no responde."
+        case .golfisticsAppDown: return "El club no responde."
         case .auth(let failure): return failure.message
         case .needsClub(let payload): return payload.message
         case .fixtureMissing(let n): return "Falta el fixture \(n)."

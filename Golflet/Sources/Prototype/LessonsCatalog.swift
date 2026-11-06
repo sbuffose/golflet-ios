@@ -82,7 +82,7 @@ enum LessonsCatalog {
 }
 
 enum ExampleRounds {
-    /// Simulated rounds on Azul lengths. Not anyone's real cards. Labeled "Datos de ejemplo".
+    /// Simulated rounds kept for the strokes-gained math test. Never shown in the app.
     static let seeds: [(id: String, title: String, seed: Int)] = [
         ("e0", "Sáb 26-sep · Cancha Azul", 11),
         ("e1", "Sáb 3-oct · Cancha Azul", 23),

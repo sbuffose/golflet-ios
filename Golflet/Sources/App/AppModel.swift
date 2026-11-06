@@ -277,7 +277,7 @@ final class AppModel {
             isSignedIn = true
             if !onboarding.done && !PrototypeStore.testing { showsOnboarding = true }
             if session.needsFirstSync {
-                await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
+                await performClubSync(clubName: "tu club", accountId: nil, knownCards: nil, kind: .link) { progressID in
                     try await api.startFirstSync(progressID: progressID, clubID: pendingClubID)
                 }
             } else {
@@ -324,7 +324,7 @@ final class AppModel {
         lastLinkMatricula = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
         lastLinkClave = clave
         lastLinkSavePassword = savePassword
-        await performClubSync(clubName: "Golfistics App", accountId: nil, knownCards: nil, kind: .link) { progressID in
+        await performClubSync(clubName: "tu club", accountId: nil, knownCards: nil, kind: .link) { progressID in
             try await api.linkClub(
                 matricula: lastLinkMatricula,
                 password: clave,
@@ -850,8 +850,16 @@ final class AppModel {
     }
 
     func updateGroup(_ group: GolfletGroup, name: String?, photoJPEG: Data?) async {
+        if let photoJPEG { GroupPhotoCache.store(photoJPEG, for: group.id) }
         await run {
             let updated = try await api.updateGroup(id: group.id, name: name, photoJPEG: photoJPEG)
+            replace(updated)
+        }
+    }
+
+    func inviteByMatricula(_ group: GolfletGroup, matricula: String) async {
+        await run {
+            let updated = try await api.inviteByMatricula(groupID: group.id, matricula: matricula)
             replace(updated)
         }
     }
@@ -1202,6 +1210,9 @@ final class AppModel {
         PrototypeStore.saveOnboarding(onboarding)
         selectedTab = .inicio
         showsOnboarding = false
+        if syncSession?.outcome == .succeeded {
+            finishSuccessfulSync()
+        }
     }
 
     func setFeature(_ feature: HoleFeature, on: Bool) {

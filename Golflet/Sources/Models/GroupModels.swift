@@ -9,7 +9,7 @@ enum GroupRole: String, Codable, Sendable, Hashable {
 
     var title: String {
         switch self {
-        case .admin: return "Admin"
+        case .admin: return "Administrador"
         case .member: return "Miembro"
         }
     }
@@ -22,6 +22,8 @@ struct GroupMember: Identifiable, Hashable, Sendable {
     var photoURL: String?
     var role: GroupRole
     var isOwner: Bool
+    var matricula: String? = nil
+    var isPending: Bool = false
 }
 
 struct GroupInviteLink: Hashable, Sendable {
@@ -50,6 +52,7 @@ struct GolfletGroup: Identifiable, Hashable, Sendable {
     var reportedMemberCount: Int? = nil
     var matchRecords: [MatchFormatRecord] = []
     var recentMatches: [PlayedMatch] = []
+    var pendingMembers: [GroupMember] = []
 
     var isAdmin: Bool { myRole == .admin }
     var memberCount: Int { reportedMemberCount ?? members.count }
@@ -428,6 +431,23 @@ enum PendingInviteStore {
 
     static func clear(defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: key)
+    }
+}
+
+enum GroupPhotoCache {
+    private static let lock = NSLock()
+    private static var images: [String: Data] = [:]
+
+    static func store(_ data: Data, for id: String) {
+        lock.lock()
+        images[id] = data
+        lock.unlock()
+    }
+
+    static func data(for id: String) -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return images[id]
     }
 }
 

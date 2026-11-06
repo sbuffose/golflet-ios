@@ -34,7 +34,9 @@ struct RootView: View {
             }
         }
         .overlay {
-            if model.syncSession != nil {
+            // En el onboarding la espera es la de Roberto (Saltar sigue ahí).
+            // Este panel queda para un sync que arranca ya dentro de la app.
+            if model.syncSession != nil, !model.showsOnboarding {
                 SyncProgressView()
                     .golfletChrome()
                     .environment(model)
@@ -98,7 +100,7 @@ struct RootView: View {
                 .tag(AppTab.academia)
                 .accessibilityIdentifier("tab-academia")
         }
-        .toolbar(model.showsLiveHole ? .hidden : .visible, for: .tabBar)
+        .toolbar(model.showsLiveHole || model.showsPlay ? .hidden : .visible, for: .tabBar)
         .tint(p.primary)
         .onAppear { configureTabBar() }
         .sheet(item: bindings.presentedRound) { round in

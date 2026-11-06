@@ -1,5 +1,7 @@
 import PhotosUI
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 struct GroupDetailView: View {
     @Environment(AppModel.self) private var model
@@ -11,6 +13,10 @@ struct GroupDetailView: View {
     @State private var showsViewSettings = false
     @State private var editingName = ""
     @State private var pickerItem: PhotosPickerItem?
+    @State private var showPhotoChoices = false
+    @State private var showLibrary = false
+    @State private var showCamera = false
+    @State private var matriculaDraft = ""
     @State private var confirmLeave = false
     @State private var comparativoRoute: ComparativoRoute?
     @State private var profileRoute: MemberProfileRoute?
@@ -74,11 +80,37 @@ struct GroupDetailView: View {
             MemberProfileView(groupID: route.groupID, memberID: route.memberID)
         }
         .onChange(of: pickerItem) { _, item in
-            Task {
-                guard let data = try? await item?.loadTransferable(type: Data.self), let group else { return }
-                await model.updateGroup(group, name: nil, photoJPEG: GroupPhoto.jpegData(from: data))
+            Task { await loadPickedPhoto(item) }
+        }
+        .confirmationDialog("Foto del grupo", isPresented: $showPhotoChoices, titleVisibility: .visible) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("Sacar foto") { showCamera = true }
+            }
+            Button("Elegir de la biblioteca") { showLibrary = true }
+            Button("Cancelar", role: .cancel) {}
+        }
+        .photosPicker(isPresented: $showLibrary, selection: $pickerItem, matching: .images)
+        .sheet(isPresented: $showCamera) {
+            GroupCameraPicker { data in
+                showCamera = false
+                Task { await savePhoto(data) }
             }
         }
+    }
+
+    private func loadPickedPhoto(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        if let picked = try? await item.loadTransferable(type: PickedGroupImage.self) {
+            await savePhoto(picked.data)
+        } else if let data = try? await item.loadTransferable(type: Data.self) {
+            await savePhoto(data)
+        }
+        pickerItem = nil
+    }
+
+    private func savePhoto(_ data: Data) async {
+        guard let group, !data.isEmpty else { return }
+        await model.updateGroup(group, name: nil, photoJPEG: GroupPhoto.jpegData(from: data))
     }
 
     @ViewBuilder
@@ -126,9 +158,9 @@ struct GroupDetailView: View {
     private func header(_ group: GolfletGroup) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 14) {
-                GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 64)
+                GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 64, cacheID: group.id)
                 VStack(alignment: .leading, spacing: 4) {
-                    GOverline(text: group.isAdmin ? "Admin" : "Miembro")
+                    GOverline(text: group.isAdmin ? "Administrador" : "Miembro")
                     Text(group.name)
                         .font(GType.sheetTitle)
                         .foregroundStyle(p.ink)
@@ -152,10 +184,12 @@ struct GroupDetailView: View {
                 }
                 .disabled(editingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
                 .accessibilityIdentifier("group-save-name")
-                PhotosPicker(selection: $pickerItem, matching: .images) {
+                Button {
+                    showPhotoChoices = true
+                } label: {
                     Text("Cambiar foto")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
+                        .font(GType.headline)
+                        .foregroundStyle(p.primary)
                 }
                 .accessibilityIdentifier("group-edit-photo")
             }
@@ -230,7 +264,10 @@ struct GroupDetailView: View {
             Text("Jugadores")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
-            ForEach(group.members) { member in
+            if group.isAdmin {
+                addByMatricula(group)
+            }
+            ForEach(group.members + group.pendingMembers) { member in
                 GCard(radius: 16, padding: 14) {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 12) {
@@ -239,22 +276,24 @@ struct GroupDetailView: View {
                                 Text(member.name)
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
-                                Text(member.isOwner ? "Dueño · \(member.role.title)" : member.role.title)
+                                Text(memberLine(member))
                                     .font(GType.label)
                                     .foregroundStyle(p.ink2)
                             }
                             Spacer()
                         }
-                        Button {
-                            profileRoute = MemberProfileRoute(groupID: group.id, memberID: member.id)
-                        } label: {
-                            Text("Ver perfil")
-                                .font(GType.label)
-                                .foregroundStyle(p.primary)
+                        if !member.isPending {
+                            Button {
+                                profileRoute = MemberProfileRoute(groupID: group.id, memberID: member.id)
+                            } label: {
+                                Text("Ver perfil")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.primary)
+                            }
+                            .accessibilityIdentifier("group-profile-\(member.id)")
+                            GProbe(id: "group-profile-\(member.id)", label: "Ver perfil")
                         }
-                        .accessibilityIdentifier("group-profile-\(member.id)")
-                        GProbe(id: "group-profile-\(member.id)", label: "Ver perfil")
-                        if group.isAdmin {
+                        if group.isAdmin, !member.isPending {
                             HStack(spacing: 10) {
                                 Button {
                                     Task {
@@ -414,6 +453,44 @@ struct GroupDetailView: View {
             return "\(FormatAR.int(Int(number.rounded()))) yd"
         default:
             return FormatAR.one(number)
+        }
+    }
+
+    private func memberLine(_ member: GroupMember) -> String {
+        var parts: [String] = []
+        if member.isPending { parts.append("Invitación pendiente") }
+        if let matricula = member.matricula, !matricula.isEmpty {
+            parts.append("Matrícula \(matricula)")
+        }
+        if parts.isEmpty {
+            return member.isOwner ? "Dueño · \(member.role.title)" : member.role.title
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func addByMatricula(_ group: GolfletGroup) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            GField(label: "Matrícula") {
+                TextField("Matrícula", text: $matriculaDraft)
+                    .keyboardType(.numberPad)
+                    .accessibilityIdentifier("group-matricula")
+            }
+            Button {
+                let value = matriculaDraft
+                matriculaDraft = ""
+                Task { await model.inviteByMatricula(group, matricula: value) }
+            } label: {
+                Text("Sumar jugador")
+                    .font(GType.headline)
+                    .foregroundStyle(p.onPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(p.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(matriculaDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+            .accessibilityIdentifier("group-add-matricula")
         }
     }
 
@@ -604,5 +681,46 @@ struct GroupViewSettings: View {
             names.append(course.name)
         }
         return names
+    }
+}
+
+struct PickedGroupImage: Transferable {
+    var data: Data
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(importedContentType: .image) { data in
+            PickedGroupImage(data: data)
+        }
+    }
+}
+
+struct GroupCameraPicker: UIViewControllerRepresentable {
+    var onImage: (Data) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImage: onImage)
+    }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onImage: (Data) -> Void
+        init(onImage: @escaping (Data) -> Void) { self.onImage = onImage }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            let image = info[.originalImage] as? UIImage
+            onImage(image?.jpegData(compressionQuality: 0.82) ?? Data())
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onImage(Data())
+        }
     }
 }

@@ -110,14 +110,14 @@ enum OnboardingPlan {
             lines.append("Hola, \(firstName(name)). Soy Roberto.")
         }
         if let club = facts.clubName {
-            lines.append("Entré con tu matrícula y leí tu ficha de \(club).")
+            lines.append("Te veo en \(club).")
         } else if facts.roundCount > 0 || facts.handicap != nil {
-            lines.append("Entré con tu matrícula y leí lo que el club tiene de vos.")
+            lines.append("Ya estuve en tu ficha.")
         } else {
-            lines.append("Con la matrícula no encontré tarjetas todavía.")
+            lines.append("Todavía no hay tarjetas a tu nombre.")
         }
         if let handicap = facts.handicap {
-            lines.append("Tu hándicap index es \(FormatAR.one(handicap)). Eso no te lo vuelvo a preguntar.")
+            lines.append("Tu index es \(FormatAR.one(handicap)).")
         }
         if let first = facts.firstRound {
             lines.append("La primera tarjeta es de \(FormatAR.monthYear(first)).")
@@ -152,5 +152,71 @@ enum OnboardingPlan {
 
     private static func firstName(_ name: String) -> String {
         name.split(separator: " ").first.map(String.init) ?? name
+    }
+}
+
+/// Copy de la espera de sync. Las cuatro frases fijas dicen qué está haciendo
+/// Roberto, no qué encontró. Un número, un club o un "leí N" solo entra si
+/// `SyncAPIProgress` ya lo trajo.
+enum OnboardingSyncCopy {
+    static let waiting: [String] = [
+        "Estoy entrando a tu club.",
+        "Busco tu hándicap y tu club.",
+        "Traigo las tarjetas que el club tenga.",
+        "Cuando entren, armo tu ficha."
+    ]
+
+    static func lines(progress: SyncAPIProgress?, elapsedStages: Int) -> [String] {
+        var count = min(max(elapsedStages, 1), waiting.count)
+        if let progress {
+            count = max(count, slot(for: progress.stage) + 1)
+        }
+        var lines = Array(waiting.prefix(count))
+        guard let progress else { return lines }
+        let index = slot(for: progress.stage)
+        guard lines.indices.contains(index) else { return lines }
+        lines[index] = liveLine(progress)
+        return lines
+    }
+
+    static func slot(for stage: SyncStage) -> Int {
+        switch stage {
+        case .connect: return 0
+        case .handicap: return 1
+        case .list, .cards: return 2
+        case .save, .done: return 3
+        }
+    }
+
+    static func liveLine(_ progress: SyncAPIProgress) -> String {
+        switch progress.stage {
+        case .connect:
+            let count = progress.clubCount ?? 0
+            if let club = progress.club?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !club.isEmpty,
+               !SyncClubIdentity.isDetecting(club) {
+                return "Conectando con \(club)."
+            }
+            return count > 1 ? "Conectando con tus clubes." : "Conectando con tu club."
+        case .list:
+            if let count = progress.listTotal, count > 0 {
+                return "El club lista \(count) tarjetas."
+            }
+            return "Busco el listado de tarjetas."
+        case .cards:
+            if let total = progress.total, total > 0 {
+                return "Leí \(progress.done ?? 0) de \(total)."
+            }
+            return "Estoy leyendo tarjetas."
+        case .handicap:
+            return "Miro el historial de hándicap."
+        case .save:
+            if let total = progress.total, total > 0, let done = progress.done {
+                return "Guardé \(done) de \(total)."
+            }
+            return "Estoy guardando lo que ya leí."
+        case .done:
+            return "Listo. Te muestro la ficha."
+        }
     }
 }

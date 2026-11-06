@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct CourseView: View {
     @Environment(AppModel.self) private var model
@@ -33,32 +34,8 @@ struct CourseView: View {
             strategy = try? await model.api.courseStrategy(courseKey: CourseIdentity.key(for: name), courseId: nil)
         }
         .sheet(item: $handbookFile) { file in
-            NavigationStack {
-                VStack(spacing: 16) {
-                    Text(file.title)
-                        .font(GType.headline)
-                        .foregroundStyle(p.ink)
-                    ShareLink(item: file.url) {
-                        Text("Compartir PDF")
-                            .font(GType.headline)
-                            .foregroundStyle(p.onPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(p.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .accessibilityIdentifier("handbook-share")
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(p.bg)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cerrar") { handbookFile = nil }
-                            .accessibilityIdentifier("handbook-close")
-                    }
-                }
-            }
+            HandbookExportSheet(file: file) { handbookFile = nil }
+                .golfletChrome()
         }
     }
 
@@ -338,7 +315,7 @@ struct CourseView: View {
         #if canImport(UIKit)
         if let url = try? CourseHandbookPDF.write(document) {
             handbookNote = document.title
-            handbookFile = HandbookFile(url: url, title: document.title)
+            handbookFile = HandbookFile(url: url, title: document.title, preview: document.plainText)
             return
         }
         #endif
@@ -499,5 +476,85 @@ struct CourseHoleCell: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Hoyo \(hole.number), P\(hole.par), \(FormatAR.signedOne(hole.averageToPar))")
+    }
+}
+
+struct HandbookPDFDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.pdf] }
+    var data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
+
+struct HandbookExportSheet: View {
+    @Environment(\.palette) private var p
+    let file: HandbookFile
+    var onClose: () -> Void
+    @State private var exporting = false
+
+    private var pdf: HandbookPDFDocument {
+        HandbookPDFDocument(data: (try? Data(contentsOf: file.url)) ?? Data())
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(file.title)
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text(file.preview.isEmpty ? "La libreta está lista para guardar." : file.preview)
+                        .font(GType.body)
+                        .foregroundStyle(p.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("handbook-preview")
+                    Button {
+                        exporting = true
+                    } label: {
+                        Text("Descargar")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("handbook-save")
+                    ShareLink(item: file.url) {
+                        Text("Compartir PDF")
+                            .font(GType.headline)
+                            .foregroundStyle(p.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(p.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .accessibilityIdentifier("handbook-share")
+                }
+                .padding(20)
+            }
+            .background(p.bg)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar", action: onClose)
+                        .accessibilityIdentifier("handbook-close")
+                }
+            }
+            .fileExporter(
+                isPresented: $exporting,
+                document: pdf,
+                contentType: .pdf,
+                defaultFilename: file.url.deletingPathExtension().lastPathComponent
+            ) { _ in }
+        }
     }
 }

@@ -8,7 +8,7 @@ final class GroupsTests: XCTestCase {
         MockAPIClient.resetGroups()
     }
 
-    func testHubUsesLiveListsAndASingleExampleFallback() {
+    func testHubUsesLiveListsAndNeverShowsExamples() {
         let live = GroupsHubContent.resolve(groupCount: 1, teeTimeCount: 2)
         XCTAssertTrue(live.usesLiveGroups)
         XCTAssertFalse(live.showsExampleGroups)
@@ -16,11 +16,10 @@ final class GroupsTests: XCTestCase {
         XCTAssertFalse(live.showsExampleTeeTimes)
 
         let empty = GroupsHubContent.resolve(groupCount: 0, teeTimeCount: 0)
-        XCTAssertTrue(empty.showsExampleGroups)
-        XCTAssertTrue(empty.showsExampleTeeTimes)
+        XCTAssertFalse(empty.showsExampleGroups)
+        XCTAssertFalse(empty.showsExampleTeeTimes)
         XCTAssertFalse(empty.usesLiveGroups)
-        XCTAssertFalse(empty.usesLiveGroups && empty.showsExampleGroups)
-        XCTAssertFalse(empty.usesLiveTeeTimes && empty.showsExampleTeeTimes)
+        XCTAssertFalse(empty.usesLiveTeeTimes)
     }
 
     func testInviteUniversalAndCustomScheme() {
@@ -288,5 +287,32 @@ final class GroupsTests: XCTestCase {
         XCTAssertTrue(next.enabled)
         let disabled = try await api.disableInvite(groupID: "g-jockey")
         XCTAssertFalse(disabled.enabled)
+    }
+
+    func testInviteByMatriculaShowsNameAndNumber() async throws {
+        let api = MockAPIClient(autoSession: true)
+        let group = try await api.inviteByMatricula(groupID: "g-jockey", matricula: " 94506 ")
+        let pending = try XCTUnwrap(group.pendingMembers.first { $0.matricula == "94506" })
+        XCTAssertEqual(pending.name, "Matrícula 94506")
+        XCTAssertTrue(pending.isPending)
+        XCTAssertEqual(group.invite?.enabled, true)
+
+        let parsed = try XCTUnwrap(GroupsParser.group(from: [
+            "id": "g1",
+            "name": "Familia",
+            "members": [["id": "u1", "name": "Ana", "matricula": "1200", "role": "member"]],
+            "pending": [["matricula": "3301", "name": "Luis"]]
+        ]))
+        XCTAssertEqual(parsed.members.first?.matricula, "1200")
+        XCTAssertEqual(parsed.pendingMembers.first?.name, "Luis")
+        XCTAssertEqual(parsed.pendingMembers.first?.matricula, "3301")
+        XCTAssertTrue(parsed.pendingMembers.first?.isPending == true)
+    }
+
+    func testGroupPhotoCacheKeepsTheJPEG() async throws {
+        let api = MockAPIClient(autoSession: true)
+        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        _ = try await api.updateGroup(id: "g-jockey", name: nil, photoJPEG: jpeg)
+        XCTAssertEqual(GroupPhotoCache.data(for: "g-jockey"), jpeg)
     }
 }

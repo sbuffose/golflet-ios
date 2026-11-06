@@ -99,7 +99,7 @@ struct MockAPIClient: GolfletAPI {
         Self.mockLinked = true
         Self.pendingNeedsClub = false
         Self.sessionLock.unlock()
-        return demoSyncResult(message: "Golfistics App vinculada · datos de demostración", newCards: 98)
+        return demoSyncResult(message: "Tu club quedó vinculado.", newCards: 98)
     }
 
     func signOut() async throws {
@@ -156,7 +156,7 @@ struct MockAPIClient: GolfletAPI {
             matricula: matricula,
             clave: savePassword ? "saved" : ""
         ))
-        return demoSyncResult(message: "Golfistics App vinculada · datos de demostración", newCards: 98)
+        return demoSyncResult(message: "Tu club quedó vinculado.", newCards: 98)
     }
 
     func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult {
@@ -702,7 +702,7 @@ enum MockClubLink {
 
     static func needsClub(matricula: String? = nil) -> GolfletError {
         .needsClub(NeedsClubPayload(
-            message: "Golfistics App no listó clubes para esa matrícula. Elegí tu club.",
+            message: "No aparecieron tus clubes para esa matrícula. Elegí el tuyo.",
             matricula: matricula,
             clubs: catalogue.filter(\.directLogin)
         ))

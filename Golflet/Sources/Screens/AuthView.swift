@@ -149,7 +149,7 @@ struct AuthView: View {
                 Button {
                     openGolfistics(failure.golfisticsURL ?? AuthCopy.golfisticsURL)
                 } label: {
-                    Text("Configurar mi contraseña en el club")
+                    Text("Configurar mi contraseña")
                         .font(GType.headline)
                         .foregroundStyle(p.ink)
                         .frame(maxWidth: .infinity)

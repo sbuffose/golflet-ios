@@ -249,7 +249,8 @@ final class GolfletUITests: XCTestCase {
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8), "No se abrió el hoyo GPS")
         XCTAssertTrue(waitFor(app, "distance-center", timeout: 4))
-        XCTAssertTrue(app.buttons["Ya pegué"].waitForExistence(timeout: 2) || first(app, "play-hit").label.contains("Ya pegué"), "Falta Ya pegué")
+        XCTAssertTrue(first(app, "play-hit").waitForExistence(timeout: 4), "Falta ENTER para marcar el golpe")
+        XCTAssertTrue(first(app, "play-track").waitForExistence(timeout: 2), "Falta TRACK")
         saveShot("17_play_hoyo")
         if first(app, "play-hole-picker").waitForExistence(timeout: 3) {
             first(app, "play-hole-picker").tap()
@@ -265,16 +266,26 @@ final class GolfletUITests: XCTestCase {
         dismissIfPresent(app, "close-strategy")
         first(app, "play-hit").tap()
         let saved = first(app, "play-shot-0")
-        reveal(app, saved)
-        XCTAssertTrue(saved.waitForExistence(timeout: 4), "Ya pegué no guardó el golpe")
+        XCTAssertTrue(saved.waitForExistence(timeout: 4), "ENTER no guardó el golpe")
         XCTAssertFalse(first(app, "club-Dr").exists, "El teléfono no tiene que pedir el palo")
         XCTAssertFalse(first(app, "play-drive-side").exists, "El teléfono no tiene que pedir cómo salió el drive")
         dismissIfPresent(app, "play-close")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
 
         if first(app, "home-recurring").waitForExistence(timeout: 4) {
-            first(app, "home-recurring").tap()
-            XCTAssertTrue(waitFor(app, "screen-recurring", timeout: 6))
+            let card = first(app, "home-recurring")
+            let scroll = app.scrollViews.firstMatch
+            for _ in 0..<6 {
+                let clearOfTabBar = card.frame.maxY < app.frame.height - 140
+                if card.isHittable, clearOfTabBar { break }
+                if scroll.exists { scroll.swipeUp() } else { app.swipeUp() }
+            }
+            if card.isHittable {
+                card.tap()
+            } else {
+                card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            XCTAssertTrue(waitFor(app, "screen-recurring", timeout: 8), "No abrió errores que se repiten")
             saveShot("18_recurring")
             dismissIfPresent(app, "metric-back")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
@@ -766,7 +777,8 @@ final class GolfletUITests: XCTestCase {
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
         XCTAssertTrue(first(app, "play-hit").waitForExistence(timeout: 4))
-        XCTAssertEqual(first(app, "play-hit").label, "Ya pegué")
+        XCTAssertEqual(first(app, "play-hit").label, "ENTER")
+        XCTAssertTrue(first(app, "play-reticle").exists || first(app, "play-aim-label").exists, "Falta el mapa de mira")
         first(app, "play-hit").tap()
         let savedShot = first(app, "play-shot-0")
         reveal(app, savedShot)
@@ -1195,9 +1207,9 @@ final class GolfletUITests: XCTestCase {
             "Mínimo 8 caracteres",
             "Tu matrícula",
             "Tu número de matrícula",
-            "La misma que usás en Golfistics",
             "La misma que para entrar a tu club",
-            "Empezá a escribir, por ejemplo Manu"
+            "Nombre del grupo",
+            "Nombre o matrícula"
         ]
         if let current = element.value as? String,
            !current.isEmpty,
