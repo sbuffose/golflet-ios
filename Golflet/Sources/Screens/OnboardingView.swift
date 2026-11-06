@@ -120,7 +120,7 @@ struct OnboardingView: View {
                     .font(GType.sheetTitle)
                     .foregroundStyle(Color(hex: BrandHex.navy))
                     .accessibilityIdentifier("ob-matricula-title")
-                Text("La contraseña es la de tu club. Con eso traigo tu ficha: hándicap, club y tarjetas.")
+                Text("Con tu matrícula y tu contraseña traigo tu ficha. No te la vuelvo a pedir.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                 GField(label: "Matrícula") {
@@ -132,7 +132,7 @@ struct OnboardingView: View {
                         .accessibilityIdentifier("ob-matricula")
                 }
                 GField(label: "Contraseña") {
-                    SecureField("La de tu club", text: $clave)
+                    SecureField("La misma que para entrar a tu club", text: $clave)
                         .textContentType(RuntimeFlags.isUITesting ? nil : .password)
                         .accessibilityIdentifier("ob-clave")
                 }

@@ -132,7 +132,7 @@ enum SyncStepCopy {
             return state == .done ? "Conectado con \(club)" : "Conectando con \(club)"
         case .list:
             if state == .done {
-                if let list = progress.listTotal { return "\(list) tarjetas en tu club" }
+                if let list = progress.listTotal { return "\(list) tarjetas encontradas" }
                 return "Tarjetas encontradas"
             }
             return "Buscando tus tarjetas"

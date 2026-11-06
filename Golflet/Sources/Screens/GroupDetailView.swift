@@ -160,7 +160,7 @@ struct GroupDetailView: View {
             HStack(spacing: 14) {
                 GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 64, cacheID: group.id)
                 VStack(alignment: .leading, spacing: 4) {
-                    GOverline(text: group.isAdmin ? "Admin" : "Miembro")
+                    GOverline(text: group.isAdmin ? "Administrador" : "Miembro")
                     Text(group.name)
                         .font(GType.sheetTitle)
                         .foregroundStyle(p.ink)

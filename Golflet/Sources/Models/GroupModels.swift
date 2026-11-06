@@ -9,7 +9,7 @@ enum GroupRole: String, Codable, Sendable, Hashable {
 
     var title: String {
         switch self {
-        case .admin: return "Admin"
+        case .admin: return "Administrador"
         case .member: return "Miembro"
         }
     }

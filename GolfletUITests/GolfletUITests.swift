@@ -1207,8 +1207,8 @@ final class GolfletUITests: XCTestCase {
             "Mínimo 8 caracteres",
             "Tu matrícula",
             "Tu número de matrícula",
-            "La de tu club",
             "La misma que para entrar a tu club",
+            "Nombre del grupo",
             "Nombre o matrícula"
         ]
         if let current = element.value as? String,

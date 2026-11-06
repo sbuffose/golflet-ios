@@ -683,9 +683,9 @@ enum GolfletError: LocalizedError, Equatable {
         switch self {
         case .notImplemented: return "El API en vivo todavía no está conectado."
         case .notAuthenticated: return "Tenés que entrar a tu cuenta de Golflet."
-        case .invalidClub: return "No reconocimos esa URL del club."
+        case .invalidClub: return "No reconocimos la URL de tu club."
         case .wrongGolfisticsCredentials: return "Matrícula o clave incorrecta."
-        case .golfisticsAppDown: return "El sistema de tu club no responde."
+        case .golfisticsAppDown: return "El club no responde."
         case .auth(let failure): return failure.message
         case .needsClub(let payload): return payload.message
         case .fixtureMissing(let n): return "Falta el fixture \(n)."
