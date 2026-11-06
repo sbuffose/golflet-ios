@@ -103,13 +103,13 @@ final class LaunchAndWeatherTests: XCTestCase {
             courseRating: 72,
             slope: 130,
             handicapIndex: 3,
+            gross: 86,
             cardStatus: "OK",
             counts: ScoreCounts(birdies: 0, pars: 10, bogeys: 4, doubles: 3, triples: 1, worse: 0),
             holes: [],
             holesPlayed: 18,
             isNineHoles: false,
-            isValid: true,
-            gross: 86
+            isValid: true
         )
         let marks = ScoreSpike.marks(in: [round], courseName: "Colorada")
         XCTAssertEqual(marks.count, 1)
