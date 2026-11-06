@@ -78,15 +78,22 @@ struct PlayHubView: View {
                                 ProtoRow(title: "Libreta de la cancha", subtitle: "Hoyo a hoyo: cómo jugarlo y tu promedio")
                                     .accessibilityIdentifier("play-libreta")
                             }
-                            NavigationLink { CourseView() } label: {
+                            NavigationLink {
+                                StrategyCourseView(
+                                    courseKey: CourseIdentity.key(for: model.selectedCourseName),
+                                    courseName: model.selectedCourseName
+                                )
+                            } label: {
                                 ProtoRow(title: "Estrategia", subtitle: "Dónde apuntar y qué palo usar en cada hoyo")
+                                    .accessibilityIdentifier("play-estrategia")
                             }
                             NavigationLink { BanderaHoyView() } label: {
-                                ProtoRow(title: "Bandera de hoy", subtitle: "Posiciones de ejemplo")
+                                ProtoRow(title: "Bandera de hoy", subtitle: "Si el club las cargó")
                                     .accessibilityIdentifier("jugar-bandera")
                             }
                             NavigationLink { ClimaView() } label: {
-                                ProtoRow(title: "Clima", subtitle: "Ejemplo. No es el pronóstico del día")
+                                ProtoRow(title: "Clima", subtitle: climaSubtitle)
+                                    .accessibilityIdentifier("jugar-clima")
                             }
                         }
                     }
@@ -98,6 +105,18 @@ struct PlayHubView: View {
         .accessibilityIdentifier("screen-jugar")
         .metricDestinations()
         .task { await model.refreshTeeTimes() }
+    }
+
+    private var climaSubtitle: String {
+        guard let booking = model.nextTeeTime else { return "Sin horario reservado" }
+        if booking.windKmh == nil && booking.tempC == nil && booking.rainMm == nil {
+            return "Este horario no trae viento, temperatura ni lluvia"
+        }
+        var bits: [String] = []
+        if let wind = booking.windKmh { bits.append("\(wind) km/h") }
+        if let temp = booking.tempC { bits.append("\(temp)°") }
+        if let rain = booking.rainMm, rain > 0 { bits.append("lluvia") }
+        return bits.joined(separator: " · ")
     }
 
     private var liveMatch: LiveRound? {
@@ -279,21 +298,15 @@ struct TeeTimesHubView: View {
 
 struct BanderaHoyView: View {
     @Environment(\.palette) private var p
-    private let pos = ["M","A","C","M","A","C","A","M","C","M","A","C","M","C","A","M","A","C"]
     var body: some View {
         GScreen(id: "screen-bandera") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Bandera de hoy").font(GType.largeTitle).foregroundStyle(p.ink)
-                    HStack { ExampleNote(text: "Cancha Azul · posiciones de ejemplo"); DemoPill() }
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            ForEach(Array(pos.enumerated()), id: \.offset) { i, c in
-                                let label = c == "A" ? "Atrás · juega +8 m" : c == "C" ? "Adelante · juega −6 m" : "Medio"
-                                ProtoRow(title: "Hoyo \(i + 1)", subtitle: label)
-                            }
-                        }
-                    }
+                    Text("No hay posiciones de bandera para hoy.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("bandera-empty")
                 }
                 .padding(20)
             }
@@ -302,33 +315,26 @@ struct BanderaHoyView: View {
 }
 
 struct ClimaView: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+
     var body: some View {
+        let report = WeatherPlay.report(booking: model.nextTeeTime, rounds: model.rounds, bag: model.bag)
         GScreen(id: "screen-clima") {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Clima").font(GType.largeTitle).foregroundStyle(p.ink)
-                DemoPill()
-                HStack {
-                    tile("Viento", "14", "km/h SO")
-                    tile("Temp.", "19°", "sube a 23°")
-                    tile("Lluvia", "0", "mm · seco")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Clima").font(GType.largeTitle).foregroundStyle(p.ink)
+                    ForEach(Array(report.lines.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(GType.body)
+                            .foregroundStyle(p.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                ExampleNote(text: "Datos de ejemplo.")
-                Spacer()
+                .padding(20)
             }
-            .padding(20)
         }
-    }
-    private func tile(_ k: String, _ v: String, _ d: String) -> some View {
-        VStack(alignment: .leading) {
-            Text(k).font(GType.label).foregroundStyle(p.ink3)
-            Text(v).font(GType.statM).foregroundStyle(p.ink).tabular()
-            Text(d).font(GType.label).foregroundStyle(p.ink3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(p.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .accessibilityIdentifier(report.hasNumbers ? "clima-real" : "clima-empty")
     }
 }
 

@@ -66,7 +66,7 @@ enum ScorecardFetch {
         calendar: Calendar? = nil
     ) -> Bool {
         let calendar = calendar ?? localCalendar
-        rounds.contains { round in
+        return rounds.contains { round in
             guard calendar.isDate(round.date, inSameDayAs: playedAt) else { return false }
             let clubOK = clubCode.isEmpty || round.clubCode.caseInsensitiveCompare(clubCode) == .orderedSame
             let courseOK = course.isEmpty || round.course.caseInsensitiveCompare(course) == .orderedSame

@@ -3,6 +3,12 @@ import Foundation
 import UIKit
 #endif
 
+struct HandbookFile: Identifiable, Equatable {
+    var id: String { url.path }
+    var url: URL
+    var title: String
+}
+
 enum CourseHandbook {
     struct Block: Equatable, Sendable {
         var heading: String

@@ -4,6 +4,10 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @Environment(\.golfletTypeToken) private var typeToken
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("golflet.launch.seen") private var seenLaunch = false
+    @State private var showSplash = true
+    @State private var splashWasFirst = !UserDefaults.standard.bool(forKey: "golflet.launch.seen")
 
     var body: some View {
         let _ = typeToken
@@ -57,6 +61,17 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.28), value: model.toastMessage)
+        .overlay {
+            if showSplash {
+                LaunchSplash(firstLaunch: splashWasFirst, reduceMotion: reduceMotion) {
+                    seenLaunch = true
+                    withAnimation(.easeOut(duration: reduceMotion ? 0.15 : 0.35)) {
+                        showSplash = false
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
     }
 
     @ViewBuilder
@@ -194,7 +209,19 @@ struct RootView: View {
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(p.bg)
         appearance.shadowColor = UIColor(p.hairline)
+        let selectedColor = UIColor(p.accent)
+        let idle = UIColor(p.ink3)
+        let selectedFont = UIFont.systemFont(ofSize: 11, weight: .bold)
+        let idleFont = UIFont.systemFont(ofSize: 10, weight: .regular)
+        for layout in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
+            layout.selected.iconColor = selectedColor
+            layout.selected.titleTextAttributes = [.foregroundColor: selectedColor, .font: selectedFont]
+            layout.normal.iconColor = idle
+            layout.normal.titleTextAttributes = [.foregroundColor: idle, .font: idleFont]
+        }
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
+        UITabBar.appearance().tintColor = selectedColor
+        UITabBar.appearance().unselectedItemTintColor = idle
     }
 }

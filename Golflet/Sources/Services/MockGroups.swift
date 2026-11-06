@@ -281,6 +281,12 @@ extension MockAPIClient {
         return profile
     }
 
+    func uploadMatchPhoto(groupID: String, matchID: String, jpeg: Data) async throws -> String {
+        _ = try await group(id: groupID)
+        guard !jpeg.isEmpty else { throw GolfletError.decoding("photo") }
+        return "mock://match/\(matchID)"
+    }
+
     func memberRound(groupID: String, memberID: String, roundID: String) async throws -> SharedScorecard {
         _ = try await group(id: groupID)
         let profile = try await memberProfile(groupID: groupID, memberID: memberID)

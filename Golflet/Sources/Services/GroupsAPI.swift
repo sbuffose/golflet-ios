@@ -91,9 +91,10 @@ enum GroupsParser {
         let id = string(blob["id"] ?? blob["group_id"])
         let name = string(blob["name"] ?? blob["title"])
         guard !id.isEmpty, !name.isEmpty else { return nil }
-        let memberSource = blob["member_list"] ?? item["member_list"] ?? blob["members"] ?? item["members"]
+        let memberBlob = (blob["members"] as? [String: Any]) ?? (item["members"] as? [String: Any])
+        let memberSource = blob["member_list"] ?? item["member_list"] ?? memberBlob?["list"] ?? memberBlob?["items"] ?? blob["members"] ?? item["members"]
         let members = members(from: memberSource)
-        let reportedCount = JSONFlex.int(from: blob["member_count"] ?? blob["members_count"] ?? blob["integrantes"] ?? item["member_count"])
+        let reportedCount = JSONFlex.int(from: blob["member_count"] ?? blob["members_count"] ?? blob["integrantes"] ?? item["member_count"] ?? memberBlob?["count"] ?? memberBlob?["total"])
             ?? ((memberSource as? [Any]) == nil ? JSONFlex.int(from: memberSource) : nil)
         let isAdmin = JSONFlex.bool(from: blob["is_admin"] ?? item["is_admin"]) ?? false
         let owner = member(from: blob["owner"])
@@ -110,7 +111,7 @@ enum GroupsParser {
         let myRole = role(blob["my_role"] ?? blob["role"])
             ?? (isAdmin ? .admin : members.first { $0.id == string(blob["me_id"]) }?.role)
             ?? .member
-        let history = MatchHistory.read(from: blob)
+        let history = MatchHistory.read(from: (blob["matches"] as? [String: Any]) ?? (blob["partidos"] as? [String: Any]) ?? blob)
         return GolfletGroup(
             id: id,
             name: name,
@@ -357,7 +358,7 @@ enum GroupsParser {
             ?? (json["head_to_head"] as? [String: Any])
             ?? (json["partidos"] as? [String: Any])
             ?? [:]
-        let matches = MatchHistory.read(from: matchBlob)
+        let matches = MatchHistory.read(from: matchBlob.isEmpty ? json : matchBlob)
         return GroupMemberProfile(
             groupID: resolvedID.isEmpty ? groupID : resolvedID,
             groupName: string(group["name"]),

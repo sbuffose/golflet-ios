@@ -143,6 +143,19 @@ struct HomeView: View {
                     .accessibilityLabel("Actualizar")
                     .accessibilityIdentifier("home-sync-\(club.accountId)")
                 }
+                if let major = ProMajor.current(on: Date()) {
+                    Link(destination: major.url) {
+                        Text(major.short)
+                            .font(GFont.ui(11, weight: .bold))
+                            .foregroundStyle(Color(hex: major.foreground))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: major.background))
+                            .clipShape(Capsule())
+                    }
+                    .accessibilityLabel(major.name)
+                    .accessibilityIdentifier("major-badge")
+                }
                 ZStack(alignment: .topTrailing) {
                     Button { model.openAvatar() } label: {
                         AvatarCircle(initials: model.profile.initials)
@@ -543,7 +556,6 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Grupos").font(GType.overline).foregroundStyle(p.ink3)
                         Text("Quién juega cuándo y lo último de tus amigos").font(GType.headline)
-                        DemoPill()
                     }
                 }
             }
@@ -576,7 +588,7 @@ struct HomeView: View {
                     }
                     .accessibilityIdentifier("home-more-sg")
                     NavigationLink { BanderaHoyView() } label: {
-                        ProtoRow(title: "Bandera de hoy", subtitle: "Posiciones de ejemplo")
+                        ProtoRow(title: "Bandera de hoy", subtitle: "Si el club las cargó")
                     }
                     NavigationLink { CierreView() } label: {
                         ProtoRow(title: "Cierre de vuelta", subtitle: "Sáb 31-oct · 84")
@@ -1375,6 +1387,20 @@ struct HomeGroupsSheet: View {
                         GOverline(text: "Tus grupos")
                         GTitle(text: "Grupos", size: 34)
                     }
+                    Button {
+                        dismiss()
+                        model.presentCreateGroup()
+                    } label: {
+                        Text("Crear grupo")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(p.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home-groups-create-cta")
                     ForEach(model.groups) { group in
                         Button {
                             dismiss()

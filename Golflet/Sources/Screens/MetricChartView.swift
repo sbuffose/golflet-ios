@@ -25,7 +25,8 @@ struct MetricChartView: View {
                                 MetricLineChart(
                                     points: points,
                                     rolling: rolling,
-                                    valueTitle: query.kind.valueTitle
+                                    valueTitle: query.kind.valueTitle,
+                                    spikes: spikes
                                 )
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 220)
@@ -34,7 +35,24 @@ struct MetricChartView: View {
                                     HStack(spacing: 16) {
                                         legend(p.ink, "Cada ronda")
                                         legend(p.primary, "Promedio móvil")
+                                        if !spikes.isEmpty {
+                                            legend(p.accent, "Dobles o peor")
+                                        }
                                     }
+                                }
+                                if !spikes.isEmpty {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Por qué subió")
+                                            .font(GType.headline)
+                                            .foregroundStyle(p.ink)
+                                        ForEach(spikes, id: \.date) { mark in
+                                            Text("\(FormatAR.longDate(mark.date)) · \(mark.gross) · \(mark.reason)")
+                                                .font(GType.label)
+                                                .foregroundStyle(p.ink2)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                    }
+                                    .accessibilityIdentifier("chart-errors")
                                 }
                             }
                         }
@@ -70,6 +88,12 @@ struct MetricChartView: View {
         }
     }
 
+    private var spikes: [ScoreSpike.Mark] {
+        guard case .gross = query.kind else { return [] }
+        let rounds = StatsEngine.ranged(model.rounds, range: query.range)
+        return ScoreSpike.marks(in: rounds, courseName: query.courseName)
+    }
+
     private var series: [MetricPoint] {
         if !remotePoints.isEmpty { return remotePoints }
         let rounds = StatsEngine.ranged(model.rounds, range: query.range)
@@ -91,6 +115,7 @@ struct MetricLineChart: View {
     var points: [MetricPoint]
     var rolling: [MetricPoint] = []
     var valueTitle: String
+    var spikes: [ScoreSpike.Mark] = []
 
     var body: some View {
         Chart {
@@ -105,8 +130,8 @@ struct MetricLineChart: View {
                     x: .value("Fecha", point.date),
                     y: .value(valueTitle, point.value)
                 )
-                .foregroundStyle(p.teeColor(point.course))
-                .symbolSize(28)
+                .foregroundStyle(isSpike(point) ? p.accent : p.teeColor(point.course))
+                .symbolSize(isSpike(point) ? 70 : 28)
             }
             ForEach(rolling) { point in
                 LineMark(
@@ -142,6 +167,10 @@ struct MetricLineChart: View {
             }
         }
         .chartYScale(domain: .automatic(includesZero: false))
+    }
+
+    private func isSpike(_ point: MetricPoint) -> Bool {
+        spikes.contains { Calendar.current.isDate($0.date, inSameDayAs: point.date) }
     }
 }
 

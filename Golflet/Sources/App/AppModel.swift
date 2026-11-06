@@ -845,6 +845,10 @@ final class AppModel {
         }
     }
 
+    func saveMatchPhoto(groupID: String, matchID: String, jpeg: Data) async -> String? {
+        (try? await api.uploadMatchPhoto(groupID: groupID, matchID: matchID, jpeg: jpeg))
+    }
+
     func updateGroup(_ group: GolfletGroup, name: String?, photoJPEG: Data?) async {
         await run {
             let updated = try await api.updateGroup(id: group.id, name: name, photoJPEG: photoJPEG)
