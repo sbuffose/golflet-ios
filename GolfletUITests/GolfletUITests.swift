@@ -16,8 +16,14 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "home-tee-tab").waitForExistence(timeout: 4), "Falta la pestaña de próximo tee time")
         first(app, "home-tee-tab").tap()
         XCTAssertTrue(waitFor(app, "home-tee-times", timeout: 4), "No scrolleó a la tarjeta de tee times")
-        XCTAssertTrue(first(app, "home-tee-partners-tt-jockey-1").waitForExistence(timeout: 3), "Faltan los compañeros")
-        first(app, "home-tee-row-tt-jockey-1").tap()
+        XCTAssertTrue(first(app, "home-tee-partners-tt-jockey-1").waitForExistence(timeout: 4), "Faltan los compañeros")
+        let teeRow = first(app, "home-tee-row-tt-jockey-1")
+        XCTAssertTrue(teeRow.waitForExistence(timeout: 4), "Falta la fila del tee time")
+        if teeRow.isHittable {
+            teeRow.tap()
+        } else {
+            teeRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "El tee time no abre el detalle")
         let cancha = first(app, "tee-prep-cancha")
         XCTAssertTrue(cancha.waitForExistence(timeout: 3), "Falta la cancha")

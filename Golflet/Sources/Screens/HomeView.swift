@@ -393,41 +393,44 @@ struct HomeView: View {
     }
 
     private func teeTimeRow(_ booking: TeeTime) -> some View {
-        NavigationLink {
-            TeeTimePrepView(booking: booking)
-        } label: {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(booking.chipWhen)
-                        .font(GType.headline)
-                        .tabular()
-                        .foregroundStyle(p.ink)
-                    Text(booking.clubName)
-                        .font(GType.body)
-                        .foregroundStyle(p.ink)
-                    if !booking.course.isEmpty {
-                        Text(booking.course)
-                            .font(GType.label)
-                            .foregroundStyle(p.ink2)
+        ZStack(alignment: .topLeading) {
+            NavigationLink {
+                TeeTimePrepView(booking: booking)
+            } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(booking.chipWhen)
+                            .font(GType.headline)
+                            .tabular()
+                            .foregroundStyle(p.ink)
+                        Text(booking.clubName)
+                            .font(GType.body)
+                            .foregroundStyle(p.ink)
+                        if !booking.course.isEmpty {
+                            Text(booking.course)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                        if let partners = booking.companionsLine {
+                            Text(partners)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
                     }
-                    if let partners = booking.companionsLine {
-                        Text(partners)
-                            .font(GType.label)
-                            .foregroundStyle(p.ink2)
-                        GProbe(id: "home-tee-partners-\(booking.id)", label: partners)
-                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(p.ink3)
                 }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(p.ink3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
             .accessibilityIdentifier("home-tee-row-\(booking.id)")
+            if let partners = booking.companionsLine {
+                GProbe(id: "home-tee-partners-\(booking.id)", label: partners)
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("home-tee-row-\(booking.id)")
         .accessibilityElement(children: .contain)
     }
 
