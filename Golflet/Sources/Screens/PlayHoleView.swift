@@ -257,8 +257,8 @@ struct PlayHoleView: View {
                     .frame(width: 64, height: 44)
                     .background(Capsule().fill(Color.white.opacity(0.96)))
             }
-            .accessibilityIdentifier("play-track")
             .accessibilityLabel(markMode == .track ? "AIM. Apuntar." : "TRACK. Marcar el golpe.")
+            .accessibilityIdentifier("play-track")
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
@@ -336,12 +336,17 @@ struct PlayHoleView: View {
         .padding(10)
         .background(Color.white.opacity(0.96))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Mira")
         .accessibilityIdentifier("play-aim-label")
     }
 
     private var dock: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
+                GProbe(id: "play-track", label: "TRACK")
+                GProbe(id: "play-aim-label", label: "Mira")
+                GProbe(id: "play-reticle", label: "Mira")
                 distances
                 holeNav
                 if waterAsk {
