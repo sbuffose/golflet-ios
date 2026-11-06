@@ -97,49 +97,100 @@ struct HandicapHistoryView: View {
                     .foregroundStyle(p.ink3)
             } else {
                 GCard(radius: 18, padding: 14) {
-                    VStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(newestFirst.enumerated()), id: \.offset) { index, point in
+                            let older = index + 1 < newestFirst.count ? newestFirst[index + 1] : nil
                             Button {
                                 openChange = openChange == index ? nil : index
                             } label: {
-                                HStack(spacing: 10) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(FormatAR.longDate(point.date))
-                                            .font(GType.headline)
-                                            .foregroundStyle(p.ink)
-                                        Text(point.course.isEmpty ? "Golflet" : point.course)
-                                            .font(GType.label)
-                                            .foregroundStyle(p.ink3)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer()
-                                    Text(FormatAR.one(point.handicap))
-                                        .font(GType.headline)
-                                        .tabular()
-                                        .foregroundStyle(p.ink)
-                                    Image(systemName: openChange == index ? "chevron.down" : "chevron.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(p.ink3)
-                                }
+                                timelineRow(point: point, older: older, index: index, isLast: index == newestFirst.count - 1, book: book)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("metric-hi-\(index)")
                             if openChange == index {
                                 jumpDetail(
                                     point: point,
-                                    previous: index + 1 < newestFirst.count ? newestFirst[index + 1] : nil,
+                                    previous: older,
                                     book: book
                                 )
                                 .accessibilityIdentifier("hcp-jump-detail-\(index)")
-                            }
-                            if index < newestFirst.count - 1 {
-                                Hairline()
+                                .padding(.leading, 24)
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func timelineRow(point: TrendPoint, older: TrendPoint?, index: Int, isLast: Bool, book: IndexComposition) -> some View {
+        let delta = older.map { point.handicap - $0.handicap }
+        let rose = (delta ?? 0) > 0.049
+        let fell = (delta ?? 0) < -0.049
+        let color: Color = rose ? p.negative : (fell ? p.green : p.ink3)
+        return HStack(alignment: .top, spacing: 12) {
+            Circle()
+                .fill(color)
+                .frame(width: 10, height: 10)
+                .padding(.top, 5)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(FormatAR.longDate(point.date))
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Text(point.course.isEmpty ? "Golflet" : point.course)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .lineLimit(1)
+                if let delta, rose || fell {
+                    Text("\(rose ? "Subió" : "Bajó") \(FormatAR.one(abs(delta)))")
+                        .font(GType.label)
+                        .foregroundStyle(color)
+                }
+                if let cause = causeLine(point: point, older: older, book: book) {
+                    Text(cause)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(FormatAR.one(point.handicap))
+                .font(GType.headline)
+                .tabular()
+                .foregroundStyle(p.ink)
+            Image(systemName: openChange == index ? "chevron.down" : "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(p.ink3)
+                .padding(.top, 4)
+        }
+        .padding(.vertical, 10)
+        .background(alignment: .topLeading) {
+            if !isLast {
+                Rectangle()
+                    .fill(p.hairline)
+                    .frame(width: 2)
+                    .padding(.leading, 4)
+                    .padding(.top, 16)
+            }
+        }
+    }
+
+    private func causeLine(point: TrendPoint, older: TrendPoint?, book: IndexComposition) -> String? {
+        guard let older else { return nil }
+        let move = IndexBook.movement(
+            from: IndexBook.counting(asOf: older.date, revisions: book.revisions),
+            to: IndexBook.counting(asOf: point.date, revisions: book.revisions)
+        )
+        var bits: [String] = []
+        if let card = move.entered.first {
+            let name = card.course.isEmpty ? "una tarjeta" : card.course
+            bits.append("Entró \(name)")
+        }
+        if let card = move.dropped.first {
+            let name = card.course.isEmpty ? "una tarjeta" : card.course
+            bits.append("Salió \(name)")
+        }
+        return bits.isEmpty ? nil : bits.joined(separator: " · ")
     }
 
     private func jumpDetail(point: TrendPoint, previous: TrendPoint?, book: IndexComposition) -> some View {

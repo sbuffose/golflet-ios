@@ -303,11 +303,22 @@ final class PlayAPITests: XCTestCase {
         XCTAssertEqual(parsed.holes.first?.variants[.scratch]?.teeClub, "Madera 3")
 
         let azul = try await api.courseStrategy(courseKey: "1:Azul", courseId: nil)
-        XCTAssertEqual(azul.publishedHoles, [7, 8])
+        XCTAssertEqual(azul.holes.count, 18)
+        XCTAssertEqual(azul.publishedHoles, Array(1...18))
+        XCTAssertEqual(azul.hole(7)?.planTitle, "Híbrido al centro y wedge al green")
         XCTAssertEqual(azul.hole(7)?.teeClub, "Híbrido")
         XCTAssertEqual(azul.hole(7)?.hazards.count, 3)
+        XCTAssertNotNil(azul.overview)
         let colorada = try await api.courseStrategy(courseKey: "1:Colorada", courseId: nil)
-        XCTAssertTrue(colorada.holes.isEmpty)
+        XCTAssertEqual(colorada.holes.count, 18)
+        XCTAssertEqual(colorada.publishedHoles, Array(1...18))
+        XCTAssertNotNil(colorada.overview)
+        XCTAssertFalse(colorada.holes.contains { ($0.planTitle ?? "").isEmpty || ($0.planText ?? "").isEmpty })
+        let emptyRemote = JockeyPlans.merging(
+            remote: CourseStrategy(courseId: "118-jockey-azul", courseKey: "1:Azul", overview: nil, overviewPublishedAt: nil, publishedHoles: [], holes: []),
+            requestedKey: nil
+        )
+        XCTAssertEqual(emptyRemote.holes.count, 18)
 
         XCTAssertEqual(
             RecapSpeech.pickLocale(from: [

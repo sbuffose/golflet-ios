@@ -73,6 +73,41 @@ final class LaunchAndWeatherTests: XCTestCase {
         XCTAssertFalse(real.plain.contains("14 km/h"))
     }
 
+    func testCoursePinAndWindShiftStayHonest() {
+        let mdp = CoursePin.coordinate(club: "Mar del Plata Golf Club", course: "")
+        XCTAssertEqual(mdp?.lat ?? 0, -38.02999, accuracy: 0.0001)
+        XCTAssertEqual(mdp?.lng ?? 0, -57.53624, accuracy: 0.0001)
+        XCTAssertNil(CoursePin.coordinate(club: "Club inventado", course: ""))
+        XCTAssertEqual(TeeForecast.cardinal(0), "norte")
+        XCTAssertEqual(TeeForecast.cardinal(90), "este")
+        let steady = TeeForecast.shiftLine(hours: [
+            ForecastHour(date: date(2026, 11, 7), tempC: 19, rainMm: 0, windKmh: 14, windFromDeg: 180),
+            ForecastHour(date: date(2026, 11, 7), tempC: 20, rainMm: 0, windKmh: 15, windFromDeg: 190)
+        ])
+        XCTAssertEqual(steady, "El viento se mantiene en estas horas.")
+        let turn = TeeForecast.shiftLine(hours: [
+            ForecastHour(date: date(2026, 11, 7), tempC: 18, rainMm: 0, windKmh: 12, windFromDeg: 0),
+            ForecastHour(date: date(2026, 11, 7), tempC: 18, rainMm: 1.2, windKmh: 22, windFromDeg: 90)
+        ])
+        XCTAssertTrue(turn?.contains("12 a 22") == true)
+        XCTAssertTrue(turn?.contains("norte") == true)
+        XCTAssertTrue(turn?.contains("este") == true)
+
+        let hourly: [String: Any] = [
+            "time": ["2026-11-07T12:00", "2026-11-07T13:00", "2026-11-07T14:00", "2026-11-07T15:00", "2026-11-07T16:00", "2026-11-07T17:00", "2026-11-07T18:00"],
+            "temperature_2m": [19.2, 20, 21, 21, 20, 18, 17],
+            "precipitation": [0, 0, 0, 0.4, 0, 0, 0],
+            "wind_speed_10m": [14.2, 16, 18, 18, 12, 10, 9],
+            "wind_direction_10m": [180, 200, 220, 220, 180, 160, 140]
+        ]
+        let hours = TeeForecast.slice(hourly: hourly, around: date(2026, 11, 7))
+        XCTAssertEqual(hours.count, 6)
+        XCTAssertEqual(hours.first?.windKmh, 14)
+        XCTAssertEqual(hours.first?.tempC, 19)
+        XCTAssertEqual(hours.first?.windFromES, "sur")
+        XCTAssertTrue(hours.first?.line.contains("sin lluvia") == true)
+    }
+
     func testHandbookWithoutWindOmitsTheWindChapter() {
         let booking = TeeTime(
             id: "tt",

@@ -1,3 +1,4 @@
+import MapKit
 import SwiftUI
 
 struct PlayHubView: View {
@@ -317,24 +318,76 @@ struct BanderaHoyView: View {
 struct ClimaView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    @State private var forecast: TeeForecast.Window?
 
     var body: some View {
-        let report = WeatherPlay.report(booking: model.nextTeeTime, rounds: model.rounds, bag: model.bag)
+        let booking = model.nextTeeTime
+        let report = WeatherPlay.report(booking: booking, rounds: model.rounds, bag: model.bag)
+        let pin = booking.flatMap { CoursePin.coordinate(club: $0.clubName, course: $0.course) }
+        let live = forecast.flatMap { window in
+            booking.map { TeeForecast.playText(window: window, booking: $0, rounds: model.rounds, bag: model.bag) }
+        }
         GScreen(id: "screen-clima") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Clima").font(GType.largeTitle).foregroundStyle(p.ink)
-                    ForEach(Array(report.lines.enumerated()), id: \.offset) { _, line in
+                    if let pin {
+                        CoursePinMap(lat: pin.lat, lng: pin.lng, title: pin.title)
+                            .frame(height: 220)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .accessibilityIdentifier("clima-map")
+                        Text(pin.title)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    let lines = live?.split(separator: "\n").map(String.init) ?? report.lines
+                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                         Text(line)
                             .font(GType.body)
                             .foregroundStyle(p.ink)
                             .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier(index == 0 ? "clima-hour" : "clima-line-\(index)")
+                    }
+                    if forecast?.failed == true {
+                        Text("No pude leer el pronóstico. El mapa es el del club.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("clima-forecast-error")
                     }
                 }
                 .padding(20)
             }
         }
-        .accessibilityIdentifier(report.hasNumbers ? "clima-real" : "clima-empty")
+        .accessibilityIdentifier(report.hasNumbers || (forecast?.hours.isEmpty == false) ? "clima-real" : "clima-empty")
+        .task(id: booking?.id) {
+            forecast = nil
+            guard let booking else { return }
+            forecast = await TeeForecast.load(booking: booking)
+        }
+    }
+}
+
+struct CoursePinMap: UIViewRepresentable {
+    var lat: Double
+    var lng: Double
+    var title: String
+
+    func makeUIView(context: Context) -> MKMapView {
+        let map = MKMapView()
+        map.isRotateEnabled = false
+        map.pointOfInterestFilter = .excludingAll
+        return map
+    }
+
+    func updateUIView(_ map: MKMapView, context: Context) {
+        let center = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+        let region = MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02))
+        map.setRegion(region, animated: false)
+        map.removeAnnotations(map.annotations)
+        let pin = MKPointAnnotation()
+        pin.coordinate = center
+        pin.title = title
+        map.addAnnotation(pin)
     }
 }
 

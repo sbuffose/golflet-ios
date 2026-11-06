@@ -167,6 +167,7 @@ struct TeeTimePrepView: View {
     @Environment(\.palette) private var p
     let booking: TeeTime
     @State private var strategy: CourseStrategy?
+    @State private var liveForecast: String?
 
     private var place: TeePlace {
         TeeCourseResolve.place(booking: booking, rounds: model.rounds, courses: model.courses)
@@ -192,7 +193,7 @@ struct TeeTimePrepView: View {
                     block("Cancha", place.canchaTitle, "tee-prep-cancha")
                     block(
                         "Pronóstico",
-                        TeeTimePrep.forecastText(booking: booking, rounds: model.rounds, bag: model.bag),
+                        liveForecast ?? TeeTimePrep.forecastText(booking: booking, rounds: model.rounds, bag: model.bag),
                         "tee-prep-forecast"
                     )
                     strategyBlock
@@ -203,6 +204,7 @@ struct TeeTimePrepView: View {
         .accessibilityIdentifier("screen-tee-prep")
         .safeAreaInset(edge: .top) { MetricBackBar() }
         .task(id: place.strategyCourses.map(\.key).joined(separator: "|")) { await loadStrategy() }
+        .task(id: booking.id) { await loadForecast() }
     }
 
     private var strategyBlock: some View {
@@ -260,5 +262,13 @@ struct TeeTimePrepView: View {
             return
         }
         strategy = try? await model.api.courseStrategy(courseKey: course.key, courseId: course.courseId)
+    }
+
+    private func loadForecast() async {
+        liveForecast = nil
+        guard !RuntimeFlags.isUITesting else { return }
+        guard booking.windKmh == nil, booking.tempC == nil, booking.rainMm == nil else { return }
+        guard let window = await TeeForecast.load(booking: booking), !window.hours.isEmpty else { return }
+        liveForecast = TeeForecast.playText(window: window, booking: booking, rounds: model.rounds, bag: model.bag)
     }
 }
