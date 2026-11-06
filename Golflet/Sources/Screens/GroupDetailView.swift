@@ -89,6 +89,14 @@ struct GroupDetailView: View {
                 adminTools(group)
             }
             members(group)
+            MatchHistorySection(
+                records: group.matchRecords,
+                matches: group.recentMatches,
+                canAttach: true,
+                onPhoto: { matchID, data in
+                    _ = await model.saveMatchPhoto(groupID: group.id, matchID: matchID, jpeg: data)
+                }
+            )
             comparisonSection
             comparativoEntry
             Button {
