@@ -344,6 +344,10 @@ struct PlayHoleView: View {
     private var dock: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
+                Button("Salir") { model.showsPlay = false }
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .accessibilityIdentifier("play-close")
                 GProbe(id: "play-track", label: "TRACK")
                 GProbe(id: "play-aim-label", label: "Mira")
                 GProbe(id: "play-reticle", label: "Mira")
