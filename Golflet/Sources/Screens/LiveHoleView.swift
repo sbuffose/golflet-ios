@@ -185,7 +185,7 @@ struct LiveHoleView: View {
                         .padding(.horizontal, 12)
                     }
                     if model.roundSettings.shows(.track, mode: model.homeMode) || showMore || model.homeMode == .mej {
-                        Button(mode == .track ? "Confirmar" : "Registrar") {
+                        Button(mode == .track ? "ENTER" : "TRACK") {
                             if mode == .track { confirmShot(penalty: lastLie == .agua, holed: geo.meters(from: center, to: pin) < 1.5) }
                             else { withAnimation(motion) { mode = .track } }
                         }
@@ -195,7 +195,14 @@ struct LiveHoleView: View {
                         .padding(.vertical, 12)
                         .background(p.primary)
                         .clipShape(Capsule())
+                        .accessibilityLabel(mode == .track ? "ENTER" : "TRACK. Marcar el golpe.")
                         .accessibilityIdentifier("live-confirm")
+                        if mode == .track {
+                            Button("AIM") { withAnimation(motion) { mode = .aim } }
+                                .font(GType.headline)
+                                .foregroundStyle(p.primary)
+                                .accessibilityLabel("AIM. Apuntar.")
+                        }
                     }
                     Button("Anotar score") { showScore = true }
                         .font(GType.headline)

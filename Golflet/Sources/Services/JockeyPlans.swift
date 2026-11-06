@@ -1,22 +1,26 @@
 import Foundation
 
-/// Published plans for Jockey Azul and Colorada.
-/// `GET /api/strategy` on golflet.vercel.app returns `holes: []` for both
-/// course keys, and this repo cannot write that API. These plans fill the
-/// hole list when the response is empty. Yardages are the club scorecard
-/// (tee Azul / tee Rojo). Holes 7 and 8 of Azul keep the measured plan.
+/// Published plans for Jockey Azul, Colorada and Mar del Plata Cancha Vieja.
+/// `GET /api/strategy` returns `holes: []` for these keys, and this repo
+/// cannot write that API. These plans fill the hole list when the response
+/// is empty. Jockey yardages are the club scorecard (tee Azul / tee Rojo).
+/// Holes 7 and 8 of Azul keep the measured plan. Cancha Vieja is the blue
+/// card in `MdPPlans`. Cancha Nueva stays empty: there is no published card.
 enum JockeyPlans {
     static func strategy(matching key: String) -> CourseStrategy? {
         let folded = key.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
         if folded.contains("colorada") { return colorada }
         if folded.contains("azul") || folded == "1:azul" { return azul }
-        return nil
+        return MdPPlans.strategy(matching: key)
     }
 
     static func merging(remote: CourseStrategy, requestedKey: String?) -> CourseStrategy {
         if !remote.holes.isEmpty { return remote }
-        let key = remote.courseKey.isEmpty ? (requestedKey ?? remote.courseId) : remote.courseKey
-        return strategy(matching: key) ?? remote
+        let keys = [remote.courseKey, requestedKey, remote.courseId].compactMap { $0 }.filter { !$0.isEmpty }
+        for key in keys {
+            if let bundled = strategy(matching: key) { return bundled }
+        }
+        return remote
     }
 
     static var azul: CourseStrategy {
