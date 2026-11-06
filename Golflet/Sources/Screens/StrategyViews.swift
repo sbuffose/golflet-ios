@@ -466,7 +466,9 @@ struct StrategyHoleCard: View {
         if compact {
             label
         } else {
-            NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: name))) {
+            NavigationLink {
+                ClubStatsView(code: ClubCode.code(for: name))
+            } label: {
                 label
             }
             .buttonStyle(.plain)
