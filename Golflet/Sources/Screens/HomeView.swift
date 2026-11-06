@@ -424,10 +424,11 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
+            .accessibilityIdentifier("home-tee-row-\(booking.id)")
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-tee-row-\(booking.id)")
+        .accessibilityElement(children: .contain)
     }
 
     private func revealPartners(_ proxy: ScrollViewProxy) {
