@@ -600,13 +600,13 @@ enum GroupsParser {
         GroupRole(rawValue: string(raw).lowercased())
     }
 
-    private static func string(_ raw: Any?) -> String {
+    fileprivate static func string(_ raw: Any?) -> String {
         if let value = raw as? String { return value }
         if let value = raw as? Int { return String(value) }
         return ""
     }
 
-    private static func optionalString(_ raw: Any?) -> String? {
+    fileprivate static func optionalString(_ raw: Any?) -> String? {
         let value = string(raw)
         return value.isEmpty ? nil : value
     }
