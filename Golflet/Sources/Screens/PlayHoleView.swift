@@ -69,14 +69,6 @@ struct PlayHoleView: View {
             if let here = location.coordinate {
                 OfflinePlay.saveLastGPS(here, accuracy: location.accuracyM)
             }
-            await refresh()
-            if let cached = CourseCache.load(courseId: course.courseId)?.strategy {
-                strategy = cached
-            }
-            if let remote = try? await model.api.courseStrategy(courseKey: course.courseKey, courseId: course.courseId) {
-                strategy = remote
-                CourseCache.save(detail: course, strategy: remote)
-            }
             RoundLiveActivity.start(
                 course: course,
                 liveRound: liveRound,
@@ -85,6 +77,14 @@ struct PlayHoleView: View {
                 practice: showsWind,
                 headingDeg: location.headingDeg
             )
+            await refresh()
+            if let cached = CourseCache.load(courseId: course.courseId)?.strategy {
+                strategy = cached
+            }
+            if let remote = try? await model.api.courseStrategy(courseKey: course.courseKey, courseId: course.courseId) {
+                strategy = remote
+                CourseCache.save(detail: course, strategy: remote)
+            }
             beginPace()
             await loadPaceEstimate()
             await refreshLivePace()

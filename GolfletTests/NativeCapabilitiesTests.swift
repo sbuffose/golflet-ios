@@ -431,5 +431,18 @@ final class NativeCapabilitiesTests: XCTestCase {
         XCTAssertEqual(snap.lastRoundURL, URL(string: "golflet://round/r1"))
         XCTAssertFalse(snap.isPlaceholder)
         XCTAssertTrue(WidgetSnapshot.placeholder.isPlaceholder)
+        XCTAssertEqual(snap.lockDetail, snap.lastLine)
+
+        let flat = """
+        {"handicap": 3.1, "last_course": "Colorada", "last_gross": 78, "next_when": "Sáb 7 · 12:20", "next_course": "Mar del Plata"}
+        """.data(using: .utf8)!
+        let posted = try XCTUnwrap(WidgetSnapshot.parseAPI(flat))
+        XCTAssertEqual(posted.handicapLine, FormatAR.one(3.1))
+        XCTAssertEqual(posted.lockDetail, "Sáb 7 · 12:20 · Mar del Plata")
+        XCTAssertFalse(posted.isPlaceholder)
+
+        let indexOnly = WidgetSnapshot(handicap: 3.1)
+        XCTAssertFalse(indexOnly.isPlaceholder)
+        XCTAssertNotEqual(indexOnly.handicapLine, "—")
     }
 }

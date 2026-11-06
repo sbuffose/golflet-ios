@@ -18,7 +18,6 @@ enum RoundLiveActivity {
         matchStatus: String? = nil
     ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        end()
         let state = LiveRoundState.make(course: course, hole: liveRound.currentHole, here: here, shots: shots, practice: practice, headingDeg: headingDeg, windKmh: windKmh, windFromDeg: windFromDeg, matchHonor: matchHonor, matchStatus: matchStatus)
         let attributes = RoundActivityAttributes(
             courseName: course.course,
@@ -32,8 +31,11 @@ enum RoundLiveActivity {
                 pushType: nil
             )
             currentID = activity.id
+            for old in Activity<RoundActivityAttributes>.activities where old.id != activity.id {
+                Task { await old.end(nil, dismissalPolicy: .immediate) }
+            }
         } catch {
-            currentID = nil
+            return
         }
     }
 

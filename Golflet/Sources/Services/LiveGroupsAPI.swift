@@ -43,6 +43,17 @@ extension LiveGolfletAPI {
         return group
     }
 
+    func inviteByMatricula(groupID: String, matricula: String) async throws -> GolfletGroup {
+        let trimmed = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw GolfletError.server("Escribí la matrícula.") }
+        _ = try? await request("POST", "/api/groups/lookup", body: ["matriculas": [trimmed]])
+        let json = try await request("POST", GroupsAPIPaths.invites(groupID), body: ["matricula": trimmed])
+        if let group = GroupsParser.group(from: json["group"] ?? json) {
+            return group
+        }
+        return try await group(id: groupID)
+    }
+
     func leaveGroup(id: String) async throws {
         _ = try await request("POST", GroupsAPIPaths.leave(id), body: [:])
     }

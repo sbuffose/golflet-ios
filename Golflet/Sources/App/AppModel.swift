@@ -850,8 +850,16 @@ final class AppModel {
     }
 
     func updateGroup(_ group: GolfletGroup, name: String?, photoJPEG: Data?) async {
+        if let photoJPEG { GroupPhotoCache.store(photoJPEG, for: group.id) }
         await run {
             let updated = try await api.updateGroup(id: group.id, name: name, photoJPEG: photoJPEG)
+            replace(updated)
+        }
+    }
+
+    func inviteByMatricula(_ group: GolfletGroup, matricula: String) async {
+        await run {
+            let updated = try await api.inviteByMatricula(groupID: group.id, matricula: matricula)
             replace(updated)
         }
     }

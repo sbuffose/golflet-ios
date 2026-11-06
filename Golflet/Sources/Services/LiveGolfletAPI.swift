@@ -262,7 +262,7 @@ struct LiveGolfletAPI: GolfletAPI {
         }
         let suffix = query.isEmpty ? "" : "?\(query.joined(separator: "&"))"
         let json = try await request("GET", "/api/strategy\(suffix)", authorized: false)
-        return PlayParser.strategy(json)
+        return JockeyPlans.merging(remote: PlayParser.strategy(json), requestedKey: courseKey ?? courseId)
     }
 
     private static let queryAllowed: CharacterSet = {
