@@ -64,9 +64,37 @@ extension MockAPIClient {
                 guard !trimmed.isEmpty else { throw GolfletError.server("Ponéle un nombre al grupo.") }
                 store.groups[index].name = trimmed
             }
-            if photoJPEG != nil {
+            if let photoJPEG {
+                GroupPhotoCache.store(photoJPEG, for: id)
                 store.groups[index].photoURL = "mock://group/\(id)"
             }
+            return store.groups[index]
+        }
+    }
+
+    func inviteByMatricula(groupID: String, matricula: String) async throws -> GolfletGroup {
+        try requireAdmin(groupID)
+        let trimmed = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw GolfletError.server("Escribí la matrícula.") }
+        return try mutate { store, _ in
+            guard let index = store.groups.firstIndex(where: { $0.id == groupID }) else {
+                throw GolfletError.server("No encontramos ese grupo.")
+            }
+            if store.groups[index].members.contains(where: { $0.matricula == trimmed })
+                || store.groups[index].pendingMembers.contains(where: { $0.matricula == trimmed }) {
+                throw GolfletError.server("Esa matrícula ya está en el grupo.")
+            }
+            let member = GroupMember(
+                id: "m-\(trimmed)",
+                name: "Matrícula \(trimmed)",
+                initials: String(trimmed.prefix(2)),
+                photoURL: nil,
+                role: .member,
+                isOwner: false,
+                matricula: trimmed,
+                isPending: true
+            )
+            store.groups[index].pendingMembers.append(member)
             return store.groups[index]
         }
     }

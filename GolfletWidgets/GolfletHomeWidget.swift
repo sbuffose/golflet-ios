@@ -40,12 +40,13 @@ struct GolfletHomeWidget: Widget {
                 .containerBackground(WidgetChrome.paper, for: .widget)
         }
         .configurationDisplayName("Golflet")
-        .description("Tu handicap y la última ronda.")
+        .description("Tu hándicap en la pantalla de bloqueo, con la última ronda o el próximo tee.")
         .supportedFamilies([
             .systemSmall,
             .systemMedium,
             .accessoryRectangular,
-            .accessoryCircular
+            .accessoryCircular,
+            .accessoryInline
         ])
         .contentMarginsDisabled()
     }
@@ -57,6 +58,9 @@ struct HomeWidgetView: View {
 
     var body: some View {
         switch family {
+        case .accessoryInline:
+            Text(snapshot.isPlaceholder ? "Golflet" : "HI \(snapshot.handicapLine)")
+                .widgetURL(snapshot.lastRoundURL ?? snapshot.nextRoundURL ?? URL(string: "golflet://home"))
         case .accessoryCircular:
             lockCircular
         case .accessoryRectangular:
@@ -111,13 +115,13 @@ struct HomeWidgetView: View {
 
     private var lockRectangular: some View {
         HStack(spacing: 8) {
-            Text(snapshot.isPlaceholder ? "—" : snapshot.handicapLine)
+            Text(snapshot.isPlaceholder ? "HI" : snapshot.handicapLine)
                 .font(.system(size: 20, weight: .semibold))
                 .monospacedDigit()
             VStack(alignment: .leading, spacing: 1) {
                 Text("HI")
                     .font(.system(size: 11, weight: .semibold))
-                Text(snapshot.isPlaceholder ? "Golflet" : snapshot.lastLine)
+                Text(snapshot.isPlaceholder ? "Abrí Golflet" : snapshot.lockDetail)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
             }

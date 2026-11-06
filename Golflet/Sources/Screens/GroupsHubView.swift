@@ -1,13 +1,13 @@
 import SwiftUI
 import UIKit
 
-/// Live membership and tee times win. Example copy is only for the list that is still empty.
+/// Live membership and tee times. An empty list stays empty.
 struct GroupsHubContent: Equatable {
     var usesLiveGroups: Bool
     var usesLiveTeeTimes: Bool
 
-    var showsExampleGroups: Bool { !usesLiveGroups }
-    var showsExampleTeeTimes: Bool { !usesLiveTeeTimes }
+    var showsExampleGroups: Bool { false }
+    var showsExampleTeeTimes: Bool { false }
 
     static func resolve(groupCount: Int, teeTimeCount: Int) -> GroupsHubContent {
         GroupsHubContent(
@@ -28,16 +28,6 @@ struct GroupsHubView: View {
         )
     }
 
-    private var exampleGroup: ProtoGroup {
-        ProtoGroup(
-            id: "ejemplo",
-            name: "Los del sábado",
-            kind: "Amigos",
-            members: ["Fede Ibarra", "Lucas Brandsen", "Tomi Lagos"],
-            example: true
-        )
-    }
-
     var body: some View {
         GScreen(id: "screen-grupos") {
             ScrollView(showsIndicators: false) {
@@ -53,7 +43,6 @@ struct GroupsHubView: View {
                     Text("Grupos")
                         .font(GType.largeTitle)
                         .foregroundStyle(p.ink)
-                    ExampleNote(text: "Tus grupos de juego y tus clubes. No es un muro: solo la gente con la que jugás.")
 
                     if !model.pendingInvites.isEmpty {
                         Text("Invitaciones").font(GType.section).foregroundStyle(p.ink)
@@ -87,16 +76,10 @@ struct GroupsHubView: View {
                             }
                         }
                     } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            DemoPill()
-                            ProtoCard {
-                                NavigationLink { GroupDetailHub(group: exampleGroup) } label: {
-                                    ProtoRow(title: exampleGroup.name, subtitle: "\(exampleGroup.members.count + 1) jugadores · ejemplo")
-                                }
-                            }
-                            ExampleNote(text: "No es un grupo tuyo. Cuando entres a uno, este ejemplo se va.")
-                        }
-                        .accessibilityIdentifier("hub-groups-example")
+                        Text("Todavía no hay grupos. Creá uno.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("hub-groups-empty")
                     }
                     Button { model.presentCreateGroup() } label: {
                         Text("+ Crear grupo")
@@ -108,10 +91,7 @@ struct GroupsHubView: View {
                     }
                     .accessibilityIdentifier("group-create")
 
-                    HStack(spacing: 8) {
-                        Text("Quién juega cuándo").font(GType.section).foregroundStyle(p.ink)
-                        if content.showsExampleTeeTimes { DemoPill() }
-                    }
+                    Text("Quién juega cuándo").font(GType.section).foregroundStyle(p.ink)
                     if content.usesLiveTeeTimes {
                         ProtoCard {
                             VStack(spacing: 0) {
@@ -126,26 +106,11 @@ struct GroupsHubView: View {
                             }
                         }
                     } else {
-                        ProtoCard {
-                            ProtoRow(title: "Sáb 7-nov", subtitle: "9:20 · ejemplo")
-                                .accessibilityIdentifier("hub-tee-example")
-                        }
+                        Text("Todavía no hay tee times.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("hub-tee-empty")
                     }
-
-                    HStack(spacing: 8) {
-                        Text("Amigos").font(GType.section).foregroundStyle(p.ink)
-                        DemoPill()
-                    }
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            ForEach(DemoPeople.rivals) { r in
-                                NavigationLink { RivalView(rival: r) } label: {
-                                    ProtoRow(title: r.name, subtitle: "HI \(r.hi) · \(r.w)G \(r.e)E \(r.l)P con vos")
-                                }
-                            }
-                        }
-                    }
-                    ExampleNote(text: "Nombres y números de ejemplo. No hay apuestas.")
                 }
                 .padding(20)
                 .padding(.bottom, 96)
@@ -170,25 +135,6 @@ struct GroupsHubView: View {
     }
 }
 
-struct DemoPerson: Identifiable, Hashable {
-    var id: String
-    var name: String
-    var hi: String
-    var w: Int
-    var l: Int
-    var e: Int
-    var form: String
-}
-
-enum DemoPeople {
-    static let rivals: [DemoPerson] = [
-        .init(id: "fede", name: "Fede Ibarra", hi: "10,8", w: 7, l: 4, e: 1, form: "GGPEGPGG"),
-        .init(id: "lucas", name: "Lucas Brandsen", hi: "14,1", w: 3, l: 5, e: 0, form: "PPGPGPPG"),
-        .init(id: "santi", name: "Santi Ocampo", hi: "8,2", w: 2, l: 6, e: 2, form: "PEPPGPEP"),
-        .init(id: "tomi", name: "Tomi Lagos", hi: "16,5", w: 5, l: 1, e: 1, form: "GGEGGPG")
-    ]
-}
-
 struct CreateGroupHub: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
@@ -203,7 +149,7 @@ struct CreateGroupHub: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Crear grupo").font(GType.largeTitle).foregroundStyle(p.ink)
-                    TextField("Ej.: Los del jueves", text: $name)
+                    TextField("Nombre del grupo", text: $name)
                         .padding(14)
                         .background(p.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -222,7 +168,9 @@ struct CreateGroupHub: View {
                     }
                     ProtoCard {
                         if members.isEmpty {
-                            ExampleNote(text: "Todavía nadie. Vos ya estás adentro.")
+                            Text("Todavía no sumaste a nadie.")
+                                .font(GType.body)
+                                .foregroundStyle(p.ink2)
                         } else {
                             ForEach(members, id: \.self) { n in
                                 ProtoRow(title: n)
@@ -254,7 +202,6 @@ struct CreateGroupHub: View {
                             .clipShape(Capsule())
                     }
                     .accessibilityIdentifier("gcrear")
-                    ExampleNote(text: "Golflet no le escribe a nadie. El link lo mandás vos.")
                 }
                 .padding(20)
             }
@@ -267,8 +214,6 @@ struct GroupDetailHub: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     var group: ProtoGroup
-    @State private var sort = "neto"
-    @State private var period = "Este mes"
     @State private var copied = false
 
     var body: some View {
@@ -276,43 +221,14 @@ struct GroupDetailHub: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(group.name).font(GType.largeTitle).foregroundStyle(p.ink)
-                    HStack {
-                        ExampleNote(text: "\(group.kind) · \(group.members.count + 1) jugadores")
-                        if group.example { DemoPill() }
-                    }
+                    Text("\(group.kind) · \(group.members.count + 1) jugadores")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
                     Text("Ranking").font(GType.section).foregroundStyle(p.ink)
-                    HStack {
-                        ForEach(["neto", "sg", "vueltas"], id: \.self) { k in
-                            Button(k == "sg" ? "Strokes gained" : k.capitalized) { sort = k }
-                                .font(GType.label)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .background(sort == k ? p.primary : p.surface)
-                                .foregroundStyle(sort == k ? p.onPrimary : p.ink2)
-                                .clipShape(Capsule())
-                        }
-                    }
-                    ProtoCard {
-                        VStack(spacing: 0) {
-                            ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
-                                HStack {
-                                    Text(row.1 == nil ? "—" : "\(i + 1)º")
-                                        .font(GType.label)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(row.2 ? p.primary : p.surface2)
-                                        .foregroundStyle(row.2 ? p.onPrimary : p.ink)
-                                        .clipShape(Capsule())
-                                    Text(row.0).font(GType.headline).foregroundStyle(p.ink)
-                                    Spacer()
-                                    Text(row.1.map { sort == "sg" ? StrokesGained.format($0) : FormatAR.one($0) } ?? "—")
-                                        .font(GType.headline).tabular()
-                                }
-                                .padding(.vertical, 8)
-                            }
-                        }
-                    }
-                    .accessibilityIdentifier("group-ranking")
+                    Text("Todavía no hay resultados. Jugá una vuelta con GPS.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("group-ranking")
 
                     Text("Desafíos").font(GType.section).foregroundStyle(p.ink)
                     NavigationLink {
@@ -326,7 +242,9 @@ struct GroupDetailHub: View {
                     let ds = model.challenges[group.id] ?? []
                     ProtoCard {
                         if ds.isEmpty {
-                            ExampleNote(text: "Ningún desafío todavía. Sin plata ni apuestas: es para ver quién juega mejor.")
+                            Text("Todavía no hay desafíos.")
+                                .font(GType.body)
+                                .foregroundStyle(p.ink2)
                         } else {
                             ForEach(ds) { d in
                                 NavigationLink { ChallengeDetailView(group: group, challenge: d) } label: {
@@ -340,45 +258,25 @@ struct GroupDetailHub: View {
                         HStack {
                             VStack(alignment: .leading) {
                                 Text("Link del grupo").font(GType.headline)
-                                Text("golflet.app/g/\(group.id)").font(GType.label).foregroundStyle(p.ink3)
+                                Text(GolfletURL.inviteURL(token: group.id).absoluteString).font(GType.label).foregroundStyle(p.ink3).lineLimit(1)
                             }
                             Spacer()
                             Button(copied ? "Copiado" : "Copiar") {
-                                UIPasteboard.general.string = "https://golflet-prototipo.vercel.app/app.html#/grupos/\(group.id)"
+                                UIPasteboard.general.string = GolfletURL.inviteURL(token: group.id).absoluteString
                                 copied = true
                             }
                             .font(GType.label)
                             .accessibilityIdentifier("gcopy")
                         }
                     }
-                    ExampleNote(text: "Prototipo: copiás el link y lo mandás vos. Golflet no le escribe a nadie.")
+                    Text("Copiá el link y mandalo.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
                 }
                 .padding(20)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var rows: [(String, Double?, Bool)] {
-        var list: [(String, Double?, Bool)] = [("Vos", sort == "neto" ? 72.8 : sort == "sg" ? -5.0 : 4, true)]
-        let sample: [String: Double] = [
-            "Fede Ibarra": sort == "neto" ? 72.1 : sort == "sg" ? -3.1 : 4,
-            "Tomi Lagos": sort == "neto" ? 74.0 : sort == "sg" ? -6.2 : 3,
-            "Lucas Brandsen": sort == "neto" ? 75.3 : sort == "sg" ? -7.8 : 4,
-            "Santi Ocampo": sort == "neto" ? 73.4 : sort == "sg" ? -4.9 : 2,
-            "Nico Paz": sort == "neto" ? 76.9 : sort == "sg" ? -9.4 : 3,
-            "Juan Ferro": sort == "neto" ? 74.8 : sort == "sg" ? -6.0 : 2
-        ]
-        for n in group.members {
-            list.append((n, group.example ? sample[n] : nil, false))
-        }
-        return list.sorted {
-            switch ( $0.1, $1.1 ) {
-            case (nil, _): return false
-            case (_, nil): return true
-            case let (a?, b?): return sort == "neto" ? a < b : a > b
-            }
-        }
     }
 
     private func challengeTitle(_ tipo: String) -> String {
@@ -402,7 +300,9 @@ struct NewChallengeView: View {
         GScreen(id: "screen-desafio-nuevo") {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Nuevo desafío").font(GType.largeTitle).foregroundStyle(p.ink)
-                ExampleNote(text: "Sin plata ni apuestas: es para ver quién juega mejor.")
+                Text("Sin plata. Es para ver quién juega mejor.")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
                 ForEach([("neto", "Mejor neto del período"), ("putts", "Menos putts por vuelta"), ("prac", "50 putts embocados de 1 m")], id: \.0) { item in
                     Button { tipo = item.0 } label: {
                         HStack {
@@ -455,7 +355,9 @@ struct ChallengeDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(challenge.tipo == "prac" ? "Desafío de práctica" : challenge.tipo == "putts" ? "Menos putts" : "Mejor neto")
                     .font(GType.largeTitle)
-                ExampleNote(text: "\(challenge.period) · datos de ejemplo para los demás")
+                Text(challenge.period)
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
                 if challenge.tipo == "prac" {
                     ProtoCard {
                         Text("Tu progreso \(challenge.progress) de 50").font(GType.headline)
@@ -473,35 +375,3 @@ struct ChallengeDetailView: View {
     }
 }
 
-struct RivalView: View {
-    @Environment(\.palette) private var p
-    var rival: DemoPerson
-    var body: some View {
-        GScreen(id: "screen-rival") {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Vos vs. \(rival.name)").font(GType.largeTitle).foregroundStyle(p.ink)
-                    HStack {
-                        metric("Ganados", "\(rival.w)", up: true)
-                        metric("Empates", "\(rival.e)", up: false)
-                        metric("Perdidos", "\(rival.l)", up: false)
-                    }
-                    DemoPill()
-                    ExampleNote(text: "Promedios de ejemplo. Solo con jugadores que aceptaron compartir.")
-                }
-                .padding(20)
-            }
-        }
-    }
-
-    private func metric(_ k: String, _ v: String, up: Bool) -> some View {
-        VStack(alignment: .leading) {
-            Text(k).font(GType.label).foregroundStyle(p.ink3)
-            Text(v).font(GType.statM).foregroundStyle(up ? p.positive : p.ink).tabular()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(p.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-}

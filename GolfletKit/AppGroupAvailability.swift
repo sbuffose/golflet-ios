@@ -6,10 +6,13 @@ import Foundation
 public enum AppGroupAvailability {
     public static let identifier = "group.com.sbuffose.golflet"
 
-    /// TODO: flip to `true` after creating `group.com.sbuffose.golflet` and
-    /// adding `com.apple.security.application-groups` to both the app and the
-    /// widget entitlements. Until then the extension cannot read the app
-    /// UserDefaults / Keychain (HI snapshot, session token).
+    /// TODO: flip to `true` only after `group.com.sbuffose.golflet` exists on
+    /// the developer portal and both entitlements list it. Adding the
+    /// entitlement before that breaks TestFlight signing. No App Store Connect
+    /// key is available in this environment, so the group stays off.
+    /// Until then the widget reads `GET /api/widget/snapshot?device=` (the app
+    /// registers that device with the session bearer). It cannot read the app
+    /// Keychain: there is no keychain access group in the current profiles.
     public static var isEnabled: Bool { false }
 
     public static var sharedDefaults: UserDefaults? {

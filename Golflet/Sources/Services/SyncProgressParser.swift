@@ -132,7 +132,7 @@ enum SyncStepCopy {
             return state == .done ? "Conectado con \(club)" : "Conectando con \(club)"
         case .list:
             if state == .done {
-                if let list = progress.listTotal { return "\(list) tarjetas en Golfistics" }
+                if let list = progress.listTotal { return "\(list) tarjetas encontradas" }
                 return "Tarjetas encontradas"
             }
             return "Buscando tus tarjetas"
@@ -176,7 +176,15 @@ enum SyncClubIdentity {
 
     static func isDetecting(_ name: String?) -> Bool {
         guard let name, !name.isEmpty else { return true }
-        return name == "Golfistics App" || name == "tu club"
+        return name == "Golfistics App" || name == "tu club" || name == "tus clubes"
+    }
+
+    /// Nombre que puede verse. El marcador interno de “todavía no sabemos el club” no se muestra.
+    static func spokenName(_ name: String?, count: Int? = nil) -> String {
+        if isDetecting(name) {
+            return (count ?? 0) > 1 ? "tus clubes" : "tu club"
+        }
+        return name ?? "tu club"
     }
 
     static func initials(name: String?, provided: String? = nil) -> String {

@@ -44,9 +44,9 @@ struct LiveRoundActivity: Widget {
                                     .foregroundStyle(WidgetChrome.white)
                             }
                             Spacer()
-                            liveYards("Ent", context.state.frontYd)
-                            liveYards("Cen", context.state.centerYd)
-                            liveYards("Fon", context.state.backYd)
+                            liveYards("F", context.state.frontYd)
+                            liveYards("C", context.state.centerYd)
+                            liveYards("B", context.state.backYd)
                         }
                         if let wind = context.state.windLine {
                             Text(wind)
@@ -126,9 +126,9 @@ struct LiveIslandBanner: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 12) {
-                bannerYards("Ent", "entrada", state.frontYd)
-                bannerYards("Cen", "centro", state.centerYd)
-                bannerYards("Fon", "fondo", state.backYd)
+                bannerYards("F", "frente", state.frontYd)
+                bannerYards("C", "centro", state.centerYd)
+                bannerYards("B", "fondo", state.backYd)
             }
         }
         .padding(.horizontal, 16)

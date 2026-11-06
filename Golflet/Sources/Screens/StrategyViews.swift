@@ -58,19 +58,25 @@ struct StrategyCourseView: View {
             Text("Hoyos")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
-            ForEach(1...18, id: \.self) { number in
-                if let hole = strategy?.hole(number) {
+            if strategy == nil && message == nil {
+                Text("Cargando el plan.")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+            } else if let published = strategy?.holes.sorted(by: { $0.hole < $1.hole }), !published.isEmpty {
+                ForEach(published) { hole in
                     NavigationLink {
-                        StrategyHoleView(courseKey: courseKey, courseName: courseName, holeNumber: number)
+                        StrategyHoleView(courseKey: courseKey, courseName: courseName, holeNumber: hole.hole)
                     } label: {
-                        holeRow(number: number, title: hole.planTitle ?? "Cómo jugarlo", published: true)
+                        holeRow(number: hole.hole, title: hole.planTitle ?? "Cómo jugarlo", published: true)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("strategy-hole-\(number)")
-                } else {
-                    holeRow(number: number, title: "Todavía sin plan", published: false)
-                        .accessibilityIdentifier("strategy-hole-\(number)")
+                    .accessibilityIdentifier("strategy-hole-\(hole.hole)")
                 }
+            } else {
+                Text("Todavía no hay un plan publicado. Cuando el club lo cargue, aparece hoyo por hoyo.")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier("strategy-empty")
             }
         }
     }
@@ -140,7 +146,7 @@ struct StrategyHoleView: View {
                             warning: StrategyCopy.siteWarning(courseKey: courseKey, hole: holeNumber)
                         )
                     } else {
-                        Text("Todavía sin plan.")
+                        Text("Este hoyo no tiene plan publicado.")
                             .font(GType.body)
                             .foregroundStyle(p.ink2)
                     }
@@ -186,7 +192,9 @@ struct StrategyHoleCard: View {
                 fullHeader
                 chips
                 plan
-                hazards
+                if !hole.hazards.isEmpty {
+                    hazards
+                }
                 why
                 miss
                 green

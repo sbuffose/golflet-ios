@@ -122,8 +122,20 @@ enum GroupsParser {
             invite: inviteLink(from: blob["invite"] ?? blob["invite_link"] ?? blob["link"]),
             reportedMemberCount: reportedCount,
             matchRecords: history.records,
-            recentMatches: history.recent
+            recentMatches: history.recent,
+            pendingMembers: invitedMembers(from: blob["pending"] ?? item["pending"])
         )
+    }
+
+    static func invitedMembers(from raw: Any?) -> [GroupMember] {
+        members(from: raw).map { member in
+            var copy = member
+            copy.isPending = true
+            if copy.matricula == nil, copy.id.allSatisfy({ $0.isNumber }) {
+                copy.matricula = copy.id
+            }
+            return copy
+        }
     }
 
     static func invites(from json: [String: Any]) -> [GroupInvitePreview] {
@@ -248,8 +260,11 @@ enum GroupsParser {
 
     static func member(from raw: Any?) -> GroupMember? {
         guard let item = raw as? [String: Any] else { return nil }
-        let id = string(item["id"] ?? item["user_id"] ?? item["member_id"])
-        let name = string(item["name"] ?? item["display_name"])
+        let matricula = optionalString(item["matricula"] ?? item["member_number"] ?? item["license"])
+        let rawID = string(item["id"] ?? item["user_id"] ?? item["member_id"])
+        let id = rawID.isEmpty ? (matricula ?? "") : rawID
+        let named = string(item["name"] ?? item["display_name"])
+        let name = named.isEmpty ? (matricula ?? "") : named
         guard !id.isEmpty, !name.isEmpty else { return nil }
         return GroupMember(
             id: id,
@@ -257,7 +272,9 @@ enum GroupsParser {
             initials: optionalString(item["initials"]) ?? initials(name),
             photoURL: optionalString(item["photo_url"] ?? item["photo"]),
             role: role(item["role"]) ?? .member,
-            isOwner: JSONFlex.bool(from: item["is_owner"] ?? item["owner"]) ?? false
+            isOwner: JSONFlex.bool(from: item["is_owner"] ?? item["owner"]) ?? false,
+            matricula: matricula,
+            isPending: string(item["status"]) == "pending"
         )
     }
 

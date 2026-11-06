@@ -7,6 +7,7 @@ struct HandbookFile: Identifiable, Equatable {
     var id: String { url.path }
     var url: URL
     var title: String
+    var preview: String = ""
 }
 
 enum CourseHandbook {

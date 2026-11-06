@@ -303,11 +303,50 @@ final class PlayAPITests: XCTestCase {
         XCTAssertEqual(parsed.holes.first?.variants[.scratch]?.teeClub, "Madera 3")
 
         let azul = try await api.courseStrategy(courseKey: "1:Azul", courseId: nil)
-        XCTAssertEqual(azul.publishedHoles, [7, 8])
+        XCTAssertEqual(azul.holes.count, 18)
+        XCTAssertEqual(azul.publishedHoles, Array(1...18))
+        XCTAssertEqual(azul.hole(7)?.planTitle, "Híbrido al centro y wedge al green")
         XCTAssertEqual(azul.hole(7)?.teeClub, "Híbrido")
         XCTAssertEqual(azul.hole(7)?.hazards.count, 3)
+        XCTAssertNotNil(azul.overview)
         let colorada = try await api.courseStrategy(courseKey: "1:Colorada", courseId: nil)
-        XCTAssertTrue(colorada.holes.isEmpty)
+        XCTAssertEqual(colorada.holes.count, 18)
+        XCTAssertEqual(colorada.publishedHoles, Array(1...18))
+        XCTAssertNotNil(colorada.overview)
+        XCTAssertFalse(colorada.holes.contains { ($0.planTitle ?? "").isEmpty || ($0.planText ?? "").isEmpty })
+        let emptyRemote = JockeyPlans.merging(
+            remote: CourseStrategy(courseId: "118-jockey-azul", courseKey: "1:Azul", overview: nil, overviewPublishedAt: nil, publishedHoles: [], holes: []),
+            requestedKey: nil
+        )
+        XCTAssertEqual(emptyRemote.holes.count, 18)
+
+        let vieja = try await api.courseStrategy(courseKey: "7:Cancha Vieja", courseId: "209-cancha-vieja")
+        XCTAssertEqual(vieja.holes.count, 18)
+        XCTAssertEqual(vieja.publishedHoles, Array(1...18))
+        XCTAssertEqual(vieja.hole(1)?.planTitle, "Driver al centro")
+        XCTAssertTrue(vieja.hole(1)?.planText?.contains("445") == true)
+        XCTAssertTrue(vieja.hole(1)?.planText?.contains("Par 4") == true)
+        XCTAssertTrue(vieja.hole(2)?.planText?.contains("195") == true)
+        XCTAssertTrue(vieja.hole(2)?.planText?.contains("Par 3") == true)
+        XCTAssertNotNil(vieja.overview)
+        XCTAssertFalse(vieja.holes.contains { ($0.planTitle ?? "").isEmpty || ($0.planText ?? "").isEmpty || $0.hazards.contains { $0.carryYd != nil } })
+        let byId = try await api.courseStrategy(courseKey: nil, courseId: "209-mdp-vieja")
+        XCTAssertEqual(byId.holes.count, 18)
+        let byAlias = JockeyPlans.merging(
+            remote: CourseStrategy(courseId: "209-cancha-vieja", courseKey: "", overview: nil, overviewPublishedAt: nil, publishedHoles: [], holes: []),
+            requestedKey: "Mar del Plata"
+        )
+        XCTAssertEqual(byAlias.holes.count, 18)
+        let nueva = try await api.courseStrategy(courseKey: "7:Cancha Nueva", courseId: "209-mdp-nueva")
+        XCTAssertTrue(nueva.holes.isEmpty)
+
+        let tee = GPSCoord(lat: 0, lng: 0)
+        let north = GPSCoord(lat: 0.01, lng: 0)
+        let heading = HoleGeoMath.heading(from: tee, to: north)
+        XCTAssertEqual(heading, 0, accuracy: 1)
+        XCTAssertNil(HoleGeoMath.lie(course: GPSCourseDetail(courseId: "209-mdp-nueva", clubCode: "209", clubName: "MdP", course: "Nueva", courseKey: "7:Cancha Nueva", par: 72, holeCount: 18, holes: [], warnings: [], attribution: nil), hole: 1, at: tee))
+        let azulLie = HoleGeoMath.azul(course: GPSCourseDetail(courseId: "118-jockey-azul", clubCode: "118", clubName: "Jockey", course: "Azul", courseKey: "1:Azul", par: 72, holeCount: 18, holes: [], warnings: [], attribution: nil), hole: 7)
+        XCTAssertNotNil(azulLie)
 
         XCTAssertEqual(
             RecapSpeech.pickLocale(from: [

@@ -185,7 +185,7 @@ struct CreateGroupView: View {
                     .accessibilityIdentifier("group-photo-picker")
 
                     GField(label: "Nombre del grupo") {
-                        TextField("Los del sábado", text: $name)
+                        TextField("Nombre del grupo", text: $name)
                             .textInputAutocapitalization(.words)
                             .accessibilityIdentifier("group-name")
                     }
@@ -493,10 +493,15 @@ struct GroupPhotoView: View {
     var url: String?
     var initials: String
     var size: CGFloat = 44
+    var cacheID: String? = nil
 
     var body: some View {
         Group {
-            if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
+            if let cacheID, let data = GroupPhotoCache.data(for: cacheID), let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
                 AsyncImage(url: parsed) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {

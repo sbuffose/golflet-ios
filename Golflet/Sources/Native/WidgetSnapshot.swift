@@ -27,7 +27,7 @@ enum WidgetSnapshotStore {
     static let key = "golflet.widget-snapshot"
 
     /// App-only store until `group.com.sbuffose.golflet` exists. The widget
-    /// timeline fetches `/api/data` instead of reading this container.
+    /// cannot read this. `WidgetRelay` posts the same JSON for the extension.
     static var defaults: UserDefaults {
         AppGroupAvailability.sharedDefaults ?? .standard
     }
@@ -36,6 +36,7 @@ enum WidgetSnapshotStore {
         if let data = try? JSONEncoder().encode(snap) {
             defaults.set(data, forKey: key)
         }
+        WidgetRelay.schedule(snap)
     }
 
     static func load() -> WidgetSnapshot? {

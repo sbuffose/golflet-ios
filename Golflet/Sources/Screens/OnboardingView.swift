@@ -48,6 +48,24 @@ struct OnboardingView: View {
         }
         .animation(motion, value: phaseKey)
         .onAppear(perform: prime)
+        .onChange(of: model.hasPlayerSnapshot) { _, ready in
+            guard phase == .syncing, ready else { return }
+            landAfterSync()
+        }
+        .onChange(of: model.syncSession?.outcome) { _, outcome in
+            guard phase == .syncing else { return }
+            if outcome == .failed || outcome == .succeeded {
+                landAfterSync()
+            }
+        }
+        .onChange(of: model.needsClub != nil) { _, needed in
+            guard phase == .syncing, needed else { return }
+            landAfterSync()
+        }
+        .onChange(of: model.authFailure != nil) { _, failed in
+            guard phase == .syncing, failed else { return }
+            landAfterSync()
+        }
     }
 
     private var phaseKey: String {
@@ -102,7 +120,7 @@ struct OnboardingView: View {
                     .font(GType.sheetTitle)
                     .foregroundStyle(Color(hex: BrandHex.navy))
                     .accessibilityIdentifier("ob-matricula-title")
-                Text("La contraseña es la de Golfistics. Con eso traigo tu hándicap, tu club y tus tarjetas.")
+                Text("Con tu matrícula y tu contraseña traigo tu ficha. No te la vuelvo a pedir.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                 GField(label: "Matrícula") {
@@ -114,7 +132,7 @@ struct OnboardingView: View {
                         .accessibilityIdentifier("ob-matricula")
                 }
                 GField(label: "Contraseña") {
-                    SecureField("La de Golfistics", text: $clave)
+                    SecureField("La misma que para entrar a tu club", text: $clave)
                         .textContentType(RuntimeFlags.isUITesting ? nil : .password)
                         .accessibilityIdentifier("ob-clave")
                 }
@@ -177,22 +195,10 @@ struct OnboardingView: View {
     }
 
     private var syncing: some View {
-        VStack(spacing: 18) {
-            Spacer()
-            ProgressView()
-                .controlSize(.large)
-                .tint(Color(hex: BrandHex.red))
-            Text("Trayendo tus tarjetas")
-                .font(GType.section)
-                .foregroundStyle(Color(hex: BrandHex.navy))
-            Text("Cuando entren, te muestro lo que ya tiene tu ficha.")
-                .font(GType.body)
-                .foregroundStyle(p.ink2)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
+        OnboardingSyncWait(
+            progress: model.syncSession?.progress,
+            reduceMotion: reduceMotion || voiceOver
+        )
     }
 
     private var reveal: some View {
@@ -572,6 +578,77 @@ struct OnboardingView: View {
         draft.done = true
         if let mode = ProfileMode(rawValue: draft.modo) { model.setHomeMode(mode) }
         model.completeOnboarding(draft)
+    }
+}
+
+/// Espera de la matrícula. Las frases salen de a una. Si Golfistics manda
+/// etapa, esa frase reemplaza a la del mismo paso. No afirma resultados.
+private struct OnboardingSyncWait: View {
+    var progress: SyncAPIProgress?
+    var reduceMotion: Bool
+    @State private var stage = 1
+
+    var body: some View {
+        let lines = OnboardingSyncCopy.lines(progress: progress, elapsedStages: stage)
+        VStack(alignment: .leading, spacing: 18) {
+            RobertoGuide(small: true, thinking: true)
+                .frame(maxWidth: .infinity)
+            SyncStatusLines(lines: lines, reduceMotion: reduceMotion)
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 8)
+        .task(id: reduceMotion) {
+            if reduceMotion {
+                stage = OnboardingSyncCopy.waiting.count
+                return
+            }
+            stage = 1
+            while !Task.isCancelled, stage < OnboardingSyncCopy.waiting.count {
+                try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 220 : 1100))
+                if Task.isCancelled { return }
+                stage += 1
+            }
+        }
+    }
+}
+
+private struct SyncStatusLines: View {
+    var lines: [String]
+    var reduceMotion: Bool
+    @State private var shown = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(Array(lines.prefix(max(shown, 0)).enumerated()), id: \.offset) { index, line in
+                let current = index == min(shown, lines.count) - 1
+                HStack(alignment: .top, spacing: 10) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(current ? Color(hex: BrandHex.red) : Color(hex: BrandHex.navy).opacity(0.28))
+                        .frame(width: 3)
+                    Text(line)
+                        .font(current ? GType.section : GType.body)
+                        .foregroundStyle(current ? Color(hex: BrandHex.navy) : Color(hex: BrandHex.navyRaised))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityIdentifier("ob-sync-line")
+                .accessibilityLabel(line)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("ob-sync-status")
+        .onAppear { reveal(upTo: lines.count) }
+        .onChange(of: lines.count) { _, count in
+            reveal(upTo: count)
+        }
+    }
+
+    private func reveal(upTo count: Int) {
+        if reduceMotion || count <= shown {
+            shown = count
+            return
+        }
+        withAnimation(.easeOut(duration: 0.45)) { shown = count }
     }
 }
 

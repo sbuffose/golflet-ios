@@ -50,6 +50,7 @@ protocol GolfletAPI: Sendable {
     func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup
     func group(id: String) async throws -> GolfletGroup
     func updateGroup(id: String, name: String?, photoJPEG: Data?) async throws -> GolfletGroup
+    func inviteByMatricula(groupID: String, matricula: String) async throws -> GolfletGroup
     func leaveGroup(id: String) async throws
     func removeMember(groupID: String, userID: String) async throws -> GolfletGroup
     func setMemberRole(groupID: String, userID: String, role: GroupRole) async throws -> GolfletGroup
