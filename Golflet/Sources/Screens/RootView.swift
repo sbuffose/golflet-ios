@@ -100,7 +100,7 @@ struct RootView: View {
                 .tag(AppTab.academia)
                 .accessibilityIdentifier("tab-academia")
         }
-        .toolbar(model.showsLiveHole ? .hidden : .visible, for: .tabBar)
+        .toolbar(model.showsLiveHole || model.showsPlay ? .hidden : .visible, for: .tabBar)
         .tint(p.primary)
         .onAppear { configureTabBar() }
         .sheet(item: bindings.presentedRound) { round in
