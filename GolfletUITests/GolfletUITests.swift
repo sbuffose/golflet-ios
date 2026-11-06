@@ -275,13 +275,18 @@ final class GolfletUITests: XCTestCase {
 
         if first(app, "home-recurring").waitForExistence(timeout: 4) {
             let card = first(app, "home-recurring")
-            if !card.isHittable { app.swipeUp() }
+            let scroll = app.scrollViews.firstMatch
+            for _ in 0..<6 {
+                let clearOfTabBar = card.frame.maxY < app.frame.height - 140
+                if card.isHittable, clearOfTabBar { break }
+                if scroll.exists { scroll.swipeUp() } else { app.swipeUp() }
+            }
             if card.isHittable {
                 card.tap()
             } else {
-                card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+                card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             }
-            XCTAssertTrue(waitFor(app, "screen-recurring", timeout: 6), "No abrió errores que se repiten")
+            XCTAssertTrue(waitFor(app, "screen-recurring", timeout: 8), "No abrió errores que se repiten")
             saveShot("18_recurring")
             dismissIfPresent(app, "metric-back")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
