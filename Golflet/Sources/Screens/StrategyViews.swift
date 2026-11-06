@@ -36,6 +36,7 @@ struct StrategyCourseView: View {
             }
         }
         .accessibilityIdentifier("screen-strategy")
+        .metricDestinations()
         .safeAreaInset(edge: .top) { MetricBackBar() }
         .task { await load() }
     }
@@ -59,7 +60,9 @@ struct StrategyCourseView: View {
                 .foregroundStyle(p.ink)
             ForEach(1...18, id: \.self) { number in
                 if let hole = strategy?.hole(number) {
-                    NavigationLink(value: StrategyHoleRoute(courseKey: courseKey, courseName: courseName, hole: number)) {
+                    NavigationLink {
+                        StrategyHoleView(courseKey: courseKey, courseName: courseName, holeNumber: number)
+                    } label: {
                         holeRow(number: number, title: hole.planTitle ?? "Cómo jugarlo", published: true)
                     }
                     .buttonStyle(.plain)
@@ -148,6 +151,7 @@ struct StrategyHoleView: View {
             }
         }
         .accessibilityIdentifier("screen-strategy-hole")
+        .metricDestinations()
         .safeAreaInset(edge: .top) { MetricBackBar() }
         .task { strategy = try? await model.api.courseStrategy(courseKey: courseKey, courseId: nil) }
     }
