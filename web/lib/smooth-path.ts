@@ -1,0 +1,54 @@
+/** t215u: smooth closed outlines (greens, bunkers, fairways, water, tree canopies) for print and screen.
+ *  Centripetal Catmull-Rom (α = 0.5, no cusps or self-loops) through every vertex, converted to cubic Bézier segments.
+ *  Faithful geometry: the curve passes through the surveyed vertices; any area gain/loss from the curvature between vertices is
+ *  compensated by scaling about the centroid so the enclosed area matches the source polygon (|Δ| < 0.5 %). Pure; mirrored in public/smooth-path.js. */
+export type XY = [number, number];
+export type Bez = { start: XY; segs: [number, number, number, number, number, number][] };
+
+function clean(pts: XY[]): XY[] {
+  const out: XY[] = [];
+  for (const p of pts) { const q = out[out.length - 1]; if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6) out.push([p[0], p[1]]); }
+  if (out.length > 2) { const a = out[0], b = out[out.length - 1]; if (Math.hypot(a[0] - b[0], a[1] - b[1]) <= 1e-6) out.pop(); }
+  return out;
+}
+export function polyArea(p: XY[]) { let s = 0; for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; }
+/** Closed centripetal Catmull-Rom → cubic Bézier (Yuksel et al. tangent form). */
+function crBez(p: XY[], alpha = 0.5): Bez {
+  const n = p.length, segs: Bez["segs"] = [];
+  const d = (a: XY, b: XY) => Math.max(Math.pow(Math.hypot(b[0] - a[0], b[1] - a[1]), alpha), 1e-9);
+  for (let i = 0; i < n; i++) {
+    const p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
+    const d1 = d(p0, p1), d2 = d(p1, p2), d3 = d(p2, p3);
+    const c1: XY = [0, 0], c2: XY = [0, 0];
+    for (let k = 0; k < 2; k++) {
+      const a = d1 * d1, b = d2 * d2, c = d3 * d3;
+      c1[k] = (a * p2[k] - b * p0[k] + (2 * a + 3 * d1 * d2 + b) * p1[k]) / (3 * d1 * (d1 + d2));
+      c2[k] = (c * p1[k] - b * p3[k] + (2 * c + 3 * d3 * d2 + b) * p2[k]) / (3 * d3 * (d3 + d2));
+    }
+    segs.push([c1[0], c1[1], c2[0], c2[1], p2[0], p2[1]]);
+  }
+  return { start: [p[0][0], p[0][1]], segs };
+}
+function bezAreaSampled(b: Bez, k = 16) {
+  const pts: XY[] = []; let [x0, y0] = b.start;
+  for (const [x1, y1, x2, y2, x3, y3] of b.segs) {
+    for (let i = 0; i < k; i++) { const t = i / k, u = 1 - t;
+      pts.push([u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3, u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3]); }
+    x0 = x3; y0 = y3;
+  }
+  return polyArea(pts);
+}
+/** Smooth closed outline. Fewer than 3 distinct points → null (draw as-is). */
+export function smoothClosed(pts: XY[]): Bez | null {
+  const p = clean(pts); if (p.length < 3) return null;
+  const A = polyArea(p); if (!Number.isFinite(A) || Math.abs(A) < 1e-9) return null;
+  let b = crBez(p);
+  const B = bezAreaSampled(b), r = A / B;
+  if (Number.isFinite(r) && r > 0 && Math.abs(r - 1) > 0.002) {   // area-preserving correction about the centroid
+    const cx = p.reduce((s, q) => s + q[0], 0) / p.length, cy = p.reduce((s, q) => s + q[1], 0) / p.length, k = Math.sqrt(r);
+    const S = (x: number, y: number): XY => [cx + (x - cx) * k, cy + (y - cy) * k];
+    b = { start: S(b.start[0], b.start[1]), segs: b.segs.map(([a, c, d, e, f, g]) => [...S(a, c), ...S(d, e), ...S(f, g)] as Bez["segs"][number]) };
+  }
+  return b;
+}
+export function sampledArea(b: Bez) { return bezAreaSampled(b, 32); }

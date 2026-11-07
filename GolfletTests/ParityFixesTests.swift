@@ -68,13 +68,22 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertEqual(home.handicapIndex, 3.7, accuracy: 0.001)
     }
 
-    func testHIChangeOmitsUnlinkedClub() {
-        XCTAssertEqual(
-            HIChangeLabel.line(entered: ["Colorada"], exited: ["Nueva"]),
-            "Entró Colorada · Salió Nueva"
-        )
-        XCTAssertNil(HIChangeLabel.line(entered: [""], exited: []))
-        XCTAssertNil(HIChangeLabel.line(entered: [], exited: []))
+    func testHIChangeNamesTheScorecardNotTheClub() {
+        let card = IndexCardRef(id: "c1", date: date(2026, 10, 20), course: "Colorada", differential: 2, gross: 70)
+        let text = HIChangeLabel.cardText(card)
+        XCTAssertTrue(text.contains("Colorada"))
+        XCTAssertTrue(text.contains("diferencial"))
+        XCTAssertTrue(text.contains("gross 70"))
+        XCTAssertFalse(text.contains("índice"))
+        XCTAssertFalse(text.contains("Mar del Plata"))
+        XCTAssertEqual(HIChangeLabel.indexLine(delta: 0.6), "El índice subió \(FormatAR.one(0.6))")
+        XCTAssertTrue(HIChangeLabel.indexLine(delta: -0.4).contains("bajó"))
+        XCTAssertEqual(HIChangeLabel.unidentified, "No puedo identificar la tarjeta.")
+        let missing = IndexShift(verified: false, enteredBest8: [], leftBest8: [], agedOut: [], enteredWindow: [])
+        XCTAssertTrue(HIChangeLabel.groups(missing).isEmpty)
+        let aged = IndexCardRef(id: "n0", date: date(2026, 1, 1), course: "Nueva", differential: 12, gross: 90)
+        let shift = IndexShift(verified: true, enteredBest8: [card], leftBest8: [], agedOut: [aged], enteredWindow: [])
+        XCTAssertEqual(HIChangeLabel.groups(shift).map(\.title), ["Entró en las 8", "Salió de las últimas 20"])
     }
 
     func testMonthLabelsStayShortAndKeepCounts() {

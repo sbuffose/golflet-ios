@@ -18,6 +18,8 @@ final class IndexBookTests: XCTestCase {
         let last = try XCTUnwrap(next.revisions.last)
         XCTAssertEqual(last.entered.map(\.id), ["fresh"])
         XCTAssertEqual(last.dropped.map(\.id), ["c1"])
+        XCTAssertEqual(last.agedOut.map(\.id), ["c1"])
+        XCTAssertTrue(last.leftBest8.isEmpty)
     }
 
     func testAgingOutACountingCardLetsTheNextBestIn() {
@@ -31,6 +33,38 @@ final class IndexBookTests: XCTestCase {
         let last = book.revisions.last
         XCTAssertEqual(last?.entered.map(\.id), ["high20"])
         XCTAssertEqual(last?.dropped.map(\.id), ["low1"])
+        XCTAssertEqual(last?.agedOut.map(\.id), ["low1"])
+        XCTAssertEqual(last?.leftBest8.map(\.id), [])
+    }
+
+    func testExplainSeparatesTheBestEightFromTheLastTwenty() {
+        var rounds = (1...20).map { card(id: "n\($0)", day: $0, differential: $0 == 1 ? 1 : 12, gross: 90) }
+        var blank = card(id: "blank", day: 21, differential: 2, gross: 70)
+        blank.course = ""
+        blank.courseLabel = nil
+        blank.clubName = "Mar del Plata Golf Club"
+        rounds.append(blank)
+        let shift = IndexBook.explain(rounds: rounds, from: date(20), to: date(21))
+        XCTAssertTrue(shift.verified)
+        XCTAssertEqual(shift.enteredBest8.map(\.id), ["blank"])
+        XCTAssertEqual(shift.enteredBest8.map(\.course), [""])
+        XCTAssertEqual(shift.enteredBest8.map(\.gross), [70])
+        XCTAssertEqual(shift.agedOut.map(\.id), ["n1"])
+        XCTAssertTrue(shift.leftBest8.isEmpty)
+        XCTAssertTrue(shift.enteredWindow.isEmpty)
+        XCTAssertFalse(HIChangeLabel.cardText(shift.enteredBest8[0]).contains("Mar del Plata"))
+        let thin = IndexBook.explain(rounds: Array(rounds.prefix(4)), from: date(3), to: date(4))
+        XCTAssertFalse(thin.verified)
+        XCTAssertTrue(thin.isEmpty)
+
+        var stayed = (1...12).map { card(id: "bad\($0)", day: $0, differential: 20, gross: 95) }
+        stayed += (13...20).map { card(id: "good\($0)", day: $0, differential: 2, gross: 74) }
+        stayed.append(card(id: "better", day: 21, differential: 1, gross: 70))
+        let beat = IndexBook.explain(rounds: stayed, from: date(20), to: date(21))
+        XCTAssertEqual(beat.enteredBest8.map(\.id), ["better"])
+        XCTAssertEqual(beat.leftBest8.map(\.id), ["good13"])
+        XCTAssertTrue(beat.agedOut.isEmpty)
+        XCTAssertTrue(beat.enteredWindow.isEmpty)
     }
 
     func testTieForTheLastSpotKeepsTheNewerCard() {
