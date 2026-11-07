@@ -1844,9 +1844,10 @@ function hiChanges(){
 function sCambios(){ return `<div class="bar"><span class="overline">Handicap Index</span></div><div id="cambios"></div>`; }
 function hiShiftHTML(move){
   const R = window.GolfletRules;
-  if (!R || !move || !move.verified) return `<p class="hi-why">${esc(R ? R.HI_UNIDENTIFIED : 'No puedo identificar la tarjeta.')}</p>`;
+  if (!R || !move) return '';
+  if (!move.verified) return `<p class="hi-why">${esc(R.HI_UNIDENTIFIED)}</p>`;
   const groups = [['Entró en las 8', move.enteredBest8 || move.entered_best8], ['Salió de las 8', move.leftBest8 || move.left_best8], ['Salió de las últimas 20', move.agedOut || move.aged_out], ['Entró en las últimas 20', move.enteredWindow || move.entered_window]].filter(([, xs]) => xs && xs.length);
-  if (!groups.length) return `<p class="hi-why">${esc(R.HI_UNIDENTIFIED)}</p>`;
+  if (!groups.length) return '';
   return groups.map(([title, xs]) => xs.map(c => `<p class="hi-why"><b>${title}</b> · ${esc(R.hiCardLine(c))}</p>`).join('')).join('');
 }
 function loadCambios(){
