@@ -1,0 +1,64 @@
+:root{
+  --color-bg:#F6F7F9;
+  --color-surface:#FFFFFF;
+  --color-surface2:#E6ECF5;
+  --color-ink:#0E1B2C;
+  --color-ink2:#3E4C62;
+  --color-ink3:#5C687B;
+  --color-hairline:#DCE1E8;
+  --color-primary:#0B2545;
+  --color-primary2:#13315C;
+  --color-onPrimary:#FFFFFF;
+  --color-accent:#C8102E;
+  --color-accentSoft:#FBE7EA;
+  --color-positive:#13315C;
+  --color-negative:#A6192E;
+  --color-turf:#DCE6F3;
+  --color-fairway:#B5C7E0;
+  --color-green:#8DBE73;
+  --color-sand:#EFE3C6;
+  --color-water:#BBD7DE;
+  --color-tee-negro:#1E1E1E;
+  --color-tee-azul:#2D5BA8;
+  --color-tee-blanco:#FFFFFF;
+  --color-tee-amarillo:#E2B93B;
+  --color-tee-rojo:#B83A2E;
+  --color-tee-celeste:#8CC3DF;
+  --color-tee-verde:#4F8A4B;
+  --radius-sm:10px;
+  --radius-md:16px;
+  --radius-lg:22px;
+  --radius-xl:28px;
+  --radius-pill:999px;
+  --space-xs:4px;
+  --space-sm:8px;
+  --space-md:12px;
+  --space-lg:16px;
+  --space-xl:24px;
+  --space-xxl:32px;
+  --shadow-card:0 1px 2px rgba(14,27,44,.04), 0 8px 24px rgba(14,27,44,.06);
+  --shadow-float:0 2px 6px rgba(14,27,44,.06), 0 18px 40px rgba(14,27,44,.12);
+  --motion-fast:160ms;
+  --motion-base:260ms;
+  --motion-curve:cubic-bezier(.2,.8,.2,1);
+  --type-largeTitle-size:42px; --type-largeTitle-weight:600; --type-largeTitle-tracking:-0.045em;
+  --type-sheetTitle-size:30px; --type-sheetTitle-weight:600; --type-sheetTitle-tracking:-0.040em;
+  --type-section-size:20px; --type-section-weight:600; --type-section-tracking:-0.025em;
+  --type-headline-size:15.5px; --type-headline-weight:600; --type-headline-tracking:-0.016em;
+  --type-body-size:16px; --type-body-weight:400; --type-body-tracking:-0.009em;
+  --type-label-size:12.5px; --type-label-weight:500; --type-label-tracking:-0.004em;
+  --type-overline-size:11px; --type-overline-weight:600; --type-overline-tracking:0.127em;
+  --type-statHero-size:80px; --type-statHero-weight:600; --type-statHero-tracking:-0.055em;
+  --type-statL-size:32px; --type-statL-weight:600; --type-statL-tracking:-0.044em;
+  --type-statM-size:24px; --type-statM-weight:600; --type-statM-tracking:-0.037em;
+  --font-ui:'Geist',-apple-system, 'SF Pro Text', system-ui, sans-serif;
+  --font-display:'Geist',-apple-system, 'SF Pro Display', system-ui, sans-serif;
+  --display-weight:var(--fw600,600); --display-size:42px; --display-tracking:-0.045em;
+}
+
+/* t150u: Tamaño / Grosor del texto (Tu cuenta). Body text scales by --ts; big numbers (≥ 26px) by --tsb (less); the 9-column scorecard by --tsc (least). */
+:root{--ts:1;--tsb:1;--tsc:1;--tsl:1;--fw400:400;--fw450:450;--fw500:500;--fw550:550;--fw600:600;--fw650:650;--fw700:700}
+html[data-ts="grande"]{--ts:1.15;--tsb:1.06;--tsc:1.06;--tsl:1.08}
+html[data-ts="muy_grande"]{--ts:1.3;--tsb:1.12;--tsc:1.1;--tsl:1.12}
+html[data-tw="marcado"]{--fw400:500;--fw450:600;--fw500:600;--fw550:700;--fw600:700;--fw650:700;--fw700:700}
+body{font-weight:var(--fw400,400)}

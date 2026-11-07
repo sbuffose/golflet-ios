@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#F6F7F9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Golflet">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<title>Golflet · Entrar</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="auth">
+  <div class="brand"><img src="/icons/icon-192.png" alt=""><b>Golflet</b></div>
+  <h1 class="ltitle"><span class="soft">Tu golf,</span> <span class="accent">ordenado</span></h1>
+  <p class="foot" style="margin:10px 2px 0;font-size:14px;color:var(--color-ink2)">Entrá con tu matrícula y la contraseña de tu club. Golflet trae tu ficha solo: no te la volvemos a preguntar.</p>
+  <form class="form" id="f" autocomplete="on" style="margin-top:18px">
+    <label class="input"><span>Matrícula</span><input name="matricula" inputmode="numeric" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="32" required placeholder="Tu número de matrícula" style="font-variant-numeric:tabular-nums"></label>
+    <label class="input"><span>Contraseña</span><input name="clave" type="password" autocomplete="current-password" maxlength="128" required placeholder="La misma que para entrar a tu club"></label>
+    <label class="check"><input type="checkbox" name="save" checked><span>Guardar mi contraseña (cifrada) para traer mis tarjetas nuevas todos los días</span></label>
+    <div id="msg" aria-live="polite"></div>
+    <button class="btn" id="go">Entrar</button>
+  </form>
+  <p class="foot" style="margin-top:18px">¿No tenés contraseña o te la olvidaste? <a id="setup" href="/recuperar" target="_blank" rel="noopener" style="color:var(--color-primary);font-weight:600">Configurala acá</a> (se recupera desde el sitio de tu club) y volvé.</p>
+  <p class="foot">Golflet verifica tu matrícula y contraseña con el sistema de tu club y solo lee tus datos: nunca cambia nada.</p>
+  <nav class="ct-links" aria-label="Contacto"><a href="/contacto.html?tipo=profesor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9 12 4.5 21.5 9 12 13.5z M6.5 11v4.2c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3V11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>¿Sos profesor?</a><a href="/contacto.html?tipo=marca"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12.2V4.5h7.7l9.3 9.3-7.7 7.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.6" fill="currentColor"/></svg>¿Sponsor o marca?</a></nav>
+</main>
+<script>
+(function(){
+  const RECOVER = '/recuperar';  // same-origin redirect → sitio del club (hostname never shown on this page)
+  const f = document.getElementById('f'), msg = document.getElementById('msg'), go = document.getElementById('go');
+  // a group share link (/g/<token>) remembers its token here so we land on the invite after signing in (7 days)
+  const JOIN = (() => { try { const t = localStorage.getItem('gl_join'), at = +localStorage.getItem('gl_join_at') || 0; return t && /^[A-Za-z0-9_-]{16,40}$/.test(t) && Date.now() - at < 7*864e5 ? t : null; } catch(e){ return null; } })();
+  const DEST = JOIN ? '/#/unirse/' + JOIN : '/';
+  if (JOIN) fetch('/api/groups/join/' + JOIN, {credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(j => { if (!j) return;
+    const b = document.createElement('div'); b.className = 'msg'; b.style.marginTop = '14px'; const t = document.createElement('b'); t.textContent = 'Te invitaron a "' + j.group.name + '"';
+    const d = document.createElement('div'); d.style.marginTop = '4px'; d.textContent = 'Entrá con tu matrícula y después aceptás o rechazás la invitación.'; b.append(t, d);
+    document.querySelector('.auth .foot').after(b); }).catch(() => {});
+  fetch('/api/me', {credentials:'same-origin'}).then(r => { if (r.ok) location.replace(DEST); });
+  const show = (kind, title, hint, link) => {
+    msg.innerHTML = '';
+    const box = document.createElement('div'); box.className = 'msg ' + kind; box.setAttribute('role', 'alert');
+    const b = document.createElement('b'); b.style.display = 'block'; b.textContent = title; box.appendChild(b);
+    if (hint) { const p = document.createElement('div'); p.style.marginTop = '4px'; p.textContent = hint; box.appendChild(p); }
+    msg.appendChild(box);
+    if (link) { const a = document.createElement('a'); a.className = 'btn ghost'; a.style.marginTop = '10px'; a.href = link; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Configurar mi contraseña'; msg.appendChild(a); }
+  };
+  f.onsubmit = async e => {
+    e.preventDefault(); msg.innerHTML = '';
+    const body = { matricula: f.matricula.value.trim(), clave: f.clave.value, save_password: f.save.checked };
+    if (!body.matricula || !body.clave) { show('err', 'Escribí tu matrícula y tu contraseña.'); return; }
+    go.disabled = true; go.textContent = 'Entrando…';
+    try {
+      const r = await fetch('/api/auth/golfistics', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+      if (r.ok) { f.clave.value = ''; location.replace(DEST); return; }
+      const j = await r.json().catch(() => ({}));
+      if (j.code === 'GOLFISTICS_REJECTED') show('err', j.message || 'No pudimos entrar con esa matrícula y contraseña.', j.hint, RECOVER);
+      else if (j.code === 'GOLFISTICS_UNAVAILABLE') show('', j.message || 'El sistema de tu club no responde en este momento. Probá de nuevo en unos minutos.');
+      else if (j.code === 'TOO_MANY_ATTEMPTS') show('err', j.message || 'Demasiados intentos fallidos.', j.hint, RECOVER);
+      else show('err', j.message || 'No se pudo entrar. Probá de nuevo.');
+    } catch (_) { show('err', 'Sin conexión.', 'Revisá tu internet y probá de nuevo.'); }
+    go.disabled = false; go.textContent = 'Entrar';
+  };
+})();
+</script>
+</body>
+</html>

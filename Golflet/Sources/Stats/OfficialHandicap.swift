@@ -13,23 +13,42 @@ enum OfficialHandicap {
     }
 }
 
-/// What changed inside the best-8, using only scorecards that are actually linked.
-/// The registration club is never a stand-in.
+/// One row of a handicap revision: which scorecard moved, and why.
+struct HIShiftGroup: Equatable, Identifiable, Sendable {
+    var id: String { title }
+    var title: String
+    var cards: [IndexCardRef]
+}
+
+/// Scorecard evidence for an official index revision. A course name alone is not a card.
 enum HIChangeLabel {
-    static func line(entered: [String], exited: [String]) -> String? {
-        let inn = entered.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        let out = exited.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        var bits: [String] = []
-        if !inn.isEmpty { bits.append("Entró \(inn.joined(separator: ", "))") }
-        if !out.isEmpty { bits.append("Salió \(out.joined(separator: ", "))") }
-        return bits.isEmpty ? nil : bits.joined(separator: " · ")
+    static let unidentified = "No puedo identificar la tarjeta."
+
+    static func groups(_ shift: IndexShift) -> [HIShiftGroup] {
+        guard shift.verified else { return [] }
+        return [
+            HIShiftGroup(title: "Entró en las 8", cards: shift.enteredBest8),
+            HIShiftGroup(title: "Salió de las 8", cards: shift.leftBest8),
+            HIShiftGroup(title: "Salió de las últimas 20", cards: shift.agedOut),
+            HIShiftGroup(title: "Entró en las últimas 20", cards: shift.enteredWindow)
+        ].filter { !$0.cards.isEmpty }
     }
 
-    static func line(entered: [IndexCardRef], exited: [IndexCardRef]) -> String? {
-        line(
-            entered: entered.map(\.course),
-            exited: exited.map(\.course)
-        )
+    /// The Handicap Index move. This number is not the scorecard differential.
+    static func indexLine(delta: Double) -> String {
+        if delta > 0.049 { return "El índice subió \(FormatAR.one(delta))" }
+        if delta < -0.049 { return "El índice bajó \(FormatAR.one(abs(delta)))" }
+        return "El índice no se movió"
+    }
+
+    /// One scorecard. "diferencial" is the card's differential, never the index.
+    static func cardText(_ card: IndexCardRef) -> String {
+        var bits = [FormatAR.syncDay(card.date)]
+        let course = card.course.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !course.isEmpty { bits.append(course) }
+        bits.append("diferencial \(FormatAR.one(card.differential))")
+        if let gross = card.gross { bits.append("gross \(gross)") }
+        return bits.joined(separator: " · ")
     }
 }
 

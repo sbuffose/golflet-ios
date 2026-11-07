@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#F6F7F9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Golflet">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<title>Golflet · Feedback</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="auth ct">
+  <a class="ct-back" id="back" href="/login">‹ Volver</a>
+  <div class="brand"><img src="/icons/icon-192.png" alt=""><b>Golflet</b></div>
+  <div id="ct"></div>
+</main>
+<script>
+(function(){
+  /* t135u: ANONYMOUS feedback. Sends only {category, texto}: no session, user id or email. */
+  fetch('/api/me', { credentials: 'same-origin' }).then(r => { if (r.ok) { const b = document.getElementById('back'); b.href = '/#/inicio'; b.textContent = '‹ Volver a Golflet'; } }).catch(() => {});
+  const CATS = [
+    ['no_funciono', 'Algo que no funcionó', 'Qué estabas haciendo, en qué pantalla, y qué pasó. Ej.: “En Rondas, al tocar una tarjeta de marzo, se quedó cargando.”', 'Estaba en… / Toqué… / Esperaba que… / Pasó que…'],
+    ['idea', 'Una idea', 'Qué te gustaría poder hacer y para qué te serviría. Ej.: “Ver cuántos greens en regulación hice por cancha.”', 'Me gustaría poder… / Me serviría para…'],
+    ['me_encanto', 'Algo que me encantó', 'Qué te gustó y por qué, así lo cuidamos. Ej.: “El gráfico de evolución: entiendo al toque si mejoré.”', 'Me encantó… porque…'],
+    ['otro', 'Otra cosa', 'Lo que quieras contarnos.', 'Contanos…']];
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const el = document.getElementById('ct'); let cat = null;
+  el.innerHTML = `<h1 class="ltitle" style="font-size:34px">Feedback</h1>
+    <p class="foot" style="font-size:15px;margin-top:8px">Contanos qué pensás de Golflet. <b>Es anónimo:</b> no guardamos tu nombre, tu email ni tu cuenta con el mensaje.</p>
+    <form class="card gg-form fb-form" id="cf" novalidate style="margin-top:18px">
+      <span class="fb-q">¿Sobre qué es?</span>
+      <div class="fb-chips" role="radiogroup" aria-label="Tipo de comentario">${CATS.map(([k, l]) => `<button type="button" class="fb-chip" role="radio" aria-checked="false" data-k="${k}">${l}</button>`).join('')}</div>
+      <p class="fb-hint" id="hint">Elegí una opción para ver una guía, o escribí directamente.</p>
+      <label>Tu comentario<textarea name="texto" id="tx" rows="6" maxlength="2000" required placeholder="Qué pasó, qué te gustaría o qué te gustó. Cuanto más concreto, mejor."></textarea></label>
+      <div class="fb-starts" id="starts" hidden></div>
+      <span class="fb-count num" id="cnt">0 / 2000</span>
+      <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+      <div id="msg"></div><button class="btn" type="submit" id="go">Enviar</button></form>
+    <p class="foot" style="margin-top:14px">¿Querés que te respondamos? Usá <a href="/contacto.html?tipo=contacto" style="color:#86672F;font-weight:600">Contactar</a>.</p>`;
+  const f = document.getElementById('cf'), tx = document.getElementById('tx'), msg = document.getElementById('msg'), go = document.getElementById('go'), cnt = document.getElementById('cnt'), hint = document.getElementById('hint'), starts = document.getElementById('starts');
+  tx.oninput = () => { cnt.textContent = tx.value.length + ' / 2000'; };
+  el.querySelectorAll('.fb-chip').forEach(b => b.onclick = () => {
+    const on = cat !== b.dataset.k; cat = on ? b.dataset.k : null;
+    el.querySelectorAll('.fb-chip').forEach(x => x.setAttribute('aria-checked', String(x.dataset.k === cat)));
+    const c = CATS.find(x => x[0] === cat);
+    hint.textContent = c ? c[2] : 'Elegí una opción para ver una guía, o escribí directamente.';
+    tx.placeholder = c ? c[3] : 'Qué pasó, qué te gustaría o qué te gustó. Cuanto más concreto, mejor.';
+    starts.hidden = !c; starts.innerHTML = c ? c[3].split(' / ').map(s => `<button type="button" class="fb-start">${esc(s.replace(/…$/, ''))}…</button>`).join('') : '';
+    starts.querySelectorAll('.fb-start').forEach(s => s.onclick = () => { const t = s.textContent.replace(/…$/, ' '); tx.value = (tx.value && !/\s$/.test(tx.value) ? tx.value + ' ' : tx.value) + t; tx.focus(); tx.setSelectionRange(tx.value.length, tx.value.length); tx.oninput(); });
+  });
+  f.onsubmit = async e => { e.preventDefault(); msg.innerHTML = '';
+    const texto = tx.value.trim(); if (texto.length < 10) { msg.innerHTML = '<div class="msg err">Contanos un poco más (al menos 10 caracteres).</div>'; tx.focus(); return; }
+    go.disabled = true; go.textContent = 'Enviando…';
+    try { const r = await fetch('/api/feedback', { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: cat, texto, website: f.website.value }) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No pudimos enviar el comentario. Probá de nuevo.');
+      el.innerHTML = `<div class="card ct-ok"><span class="ct-check" aria-hidden="true">✓</span><h1 class="stitle">¡Gracias!</h1><p>${esc(j.message)}</p><a class="btn ghost" href="${document.getElementById('back').getAttribute('href')}">Volver</a></div>`;
+    } catch (err) { go.disabled = false; go.textContent = 'Enviar'; msg.innerHTML = `<div class="msg err">${esc(err.message)}</div>`; } };
+})();
+</script>
+</body>
+</html>
