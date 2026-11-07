@@ -32,7 +32,9 @@ enum LivePayloadMapper {
             profile: PlayerProfile(
                 displayName: display,
                 initials: initials(display),
-                currentHandicap: playerHI ?? hiHistory.last?.handicap ?? rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 0,
+                currentHandicap: OfficialHandicap.latest(player: playerHI, history: hiHistory)
+                    ?? rounds.sorted { $0.date > $1.date }.first?.handicapIndex
+                    ?? 0,
                 firstName: firstName
             ),
             clubs: clubs,

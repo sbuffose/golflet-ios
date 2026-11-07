@@ -93,58 +93,30 @@ enum JockeyPlans {
             hole: hole.n,
             planTitle: advice.title,
             planText: advice.text,
-            teeClub: advice.club,
-            teeTarget: advice.target,
+            teeClub: advice.club.isEmpty ? nil : advice.club,
+            teeTarget: advice.target.isEmpty ? nil : advice.target,
             target: nil,
-            hazards: [
-                StrategyHazard(
-                    id: "\(course.lowercased())-\(hole.n)",
-                    type: "rough",
-                    typeLabel: "Rough",
-                    side: advice.miss,
-                    sideLabel: advice.miss == "izquierda" ? "Izquierda" : "Derecha",
-                    fromYd: nil,
-                    carryYd: nil,
-                    fromM: nil,
-                    carryM: nil,
-                    note: advice.hazard,
-                    at: nil
-                )
-            ],
+            hazards: [],
             why: "Par \(hole.par), \(hole.yards) yd desde el tee de juego, hándicap \(hole.hcp) de la cancha.",
-            missSide: advice.miss,
-            missNote: advice.hazard,
+            missSide: advice.miss.isEmpty ? nil : advice.miss,
+            missNote: advice.hazard.isEmpty ? nil : advice.hazard,
             greenSlope: nil,
-            greenLeave: "Abajo del hoyo",
-            greenNotes: "Mejor corto que pasado.",
-            variants: [
-                .medio: StrategyVariant(teeClub: advice.club, plan: advice.text)
-            ],
+            greenLeave: nil,
+            greenNotes: nil,
+            variants: [:],
             publishedAt: "2026-11-06T12:00:00Z"
         )
     }
 
     private static func teeAdvice(par: Int, yards: Int, hcp: Int) -> (title: String, text: String, club: String, target: String, miss: String, hazard: String) {
-        let hard = hcp <= 4 ? " Es de los más duros: centro antes que un golpe heroico." : ""
-        let easy = hcp >= 15 ? " Acá se defiende el par. Un golpe de más vale más que el riesgo." : ""
-        switch par {
-        case 3 where yards < 140:
-            return ("Wedge al centro", "Par 3 corto, \(yards) yd. Wedge o hierro 9 al medio del green. No lo pases.\(easy)", "PW", "Centro del green", "corto", "Si errás, que sea corto. Largo no vuelve.")
-        case 3 where yards < 190:
-            return ("Hierro al centro", "Par 3 de \(yards) yd. Hierro medio al centro, sin cazar la bandera.\(easy)", "Hierro 7", "Centro del green", "corto", "El rough de adelante es mejor que pasarlo.")
-        case 3:
-            return ("Hierro largo, sin pasarte", "Par 3 largo, \(yards) yd. Salí con lo que llegue cómodo y dejalo en el medio.\(hard)", "Híbrido", "Centro del green", "corto", "No lo cacees: pasado queda muerto.")
-        case 5 where yards < 500:
-            return ("Dos golpes y un wedge", "Par 5 de \(yards) yd. Driver al centro y un segundo que deje wedge entero. No lo fuerces en dos.\(hard)", "Driver", "Centro del fairway", "izquierda", "El rough te saca el segundo golpe. Mejor el centro.")
-        case 5:
-            return ("Jugalo en tres", "Par 5 de \(yards) yd. Tres golpes. El segundo es posición, no distancia.\(hard)", "Driver", "Lado ancho del fairway", "izquierda", "Un layup al centro le gana al rough.")
-        case 4 where yards < 330:
-            return ("Híbrido y wedge", "Par 4 corto, \(yards) yd. Híbrido o hierro largo y dejá un wedge. El driver no hace falta.\(easy)", "Híbrido", "Centro, corto del problema", "izquierda", "Pasarte desde el tee te deja un approach incómodo.")
-        case 4 where yards < 390:
-            return ("Madera al centro", "Par 4 de \(yards) yd. Madera o híbrido al centro. El approach tiene que quedar entero.\(easy)", "Madera 3", "Centro del fairway", "derecha", "Del rough el hierro no entra igual. Pagá el centro.")
-        default:
-            return ("Driver al lado ancho", "Par 4 de \(yards) yd. Driver al lado más ancho y un hierro al centro del green.\(hard)", "Driver", "Lado ancho", "izquierda", "Un drive al rough te deja el segundo golpe largo.")
-        }
+        (
+            "Par \(par) · \(yards) yd",
+            "Par \(par), \(yards) yd, hándicap \(hcp) de la cancha. No hay palo ni línea verificados para este hoyo.",
+            "",
+            "",
+            "",
+            ""
+        )
     }
 
     private static let azul7 = HoleStrategy(

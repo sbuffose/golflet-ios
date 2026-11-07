@@ -186,8 +186,10 @@ struct LiveHoleView: View {
                     }
                     if model.roundSettings.shows(.track, mode: model.homeMode) || showMore || model.homeMode == .mej {
                         Button(mode == .track ? "ENTER" : "TRACK") {
-                            if mode == .track { confirmShot(penalty: lastLie == .agua, holed: geo.meters(from: center, to: pin) < 1.5) }
-                            else { withAnimation(motion) { mode = .track } }
+                            if mode == .track {
+                                let onCup = TrackSession.onCup(meters: Double(geo.meters(from: center, to: pin)))
+                                confirmShot(penalty: false, holed: onCup)
+                            } else { withAnimation(motion) { mode = .track } }
                         }
                         .font(GType.headline)
                         .foregroundStyle(.white)

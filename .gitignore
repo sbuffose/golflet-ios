@@ -34,3 +34,8 @@ secrets/
 # Editor
 .idea/
 .vscode/
+
+# Web app (source lives in web/; installed and built output does not)
+web/node_modules/
+web/.next/
+web/.vercel/

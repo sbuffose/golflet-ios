@@ -79,12 +79,10 @@ struct PlayHubView: View {
                                 ProtoRow(title: "Libreta de la cancha", subtitle: "Hoyo a hoyo: cómo jugarlo y tu promedio")
                                     .accessibilityIdentifier("play-libreta")
                             }
-                            NavigationLink {
-                                StrategyCourseView(
-                                    courseKey: CourseIdentity.key(for: model.selectedCourseName),
-                                    courseName: model.selectedCourseName
-                                )
-                            } label: {
+                            NavigationLink(value: MetricRoute.strategy(
+                                courseKey: CourseIdentity.key(for: model.selectedCourseName),
+                                courseName: model.selectedCourseName
+                            )) {
                                 ProtoRow(title: "Estrategia", subtitle: "Dónde apuntar y qué palo usar en cada hoyo")
                                     .accessibilityIdentifier("play-estrategia")
                             }
@@ -308,14 +306,20 @@ struct ClimaView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @State private var forecast: TeeForecast.Window?
+    @State private var holes: [GPSHole] = []
 
     var body: some View {
         let booking = model.nextTeeTime
-        let report = WeatherPlay.report(booking: booking, rounds: model.rounds, bag: model.bag)
+        let report = WeatherPlay.report(booking: booking, rounds: model.rounds, bag: model.bag, holes: holes)
         let pin = booking.flatMap { CoursePin.coordinate(club: $0.clubName, course: $0.course) }
         let live = forecast.flatMap { window in
-            booking.map { TeeForecast.playText(window: window, booking: $0, rounds: model.rounds, bag: model.bag) }
+            booking.map { TeeForecast.playText(window: window, booking: $0, rounds: model.rounds, bag: model.bag, holes: holes) }
         }
+        let windRows = HoleWind.rows(
+            holes: holes,
+            windFromDeg: HoleWind.degrees(from: booking?.windFrom ?? forecast?.hours.first?.windFromES),
+            speedKmh: booking?.windKmh ?? forecast?.hours.first?.windKmh
+        )
         GScreen(id: "screen-clima") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -329,13 +333,31 @@ struct ClimaView: View {
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
                     }
-                    let lines = live?.split(separator: "\n").map(String.init) ?? report.lines
+                    let showWind = windRows.contains { $0.relative != .unavailable }
+                    let lines = (live?.split(separator: "\n").map(String.init) ?? report.lines)
+                        .filter { !showWind || !$0.hasPrefix("Hoyo ") }
                     ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                         Text(line)
-                            .font(GType.body)
+                            .font(GType.label)
                             .foregroundStyle(p.ink)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier(index == 0 ? "clima-hour" : "clima-line-\(index)")
+                    }
+                    if showWind {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(windRows.filter { $0.relative != .unavailable }) { row in
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.up")
+                                        .rotationEffect(.degrees(HoleWind.arrowDegrees(row.relative)))
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(p.accent)
+                                    Text(row.line)
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink)
+                                }
+                                .accessibilityIdentifier("clima-wind-\(row.number)")
+                            }
+                        }
                     }
                     if forecast?.failed == true {
                         Text("No pude leer el pronóstico. El mapa es el del club.")
@@ -350,7 +372,14 @@ struct ClimaView: View {
         .accessibilityIdentifier(report.hasNumbers || (forecast?.hours.isEmpty == false) ? "clima-real" : "clima-empty")
         .task(id: booking?.id) {
             forecast = nil
+            holes = []
             guard let booking else { return }
+            let courseId = CourseIdentity.id(for: booking.course)
+            if let cached = CourseCache.load(courseId: courseId) {
+                holes = cached.detail.holes
+            } else if let remote = try? await model.api.gpsCourse(id: courseId, lat: nil, lng: nil) {
+                holes = remote.holes
+            }
             forecast = await TeeForecast.load(booking: booking)
         }
     }

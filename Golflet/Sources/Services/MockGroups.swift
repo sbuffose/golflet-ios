@@ -21,22 +21,30 @@ extension MockAPIClient {
         }
     }
 
-    func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup {
+    func createGroup(name: String, photoJPEG: Data?, idempotencyKey: String?) async throws -> GolfletGroup {
         guard isAuthenticated else { throw GolfletError.notAuthenticated }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw GolfletError.server("Ponéle un nombre al grupo.") }
+        if let idempotencyKey, let existing = mutate({ store, _ in
+            store.createdByKey[idempotencyKey]
+        }) {
+            return existing
+        }
         let me = currentMember(role: .admin, owner: true)
         let token = "invite-\(UUID().uuidString.prefix(8).lowercased())"
         let group = GolfletGroup(
             id: "g-\(UUID().uuidString.prefix(8).lowercased())",
             name: trimmed,
-            photoURL: photoJPEG == nil ? nil : "mock://group/\(token)",
+            photoURL: (photoJPEG == nil || photoJPEG?.isEmpty == true) ? nil : "mock://group/\(token)",
             owner: me,
             members: [me],
             myRole: .admin,
             invite: .make(token: token)
         )
         return mutate { store, _ in
+            if let idempotencyKey {
+                store.createdByKey[idempotencyKey] = group
+            }
             store.groups.append(group)
             store.views[group.id] = .default
             return group
@@ -64,7 +72,7 @@ extension MockAPIClient {
                 guard !trimmed.isEmpty else { throw GolfletError.server("Ponéle un nombre al grupo.") }
                 store.groups[index].name = trimmed
             }
-            if let photoJPEG {
+            if let photoJPEG, !photoJPEG.isEmpty {
                 GroupPhotoCache.store(photoJPEG, for: id)
                 store.groups[index].photoURL = "mock://group/\(id)"
             }
@@ -372,6 +380,7 @@ struct MockGroupStore: Sendable {
     var pending: [GroupInvitePreview]
     var views: [String: GroupViewConfig]
     var share: [String: SharePrefs]
+    var createdByKey: [String: GolfletGroup] = [:]
 
     static func seed() -> MockGroupStore {
         let me = GroupMember(id: meID, name: "Jugador Demo", initials: "JD", photoURL: nil, role: .admin, isOwner: true)

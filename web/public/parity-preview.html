@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Golflet · verificación</title>
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/style.css">
+<style>
+  body{margin:0;background:#F6F7F9;color:#0B2545;font-family:Geist,system-ui,sans-serif}
+  main{max-width:420px;margin:0 auto;padding:16px 16px 40px}
+  h1{font-size:22px;margin:8px 0}
+  .map{position:relative;height:280px;border-radius:16px;overflow:hidden;background:#16324f url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect width='80' height='80' fill='%2314303a'/><path d='M0 40h80M40 0v80' stroke='%231e4450' stroke-width='8'/></svg>");background-size:80px}
+  .dock{position:absolute;left:0;right:0;bottom:0}
+  .rail{position:absolute;left:8px;top:24px}
+  button.step{margin:8px 8px 0 0}
+</style>
+</head>
+<body>
+<main>
+  <p class="overline">Golflet</p>
+  <h1>Jugar</h1>
+  <section id="picker"></section>
+  <h2>Viento</h2>
+  <section id="wind"></section>
+  <h2>Cambios</h2>
+  <section id="hi"></section>
+  <h2>Meses</h2>
+  <section id="months"></section>
+  <h2>Track</h2>
+  <div id="frames"></div>
+  <div class="map" id="map">
+    <div class="tk-shots-rail rail" id="rail"></div>
+    <div class="tk-ret on" id="play-reticle"><i></i></div>
+    <div class="tk-ro" id="read"></div>
+    <div class="tk-dock dock" id="dock"></div>
+  </div>
+  <p id="phase"></p>
+</main>
+<script src="/play-rules.js"></script>
+<script>
+const R = window.GolfletRules;
+const groups = R.coursePickerGroups([
+  { course_id: "209-vieja", club_code: "209", club_name: "Mar del Plata Golf Club", course_label: "Cancha Vieja", distance_km: 4.2 },
+  { course_id: "209-nueva", club_code: "209", club_name: "Mar del Plata Golf Club", course_label: "Cancha Nueva" },
+  { course_id: "118-solo", club_code: "118", club_name: "Jockey Club", course_label: "Jockey Club" }
+]);
+document.getElementById("picker").innerHTML = groups.map(g => `<section class="jg-club" id="club-${g.code}"><div class="jg-club-h"><b>${g.club}</b>${g.distance ? `<span>${g.distance}</span>` : ""}</div>${g.rows.map(c => `<div class="row jg-course" id="course-${c.id}"><span class="t">${c.name}</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l6 6-6 6"/></svg></div>`).join("")}</section>`).join("");
+const holes = [{ hole: 1, bearing: 90 }, { hole: 2, bearing: null }];
+document.getElementById("wind").innerHTML = `<div class="card tw-card"><p class="tw-now"><b>20 km/h, viene del este</b><span>Pronóstico</span></p><div class="tw-holes">${holes.map(h => `<div><span>${R.windPlay(h.hole, 90, h.bearing, 20).text}</span></div>`).join("")}</div></div>`;
+const entered = { id: "c1", date: "2026-10-20", course: "Colorada", differential: 2, gross: 70 };
+const aged = { id: "n0", date: "2026-01-01", course: "Nueva", differential: 12, gross: 90 };
+document.getElementById("hi").innerHTML = `<div class="card"><div class="overline">Hándicap index</div><div class="big num">3.7</div><p>4 nov 2026</p></div><h2>Cambios</h2><p class="foot">Abajo, cada salto del índice. La tarjeta dice su diferencial, que no es el índice.</p><ol class="hi-tl"><li><div class="rev"><i></i><time>4 nov 2026</time><b class="num">3,1 → 3,7</b><span class="evo-d up num">índice ↑ 0,6</span><p class="hi-why"><b>Entró en las 8</b> · ${R.hiCardLine(entered)}</p><p class="hi-why"><b>Salió de las últimas 20</b> · ${R.hiCardLine(aged)}</p></div></li></ol>`;
+const cols = R.monthColumns([{month:"2026-06",birdies:1,pars:2},{month:"2026-07",birdies:0,pars:3},{month:"2026-08",birdies:2,pars:1},{month:"2026-09",birdies:1,pars:1},{month:"2026-10",birdies:3,pars:2},{month:"2026-11",birdies:1,pars:4}]);
+const mx = Math.max(...cols.map(c => Math.max(c.birdies, c.pars)));
+document.getElementById("months").innerHTML = `<div class="mo-scroll" id="moscroll">${cols.map(c => `<button type="button" class="mo-col" data-mo="${c.id}" aria-label="${c.detail}"><span class="mo-yr">${c.showsYear ? c.year : ""}</span><span class="mo-bars"><i class="b" style="height:${Math.max(2,c.birdies/mx*28)}px"></i><i class="p" style="height:${Math.max(2,c.pars/mx*28)}px"></i></span><span class="mo-l">${c.shortLabel}</span></button>`).join("")}</div><p class="mo-detail" id="modetail">${cols.at(-1).detail}</p>`;
+document.getElementById("moscroll").scrollLeft = 999;
+document.querySelectorAll("[data-mo]").forEach(b => b.onclick = () => { const d = document.getElementById("modetail"); d.hidden = false; d.textContent = b.getAttribute("aria-label"); });
+const PROMPT = {confirmTee:"Arrastrá el mapa para confirmar el tee",confirmFlag:"Arrastrá el mapa para marcar la bandera",tracking:"Arrastrá el mapa hasta donde terminó el golpe",penaltyWhere:"Penalidad: ¿adónde fue?",relief:"Penalidad. Elegí otra vez o drop",drop:"Arrastrá el mapa hasta el drop"};
+function frame(title, state) {
+  const set = state.phase === "confirmTee" || state.phase === "confirmFlag" || state.phase === "drop";
+  const pen = state.phase === "penaltyWhere" || state.phase === "relief" || state.phase === "drop";
+  const enter = state.phase !== "relief";
+  return `<figure class="map" style="margin:12px 0"><div class="tk-shots-rail rail">${state.marks.map((m,i)=>`<span>${m.drop?"Drop":m.penalty?"P":m.club||i+1}</span>`).join("")}</div><div class="tk-ret on ${pen?"pen":""}"><i></i></div><div class="tk-ro"><b>${PROMPT[state.phase]}</b></div><div class="tk-dock dock"><div class="tk-hn"><b>${title}</b><span>Hoyo 1 · Par 4 · 380 yd</span></div><div class="tk-acts">${state.phase==="relief"?'<button type="button" class="tk-ghost">Otra vez</button><button type="button" class="tk-ghost">Drop</button>':""}${state.phase==="tracking"?'<button type="button" class="tk-ghost">P</button>':""}${set?'<button type="button" class="tk-enter">SET</button>':enter?'<button type="button" class="tk-enter">ENTER</button>':""}</div></div></figure>`;
+}
+let demo = R.trackNew();
+const frames = [["Tee", demo]];
+demo = R.trackSet(demo, {lat:1,lng:1}); frames.push(["Bandera", demo]);
+demo = R.trackSet(demo, {lat:1.01,lng:1}); frames.push(["Golpes", demo]);
+demo = R.trackEnter(demo, {lat:1.02,lng:1}, "7i", false).state;
+frames[2] = ["Golpes", demo];
+let pen = R.trackPenalty(demo); frames.push(["¿Adónde fue?", pen]);
+pen = R.trackEnter(pen, {lat:2,lng:2}, null, false).state; frames.push(["Otra vez o drop", pen]);
+frames.push(["Drop", R.trackDrop(pen)]);
+document.getElementById("frames").innerHTML = frames.map(([t, st]) => frame(t, st)).join("");
+let s = R.trackNew();
+const steps = [
+  ["SET tee", () => { s = R.trackSet(s, { lat: -34.48, lng: -58.53 }); }],
+  ["SET bandera", () => { s = R.trackSet(s, { lat: -34.481, lng: -58.529 }); }],
+  ["ENTER", () => { s = R.trackEnter(s, { lat: -34.4804, lng: -58.5296 }, "7i", false).state; }],
+  ["P", () => { s = R.trackPenalty(s); }],
+  ["ENTER penalidad", () => { s = R.trackEnter(s, { lat: -34.482, lng: -58.531 }, null, false).state; }],
+  ["Drop", () => { s = R.trackDrop(s); }],
+  ["SET drop", () => { s = R.trackSet(s, { lat: -34.4812, lng: -58.530 }); }]
+];
+function paint() {
+  document.getElementById("phase").textContent = s.phase + " · golpes " + s.marks.filter(m => m.countsStroke).length;
+  document.getElementById("rail").innerHTML = s.marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? "Drop" : m.penalty ? "P" : m.holed ? "Hoyo" : (m.club || i + 1)}</span>`).join("");
+  const set = s.phase === "confirmTee" || s.phase === "confirmFlag" || s.phase === "drop";
+  document.getElementById("read").innerHTML = `<b>${({confirmTee:"Arrastrá el mapa para confirmar el tee",confirmFlag:"Arrastrá el mapa para marcar la bandera",tracking:"Arrastrá el mapa hasta donde terminó el golpe",penaltyWhere:"Penalidad: ¿adónde fue?",relief:"Penalidad. Elegí otra vez o drop",drop:"Arrastrá el mapa hasta el drop"})[s.phase]}</b>`;
+  document.getElementById("play-reticle").classList.toggle("pen", s.phase === "penaltyWhere" || s.phase === "relief" || s.phase === "drop");
+  document.getElementById("dock").innerHTML = `<div class="tk-nav"><div class="tk-hn"><b>Hoyo 1</b><span>Par 4 · 380 yd · Hcp 7</span></div></div><div class="tk-acts">${s.phase==="tracking"?'<button type="button" class="tk-ghost" id="play-penalty">P</button>':""}${s.phase==="relief"?'<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>':""}${set?'<button type="button" class="tk-enter" id="play-set">SET</button>':'<button type="button" class="tk-enter" id="play-hit">ENTER</button>'}</div>`;
+}
+document.getElementById("map").insertAdjacentHTML("beforebegin", steps.map((s, i) => `<button class="btn sm step" type="button" id="step-${i}">${s[0]}</button>`).join(""));
+steps.forEach((step, i) => document.getElementById("step-" + i).onclick = () => { step[1](); paint(); });
+paint();
+</script>
+</body>
+</html>

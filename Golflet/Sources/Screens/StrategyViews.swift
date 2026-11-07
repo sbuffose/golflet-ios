@@ -192,6 +192,7 @@ struct StrategyHoleCard: View {
                 fullHeader
                 chips
                 plan
+                sketch
                 if !hole.hazards.isEmpty {
                     hazards
                 }
@@ -309,6 +310,49 @@ struct StrategyHoleCard: View {
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                     .accessibilityIdentifier("strategy-plan")
+            } else if level != .general {
+                Text("No hay un plan verificado para \(level.chip.lowercased()).")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier("strategy-plan-missing")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sketch: some View {
+        let marks = hole.hazards.compactMap { hazard -> (String, Int)? in
+            guard let yards = hazard.carryYd ?? hazard.fromYd else { return nil }
+            return (hazard.title, yards)
+        }
+        if !marks.isEmpty, let span = marks.map(\.1).max(), span > 0 {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Distancias publicadas")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                VStack(alignment: .leading, spacing: 6) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(p.hairline)
+                                .frame(height: 4)
+                            ForEach(Array(marks.enumerated()), id: \.offset) { _, mark in
+                                let x = max(8, geo.size.width * CGFloat(mark.1) / CGFloat(span))
+                                Circle()
+                                    .fill(p.accent)
+                                    .frame(width: 8, height: 8)
+                                    .position(x: min(x, geo.size.width - 4), y: 8)
+                            }
+                        }
+                    }
+                    .frame(height: 16)
+                    ForEach(Array(marks.enumerated()), id: \.offset) { _, mark in
+                        Text("\(mark.0) · \(mark.1) yd")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                }
+                .accessibilityIdentifier("strategy-sketch")
             }
         }
     }
@@ -485,9 +529,9 @@ struct StrategyHoleCard: View {
     }
 
     private var availableLevels: [StrategyLevel] {
-        var levels: [StrategyLevel] = [.general]
-        for level in [StrategyLevel.scratch, .medio, .alto] where hole.variants[level] != nil {
-            levels.append(level)
+        var levels: [StrategyLevel] = [.general, .scratch, .medio]
+        if hole.variants[.alto] != nil {
+            levels.append(.alto)
         }
         return levels
     }

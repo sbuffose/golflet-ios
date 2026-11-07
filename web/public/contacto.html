@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#F6F7F9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Golflet">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<title>Golflet · Contacto</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="auth ct">
+  <a class="ct-back" id="back" href="/login">‹ Volver</a>
+  <div class="brand"><img src="/icons/icon-192.png" alt=""><b>Golflet</b></div>
+  <div id="ct"></div>
+</main>
+<script>
+(function(){
+  const tipo = new URLSearchParams(location.search).get('tipo'), kind = ['marca', 'contacto'].includes(tipo) ? tipo : 'profesor';
+  fetch('/api/me', { credentials: 'same-origin' }).then(r => { if (r.ok) { const b = document.getElementById('back'); b.href = '/#/inicio'; b.textContent = '‹ Volver a Golflet'; } }).catch(() => {});
+  const F = kind === 'profesor'
+    ? { t: '¿Sos profesor?', l: 'Dejanos tus datos y te contactamos para sumarte a Golflet: tus alumnos van a poder compartir sus números con vos.',
+        fields: [['nombre','Nombre y apellido','text','name',true,80], ['telefono','Teléfono','tel','tel',true,30], ['lugar','Dónde das clases','text','off',true,120,'Ej.: Driving Norte, Jockey Club'], ['matricula_aag','Matrícula de Pro AAG','text','off',false,20,'Opcional']] }
+    : kind === 'contacto'
+    ? { t: 'Contactar', l: 'Dejanos tus datos y el motivo, y te contactamos.',
+        fields: [['nombre','Nombre y apellido','text','name',true,80], ['telefono','Teléfono','tel','tel',true,30], ['motivo','Motivo','textarea','off',true,1000,'Contanos en qué te podemos ayudar']] }
+    : { t: '¿Sponsor o marca?', l: 'Contanos qué tenés en mente y te contactamos.',
+        fields: [['nombre','Nombre y apellido','text','name',true,80], ['empresa','Empresa o marca','text','organization',true,100], ['telefono','Teléfono','tel','tel',true,30], ['motivo','Motivo','textarea','off',true,1000,'Torneo, sponsoreo, producto…']] };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const el = document.getElementById('ct');
+  el.innerHTML = `<h1 class="ltitle" style="font-size:34px">${F.t}</h1><p class="foot" style="font-size:15px;margin-top:8px">${F.l}</p>
+    <form class="card gg-form" id="cf" novalidate style="margin-top:18px">
+      ${F.fields.map(([n,l,t,ac,req,max,ph]) => `<label>${l}${req ? '' : ' <small style="font-weight:400;color:var(--color-ink3)">(opcional)</small>'}${t === 'textarea'
+        ? `<textarea name="${n}" rows="4" maxlength="${max}" ${req?'required':''} placeholder="${esc(ph||'')}"></textarea>`
+        : `<input name="${n}" type="${t}" maxlength="${max}" autocomplete="${ac}" ${t==='tel'?'inputmode="tel"':''} ${req?'required':''} placeholder="${esc(ph||'')}">`}</label>`).join('')}
+      <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+      <div id="msg"></div><button class="btn" type="submit" id="go">Enviar</button></form>${kind === 'profesor' ? `<p class="foot" style="margin-top:14px">¿Ya te sumamos a Golflet? <a href="/profesor.html" style="color:#86672F;font-weight:600">Entrá como profesor</a></p>` : ''}`;
+  const f = document.getElementById('cf'), msg = document.getElementById('msg'), go = document.getElementById('go');
+  f.onsubmit = async e => { e.preventDefault(); msg.innerHTML = '';
+    const body = { kind }; for (const [n] of F.fields) body[n] = f[n].value.trim(); body.website = f.website.value;
+    const miss = F.fields.find(([n,,, , req]) => req && !body[n]); if (miss) { msg.innerHTML = `<div class="msg err">Completá “${esc(miss[1])}”.</div>`; f[miss[0]].focus(); return; }
+    go.disabled = true; go.textContent = 'Enviando…';
+    try { const r = await fetch('/api/leads', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No pudimos enviar el formulario. Probá de nuevo.');
+      el.innerHTML = `<div class="card ct-ok"><span class="ct-check" aria-hidden="true">✓</span><h1 class="stitle">¡Listo!</h1><p>${esc(j.message)}</p><a class="btn ghost" href="${document.getElementById('back').getAttribute('href')}">Volver</a></div>`;
+    } catch (err) { go.disabled = false; go.textContent = 'Enviar'; msg.innerHTML = `<div class="msg err">${esc(err.message)}</div>`; } };
+})();
+</script>
+</body>
+</html>

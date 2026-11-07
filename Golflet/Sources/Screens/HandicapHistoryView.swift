@@ -1,4 +1,3 @@
-import Charts
 import SwiftUI
 
 struct HandicapHistoryView: View {
@@ -13,20 +12,27 @@ struct HandicapHistoryView: View {
     @State private var showAllRevisions = false
 
     var body: some View {
-        let points = apiPoints ?? StatsEngine.handicapSeries(model.rounds)
+        let points = displayedPoints
         let changes = StatsEngine.handicapChanges(points)
         let book = IndexBook.composition(from: model.rounds)
         let home = model.home
+        let headline = OfficialHandicap.latest(player: home.handicapIndex, history: model.officialHistory) ?? home.handicapIndex
+        let headlineDay = model.officialHistory.max { $0.date < $1.date }?.date
         GScreen(id: "screen-metric-handicap") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Handicap index")
+                        GOverline(text: "Hándicap index")
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(FormatAR.one(home.handicapIndex))
+                            Text(FormatAR.one(headline))
                                 .font(GType.statL)
                                 .tabular()
                                 .foregroundStyle(p.ink)
+                            if let headlineDay {
+                                Text(FormatAR.syncDay(headlineDay))
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink3)
+                            }
                             if !home.trendSinceLabel.isEmpty {
                                 HStack(spacing: 4) {
                                     Image(systemName: home.trendDelta <= 0 ? "arrow.down" : "arrow.up")
@@ -78,7 +84,7 @@ struct HandicapHistoryView: View {
                 if !drill.history.isEmpty {
                     apiPoints = drill.history.compactMap { item in
                         guard let date = item.date else { return nil }
-                        return TrendPoint(date: date, handicap: item.hi, course: item.club ?? "")
+                        return TrendPoint(date: date, handicap: item.hi, course: "")
                     }.reversed()
                 }
             }
@@ -91,6 +97,9 @@ struct HandicapHistoryView: View {
             Text("Cambios")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
+            Text("Cada fila es un salto del índice. Debajo, la tarjeta que entró o salió y su diferencial.")
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
             if newestFirst.isEmpty {
                 Text("No hay historial de hándicap en las tarjetas.")
                     .font(GType.label)
@@ -137,21 +146,12 @@ struct HandicapHistoryView: View {
                 Text(FormatAR.longDate(point.date))
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Text(point.course.isEmpty ? "Golflet" : point.course)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
-                    .lineLimit(1)
                 if let delta, rose || fell {
-                    Text("\(rose ? "Subió" : "Bajó") \(FormatAR.one(abs(delta)))")
+                    Text(HIChangeLabel.indexLine(delta: delta))
                         .font(GType.label)
                         .foregroundStyle(color)
                 }
-                if let cause = causeLine(point: point, older: older, book: book) {
-                    Text(cause)
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                        .lineLimit(2)
-                }
+                causeBlock(point: point, older: older)
             }
             Spacer(minLength: 8)
             Text(FormatAR.one(point.handicap))
@@ -175,32 +175,31 @@ struct HandicapHistoryView: View {
         }
     }
 
-    private func causeLine(point: TrendPoint, older: TrendPoint?, book: IndexComposition) -> String? {
-        guard let older else { return nil }
-        let move = IndexBook.movement(
-            from: IndexBook.counting(asOf: older.date, revisions: book.revisions),
-            to: IndexBook.counting(asOf: point.date, revisions: book.revisions)
-        )
-        var bits: [String] = []
-        if let card = move.entered.first {
-            let name = card.course.isEmpty ? "una tarjeta" : card.course
-            bits.append("Entró \(name)")
+    @ViewBuilder
+    private func causeBlock(point: TrendPoint, older: TrendPoint?) -> some View {
+        if let older {
+            let shift = IndexBook.explain(rounds: model.rounds, from: older.date, to: point.date)
+            let groups = HIChangeLabel.groups(shift)
+            if groups.isEmpty {
+                Text(HIChangeLabel.unidentified)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(groups) { group in
+                        ForEach(group.cards) { card in
+                            Text("\(group.title) · \(HIChangeLabel.cardText(card))")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                    }
+                }
+            }
         }
-        if let card = move.dropped.first {
-            let name = card.course.isEmpty ? "una tarjeta" : card.course
-            bits.append("Salió \(name)")
-        }
-        return bits.isEmpty ? nil : bits.joined(separator: " · ")
     }
 
     private func jumpDetail(point: TrendPoint, previous: TrendPoint?, book: IndexComposition) -> some View {
         let active = IndexBook.counting(asOf: point.date, revisions: book.revisions)
-        let move: (entered: [IndexCardRef], dropped: [IndexCardRef])? = previous.map { earlier in
-            IndexBook.movement(
-                from: IndexBook.counting(asOf: earlier.date, revisions: book.revisions),
-                to: active
-            )
-        }
         return VStack(alignment: .leading, spacing: 8) {
             if active.isEmpty {
                 Text("Hasta esa fecha las tarjetas no traen diferencial.")
@@ -211,23 +210,6 @@ struct HandicapHistoryView: View {
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
                 cardList(active)
-            }
-            if let move, !move.entered.isEmpty {
-                Text("Entró")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-                cardList(move.entered)
-            }
-            if let move, !move.dropped.isEmpty {
-                Text("Salió")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-                cardList(move.dropped)
-            }
-            if let move, !active.isEmpty, move.entered.isEmpty, move.dropped.isEmpty {
-                Text("El grupo de tarjetas no cambió.")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -279,23 +261,28 @@ struct HandicapHistoryView: View {
             Text(FormatAR.longDate(revision.date))
                 .font(GType.headline)
                 .foregroundStyle(p.ink)
-            if !revision.entered.isEmpty {
-                Text("Entró \(revision.entered.map(cardLine).joined(separator: " · "))")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-            }
-            if !revision.dropped.isEmpty {
-                Text("Salió \(revision.dropped.map(cardLine).joined(separator: " · "))")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-            }
+            revisionLines("Entró en las 8", revision.entered)
+            revisionLines("Salió de las 8", revision.leftBest8)
+            revisionLines("Salió de las últimas 20", revision.agedOut)
+            revisionLines("Entró en las últimas 20", revision.joinedWindow)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func revisionLines(_ title: String, _ cards: [IndexCardRef]) -> some View {
+        Group {
+            if !cards.isEmpty {
+                ForEach(cards) { card in
+                    Text("\(title) · \(HIChangeLabel.cardText(card))")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                }
+            }
+        }
+    }
+
     private func cardLine(_ card: IndexCardRef) -> String {
-        let course = card.course.isEmpty ? "Tarjeta" : card.course
-        return "\(course) \(FormatAR.one(card.differential))"
+        HIChangeLabel.cardText(card)
     }
 
     private func countingCaption(_ book: IndexComposition) -> String {
@@ -319,15 +306,20 @@ struct HandicapHistoryView: View {
                             .font(GType.headline)
                             .foregroundStyle(p.ink)
                             .lineLimit(1)
-                        Text(FormatAR.longDate(card.date))
+                        Text(FormatAR.longDate(card.date) + (card.gross.map { " · gross \($0)" } ?? ""))
                             .font(GType.label)
                             .foregroundStyle(p.ink3)
                     }
                     Spacer()
-                    Text(FormatAR.one(card.differential))
-                        .font(GType.headline)
-                        .tabular()
-                        .foregroundStyle(p.ink)
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text(FormatAR.one(card.differential))
+                            .font(GType.headline)
+                            .tabular()
+                            .foregroundStyle(p.ink)
+                        Text("diferencial")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                    }
                 }
                 .accessibilityIdentifier("hcp-card-\(card.id)")
             }
@@ -349,38 +341,119 @@ struct HandicapHistoryView: View {
         return "Cada punto es el índice que venía en la tarjeta. El historial oficial empieza en 2023."
     }
 
+    private var displayedPoints: [TrendPoint] {
+        var points = apiPoints ?? StatsEngine.handicapSeries(model.rounds)
+        for item in model.officialHistory {
+            let already = points.contains { point in
+                Calendar.gregorian.isDate(point.date, inSameDayAs: item.date)
+                    && abs(point.handicap - item.handicap) < 0.05
+            }
+            if !already {
+                points.append(TrendPoint(date: item.date, handicap: item.handicap, course: ""))
+            }
+        }
+        return points.sorted { $0.date < $1.date }
+    }
+
     private var monthlyCard: some View {
+        MonthBarsCard(columns: MonthWindow.columns(from: monthlyScores))
+    }
+
+    private func legendDot(_ color: Color, _ label: String) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(label)
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+        }
+    }
+}
+
+struct MonthBarsCard: View {
+    @Environment(\.palette) private var p
+    let columns: [MonthWindow.Column]
+    @State private var selected: String?
+
+    private var detail: String? {
+        columns.first { $0.id == selected }?.detail
+    }
+
+    var body: some View {
         GCard(radius: 22, padding: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Birdies y pares")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Chart {
-                    ForEach(monthlyScores) { row in
-                        BarMark(
-                            x: .value("Mes", FormatAR.dayMonth(row.date).month),
-                            y: .value("Birdies", row.birdies)
-                        )
-                        .foregroundStyle(p.accentInk)
-                        BarMark(
-                            x: .value("Mes", FormatAR.dayMonth(row.date).month),
-                            y: .value("Pares", row.pars)
-                        )
-                        .foregroundStyle(p.primary)
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .bottom, spacing: 8) {
+                            ForEach(columns) { column in
+                                columnView(column)
+                                    .id(column.id)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .onAppear {
+                        if let last = columns.last {
+                            proxy.scrollTo(last.id, anchor: .trailing)
+                        }
                     }
                 }
-                .frame(height: 140)
                 .accessibilityIdentifier("hcp-monthly-bars")
+                if let detail {
+                    Text(detail)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink)
+                        .accessibilityIdentifier("hcp-monthly-detail")
+                }
                 HStack(spacing: 16) {
-                    legendDot(p.accentInk, "Birdies")
-                    legendDot(p.primary, "Pares")
+                    legend(p.accentInk, "Birdies")
+                    legend(p.primary, "Pares")
                 }
                 .accessibilityIdentifier("hcp-monthly-legend")
             }
         }
     }
 
-    private func legendDot(_ color: Color, _ label: String) -> some View {
+    private func columnView(_ column: MonthWindow.Column) -> some View {
+        let maxValue = max(columns.map { max($0.birdies, $0.pars) }.max() ?? 1, 1)
+        return Button {
+            selected = selected == column.id ? nil : column.id
+        } label: {
+            VStack(spacing: 4) {
+                if column.showsYear {
+                    Text(String(column.year))
+                        .font(GFont.ui(9, weight: .semibold))
+                        .foregroundStyle(p.ink3)
+                } else {
+                    Text(" ")
+                        .font(GFont.ui(9))
+                }
+                HStack(alignment: .bottom, spacing: 3) {
+                    bar(column.birdies, maxValue, p.accentInk)
+                    bar(column.pars, maxValue, p.primary)
+                }
+                .frame(height: 72, alignment: .bottom)
+                Text(column.shortLabel)
+                    .font(GFont.ui(11, weight: .semibold))
+                    .foregroundStyle(selected == column.id ? p.accent : p.ink)
+                    .lineLimit(1)
+            }
+            .frame(width: 48)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("hcp-month-\(column.id)")
+        .accessibilityLabel(column.detail)
+    }
+
+    private func bar(_ value: Int, _ maxValue: Int, _ color: Color) -> some View {
+        RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .fill(color)
+            .frame(width: 10, height: max(4, 68 * CGFloat(value) / CGFloat(maxValue)))
+    }
+
+    private func legend(_ color: Color, _ label: String) -> some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 7, height: 7)
             Text(label)

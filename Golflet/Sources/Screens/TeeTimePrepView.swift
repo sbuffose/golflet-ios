@@ -123,8 +123,8 @@ enum TeeTimePrep {
     }
 
     /// Numbers only when the tee time sent them. A text forecast is shown as-is.
-    static func forecastText(booking: TeeTime, rounds: [Round], bag: [BagClub]) -> String {
-        let report = WeatherPlay.report(booking: booking, rounds: rounds, bag: bag)
+    static func forecastText(booking: TeeTime, rounds: [Round], bag: [BagClub], holes: [GPSHole] = []) -> String {
+        let report = WeatherPlay.report(booking: booking, rounds: rounds, bag: bag, holes: holes)
         if report.hasNumbers {
             let lines = report.lines.filter { !$0.hasPrefix("Horario:") }
             if !lines.isEmpty { return lines.joined(separator: "\n") }
@@ -168,6 +168,7 @@ struct TeeTimePrepView: View {
     let booking: TeeTime
     @State private var strategy: CourseStrategy?
     @State private var liveForecast: String?
+    @State private var gpsHoles: [GPSHole] = []
 
     private var place: TeePlace {
         TeeCourseResolve.place(booking: booking, rounds: model.rounds, courses: model.courses)
@@ -193,7 +194,7 @@ struct TeeTimePrepView: View {
                     block("Cancha", place.canchaTitle, "tee-prep-cancha")
                     block(
                         "Pronóstico",
-                        liveForecast ?? TeeTimePrep.forecastText(booking: booking, rounds: model.rounds, bag: model.bag),
+                        liveForecast ?? TeeTimePrep.forecastText(booking: booking, rounds: model.rounds, bag: model.bag, holes: gpsHoles),
                         "tee-prep-forecast"
                     )
                     strategyBlock
@@ -203,7 +204,10 @@ struct TeeTimePrepView: View {
         }
         .accessibilityIdentifier("screen-tee-prep")
         .safeAreaInset(edge: .top) { MetricBackBar() }
-        .task(id: place.strategyCourses.map(\.key).joined(separator: "|")) { await loadStrategy() }
+        .task(id: place.strategyCourses.map(\.key).joined(separator: "|")) {
+            await loadStrategy()
+            await loadWindHoles()
+        }
         .task(id: booking.id) { await loadForecast() }
     }
 
@@ -220,9 +224,7 @@ struct TeeTimePrepView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityIdentifier("tee-prep-strategy")
                     ForEach(place.strategyCourses) { course in
-                        NavigationLink {
-                            StrategyCourseView(courseKey: course.key, courseName: course.name)
-                        } label: {
+                        NavigationLink(value: MetricRoute.strategy(courseKey: course.key, courseName: course.name)) {
                             HStack {
                                 Text(place.strategyCourses.count == 1 ? "Cómo jugar la cancha" : course.name)
                                     .font(GType.headline)
@@ -262,6 +264,18 @@ struct TeeTimePrepView: View {
             return
         }
         strategy = try? await model.api.courseStrategy(courseKey: course.key, courseId: course.courseId)
+    }
+
+    private func loadWindHoles() async {
+        gpsHoles = []
+        guard place.strategyCourses.count == 1, let course = place.strategyCourses.first else { return }
+        if let cached = CourseCache.load(courseId: course.courseId) {
+            gpsHoles = cached.detail.holes
+            return
+        }
+        if let remote = try? await model.api.gpsCourse(id: course.courseId, lat: nil, lng: nil) {
+            gpsHoles = remote.holes
+        }
     }
 
     private func loadForecast() async {

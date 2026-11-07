@@ -5,19 +5,39 @@ extension LiveGolfletAPI {
         GroupsParser.groups(from: try await request("GET", GroupsAPIPaths.list))
     }
 
-    func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup {
+    func createGroup(name: String, photoJPEG: Data?, idempotencyKey: String?) async throws -> GolfletGroup {
+        let key = idempotencyKey ?? UUID().uuidString
+        return try await GroupCreateLedger.shared.run(key: key) {
+            try await self.createGroupOnce(name: name, photoJPEG: photoJPEG, idempotencyKey: key)
+        }
+    }
+
+    private func createGroupOnce(name: String, photoJPEG: Data?, idempotencyKey: String) async throws -> GolfletGroup {
         let json = try await request(
             "POST",
             GroupsAPIPaths.list,
-            body: ["name": name, "matriculas": [String]()]
+            body: ["name": name, "matriculas": [String]()],
+            headers: ["Idempotency-Key": idempotencyKey]
         )
-        guard var group = GroupsParser.group(from: json["group"] ?? json) else { throw GolfletError.decoding("group") }
+        let fetched: GolfletGroup?
+        if let id = GroupCreateDecode.group(from: json, requestedName: name)?.id {
+            fetched = try? await group(id: id)
+        } else {
+            fetched = nil
+        }
+        guard var group = GroupCreateDecode.group(from: json, requestedName: name, fetched: fetched) else {
+            throw GolfletError.decoding("group")
+        }
         if let photoJPEG, !photoJPEG.isEmpty {
-            let photo = try await putGroupPhoto(id: group.id, jpeg: photoJPEG)
-            if let updated = GroupsParser.group(from: photo["group"] ?? photo) {
-                group = updated
-            } else if let url = photo["photo_url"] as? String {
-                group.photoURL = url
+            do {
+                let photo = try await putGroupPhoto(id: group.id, jpeg: photoJPEG)
+                if let updated = GroupsParser.group(from: photo["group"] ?? photo) {
+                    group = updated
+                } else if let url = photo["photo_url"] as? String {
+                    group.photoURL = url
+                }
+            } catch {
+                group.photoURL = nil
             }
         }
         return group
