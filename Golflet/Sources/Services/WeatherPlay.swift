@@ -8,7 +8,7 @@ enum WeatherPlay {
         var hasNumbers: Bool
     }
 
-    static func report(booking: TeeTime?, rounds: [Round], bag: [BagClub]) -> Report {
+    static func report(booking: TeeTime?, rounds: [Round], bag: [BagClub], holes: [GPSHole] = []) -> Report {
         guard let booking else {
             return Report(lines: ["No hay un tee time reservado, así que no hay viento, temperatura ni lluvia."], hasNumbers: false)
         }
@@ -20,24 +20,15 @@ enum WeatherPlay {
                 wind += " desde \(from)"
             }
             lines.append(wind + ".")
-            if booking.windFrom == nil || booking.windFrom?.isEmpty == true {
-                lines.append("El horario no dice de dónde viene, así que no cambio el palo.")
-            } else {
-                lines.append("El horario no trae el rumbo de cada hoyo, así que el plan de salida queda como está.")
-            }
+            let fromDeg = HoleWind.degrees(from: booking.windFrom)
+            let rows = HoleWind.rows(holes: holes, windFromDeg: fromDeg, speedKmh: kmh)
+            lines.append(HoleWind.relativeText(windFromDeg: fromDeg, holes: rows))
             if let carry {
-                lines.append("Tu driver está en \(carry) m. Con viento de frente de esta fuerza, pensá un palo más en los hierros.")
+                lines.append("Tu driver medido está en \(carry) m.")
             }
         }
         if let temp = booking.tempC {
             lines.append("Temperatura \(temp)°.")
-            if temp < 15 {
-                if let carry {
-                    lines.append("Por debajo de 15° la pelota vuela menos. Con el driver a \(carry) m, un palo más alcanza en los hierros.")
-                } else {
-                    lines.append("Por debajo de 15° la pelota vuela menos. No tengo tu distancia de driver para pasar eso a metros.")
-                }
-            }
         }
         if let rain = booking.rainMm {
             if rain > 0 {

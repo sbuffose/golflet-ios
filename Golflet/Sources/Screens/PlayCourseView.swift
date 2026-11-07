@@ -95,57 +95,46 @@ struct PlayCourseView: View {
         }
     }
 
-    @ViewBuilder
     private func clubBlock(_ group: ClubCourseGroup) -> some View {
-        if group.isSingle, let course = group.courses.first {
-            Button {
-                prepareStart(course)
-            } label: {
-                clubCard(group, showsChevron: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("course-\(course.courseId)")
-            .accessibilityLabel(group.clubName)
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                clubCard(group, showsChevron: false)
-                    .accessibilityIdentifier("club-\(group.clubCode.isEmpty ? group.groupingKey : group.clubCode)")
-                ForEach(group.courses) { course in
-                    Button {
-                        prepareStart(course)
-                    } label: {
-                        GCard(radius: 16, padding: 12) {
-                            HStack {
-                                Text(CourseDisplay.courseTitle(course))
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                    .accessibilityIdentifier("course-\(course.courseId)")
-                                Spacer()
-                                MetricChevron(color: p.ink3)
-                            }
+        VStack(alignment: .leading, spacing: 8) {
+            clubHeading(group)
+                .accessibilityIdentifier("club-\(group.clubCode.isEmpty ? group.groupingKey : group.clubCode)")
+            ForEach(group.courses) { course in
+                Button {
+                    prepareStart(course)
+                } label: {
+                    GCard(radius: 16, padding: 12) {
+                        HStack {
+                            Text(courseRowTitle(course, in: group))
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                                .accessibilityIdentifier("course-\(course.courseId)")
+                            Spacer()
+                            MetricChevron(color: p.ink3)
                         }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("course-\(course.courseId)")
-                    .accessibilityLabel(CourseDisplay.fullName(course))
                 }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("course-\(course.courseId)")
+                .accessibilityLabel(CourseDisplay.fullName(course))
             }
         }
     }
 
-    private func clubCard(_ group: ClubCourseGroup, showsChevron: Bool) -> some View {
-        GCard(radius: 18, padding: 14) {
-            clubHeader(group, showsChevron: showsChevron)
+    private func courseRowTitle(_ course: GPSCourseSummary, in group: ClubCourseGroup) -> String {
+        let title = CourseDisplay.courseTitle(course)
+        if group.isSingle, title.caseInsensitiveCompare(group.clubName) == .orderedSame {
+            return "Jugar esta cancha"
         }
+        return title
     }
 
-    private func clubHeader(_ group: ClubCourseGroup, showsChevron: Bool) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+    private func clubHeading(_ group: ClubCourseGroup) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(group.clubName)
-                    .font(GType.headline)
+                    .font(GType.section)
                     .foregroundStyle(p.ink)
                     .lineLimit(2)
                 if group.courseCount > 1 {
@@ -161,10 +150,9 @@ struct PlayCourseView: View {
                     .tabular()
                     .foregroundStyle(p.ink3)
             }
-            if showsChevron {
-                MetricChevron(color: p.ink3)
-            }
         }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
     }
 
     private func loadCourses() async {
