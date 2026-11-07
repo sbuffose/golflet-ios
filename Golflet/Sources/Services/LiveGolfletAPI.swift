@@ -277,7 +277,8 @@ struct LiveGolfletAPI: GolfletAPI {
         body: [String: Any]? = nil,
         authorized: Bool = true,
         captureToken: Bool = false,
-        timeout: TimeInterval = 30
+        timeout: TimeInterval = 30,
+        headers: [String: String] = [:]
     ) async throws -> [String: Any] {
         guard let url = URL(string: path, relativeTo: baseURL) else { throw GolfletError.invalidClub }
         var request = URLRequest(url: url)
@@ -288,6 +289,9 @@ struct LiveGolfletAPI: GolfletAPI {
         if authorized {
             guard let token = KeychainStore.loadToken() else { throw GolfletError.notAuthenticated }
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        for (field, value) in headers where !value.isEmpty {
+            request.setValue(value, forHTTPHeaderField: field)
         }
         if let body {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)

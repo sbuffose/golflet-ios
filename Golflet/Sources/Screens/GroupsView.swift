@@ -146,6 +146,7 @@ struct CreateGroupView: View {
     @State private var name = ""
     @State private var pickerItem: PhotosPickerItem?
     @State private var photoData: Data?
+    @State private var submitKey = UUID().uuidString
 
     var body: some View {
         if let payload = model.inviteShare {
@@ -198,10 +199,11 @@ struct CreateGroupView: View {
 
                     Button {
                         Task {
-                            await model.createGroup(
-                                name: name,
-                                photoJPEG: photoData.map { GroupPhoto.jpegData(from: $0) }
-                            )
+                            let jpeg = photoData.flatMap { data -> Data? in
+                                let encoded = GroupPhoto.jpegData(from: data)
+                                return encoded.isEmpty ? nil : encoded
+                            }
+                            await model.createGroup(name: name, photoJPEG: jpeg, idempotencyKey: submitKey)
                         }
                     } label: {
                         Text(model.isBusy ? "Creando…" : "Crear grupo")

@@ -6,6 +6,7 @@ import Observation
 final class AppModel {
     var user: GolfletUser?
     var profile = PlayerProfile(displayName: "Jugador Demo", initials: "JD", currentHandicap: 3.1)
+    var officialHistory: [HIPoint] = []
     var clubs: [LinkedClub] = []
     var rounds: [Round] = []
     var courses: [Course] = []
@@ -111,7 +112,12 @@ final class AppModel {
 
     var isAuthenticated: Bool { isSignedIn }
     var isLive: Bool { !api.persistsLocally }
-    var home: HomeSnapshot { StatsEngine.home(rounds: rounds) }
+    var home: HomeSnapshot {
+        StatsEngine.home(
+            rounds: rounds,
+            officialIndex: OfficialHandicap.latest(player: profile.currentHandicap, history: officialHistory)
+        )
+    }
     var groupedCourseNames: [String] { StatsEngine.groupedCourseNames(from: courseFilterOptions) }
 
     var courseFilterOptions: [CourseFilter] {
@@ -794,14 +800,20 @@ final class AppModel {
         }
     }
 
-    func createGroup(name: String, photoJPEG: Data?) async {
+    func createGroup(name: String, photoJPEG: Data?, idempotencyKey: String? = nil) async {
+        var opened: String?
         await run {
-            let group = try await api.createGroup(name: name, photoJPEG: photoJPEG)
-            groups.insert(group, at: 0)
-            if let invite = group.invite, invite.enabled {
-                inviteShare = InviteSharePayload(groupName: group.name, url: invite.url)
+            let group = try await api.createGroup(name: name, photoJPEG: photoJPEG, idempotencyKey: idempotencyKey)
+            if !groups.contains(where: { $0.id == group.id }) {
+                groups.insert(group, at: 0)
             }
+            opened = group.id
+            showsCreateGroup = false
             await refreshGroups()
+        }
+        if let opened {
+            try? await Task.sleep(for: .milliseconds(400))
+            presentedGroupID = opened
         }
     }
 
@@ -1158,6 +1170,7 @@ final class AppModel {
     private func apply(_ snap: AppSnapshot) {
         user = snap.user
         profile = snap.profile
+        officialHistory = snap.hiHistory
         clubs = snap.clubs
         rounds = snap.rounds
         courses = snap.courses

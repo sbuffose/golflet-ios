@@ -71,6 +71,10 @@ final class LaunchAndWeatherTests: XCTestCase {
         XCTAssertTrue(real.plain.contains("230 m"))
         XCTAssertTrue(real.plain.contains("11°"))
         XCTAssertFalse(real.plain.contains("14 km/h"))
+        XCTAssertFalse(real.plain.contains("palo más"))
+        XCTAssertFalse(real.plain.contains("en contra"))
+        XCTAssertFalse(real.plain.contains("de frente"))
+        XCTAssertTrue(real.plain.contains("Sin rumbo verificado"))
     }
 
     func testCoursePinAndWindShiftStayHonest() {

@@ -47,7 +47,7 @@ protocol GolfletAPI: Sendable {
     func saveProfesorMatchAnswers(_ answers: ProfesorMatchAnswers) async throws -> ProfesorMatchAnswers
     func profesorMatches() async throws -> [ProfesorMatch]
     func groups() async throws -> [GolfletGroup]
-    func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup
+    func createGroup(name: String, photoJPEG: Data?, idempotencyKey: String?) async throws -> GolfletGroup
     func group(id: String) async throws -> GolfletGroup
     func updateGroup(id: String, name: String?, photoJPEG: Data?) async throws -> GolfletGroup
     func inviteByMatricula(groupID: String, matricula: String) async throws -> GolfletGroup
@@ -85,6 +85,10 @@ protocol GolfletAPI: Sendable {
 }
 
 extension GolfletAPI {
+    func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup {
+        try await createGroup(name: name, photoJPEG: photoJPEG, idempotencyKey: nil)
+    }
+
     func createLiveRound(courseId: String?, tee: String?) async throws -> LiveRound {
         try await createLiveRound(courseId: courseId, tee: tee, players: PaceDefaults.players, modality: PaceDefaults.modality)
     }

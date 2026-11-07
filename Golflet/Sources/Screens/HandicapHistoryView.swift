@@ -1,4 +1,3 @@
-import Charts
 import SwiftUI
 
 struct HandicapHistoryView: View {
@@ -13,7 +12,7 @@ struct HandicapHistoryView: View {
     @State private var showAllRevisions = false
 
     var body: some View {
-        let points = apiPoints ?? StatsEngine.handicapSeries(model.rounds)
+        let points = displayedPoints
         let changes = StatsEngine.handicapChanges(points)
         let book = IndexBook.composition(from: model.rounds)
         let home = model.home
@@ -21,7 +20,7 @@ struct HandicapHistoryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Handicap index")
+                        GOverline(text: "Hándicap index")
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text(FormatAR.one(home.handicapIndex))
                                 .font(GType.statL)
@@ -78,7 +77,7 @@ struct HandicapHistoryView: View {
                 if !drill.history.isEmpty {
                     apiPoints = drill.history.compactMap { item in
                         guard let date = item.date else { return nil }
-                        return TrendPoint(date: date, handicap: item.hi, course: item.club ?? "")
+                        return TrendPoint(date: date, handicap: item.hi, course: "")
                     }.reversed()
                 }
             }
@@ -137,10 +136,6 @@ struct HandicapHistoryView: View {
                 Text(FormatAR.longDate(point.date))
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Text(point.course.isEmpty ? "Golflet" : point.course)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
-                    .lineLimit(1)
                 if let delta, rose || fell {
                     Text("\(rose ? "Subió" : "Bajó") \(FormatAR.one(abs(delta)))")
                         .font(GType.label)
@@ -181,16 +176,7 @@ struct HandicapHistoryView: View {
             from: IndexBook.counting(asOf: older.date, revisions: book.revisions),
             to: IndexBook.counting(asOf: point.date, revisions: book.revisions)
         )
-        var bits: [String] = []
-        if let card = move.entered.first {
-            let name = card.course.isEmpty ? "una tarjeta" : card.course
-            bits.append("Entró \(name)")
-        }
-        if let card = move.dropped.first {
-            let name = card.course.isEmpty ? "una tarjeta" : card.course
-            bits.append("Salió \(name)")
-        }
-        return bits.isEmpty ? nil : bits.joined(separator: " · ")
+        return HIChangeLabel.line(entered: move.entered, exited: move.dropped)
     }
 
     private func jumpDetail(point: TrendPoint, previous: TrendPoint?, book: IndexComposition) -> some View {
@@ -349,38 +335,119 @@ struct HandicapHistoryView: View {
         return "Cada punto es el índice que venía en la tarjeta. El historial oficial empieza en 2023."
     }
 
+    private var displayedPoints: [TrendPoint] {
+        var points = apiPoints ?? StatsEngine.handicapSeries(model.rounds)
+        for item in model.officialHistory {
+            let already = points.contains { point in
+                Calendar.gregorian.isDate(point.date, inSameDayAs: item.date)
+                    && abs(point.handicap - item.handicap) < 0.05
+            }
+            if !already {
+                points.append(TrendPoint(date: item.date, handicap: item.handicap, course: ""))
+            }
+        }
+        return points.sorted { $0.date < $1.date }
+    }
+
     private var monthlyCard: some View {
+        MonthBarsCard(columns: MonthWindow.columns(from: monthlyScores))
+    }
+
+    private func legendDot(_ color: Color, _ label: String) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(label)
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+        }
+    }
+}
+
+struct MonthBarsCard: View {
+    @Environment(\.palette) private var p
+    let columns: [MonthWindow.Column]
+    @State private var selected: String?
+
+    private var detail: String? {
+        columns.first { $0.id == selected }?.detail
+    }
+
+    var body: some View {
         GCard(radius: 22, padding: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Birdies y pares")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Chart {
-                    ForEach(monthlyScores) { row in
-                        BarMark(
-                            x: .value("Mes", FormatAR.dayMonth(row.date).month),
-                            y: .value("Birdies", row.birdies)
-                        )
-                        .foregroundStyle(p.accentInk)
-                        BarMark(
-                            x: .value("Mes", FormatAR.dayMonth(row.date).month),
-                            y: .value("Pares", row.pars)
-                        )
-                        .foregroundStyle(p.primary)
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .bottom, spacing: 8) {
+                            ForEach(columns) { column in
+                                columnView(column)
+                                    .id(column.id)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .onAppear {
+                        if let last = columns.last {
+                            proxy.scrollTo(last.id, anchor: .trailing)
+                        }
                     }
                 }
-                .frame(height: 140)
                 .accessibilityIdentifier("hcp-monthly-bars")
+                if let detail {
+                    Text(detail)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink)
+                        .accessibilityIdentifier("hcp-monthly-detail")
+                }
                 HStack(spacing: 16) {
-                    legendDot(p.accentInk, "Birdies")
-                    legendDot(p.primary, "Pares")
+                    legend(p.accentInk, "Birdies")
+                    legend(p.primary, "Pares")
                 }
                 .accessibilityIdentifier("hcp-monthly-legend")
             }
         }
     }
 
-    private func legendDot(_ color: Color, _ label: String) -> some View {
+    private func columnView(_ column: MonthWindow.Column) -> some View {
+        let maxValue = max(columns.map { max($0.birdies, $0.pars) }.max() ?? 1, 1)
+        return Button {
+            selected = selected == column.id ? nil : column.id
+        } label: {
+            VStack(spacing: 4) {
+                if column.showsYear {
+                    Text(String(column.year))
+                        .font(GFont.ui(9, weight: .semibold))
+                        .foregroundStyle(p.ink3)
+                } else {
+                    Text(" ")
+                        .font(GFont.ui(9))
+                }
+                HStack(alignment: .bottom, spacing: 3) {
+                    bar(column.birdies, maxValue, p.accentInk)
+                    bar(column.pars, maxValue, p.primary)
+                }
+                .frame(height: 72, alignment: .bottom)
+                Text(column.shortLabel)
+                    .font(GFont.ui(11, weight: .semibold))
+                    .foregroundStyle(selected == column.id ? p.accent : p.ink)
+                    .lineLimit(1)
+            }
+            .frame(width: 48)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("hcp-month-\(column.id)")
+        .accessibilityLabel(column.detail)
+    }
+
+    private func bar(_ value: Int, _ maxValue: Int, _ color: Color) -> some View {
+        RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .fill(color)
+            .frame(width: 10, height: max(4, 68 * CGFloat(value) / CGFloat(maxValue)))
+    }
+
+    private func legend(_ color: Color, _ label: String) -> some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 7, height: 7)
             Text(label)

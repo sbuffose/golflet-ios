@@ -60,14 +60,14 @@ enum StatsEngine {
         filters.filter { $0.kind == .group }.flatMap(\.courseNames)
     }
 
-    static func home(rounds: [Round], now: Date = Date()) -> HomeSnapshot {
+    static func home(rounds: [Round], now: Date = Date(), officialIndex: Double? = nil) -> HomeSnapshot {
         let sorted = rounds.sorted { $0.date > $1.date }
         let valid18 = eighteenHoleValid(rounds)
         let calendar = Calendar.gregorian
         let year = calendar.component(.year, from: now)
         let yearRounds = valid18.filter { calendar.component(.year, from: $0.date) == year }
 
-        let latestHI = sorted.first?.handicapIndex ?? 0
+        let latestHI = officialIndex ?? sorted.first?.handicapIndex ?? 0
         let history = handicapSeries(rounds)
         let april = calendar.date(from: DateComponents(year: year, month: 4, day: 1))
         let aprilHI = history.first(where: {
