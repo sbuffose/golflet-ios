@@ -14,9 +14,17 @@ El árbol se recuperó de `/workspace/golflet/platform` (ahí no había `.git`).
 
 No hay credenciales, `.env` ni `.vercel` en este árbol. La base y las claves siguen en el proyecto de Vercel.
 
-## Qué hay que aplicar en la base antes de que el reintento de grupos sea durable
+## Migración de grupos
 
-`db/schema.sql` suma la tabla `cmp_create_key`. Es aditiva. Si todavía no existe, crear un grupo sigue funcionando; el mismo pedido puede duplicarse hasta que la tabla esté creada. Los nombres de grupo no son únicos.
+`db/migrations/0041_cmp_create_key.sql` es aditiva e idempotente: crea `cmp_create_key` si no está y agrega `payload_hash` si la tabla ya existía. No modifica ni borra grupos, miembros ni tarjetas. Los nombres de grupo no son únicos.
+
+Hay que aplicarla con la URL que ya tiene el proyecto, sin pegarla en el repo ni en una ruta pública:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f web/db/migrations/0041_cmp_create_key.sql
+```
+
+En Neon alcanza el editor SQL del proyecto, con la misma sentencia. Si la tabla no está y el pedido trae clave de reintento, la transacción se revierte y no queda un grupo a medias.
 
 ## Scripts
 

@@ -923,10 +923,13 @@ create table if not exists golf_match (
 create index if not exists golf_match_user on golf_match (user_id, date desc);
 
 -- v41: replay the same group-create request. Names are not unique: a new key is a new group even when the name matches.
+-- payload_hash binds the key to that request. The standalone file is web/db/migrations/0041_cmp_create_key.sql.
 create table if not exists cmp_create_key (
   user_id text not null,
   idem_key text not null,
   group_id uuid not null references cmp_group(id) on delete cascade,
+  payload_hash text,
   created_at timestamptz not null default now(),
   primary key (user_id, idem_key)
 );
+alter table cmp_create_key add column if not exists payload_hash text;

@@ -11,7 +11,7 @@ import { clubStats } from "./shots-calc";
 import { callName, titleWord } from "./person-name";
 import { effectiveShare, getView, linkInfo, newToken, type Share } from "./group-share";
 import { rangeSince, parseRange } from "./metrics";
-import { normalizeIdempotencyKey, presentCreatedGroup } from "./group-create";
+import { createGroupAtomic } from "./group-create-tx";
 
 export const MAX_MEMBERS = 12, INVITES_PER_DAY = 20, GROUPS_PER_DAY = 10;
 /** Member colors: brand greens and golds only (#0F3D2E / #C8A86A first). */
@@ -86,42 +86,14 @@ export async function listGroups(userId: string) {
   return { groups, invitations, outgoing };
 }
 
-async function findCreated(userId: string, key: string) {
-  try {
-    const [row] = await q(`select g.id, g.name, g.share_token, g.share_enabled, g.share_expires_at, g.photo_updated_at, (g.photo is not null) has_photo
-      from cmp_create_key k join cmp_group g on g.id = k.group_id where k.user_id=$1 and k.idem_key=$2`, [userId, key]);
-    if (!row) return null;
-    const invited = await q(`select id member_id, matricula, (user_id is not null) is_user from cmp_member where group_id=$1 and status='invited'`, [row.id]);
-    return presentCreatedGroup(row, invited, linkInfo(row), photoUrl(row));
-  } catch (e) {
-    if ((e as { code?: string })?.code === "42P01") return null;
-    throw e;
-  }
-}
-
+/** Group, owner and ledger commit together. Invites run after that commit and do not create a second group on retry. */
 export async function createGroup(userId: string, name: unknown, matriculas: unknown, idemRaw?: unknown) {
-  const nm = typeof name === "string" ? name.trim().replace(/\s+/g, " ") : "";
-  if (nm.length < 2 || nm.length > 40) throw new HttpError(400, "Poné un nombre de 2 a 40 letras.");
-  const key = normalizeIdempotencyKey(idemRaw);
-  if (key) {
-    const prev = await findCreated(userId, key);
-    if (prev) return prev;
-  }
-  await rateLimit(userId, "group.create", GROUPS_PER_DAY);
-  const mats = await myMatriculas(userId);
-  const [g] = await q(`insert into cmp_group (name, owner_id, share_token, share_enabled) values ($1,$2,$3,true) returning id, name, share_token, share_enabled, share_expires_at`, [nm, userId, newToken()]);
-  await q(`insert into cmp_member (group_id, matricula, user_id, status, invited_by, responded_at, role) values ($1,$2,$3,'accepted',$3,now(),'admin')`, [g.id, mats[0] || `u:${userId.slice(0, 8)}`, userId]);
-  await event(userId, "group.create", g.id);
+  const made = await createGroupAtomic(userId, name, matriculas, idemRaw, undefined, GROUPS_PER_DAY);
+  if (made.replay) return made.result;
+  const g = made.group!;
   const invited = [];
   for (const m of (Array.isArray(matriculas) ? matriculas : []).slice(0, MAX_MEMBERS - 1)) invited.push(await invite(userId, g.id, m).catch(e => ({ matricula: String(m), error: e.message })));
-  if (key) {
-    try {
-      await q(`insert into cmp_create_key (user_id, idem_key, group_id) values ($1,$2,$3) on conflict (user_id, idem_key) do nothing`, [userId, key, g.id]);
-    } catch (e) {
-      if ((e as { code?: string })?.code !== "42P01") throw e;
-    }
-  }
-  return presentCreatedGroup(g, invited, linkInfo(g), null);
+  return { ...made.result, invited };
 }
 
 export async function invite(userId: string, groupId: string, matricula: unknown) {

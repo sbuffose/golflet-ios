@@ -29,6 +29,32 @@ export function isTransientDbError(e: unknown): boolean {
   return TRANSIENT.test(m) || (e as any)?.code === "57P01";
 }
 
+export type QueryClient = {
+  query: (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
+  release?: () => void;
+};
+
+/** One connection, one transaction. A thrown error rolls the work back, including a group insert that never reached the ledger. */
+export async function withTransaction<T>(fn: (run: (text: string, params?: unknown[]) => Promise<any[]>) => Promise<T>, connect?: () => Promise<QueryClient>): Promise<T> {
+  const client = connect ? await connect() : await getPool().connect();
+  const run = async (text: string, params: unknown[] = []) => {
+    const r = await client.query(text, params);
+    if (Array.isArray(r)) return r;
+    return r?.rows ?? [];
+  };
+  try {
+    await client.query("BEGIN");
+    const out = await fn(run);
+    await client.query("COMMIT");
+    return out;
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch { /* the connection may already be aborted */ }
+    throw e;
+  } finally {
+    client.release?.();
+  }
+}
+
 export async function q<T = any>(text: string, params: unknown[] = []): Promise<T[]> {
   try {
     const r = await getPool().query(text, params as any[]);

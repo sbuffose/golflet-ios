@@ -68,7 +68,7 @@ export function metricDetail(D: any, metric: Metric, o: Opts) {
       const i = allHi.findIndex((y: any) => y.date === x.date);
       const prev = i > 0 ? allHi[i - 1] : null;
       const move = hiAttribution(D, prev?.date ?? null, x.date);
-      return { date: x.date, hi: x.hi, club: null, course: null, verified: move.verified,
+      return { date: x.date, hi: x.hi, club: x.club ?? null, course: null, verified: move.verified,
         entered_best8: move.enteredBest8, left_best8: move.leftBest8, aged_out: move.agedOut, entered_window: move.enteredWindow };
     }).reverse();
     return { ...base, current: officialIndex(D.player?.handicap_index, allHi), low: vals.length ? Math.min(...vals) : null, high: vals.length ? Math.max(...vals) : null,
