@@ -2549,6 +2549,10 @@ html[data-ts] .bagtable .baghdr,html[data-ts] .bagtable .bagrow{grid-template-co
 .tk-ret.pen i{background:#0B2545}
 .tk-dock{background:rgba(255,255,255,.96);color:#0B2545;max-height:248px;overflow:auto;border-radius:18px 18px 0 0;box-shadow:0 -8px 24px rgba(11,37,69,.12)}
 .tk-enter{background:#C8102E;color:#fff}
+.tk-cancel{flex:1;border:0;border-radius:14px;padding:12px 10px;background:#0B2545;color:#F6F7F9;font:650 15px/1 Geist,system-ui,sans-serif;cursor:pointer}
+.tk-next{flex:1;border:0;border-radius:14px;padding:14px 10px;background:#C8102E;color:#fff;font:650 16px/1 Geist,system-ui,sans-serif;cursor:pointer}
+.tk-undo{flex:0 0 48px}
+.tk-shot{border:0;background:rgba(11,37,69,.92);color:#fff;border-radius:999px;padding:6px 8px;font:650 12px/1 Geist,system-ui,sans-serif;cursor:pointer;text-align:left}
 .tk-ghost{background:#F6F7F9;color:#0B2545}
 .tk-hn b,.tk-hn span,.tk-msg{color:#0B2545}
 .tk-shots-rail{position:absolute;left:8px;top:28%;z-index:4;display:flex;flex-direction:column;gap:6px;max-height:42%;overflow:auto}
