@@ -27,7 +27,21 @@ struct MockAPIClient: GolfletAPI {
     static var scriptedNewRounds: Int? = nil
     /// Tests run this once, inside bootstrap, before the snapshot returns.
     static var onBootstrap: (@MainActor () async -> Void)?
+    static var onSaveRoundNotes: (@MainActor () async -> Void)?
+    static var onSaveHoleMark: (@MainActor () async -> Void)?
+    static var onHoleMarks: (@MainActor () async -> Void)?
+    static var noteEntries = 0
+    static var holeMarkEntries = 0
+    static var holeReadEntries = 0
     static var pendingNeedsClub = false
+
+    private static func take(_ hook: inout (@MainActor () async -> Void)?) -> (@MainActor () async -> Void)? {
+        sessionLock.lock()
+        let taken = hook
+        hook = nil
+        sessionLock.unlock()
+        return taken
+    }
 
     static func dequeueScorecardFetches() -> [ScorecardFetchJob]? {
         sessionLock.lock()
@@ -238,6 +252,9 @@ struct MockAPIClient: GolfletAPI {
     func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws -> QuickTotals {
         _ = roundId
         _ = notes
+        let hook = Self.take(&Self.onSaveRoundNotes)
+        Self.noteEntries += 1
+        if let hook { await hook() }
         Self.sessionLock.lock()
         if !Self.scriptedRoundNotes.isEmpty {
             let note = Self.scriptedRoundNotes.removeFirst()
@@ -257,6 +274,9 @@ struct MockAPIClient: GolfletAPI {
     }
 
     func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave {
+        let hook = Self.take(&Self.onSaveHoleMark)
+        Self.holeMarkEntries += 1
+        if let hook { await hook() }
         Self.sessionLock.lock()
         defer { Self.sessionLock.unlock() }
         var rows = Self.holeMarksByRound[roundId] ?? [:]
@@ -274,6 +294,9 @@ struct MockAPIClient: GolfletAPI {
     }
 
     func holeMarks(roundId: String) async throws -> [HoleMark] {
+        let hook = Self.take(&Self.onHoleMarks)
+        Self.holeReadEntries += 1
+        if let hook { await hook() }
         Self.sessionLock.lock()
         defer { Self.sessionLock.unlock() }
         return (Self.holeMarksByRound[roundId] ?? [:]).values.sorted { $0.hole < $1.hole }

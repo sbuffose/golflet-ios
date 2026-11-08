@@ -14,6 +14,12 @@ final class RoundNoteModelTests: XCTestCase {
         MockAPIClient.scriptedScorecardFetches = []
         MockAPIClient.scriptedNewRounds = nil
         MockAPIClient.onBootstrap = nil
+        MockAPIClient.onSaveRoundNotes = nil
+        MockAPIClient.onSaveHoleMark = nil
+        MockAPIClient.onHoleMarks = nil
+        MockAPIClient.noteEntries = 0
+        MockAPIClient.holeMarkEntries = 0
+        MockAPIClient.holeReadEntries = 0
         super.tearDown()
     }
 
@@ -22,13 +28,13 @@ final class RoundNoteModelTests: XCTestCase {
         model.rounds = [sample("r1", putts: 32, gir: 10, fir: 8), sample("r2", putts: 50, gir: 12, fir: 9)]
         model.presentedRound = model.rounds[0]
         MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: 7, gir: 1, fir: 1, updatedAt: newerStamp)]
-        let accepted = await model.saveRoundNotes(roundId: "r1", putts: 7, gir: 1, fir: 1, text: "nota")
+        let accepted = await model.saveRoundNotes(roundId: "r1", putts: 7, gir: 1, fir: 1, text: "nota", session: model.sessionEpoch)
         XCTAssertEqual(accepted?.putts, 7)
 
         MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: 4, gir: 1, fir: 1, updatedAt: olderStamp)]
-        let rejected = await model.saveRoundNotes(roundId: "r1", putts: 4, gir: 1, fir: 1, text: "nota")
+        let rejected = await model.saveRoundNotes(roundId: "r1", putts: 4, gir: 1, fir: 1, text: "nota", session: model.sessionEpoch)
         XCTAssertNil(rejected)
-        XCTAssertFalse(model.applyStatFields(roundId: "r1", fields: ["putts": 3, "gir": 1, "fir": 1], notesAt: QuickStats.noteDate(olderStamp)))
+        XCTAssertFalse(model.applyStatFields(roundId: "r1", fields: ["putts": 3, "gir": 1, "fir": 1], notesAt: QuickStats.noteDate(olderStamp), session: model.sessionEpoch))
 
         XCTAssertEqual(model.presentedRound?.putts, 7)
         XCTAssertEqual(model.presentedRound?.gir, 1)
@@ -49,14 +55,14 @@ final class RoundNoteModelTests: XCTestCase {
         model.presentedRound = model.rounds[1]
 
         MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: 9, gir: 2, fir: 2, updatedAt: laterStamp)]
-        let accepted = await model.saveRoundNotes(roundId: "r2", putts: 9, gir: 2, fir: 2, text: "otra")
+        let accepted = await model.saveRoundNotes(roundId: "r2", putts: 9, gir: 2, fir: 2, text: "otra", session: model.sessionEpoch)
         XCTAssertEqual(accepted?.putts, 9)
         XCTAssertEqual(model.rounds.first { $0.roundId == "r1" }?.putts, 7)
         XCTAssertEqual(model.rounds.first { $0.roundId == "r1" }?.notes, "nota")
         XCTAssertEqual(model.presentedRound?.putts, 9)
 
         MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: 1, gir: 0, fir: 0, updatedAt: olderStamp)]
-        let rejected = await model.saveRoundNotes(roundId: "r2", putts: 1, gir: 0, fir: 0, text: "otra")
+        let rejected = await model.saveRoundNotes(roundId: "r2", putts: 1, gir: 0, fir: 0, text: "otra", session: model.sessionEpoch)
         XCTAssertNil(rejected)
         XCTAssertEqual(model.presentedRound?.putts, 9)
         XCTAssertEqual(model.rounds.first { $0.roundId == "r1" }?.putts, 7)
@@ -74,7 +80,7 @@ final class RoundNoteModelTests: XCTestCase {
         model.presentedRound = model.rounds[0]
 
         MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: nil, gir: nil, fir: nil, updatedAt: laterStamp)]
-        let text = await model.saveRoundNotes(roundId: "r1", putts: nil, gir: nil, fir: nil, text: "solo texto")
+        let text = await model.saveRoundNotes(roundId: "r1", putts: nil, gir: nil, fir: nil, text: "solo texto", session: model.sessionEpoch)
         XCTAssertNotNil(text)
         XCTAssertEqual(model.rounds[0].putts, 7)
         XCTAssertEqual(model.rounds[0].gir, 1)
@@ -83,13 +89,13 @@ final class RoundNoteModelTests: XCTestCase {
         XCTAssertEqual(model.presentedRound?.notesAt, QuickStats.noteDate(laterStamp))
 
         MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: 4, gir: 1, fir: 1, updatedAt: newerStamp)]
-        let rejected = await model.saveRoundNotes(roundId: "r1", putts: 4, gir: 1, fir: 1, text: "solo texto")
+        let rejected = await model.saveRoundNotes(roundId: "r1", putts: 4, gir: 1, fir: 1, text: "solo texto", session: model.sessionEpoch)
         XCTAssertNil(rejected)
         XCTAssertEqual(model.rounds[0].putts, 7)
         XCTAssertEqual(model.presentedRound?.notesAt, QuickStats.noteDate(laterStamp))
 
         let zeroAt = QuickStats.noteDate("2026-11-08T04:21:33.168Z")
-        XCTAssertTrue(model.applyStatFields(roundId: "r1", fields: ["putts": 0], notesAt: zeroAt))
+        XCTAssertTrue(model.applyStatFields(roundId: "r1", fields: ["putts": 0], notesAt: zeroAt, session: model.sessionEpoch))
         XCTAssertEqual(model.rounds[0].putts, 0)
         XCTAssertEqual(model.rounds[0].gir, 1)
         model.presentedRound = nil
@@ -108,7 +114,7 @@ final class RoundNoteModelTests: XCTestCase {
         ]
         model.presentedRound = model.rounds[0]
         MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: 7, gir: 1, fir: 1, updatedAt: newerStamp)]
-        let accepted = await model.saveRoundNotes(roundId: "r1", putts: 7, gir: 1, fir: 1, text: "nota")
+        let accepted = await model.saveRoundNotes(roundId: "r1", putts: 7, gir: 1, fir: 1, text: "nota", session: model.sessionEpoch)
         XCTAssertEqual(accepted?.putts, 7)
 
         MockAPIClient.scriptedSnapshots = [snapshot([
@@ -273,12 +279,142 @@ final class RoundNoteModelTests: XCTestCase {
         XCTAssertFalse(model.isSignedIn)
     }
 
+    func testALeftVisitOrLogoutDoesNotDispatchTheNote() async throws {
+        let model = try makeModel()
+        model.rounds = [sample("r1", putts: 7, gir: 1, fir: 1, notesAt: newerStamp)]
+        let visit = RoundVisit()
+        visit.enter()
+        let saver = QuickNoteSaver()
+        saver.schedule(
+            model: model, roundId: "r1", text: "borrador", putts: 7, gir: 1, fir: 1,
+            session: model.sessionEpoch, visit: visit, generation: visit.generation,
+            delayNanoseconds: 400_000_000
+        )
+        visit.leave()
+        try await Task.sleep(nanoseconds: 700_000_000)
+        XCTAssertEqual(MockAPIClient.noteEntries, 0)
+        XCTAssertEqual(model.rounds[0].putts, 7)
+
+        let again = RoundVisit()
+        again.enter()
+        let held = QuickNoteSaver()
+        held.schedule(
+            model: model, roundId: "r1", text: "otro", putts: 7, gir: 1, fir: 1,
+            session: model.sessionEpoch, visit: again, generation: again.generation,
+            delayNanoseconds: 400_000_000
+        )
+        held.cancel()
+        try await Task.sleep(nanoseconds: 700_000_000)
+        XCTAssertEqual(MockAPIClient.noteEntries, 0)
+
+        let live = RoundVisit()
+        live.enter()
+        let pending = QuickNoteSaver()
+        pending.schedule(
+            model: model, roundId: "r1", text: "sale", putts: 7, gir: 1, fir: 1,
+            session: model.sessionEpoch, visit: live, generation: live.generation,
+            delayNanoseconds: 400_000_000
+        )
+        await model.signOut()
+        try await Task.sleep(nanoseconds: 700_000_000)
+        XCTAssertEqual(MockAPIClient.noteEntries, 0)
+        XCTAssertNil(model.notes.note(for: "r1"))
+        XCTAssertTrue(model.rounds.isEmpty)
+    }
+
+    func testAVisitThatEndsWhileTheNoteIsInFlightDoesNotPaint() async throws {
+        let model = try makeModel()
+        model.rounds = [sample("r1", putts: 32, gir: 10, fir: 8, notesAt: olderStamp)]
+        let visit = RoundVisit()
+        visit.enter()
+        var painted = false
+        MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: 7, gir: 1, fir: 1, updatedAt: newerStamp)]
+        MockAPIClient.onSaveRoundNotes = { visit.leave() }
+        let saver = QuickNoteSaver()
+        saver.schedule(
+            model: model, roundId: "r1", text: "en viaje", putts: 7, gir: 1, fir: 1,
+            session: model.sessionEpoch, visit: visit, generation: visit.generation,
+            delayNanoseconds: 30_000_000
+        ) { _ in painted = true }
+        try await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertEqual(MockAPIClient.noteEntries, 1)
+        XCTAssertFalse(painted)
+        XCTAssertEqual(model.rounds[0].putts, 7)
+    }
+
+    func testAPriorAccountCompletionIsIgnoredAndAStaleSessionIsNotSent() async throws {
+        let model = try makeModel()
+        model.user = player("demo")
+        model.rounds = [sample("r1", putts: 7, gir: 1, fir: 1, notes: "mia", notesAt: newerStamp)]
+        let epoch = model.sessionEpoch
+        MockAPIClient.scriptedRoundNotes = [QuickTotals(putts: 4242, gir: 9, fir: 9, updatedAt: laterStamp)]
+        MockAPIClient.onSaveRoundNotes = {
+            await model.signOut()
+            await model.signInGolfistics(matricula: "124", clave: "ok", savePassword: false)
+        }
+        let ignored = await model.saveRoundNotes(roundId: "r1", putts: 4242, gir: 9, fir: 9, text: "cuenta vieja", session: epoch)
+        XCTAssertNil(ignored)
+        XCTAssertEqual(MockAPIClient.noteEntries, 1)
+        XCTAssertTrue(MockAPIClient.scriptedRoundNotes.isEmpty)
+        XCTAssertEqual(model.user?.id, "demo")
+        XCTAssertNotEqual(model.sessionEpoch, epoch)
+        XCTAssertFalse(model.rounds.contains { $0.putts == 4242 })
+        XCTAssertFalse(model.rounds.contains { $0.notes == "cuenta vieja" })
+        XCTAssertNil(model.notes.note(for: "r1"))
+
+        let mark = HoleMark(hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6)
+        MockAPIClient.onSaveHoleMark = {
+            await model.signOut()
+            await model.signInGolfistics(matricula: "124", clave: "ok", savePassword: false)
+        }
+        let sent = await model.sendHoleMark(roundId: "r1", session: model.sessionEpoch, mark: mark)
+        if case .ignored = sent {} else { XCTFail("la marca ya enviada tenía que ignorarse") }
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 1)
+        XCTAssertFalse(model.rounds.contains { $0.putts == 4242 })
+
+        let readEpoch = model.sessionEpoch
+        MockAPIClient.onHoleMarks = {
+            await model.signOut()
+            await model.signInGolfistics(matricula: "124", clave: "ok", savePassword: false)
+        }
+        let read = await model.readHoleMarks(roundId: "r1", session: readEpoch)
+        if case .ignored = read {} else { XCTFail("la lectura ya pedida tenía que ignorarse") }
+        XCTAssertEqual(MockAPIClient.holeReadEntries, 1)
+
+        let current = model.sessionEpoch
+        model.writeHoleCache(
+            roundId: "r-nueva",
+            session: current,
+            present: [HoleExtra(roundId: "r-nueva", hole: 1, putts: 2, gir: true, fairway: "hit")],
+            clear: []
+        )
+        model.writeHoleCache(roundId: "r-nueva", session: epoch, present: [], clear: [1])
+        XCTAssertEqual(model.notes.extras(for: "r-nueva").first?.putts, 2)
+        XCTAssertFalse(model.applyStatFields(roundId: "r1", fields: ["putts": 4], notesAt: QuickStats.noteDate(laterStamp), session: epoch))
+
+        let blocked = await model.saveRoundNotes(roundId: "r1", putts: 1, gir: 0, fir: 0, text: "no", session: epoch)
+        XCTAssertNil(blocked)
+        XCTAssertEqual(MockAPIClient.noteEntries, 1)
+        let unread = await model.readHoleMarks(roundId: "r1", session: epoch)
+        if case .notSent = unread {} else { XCTFail("la lectura vieja no tenía que salir") }
+        XCTAssertEqual(MockAPIClient.holeReadEntries, 1)
+        let unsent = await model.sendHoleMark(roundId: "r1", session: epoch, mark: mark)
+        if case .notSent = unsent {} else { XCTFail("la marca vieja no tenía que salir") }
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 1)
+    }
+
     private func makeModel() throws -> AppModel {
         MockAPIClient.scriptedRoundNotes = []
         MockAPIClient.scriptedSnapshots = []
         MockAPIClient.scriptedScorecardFetches = []
         MockAPIClient.scriptedNewRounds = nil
         MockAPIClient.onBootstrap = nil
+        MockAPIClient.onSaveRoundNotes = nil
+        MockAPIClient.onSaveHoleMark = nil
+        MockAPIClient.onHoleMarks = nil
+        MockAPIClient.noteEntries = 0
+        MockAPIClient.holeMarkEntries = 0
+        MockAPIClient.holeReadEntries = 0
         let container = try ModelContainer(
             for: RoundNote.self, HoleExtra.self, BagClubRecord.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
