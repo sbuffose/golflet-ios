@@ -300,9 +300,9 @@ function holeTally(r){
 }
 function scoreKey(c){
   if (!c.known) return '';
-  const item = (cls, n, label, mark) => `<span><span class="b ${cls}" aria-hidden="true">${mark}</span><b class="num">${n}</b> ${label}</span>`;
+  const item = (cls, n, label, spoken) => `<span aria-label="${n} ${spoken}"><span class="b ${cls}" aria-hidden="true">${n}</span> ${label}</span> `;
   const scope = c.known < c.holes ? `<p class="foot">En ${c.known} hoyos con score. Un hoyo sin score no cuenta como par.</p>` : '';
-  return `<div class="keyrow" id="scoreline" aria-label="${c.eagles} águilas, ${c.birdies} birdies, ${c.pars} pares, ${c.bogeys} bogeys, ${c.doubles} doble o peor">${item('eagle', c.eagles, 'Águilas', '−2')}${item('birdie', c.birdies, 'Birdies', '−1')}${item('par', c.pars, 'Pares', '0')}${item('bogey', c.bogeys, 'Bogeys', '+1')}${item('double', c.doubles, 'Doble +', '+2')}</div>${scope}`;
+  return `<div class="keyrow" id="scoreline">${item('eagle', c.eagles, 'Águilas', 'águilas')}${item('birdie', c.birdies, 'Birdies', 'birdies')}${item('par', c.pars, 'Pares', 'pares')}${item('bogey', c.bogeys, 'Bogeys', 'bogeys')}${item('double', c.doubles, 'Doble +', 'doble o peor')}</div>${scope}`;
 }
 function sRonda(id){
   const r = rounds.find(x=>x.round_id===id); if(!r) return '<p>Ronda no encontrada.</p>';
@@ -323,6 +323,7 @@ function sRonda(id){
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
   <div class="section"><h2>Tu juego</h2><span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
+  <a class="card row rt-track" id="round-track" href="#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&amp;hole=1"><span class="rt-mark">TRACK</span><span class="body"><span class="t">Registrar mis tiros</span><span class="s">Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.</span></span>${ICON.chev}</a>
   <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
   <div class="fields">
     <label class="field"><span>Putts</span><input inputmode="numeric" data-k="putts" value="${r.putts??''}" placeholder="—"></label>
@@ -769,19 +770,23 @@ function resolveTeeCourse(t){
   }
   return { course: null, choices: [], why: 'vacío' };
 }
-function wxCardHTML(title, pin, now, fc, holes){
+function wxCardHTML(title, pin, now, fc, holes, booked){
   const hours = (fc?.hours || []).slice(0, 6);
-  const map = pin && pin.sat && finiteLL(pin) ? `<div class="tw-mapwrap"><img class="tw-map" alt="Vista de ${esc(pin.title)}" src="${satUrl(pin.lat, pin.lng)}"></div>` : (pin && !pin.sat ? `<p class="tw-miss">Sin vista satelital de esta cancha.</p>` : '');
+  const map = booked ? '' : (pin && pin.sat && finiteLL(pin) ? `<div class="tw-mapwrap"><img class="tw-map" alt="Vista de ${esc(pin.title)}" src="${satUrl(pin.lat, pin.lng)}"></div>` : (pin && !pin.sat ? `<p class="tw-miss">Sin vista satelital de esta cancha.</p>` : ''));
   const h0 = hours[0];
-  const from = now && now.from_deg != null ? now.from_deg : (h0 && h0.wind_from_deg != null ? h0.wind_from_deg : null);
-  const kmh = now && now.kmh != null ? now.kmh : (h0 && h0.wind_kmh != null ? h0.wind_kmh : null);
-  const temp = now && now.temp_c != null ? Math.round(now.temp_c) : (h0 && h0.temp_c != null ? h0.temp_c : null);
-  const fact = kmh != null ? `${Math.round(kmh)} km/h${from != null ? `, viene del ${windFrom(from)}` : ''}${temp != null ? ` · ${temp}°` : ''}` : null;
+  const useNow = !booked && now && (now.from_deg != null || now.kmh != null);
+  const from = useNow && now.from_deg != null ? now.from_deg : (h0 && h0.wind_from_deg != null ? h0.wind_from_deg : null);
+  const kmh = useNow && now.kmh != null ? now.kmh : (h0 && h0.wind_kmh != null ? h0.wind_kmh : null);
+  const temp = useNow && now.temp_c != null ? Math.round(now.temp_c) : (h0 && h0.temp_c != null ? h0.temp_c : null);
+  const stamp = booked && h0 && h0.at ? String(h0.at).slice(11, 16) : '';
+  const fact = kmh != null ? `${stamp ? `Pronóstico ${stamp} · ` : ''}${Math.round(kmh)} km/h${from != null ? `, viene del ${windFrom(from)}` : ''}${!booked && temp != null ? ` · ${temp}°` : ''}` : null;
   const rules = window.GolfletRules;
   const rows = rules && holes && holes.length ? holes.map(h => rules.windPlay(h.hole, from, h.bearing, kmh)) : [];
   const playable = rows.filter(p => p && p.relative && p.relative !== 'unavailable');
   const missing = rules && !rows.length ? rules.windPlay(0, from, null, kmh).text.replace(/^Hoyo 0 · /, '') : '';
-  const wind = playable.length ? `<div class="tw-holes">${playable.map(p => `<div><span>${esc(p.text)}</span></div>`).join('')}</div>` : (rows.length ? `<p class="tw-miss">No hay rumbo verificado del tee al green. El viento no se clasifica por hoyo.</p>` : (missing ? `<p class="tw-miss">${esc(missing)}</p>` : ''));
+  const omitted = rows.length - playable.length;
+  const omitNote = playable.length && omitted ? `<p class="foot">${omitted === 1 ? 'Un hoyo sin rumbo verificado no se clasifica.' : `${omitted} hoyos sin rumbo verificado no se clasifican.`}</p>` : '';
+  const wind = playable.length ? `<div class="tw-holes">${playable.map(p => `<div><span>${esc(p.text)}</span></div>`).join('')}</div>${omitNote}` : (rows.length ? `<p class="tw-miss">No hay rumbo verificado del tee al green. El viento no se clasifica por hoyo.</p>` : (missing ? `<p class="tw-miss">${esc(missing)}</p>` : ''));
   const driver = (typeof G !== 'undefined' && Array.isArray(G.bag) ? G.bag : []).find(b => /driver|^dr$/i.test(String(b.club || '')));
   const carry = driver && driver.carry != null && Number.isFinite(Number(driver.carry)) ? Math.round(Number(driver.carry)) : null;
   const bagLine = carry != null ? `<p class="foot">Driver cargado: ${carry} yd. No lo paso a metros y no elijo un palo por el viento o el frío.</p>` : '';
@@ -833,7 +838,7 @@ async function fillTeePrep(t, id){
   const pin = pinFor(t.club_name, r.course.key) || pinFor(t.club_name, t.club_key) || coursePin(r.course.key);
   const at = t.starts_at || `${t.date}T${t.time}:00-03:00`;
   const gen = VIEW_GEN;
-  box.innerHTML = `<div class="section"><h2>${esc(r.course.name)}</h2>${r.why === 'última ronda' ? '<span class="badge">la última que jugaste acá</span>' : r.why === 'elegida' ? '<span class="badge">elegida</span>' : ''}</div>
+  box.innerHTML = `<div class="section"><h2>Cómo va a estar</h2><span class="badge">${esc(r.course.name)}</span></div>
     <div id="teewx"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
     <div id="teest"></div>`;
   const wx = $('#teewx'), st = $('#teest');
@@ -841,12 +846,11 @@ async function fillTeePrep(t, id){
     if (!pin) { if (wx) wx.innerHTML = `<p class="foot">No tenemos la ubicación de esta cancha para mostrar el viento.</p>`; return; }
     try {
       const holesP = holeBearings(r.course.key);
-      const [now, fc, holes] = await Promise.all([
-        api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
+      const [fc, holes] = await Promise.all([
         api(`/api/weather/forecast?lat=${pin.lat}&lng=${pin.lng}&at=${encodeURIComponent(at)}`, { timeoutMs: READ_MS }),
         holesP,
       ]);
-      if (wx && gen === VIEW_GEN && $('#teewx') === wx) wx.innerHTML = wxCardHTML(pin.title, pin, now, fc, holes);
+      if (wx && gen === VIEW_GEN && $('#teewx') === wx) wx.innerHTML = wxCardHTML(pin.title, pin, null, fc, holes, true);
     } catch (e) { if (wx && gen === VIEW_GEN && $('#teewx') === wx) wx.innerHTML = errBox(e, 'el viento'); }
   })();
   const stratJob = (async () => {
@@ -910,11 +914,11 @@ async function loadTee(id, opts){
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
       <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HCP ${f1(c.hcp)}`:''}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HCP</span></div>`:''}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
       <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
+      <div id="teeprep"></div>
       ${past ? '' : `<div class="section"><h2>Tu hándicap de juego</h2></div><div class="card tt-now">${teeBlock(d, t.id)}</div>`}
       <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>
       <button type="button" class="btn ghost" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>`;
     const rb = $('#refresh-booking'); if (rb) rb.onclick = () => refreshBooking(id, rb);
-    el.insertAdjacentHTML('beforeend', '<div id="teeprep"></div>');
     if (!opts?.quiet) refreshReservations(navigator.onLine !== false).then(d => { if (d?.fresh && $('#tee')?.dataset.id === id) loadTee(id, { quiet: true }); });
     bindTeeBlock(el, t.id, () => loadTee(id));
     fillTeePrep(t, id);
@@ -2891,6 +2895,8 @@ function bindQuick(id){
       retry.onclick = () => { if (phase === 'conflict') reloadAccount(); else retryLoad(); };
     }
     const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
+    const track = document.getElementById('round-track');
+    if (track) track.setAttribute('href', `#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&hole=${h[0]}`);
   };
   box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
   paint();
@@ -3114,7 +3120,7 @@ function render(keepScroll){
   else if (p[0]==='privado'){ detail = sPrivado(); base = 'resumen'; }
   else if (p[0]==='pelota'){ detail = sPelota(); base = 'cuenta'; }
   else if (p[0]==='sorteos'){ detail = sSorteos(); base = 'cuenta'; }
-  else if (p[0]==='reconstruir'){ detail = `<div id="recon" data-id="${esc(p[1] || '')}"></div>`; base = 'rondas'; }
+  else if (p[0]==='reconstruir'){ detail = `<div id="recon" data-id="${esc((p[1] || '').split('?')[0])}"></div>`; base = 'rondas'; }
   else if (p[0]==='jugar'){ detail = sJugar(p[1]); base = 'resumen'; }
   else if (p[0].split('?')[0]==='metricas'){ detail = sMetricas(p[1], p[2]); base = 'resumen'; }
   else if (p[0]==='notificaciones'){ detail = sNotifs(); base = 'inicio'; }

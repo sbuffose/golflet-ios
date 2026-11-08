@@ -13,6 +13,7 @@ struct RoundDetailView: View {
     @State private var extras: [Int: HoleExtra] = [:]
     @State private var showsGameEditor = false
     @State private var showsRecap = false
+    @State private var showsTrack = false
     @State private var quickError = ""
     @State private var quickConflict = false
     @State private var needsRetry = false
@@ -55,6 +56,19 @@ struct RoundDetailView: View {
         .sheet(isPresented: $showsRecap) {
             NavigationStack {
                 RecapView(roundId: round.roundId)
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(isPresented: $showsTrack) {
+            NavigationStack {
+                ReconstructView(context: RoundTrackContext(
+                    roundId: round.roundId,
+                    date: round.date,
+                    courseName: round.course,
+                    clubCode: round.clubCode,
+                    hole: 1
+                ))
             }
             .golfletChrome()
             .environment(model)
@@ -193,12 +207,10 @@ struct RoundDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             holeTable(Array(round.holes.prefix(9)), totalLabel: "IDA", total: round.outScore)
             holeTable(Array(round.holes.suffix(from: min(9, round.holes.count))), totalLabel: "VTA", total: round.inScore)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], alignment: .leading, spacing: 8) {
-                legend(.eagleOrBetter, "Águila", categoryCount(.eagleOrBetter))
-                legend(.birdie, "Birdie", categoryCount(.birdie))
-                legend(.par, "Par", categoryCount(.par))
-                legend(.bogey, "Bogey", categoryCount(.bogey))
-                legend(.doubleOrWorse, "Doble+", categoryCount(.doubleOrWorse))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], alignment: .leading, spacing: 10) {
+                ForEach(ScoreLegend.items(holes: round.holes, counts: round.counts)) { item in
+                    legend(item)
+                }
             }
             if !caption.isEmpty {
                 Text(caption)
@@ -253,31 +265,47 @@ struct RoundDetailView: View {
         }
     }
 
-    private func categoryCount(_ result: HoleResult) -> Int {
-        let known = round.holes.filter { $0.strokes != nil && $0.result != .unknown }
-        if !known.isEmpty {
-            return known.filter { $0.result == result }.count
-        }
-        switch result {
-        case .eagleOrBetter:
-            return ScoreCounts.resolvedEagles(reported: round.counts.eagles, holes: round.holes)
-        case .birdie: return round.counts.birdies
-        case .par: return round.counts.pars
-        case .bogey: return round.counts.bogeys
-        case .doubleOrWorse: return round.counts.doubles + round.counts.triples + round.counts.worse
-        case .unknown: return 0
-        }
-    }
-
-    private func legend(_ result: HoleResult, _ label: String, _ count: Int) -> some View {
-        HStack(spacing: 4) {
-            ScoreMark(strokes: count, result: result, diameter: 22)
-            Text(label)
+    private func legend(_ item: ScoreLegend.Item) -> some View {
+        HStack(spacing: 8) {
+            legendMark(item.result, item.count)
+            Text(item.label)
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .accessibilityLabel("\(count) \(label)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(item.count) \(item.spoken)")
+    }
+
+    @ViewBuilder
+    private func legendMark(_ result: HoleResult, _ count: Int) -> some View {
+        let mark = Text("\(count)")
+            .font(GFont.ui(13, weight: .semibold))
+            .tabular()
+            .foregroundStyle(legendInk(result))
+            .frame(minWidth: 26, minHeight: 26)
+            .padding(.horizontal, 4)
+        switch result {
+        case .eagleOrBetter:
+            mark.background(p.primary).clipShape(Circle())
+        case .birdie:
+            mark.background(p.accent).clipShape(Circle())
+        case .par, .unknown:
+            mark
+        case .bogey:
+            mark.background(p.sand).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        case .doubleOrWorse:
+            mark.background(Color(red: 74 / 255, green: 81 / 255, blue: 76 / 255)).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    private func legendInk(_ result: HoleResult) -> Color {
+        switch result {
+        case .eagleOrBetter: return p.accent
+        case .birdie, .doubleOrWorse: return p.onPrimary
+        default: return p.ink
+        }
     }
 
     private var gameStats: some View {
@@ -292,6 +320,38 @@ struct RoundDetailView: View {
                     .foregroundStyle(p.ink2)
                     .accessibilityIdentifier("edit-game")
             }
+            Button { showsTrack = true } label: {
+                HStack(spacing: 12) {
+                    Text("TRACK")
+                        .font(GFont.ui(12, weight: .semibold))
+                        .foregroundStyle(p.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(p.onPrimary)
+                        .clipShape(Capsule())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Registrar mis tiros")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                        Text("Cómo fueron los golpes en el mapa de esta vuelta. Los putts, el drive y el green quedan aparte.")
+                            .font(GType.label)
+                            .foregroundStyle(p.onPrimary.opacity(0.72))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(p.onPrimary.opacity(0.8))
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("round-track")
+            .accessibilityLabel("Registrar mis tiros")
+            .accessibilityHint("Abre el mapa de golpes de esta vuelta")
             HStack(spacing: 10) {
                 gameField("Putts", $puttsText, .putts)
                 gameField("Greens", $girText, .gir)

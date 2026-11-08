@@ -206,12 +206,40 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#scoreline");
     const scoreline = await page.$eval("#scoreline", el => el.textContent || "");
-    assert.match(scoreline, /1 Águila/);
-    assert.match(scoreline, /1 Birdie/);
-    assert.match(scoreline, /1 Par/);
-    assert.match(scoreline, /0 Bogey/);
-    assert.match(await page.$eval(".keyrow", el => el.textContent || ""), /−2/);
-    assert.equal((await page.$eval(".keyrow", el => el.textContent || "")).includes("Águila2"), false);
+    const legend = await page.$eval("#scoreline", el => ({
+      text: el.textContent || "",
+      marks: [...el.querySelectorAll(".b")].map(node => node.textContent || ""),
+      names: [...el.querySelectorAll("[aria-label]")].map(node => node.getAttribute("aria-label")),
+    }));
+    assert.deepEqual(legend.marks, ["1", "1", "1", "0", "0"]);
+    assert.deepEqual(legend.names, ["1 águilas", "1 birdies", "1 pares", "0 bogeys", "0 doble o peor"]);
+    assert.match(scoreline, /1 Águilas/);
+    assert.match(scoreline, /1 Birdies/);
+    assert.match(scoreline, /1 Pares/);
+    assert.match(scoreline, /0 Bogeys/);
+    assert.match(scoreline, /0 Doble \+/);
+    assert.equal(/[−+][12]/.test(scoreline), false);
+    assert.equal(scoreline.includes("Águilas1"), false);
+    assert.equal(scoreline.includes("Águila2"), false);
+    assert.match(await page.$eval("#difnote", el => el.textContent || ""), /Diferencial estimado por Golflet/);
+    const trackPlace = await page.evaluate(() => {
+      const track = document.querySelector("#round-track");
+      const stats = document.querySelector("#qstat");
+      const fields = document.querySelector(".fields");
+      if (!track || !stats || !fields) return null;
+      return {
+        href: track.getAttribute("href"),
+        label: track.getAttribute("aria-label") || track.textContent,
+        beforeStats: !!(track.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING),
+        fieldsStay: !!fields.querySelector('[data-k="putts"]') && !!fields.querySelector('[data-k="gir"]') && !!fields.querySelector('[data-k="fir"]'),
+        quickStays: !!stats.querySelector("#qputts") && !!stats.querySelector("#qfw") && !!stats.querySelector("#qgir"),
+      };
+    });
+    assert.equal(trackPlace?.href, "#/reconstruir?ronda=r-nov&hole=1");
+    assert.match(trackPlace?.label || "", /Registrar mis tiros/);
+    assert.equal(trackPlace?.beforeStats, true);
+    assert.equal(trackPlace?.fieldsStay, true);
+    assert.equal(trackPlace?.quickStays, true);
     note("inicio");
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });
     await page.waitForSelector(".hero .hi-ch-l");

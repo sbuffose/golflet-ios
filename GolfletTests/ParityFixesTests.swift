@@ -23,6 +23,18 @@ final class ParityFixesTests: XCTestCase {
         )
     }
 
+    func testRoundTrackMatchesThisCourseAndDoesNotGuess() {
+        let azul = Course(clubCode: "118", clubName: "Jockey", name: "Azul", holes: [])
+        let colorado = Course(clubCode: "118", clubName: "Jockey", name: "Colorado", holes: [])
+        let other = Course(clubCode: "200", clubName: "Otro", name: "Azul", holes: [])
+        let matched = RoundTrackCourse.match(courses: [azul, colorado, other], clubCode: "118", name: "Azul")
+        XCTAssertEqual(matched?.name, "Azul")
+        XCTAssertEqual(matched?.clubCode, "118")
+        XCTAssertNil(RoundTrackCourse.match(courses: [azul, other], clubCode: "", name: "Azul"))
+        XCTAssertEqual(RoundTrackCourse.match(courses: [colorado], clubCode: "", name: "colorado")?.clubCode, "118")
+        XCTAssertNil(RoundTrackCourse.match(courses: [other], clubCode: "118", name: "Azul"))
+    }
+
     func testWindFromConventionAndMissingBearing() {
         XCTAssertEqual(HoleWind.degrees(from: "N"), 0)
         XCTAssertEqual(HoleWind.degrees(from: "sur"), 180)
@@ -46,6 +58,13 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertTrue(missing.first?.line.contains("sin rumbo") == true)
         XCTAssertFalse(HoleWind.relativeText(windFromDeg: nil, holes: missing).contains("en contra"))
         XCTAssertTrue(HoleWind.relativeText(windFromDeg: 180, holes: []).contains("Sin rumbo verificado"))
+        let blindRows = (1...18).map { hole(number: $0, tee: nil, pin: GPSCoord(lat: 1, lng: 1)) }
+        let collapsed = HoleWind.classified(HoleWind.rows(holes: blindRows, windFromDeg: 180, speedKmh: 18))
+        XCTAssertTrue(collapsed.rows.isEmpty)
+        XCTAssertEqual(collapsed.omitted, 18)
+        let mixed = HoleWind.classified(HoleWind.rows(holes: [east, blind], windFromDeg: 90, speedKmh: 18))
+        XCTAssertEqual(mixed.rows.map(\.number), [1])
+        XCTAssertEqual(mixed.omitted, 1)
     }
 
     func testWeatherUsesHoleBearingWhenItExists() {

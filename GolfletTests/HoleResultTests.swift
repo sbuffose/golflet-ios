@@ -27,6 +27,24 @@ final class HoleResultTests: XCTestCase {
         XCTAssertEqual(HoleResult(className: "otro", toPar: nil), .unknown)
     }
 
+    func testLegendPutsTheRoundCountInEachCategoryAndKeepsZeroEagles() {
+        let holes = [
+            HoleScore(number: 1, par: 3, handicap: 1, yards: nil, strokes: 1, toPar: -2, result: .eagleOrBetter),
+            HoleScore(number: 2, par: 4, handicap: 2, yards: nil, strokes: 4, toPar: 0, result: .par),
+            HoleScore(number: 3, par: 5, handicap: 3, yards: nil, strokes: 4, toPar: -1, result: .birdie),
+        ]
+        let unused = ScoreCounts(birdies: 9, pars: 9, bogeys: 9, doubles: 9, triples: 9, worse: 9, eagles: 9)
+        let items = ScoreLegend.items(holes: holes, counts: unused)
+        XCTAssertEqual(items.map(\.label), ["Águilas", "Birdies", "Pares", "Bogeys", "Doble +"])
+        XCTAssertEqual(items.map(\.spoken), ["águilas", "birdies", "pares", "bogeys", "doble o peor"])
+        XCTAssertEqual(items.map(\.count), [1, 1, 1, 0, 0])
+        XCTAssertFalse(items.contains { $0.label.contains("−") || $0.label.contains("+1") || $0.label.contains("+2") })
+
+        let unknown = [HoleScore(number: 1, par: 4, handicap: 1, yards: nil, strokes: nil, toPar: nil, result: .unknown)]
+        let reported = ScoreCounts(birdies: 3, pars: 8, bogeys: 5, doubles: 1, triples: 1, worse: 0, eagles: 0)
+        XCTAssertEqual(ScoreLegend.items(holes: unknown, counts: reported).map(\.count), [0, 3, 8, 5, 2])
+    }
+
     func testSummaryOmitsEaglesUntilOneExists() {
         let pellegrini = ScorecardSummary.line(
             eagles: 0,
