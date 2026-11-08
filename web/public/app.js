@@ -2669,7 +2669,7 @@ function bindQuick(id){
   const holes = r.holes.filter(h => h[0] != null);
   const holeRefs = holes.map(h => ({ hole: h[0], par: h[1] == null ? null : h[1] }));
   let idx = 0, gen = 0, phase = 'idle', chain = Promise.resolve();
-  let revs = {}, seeded = false, readFailed = false, accountBoard = [];
+  let revs = {}, seeded = false, readFailed = false, accountBoard = [], noteAt = '';
   const drafts = new Map();
   const visible = marks => (marks || []).filter(m => m.putts != null || m.gir === true || m.gir === false || m.drive).map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
   const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0], putts: null, gir: null, drive: null };
@@ -2765,16 +2765,16 @@ function bindQuick(id){
             accountBoard = Q.acceptSaved(accountBoard, { hole: body.hole, putts: mark.putts ?? null, gir: mark.gir ?? null, drive: mark.drive ?? null, rev: Number(mark.rev) });
             if (drafts.get(hole) && drafts.get(hole).rev === body.rev) drafts.delete(hole);
             syncBoard();
+            const note = saved.note;
+            if (note && Q.noteIsNewer(noteAt, note.updated_at)) {
+              const fields = {};
+              ['putts', 'gir', 'fir'].forEach(k => { if (note[k] != null && note[k] !== '') fields[k] = note[k]; });
+              noteAt = note.updated_at || noteAt;
+              if (Object.keys(fields).length) applyTotals(note, fields);
+            }
           }
           if (mine !== gen) return;
           if (outcome !== 'saved') { phase = 'conflict'; paint(); return; }
-        }
-        if (mine !== gen) return;
-        const fields = Q.noteFields(Q.projectBoard(accountBoard, [...drafts.values()]).rows, holeRefs);
-        if (Object.keys(fields).length) {
-          const { note } = await api(`/api/rounds/${encodeURIComponent(id)}/notes`, { method: 'PUT', body: JSON.stringify(fields) });
-          if (mine !== gen) return;
-          applyTotals(note, fields);
         }
         if (mine !== gen) return;
         phase = 'saved';

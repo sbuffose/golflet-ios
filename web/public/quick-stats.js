@@ -118,6 +118,11 @@
     });
     return { holes: holes, revs: revs };
   }
+  function noteIsNewer(previous, next) {
+    if (!next) return false;
+    if (!previous) return true;
+    return String(next) >= String(previous);
+  }
   function sendDecision(accountReady, stillHere) {
     if (!accountReady || !stillHere) return "hold";
     return "send";
@@ -176,7 +181,7 @@
     noteFields: noteFields, mergeNote: mergeNote, applyMark: applyMark, shouldCommit: shouldCommit, accountView: accountView,
     nextHoleRev: nextHoleRev, seedHoleRevs: seedHoleRevs, planHoleSend: planHoleSend,
     mergeAccountHole: mergeAccountHole, absorbAccountMarks: absorbAccountMarks, sendDecision: sendDecision,
-    projectBoard: projectBoard, acceptSaved: acceptSaved,
+    projectBoard: projectBoard, acceptSaved: acceptSaved, noteIsNewer: noteIsNewer,
     interpretSave: interpretSave, phaseAfter: phaseAfter, saveMessage: saveMessage
   };
 })(typeof window !== "undefined" ? window : globalThis);

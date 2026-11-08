@@ -140,8 +140,8 @@ final class QuickStatsTests: XCTestCase {
             XCTAssertEqual(status, 409)
         }
         let retry = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: nil, gir: false, drive: nil, rev: 6))
-        XCTAssertEqual(retry.gir, false)
-        XCTAssertEqual(retry.rev, 6)
+        XCTAssertEqual(retry.mark.gir, false)
+        XCTAssertEqual(retry.mark.rev, 6)
         _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: nil, gir: nil, drive: nil, rev: 7))
         do {
             _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: nil, gir: true, drive: nil, rev: 6))
@@ -218,8 +218,8 @@ final class QuickStatsTests: XCTestCase {
         let round = UUID().uuidString
         _ = try await api.saveHoleMark(roundId: round, mark: account[0])
         let first = try await api.saveHoleMark(roundId: round, mark: board[0])
-        XCTAssertEqual(first.rev, 6)
-        let saved = QuickStats.acceptSaved(account: account, saved: first)
+        XCTAssertEqual(first.mark.rev, 6)
+        let saved = QuickStats.acceptSaved(account: account, saved: first.mark)
         let secondEdit = QuickStats.mergeAccount(
             account: saved.first { $0.hole == 1 },
             local: HoleMark(hole: 1, putts: nil, gir: false, drive: nil, rev: 0),
@@ -230,8 +230,8 @@ final class QuickStatsTests: XCTestCase {
         XCTAssertEqual(secondEdit.gir, false)
         XCTAssertEqual(secondEdit.drive, "fairway")
         let second = try await api.saveHoleMark(roundId: round, mark: secondEdit)
-        XCTAssertEqual(second.rev, 7)
-        XCTAssertEqual(second.gir, false)
+        XCTAssertEqual(second.mark.rev, 7)
+        XCTAssertEqual(second.mark.gir, false)
         do {
             _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: 3, gir: false, drive: "fairway", rev: 6))
             XCTFail("La segunda edición no puede repetir la revisión 6")

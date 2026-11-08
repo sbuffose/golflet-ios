@@ -316,6 +316,125 @@ export function applyPresentColumns(stored: NoteTotals, patch: NotePatch): NoteT
   };
 }
 
+/**
+ * The marks on the account decide a column only when every hole that counts has that stat.
+ * Zero is a total. A null hole is missing, not zero, and the stored 32/10/8 stays.
+ * A client number is not a vote: once any hole mark exists, an incomplete column is left alone.
+ */
+export function noteAuthority(
+  marks: Mark[],
+  holes: HoleRef[],
+  client: NotePatch,
+): NotePatch {
+  if (!marks.length) return client;
+  const derived = noteFields(marks, holes);
+  const numberOr = (key: "putts" | "gir" | "fir"): { present: boolean; value: number | null } => {
+    if (derived[key] == null) return { present: false, value: null };
+    return { present: true, value: Number(derived[key]) };
+  };
+  const putts = numberOr("putts");
+  const gir = numberOr("gir");
+  const fir = numberOr("fir");
+  return {
+    putts: putts.value,
+    gir: gir.value,
+    fir: fir.value,
+    notes: client.notes,
+    puttsPresent: putts.present,
+    girPresent: gir.present,
+    firPresent: fir.present,
+    notesPresent: client.notesPresent,
+  };
+}
+
+/** Ignore a note snapshot that left the server before the one already on screen. */
+export function noteIsNewer(previous: string | null | undefined, next: string | null | undefined): boolean {
+  if (!next) return false;
+  if (!previous) return true;
+  return String(next) >= String(previous);
+}
+
+/** Serializes hole writes and note writes for one round. Released when the transaction ends. */
+export const QUICK_LOCK = `select pg_advisory_xact_lock(hashtext('golflet-hole'), hashtext($1::text))`;
+
+type SqlRun = (text: string, params?: unknown[]) => Promise<any[]>;
+
+function asMark(row: { hole: unknown; putts: unknown; gir: unknown; drive: unknown; rev: unknown }): StoredMark {
+  return {
+    hole: Number(row.hole),
+    putts: row.putts == null ? null : Number(row.putts),
+    gir: row.gir == null ? null : row.gir === true,
+    drive: row.drive == null ? null : String(row.drive),
+    rev: Number(row.rev),
+  };
+}
+
+function noteRow(row: { putts?: unknown; gir?: unknown; fir?: unknown; notes?: unknown; updated_at?: unknown } | undefined) {
+  if (!row) return null;
+  const stamp = row.updated_at instanceof Date ? row.updated_at.toISOString() : (row.updated_at == null ? null : String(row.updated_at));
+  return {
+    putts: row.putts == null ? null : Number(row.putts),
+    gir: row.gir == null ? null : Number(row.gir),
+    fir: row.fir == null ? null : Number(row.fir),
+    notes: row.notes == null ? null : String(row.notes),
+    updated_at: stamp,
+  };
+}
+
+/**
+ * One transaction already holds the connection. The lock covers the hole and the total,
+ * so the other device cannot publish a total from the snapshot it loaded.
+ */
+export async function writeHoleMark(run: SqlRun, input: {
+  roundId: string;
+  userId: string;
+  incoming: Record<string, unknown>;
+  card: HoleRef[];
+}) {
+  await run(QUICK_LOCK, [input.roundId]);
+  const [cur] = await run(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and hole=$2`, [input.roundId, Number(input.incoming.hole)]);
+  const decision = applyMark(cur ? asMark(cur) : null, input.incoming, input.card);
+  if (!decision.conflict && !decision.idempotent) {
+    const written = await run(HOLE_MARK_UPSERT, [input.roundId, input.userId, decision.mark.hole, decision.mark.putts, decision.mark.gir, decision.mark.drive, decision.mark.rev]);
+    if (!written[0]) {
+      const [kept] = await run(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and hole=$2`, [input.roundId, decision.mark.hole]);
+      const settled = settleWrite(kept ? asMark(kept) : null, decision.mark);
+      return { ...settled, note: null as ReturnType<typeof noteRow> };
+    }
+  }
+  if (decision.conflict) return { ...decision, note: null as ReturnType<typeof noteRow> };
+  const rows = await run(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and user_id=$2 order by hole`, [input.roundId, input.userId]);
+  const authority = noteAuthority(rows.map(asMark), input.card, {
+    putts: null, gir: null, fir: null, notes: null,
+    puttsPresent: false, girPresent: false, firPresent: false, notesPresent: false,
+  });
+  if (!authority.puttsPresent && !authority.girPresent && !authority.firPresent) {
+    return { ...decision, note: null as ReturnType<typeof noteRow> };
+  }
+  const [note] = await run(NOTE_UPSERT, [
+    input.roundId, input.userId, authority.putts, authority.gir, authority.fir, null,
+    authority.puttsPresent, authority.girPresent, authority.firPresent, false,
+  ]);
+  return { ...decision, note: noteRow(note) };
+}
+
+/** A notes request may carry a stale board. The stored marks decide the columns they can decide. */
+export async function writeAuthoritativeNote(run: SqlRun, input: {
+  roundId: string;
+  userId: string;
+  card: HoleRef[];
+  client: NotePatch;
+}) {
+  await run(QUICK_LOCK, [input.roundId]);
+  const rows = await run(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and user_id=$2 order by hole`, [input.roundId, input.userId]);
+  const authority = noteAuthority(rows.map(asMark), input.card, input.client);
+  const [note] = await run(NOTE_UPSERT, [
+    input.roundId, input.userId, authority.putts, authority.gir, authority.fir, authority.notes,
+    authority.puttsPresent, authority.girPresent, authority.firPresent, authority.notesPresent,
+  ]);
+  return noteRow(note);
+}
+
 /** Single statement. A concurrent GIR-only write cannot put the previous putts back. */
 export const NOTE_UPSERT = `insert into round_note (round_id, user_id, putts, gir, fir, notes, updated_at)
   values ($1,$2,$3,$4,$5,$6,now())
