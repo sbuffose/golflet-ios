@@ -3,7 +3,7 @@
   const TILE = (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
   const R = () => window.GolfletRules;
   const hav = (a, b) => {
-    if (!a || !b) return null;
+    if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(a.lng) || !Number.isFinite(b.lat) || !Number.isFinite(b.lng)) return null;
     const Re = 6371000, t = x => x * Math.PI / 180, dLa = t(b.lat - a.lat), dLo = t(b.lng - a.lng);
     const h = Math.sin(dLa / 2) ** 2 + Math.cos(t(a.lat)) * Math.cos(t(b.lat)) * Math.sin(dLo / 2) ** 2;
     return 2 * Re * Math.asin(Math.sqrt(h));
@@ -69,10 +69,9 @@
     const holeRec = () => S.holes.find(h => h.hole === S.hole || h.number === S.hole) || S.holes[S.hole - 1] || {};
     const gpsHole = () => (S.course?.holes || []).find(h => h.number === S.hole || h.hole === S.hole) || null;
     const asLL = p => {
-      if (!p) return null;
-      if (Array.isArray(p) && p.length >= 2 && Number.isFinite(+p[0]) && Number.isFinite(+p[1])) return { lat: +p[0], lng: +p[1] };
-      if (Number.isFinite(+p.lat) && Number.isFinite(+p.lng)) return { lat: +p.lat, lng: +p.lng };
-      return null;
+      if (!p || !R()) return null;
+      if (Array.isArray(p)) return R().knownPoint(p[0], p[1]);
+      return R().knownPoint(p.lat, p.lng);
     };
     const pinCoord = () => {
       const rec = holeRec(), g = rec.green || gpsHole()?.green || {};
@@ -155,7 +154,10 @@
       S.suggestedTee = tee;
       S.suggestedPin = pin;
       const saved = (S.saved || []).filter(s => Number(s.hole) === Number(S.hole));
-      const placed = saved.filter(s => Number.isFinite(+s.end_lat) && Number.isFinite(+s.end_lng));
+      const placed = saved.flatMap(s => {
+        const end = R().knownPoint(s.end_lat, s.end_lng);
+        return end ? [{ ...s, end }] : [];
+      });
       if (!saved.length) {
         S.done = false;
         S.track = R().trackNew();
@@ -167,9 +169,9 @@
         phase: 'tracking',
         tee: tee ? { ...tee } : null,
         flag: pin ? { ...pin } : null,
-        ball: last ? { lat: +last.end_lat, lng: +last.end_lng } : (tee ? { ...tee } : null),
+        ball: last ? { ...last.end } : (tee ? { ...tee } : null),
         marks: placed.map((s, i) => ({
-          id: s.id || i + 1, lat: +s.end_lat, lng: +s.end_lng, club: s.club || null,
+          id: s.id || i + 1, lat: s.end.lat, lng: s.end.lng, club: s.club || null,
           countsStroke: s.result !== 'penalty', holed: s.result === 'holed',
           penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0, drop: false,
         })),
@@ -250,14 +252,30 @@
         if (next) next.onclick = () => goHole(S.hole + 1);
         return;
       }
-      const ydOf = m => m == null || !Number.isFinite(+m) ? '' : `${Math.round(+m / 0.9144)} yd`;
+      const ydOf = m => {
+        if (m == null) return '';
+        if (typeof m === 'string' && m.trim() === '') return '';
+        const n = typeof m === 'number' ? m : Number(typeof m === 'string' ? m.trim() : NaN);
+        return Number.isFinite(n) && n >= 0 ? `${Math.round(n / 0.9144)} yd` : '';
+      };
       const savedRows = (S.saved || []).filter(s => Number(s.hole) === Number(S.hole));
-      const railSource = S.track.marks.length ? S.track.marks.map((m, i) => {
+      let prevKnown = R().knownPoint(S.track.tee?.lat, S.track.tee?.lng);
+      const savedRail = savedRows.map((s, i) => {
+        const end = R().knownPoint(s.end_lat, s.end_lng);
+        let yards = ydOf(s.distance_m);
+        if (!yards && end && prevKnown) {
+          const meters = hav(prevKnown, end);
+          if (meters != null) yards = `${yd(meters)} yd`;
+        }
+        if (end) prevKnown = end;
+        return { id: s.id, club: clubLabel(s.club) || s.club, yards, unknown: !end && !yards, n: i + 1 };
+      });
+      const railSource = savedRail.length ? savedRail : S.track.marks.map((m, i) => {
         const prev = i ? { lat: S.track.marks[i - 1].lat, lng: S.track.marks[i - 1].lng } : S.track.tee;
         const meters = prev ? hav(prev, { lat: m.lat, lng: m.lng }) : null;
-        return { id: m.id, club: clubLabel(m.club) || m.club, yards: meters == null ? '' : `${yd(meters)} yd`, n: i + 1 };
-      }) : savedRows.map((s, i) => ({ id: s.id, club: clubLabel(s.club) || s.club, yards: ydOf(s.distance_m), n: i + 1 }));
-      const rail = retro && railSource.length ? `<div class="tk-shots-rail" id="rc-shots" aria-label="Golpes">${railSource.map((s, i) => `<button type="button" class="tk-shot" id="play-shot-${i}">${s.n}. ${esc(s.club || '—')}${s.yards ? ` · ${esc(s.yards)}` : ''}</button>`).join('')}</div>` : (!retro ? `<div class="tk-shots-rail" aria-label="Golpes">${marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? 'Drop' : m.penalty ? 'P' : m.holed ? 'Hoyo' : (m.club ? esc(clubLabel(m.club)) : (i + 1))}</span>`).join('')}</div>` : '');
+        return { id: m.id, club: clubLabel(m.club) || m.club, yards: meters == null ? '' : `${yd(meters)} yd`, unknown: false, n: i + 1 };
+      });
+      const rail = retro && railSource.length ? `<div class="tk-shots-rail" id="rc-shots" aria-label="Golpes">${railSource.map((s, i) => `<button type="button" class="tk-shot" id="play-shot-${i}">${s.n}. ${esc(s.club || '—')}${s.yards ? ` · ${esc(s.yards)}` : s.unknown ? ' · Sin ubicación' : ''}</button>`).join('')}</div>` : (!retro ? `<div class="tk-shots-rail" aria-label="Golpes">${marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? 'Drop' : m.penalty ? 'P' : m.holed ? 'Hoyo' : (m.club ? esc(clubLabel(m.club)) : (i + 1))}</span>`).join('')}</div>` : '');
       const setup = retro && (phase === 'confirmTee' || phase === 'confirmFlag');
       const marking = retro && phase === 'tracking' && !S.done && phase !== 'relief';
       el.innerHTML = `<div class="tk" id="play-track">
@@ -305,6 +323,8 @@
       map.dataset.cx = String(S.cam.cx);
       map.dataset.cy = String(S.cam.cy);
       map.dataset.z = String(S.cam.z);
+      map.dataset.ballLat = S.track.ball && Number.isFinite(S.track.ball.lat) ? String(S.track.ball.lat) : '';
+      map.dataset.ballLng = S.track.ball && Number.isFinite(S.track.ball.lng) ? String(S.track.ball.lng) : '';
     };
     const paintRead = () => {
       const ro = el.querySelector('#tkro'); if (ro) ro.innerHTML = cursorRead(fromCenter());

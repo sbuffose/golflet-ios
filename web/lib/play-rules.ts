@@ -2,6 +2,23 @@
  *  Meteorological wind is where it comes FROM. A shot is holed only on the cup. */
 
 export type LL = { lat: number; lng: number };
+
+/** Same rule as validLatLng: a blank endpoint is unknown, a numeric zero is real, and (0, 0) is not a point. */
+export function knownPoint(lat: unknown, lng: unknown): LL | null {
+  const a = knownCoord(lat), b = knownCoord(lng);
+  if (a == null || b == null || Math.abs(a) > 90 || Math.abs(b) > 180 || (a === 0 && b === 0)) return null;
+  return { lat: a, lng: b };
+}
+function knownCoord(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text || !/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(text)) return null;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
 export type WindRel = "favor" | "contra" | "cruzado" | "unavailable";
 export type TrackPhase = "confirmTee" | "confirmFlag" | "tracking" | "penaltyWhere" | "relief" | "drop";
 export type TrackMark = { id: number; lat: number; lng: number; club: string | null; countsStroke: boolean; holed: boolean; penalty: boolean; drop: boolean };

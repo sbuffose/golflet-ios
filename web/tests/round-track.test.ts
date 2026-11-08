@@ -67,7 +67,10 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
       }
       if (url.pathname === "/api/reconstructions/live-saved/shots" && req.method === "GET") return json({ shots: [{ id: "s1", hole: 1, club: "7i", position_label: "Marcado a mano", distance_label: "Distancia estimada", distance_m: 140, penalty_strokes: 0 }] });
       if (url.pathname === "/api/reconstructions" && req.method === "POST") return json({ live_round: { id: "live-new" } }, 201);
-      if (url.pathname === "/api/reconstructions/live-new/shots" && req.method === "POST") return json({ shots: [{ id: "s-new", hole: 1, club: null, position_label: "Marcado a mano", distance_label: "Distancia estimada", distance_m: 12, penalty_strokes: 0 }] });
+      if (url.pathname === "/api/reconstructions/live-new/shots" && req.method === "POST") {
+        const posted = JSON.parse(raw || "{}");
+        return json({ shots: [{ id: "s-new", hole: 1, club: posted.club || null, position_label: "Marcado a mano", distance_label: "Distancia estimada", distance_m: 12, penalty_strokes: 0, lat: posted.lat ?? null, lng: posted.lng ?? null, end_lat: posted.end_lat ?? null, end_lng: posted.end_lng ?? null }] });
+      }
       if (req.method === "POST") return json({ live_round: { id: "should-not-create" } }, 201);
       return json({});
     }
@@ -320,11 +323,12 @@ test("a late reconstruction reply does not navigate or post the shot after the p
         });
       }
       if (url.pathname === "/api/reconstructions" && req.method === "POST") {
+        const id = `live-held-${creates().length}`;
         if (holdCreates > 0) {
           holdCreates -= 1;
           await new Promise<void>(resolve => queued.push(resolve));
         }
-        return json({ live_round: { id: "live-held" } }, 201);
+        return json({ live_round: { id } }, 201);
       }
       if (req.method === "POST" && /\/shots$/.test(url.pathname)) return json({ shots: [{ id: "s-held", hole: 1, club: "7i", distance_m: 12, penalty_strokes: 0 }] });
       if (url.pathname === "/api/reconstructions/live-saved/shots" && req.method === "GET") return json({ shots: [] });
@@ -343,6 +347,11 @@ test("a late reconstruction reply does not navigate or post the shot after the p
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
   const release = () => {
     const done = queued.shift();
+    if (!done) throw new Error("no reconstruction reply is waiting");
+    done();
+  };
+  const releaseLast = () => {
+    const done = queued.pop();
     if (!done) throw new Error("no reconstruction reply is waiting");
     done();
   };
@@ -394,7 +403,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     assert.equal(await page.evaluate(() => location.hash.includes("live-held")), false);
     assert.match(await page.evaluate(() => location.hash), /ronda=r-nov/);
     release();
-    await page.waitForFunction(() => location.hash.startsWith("#/reconstruir/live-held"));
+    await page.waitForFunction(() => /#\/reconstruir\/live-held-\d+/.test(location.hash));
     await until(() => shotPosts().length === 1, "the live visit did not post its shot");
 
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
@@ -410,8 +419,121 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     assert.equal(await page.evaluate(() => document.documentElement.classList.contains("rc-map")), false);
     assert.equal(shotPosts().length, 1);
     assert.equal(creates().length, 4);
+
+    await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
+    await reachEnter(page);
+    holdCreates = 2;
+    await page.click("#play-hit");
+    await until(() => creates().length === 5, "the older create did not start");
+    await page.click("#rc-close");
+    await page.waitForFunction(() => location.hash === "#/ronda/r-nov");
+    await reachEnter(page);
+    await page.click("#play-hit");
+    await until(() => creates().length === 6, "the newer create did not start");
+    releaseLast();
+    await page.waitForFunction(() => /#\/reconstruir\/live-held-\d+/.test(location.hash));
+    await until(() => shotPosts().length === 2, "the newer visit did not post its shot");
+    const kept = await page.evaluate(() => location.hash);
+    release();
+    await settle();
+    assert.equal(await page.evaluate(() => location.hash), kept);
+    assert.equal(shotPosts().length, 2);
+
+    await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
+    await reachEnter(page);
+    holdCreates = 1;
+    await page.click("#play-hit");
+    await until(() => creates().length === 7, "the logout create did not start");
+    await page.evaluate(() => { location.replace("/login"); });
+    await page.waitForFunction(() => location.pathname === "/login");
+    release();
+    await settle();
+    assert.equal(await page.evaluate(() => location.pathname), "/login");
+    assert.equal(shotPosts().length, 2);
   } finally {
     while (queued.length) queued.shift()?.();
+    await browser.close();
+    await new Promise<void>(r => server.close(() => r()));
+  }
+});
+
+test("a stored shot with no point stays unknown and the next shot does not start at 0,0", { timeout: 60_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+  const calls: { method: string; path: string }[] = [];
+  const shots = [
+    { id: "u1", hole: 1, club: "7i", lat: null, lng: null, end_lat: null, end_lng: null, distance_m: null, position_label: "Sin ubicación", distance_label: "Sin distancia" },
+    { id: "u2", hole: 1, club: "PW", lat: "", lng: "", end_lat: "", end_lng: "  ", distance_m: "", position_label: "Sin ubicación", distance_label: "Sin distancia" },
+    { id: "u3", hole: 1, club: "SW", lat: null, lng: -58.401, end_lat: null, end_lng: -58.401, distance_m: null, position_label: "Sin ubicación", distance_label: "Sin distancia" },
+    { id: "u0", hole: 1, club: "GW", lat: "0", lng: "0", end_lat: "0", end_lng: "0", distance_m: null, position_label: "Sin ubicación", distance_label: "Sin distancia" },
+    { id: "u4", hole: 1, club: "9i", lat: -34.6, lng: -58.4, end_lat: -34.601, end_lng: -58.401, distance_m: null, position_label: "Marcado a mano", distance_label: "Sin distancia" },
+  ];
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
+    const json = (body: unknown, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (url.pathname.startsWith("/api/")) {
+      for await (const chunk of req) void chunk;
+      calls.push({ method: req.method || "GET", path: url.pathname });
+      if (url.pathname === "/api/data") return json(data);
+      if (url.pathname === "/api/gps/courses") return json({ courses: [{ course_id: "course-fixture", club_name: "Club Fixture", course: "Cancha Fixture", label: "Cancha Fixture" }] });
+      if (url.pathname === "/api/gps/courses/course-fixture" || url.pathname === "/api/gps/courses/fx-cancha-fixture") {
+        return json({ course: { holes: [{ hole: 1, tee: { lat: -34.6, lng: -58.4 }, green: { center: { lat: -34.601, lng: -58.401 } } }] } });
+      }
+      if (url.pathname === "/api/reconstructions" && req.method === "GET") {
+        return json({
+          rounds: [{ id: "r-saved", date: "2026-10-01", course: "Cancha Fixture", club_name: "Club Fixture", club_code: "fx" }],
+          reconstructions: [{ id: "live-saved", date: "2026-10-01", course: "Cancha Fixture", club_code: "fx", vm_course: "Cancha Fixture", round_id: "r-saved" }],
+        });
+      }
+      if (url.pathname === "/api/reconstructions/live-saved/shots" && req.method === "GET") return json({ shots });
+      if (req.method === "POST") return json({ live_round: { id: "should-not-create" } }, 201);
+      return json({});
+    }
+    const file = url.pathname === "/" ? "/index.html" : url.pathname;
+    try {
+      const buf = await readFile(new URL(file.slice(1), ROOT));
+      res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" });
+      res.end(buf);
+    } catch { res.writeHead(404); res.end("missing"); }
+  });
+  await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const { default: puppeteer } = await import("puppeteer-core");
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true });
+    await page.setRequestInterception(true);
+    page.on("request", req => {
+      const host = new URL(req.url()).hostname;
+      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      else req.continue();
+    });
+    await page.goto(`http://127.0.0.1:${port}/#/ronda/r-saved`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("#round-track");
+    await page.click("#round-track");
+    await page.waitForSelector("#rc-shots");
+    const seen = await page.evaluate(() => {
+      const map = document.querySelector("#tkmap");
+      return {
+        rail: document.querySelector("#rc-shots")?.textContent || "",
+        read: document.querySelector("#tkro")?.textContent || "",
+        ballLat: map?.getAttribute("data-ball-lat") || "",
+        ballLng: map?.getAttribute("data-ball-lng") || "",
+        script: [...document.scripts].some(s => (s.src || "").includes("/track.js")),
+      };
+    });
+    assert.equal(seen.script, true);
+    assert.match(seen.rail, /Hierro 7 · Sin ubicación/);
+    assert.match(seen.rail, /PW · Sin ubicación/);
+    assert.match(seen.rail, /SW · Sin ubicación/);
+    assert.match(seen.rail, /GW · Sin ubicación/);
+    assert.match(seen.rail, /9i|Hierro 9/);
+    assert.equal(/\d{6,}/.test(seen.rail + seen.read), false);
+    assert.equal(seen.rail.includes("7837291"), false);
+    assert.equal(seen.ballLat, "-34.601");
+    assert.equal(seen.ballLng, "-58.401");
+    assert.deepEqual(cardWrites(calls), []);
+  } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));
   }
