@@ -1227,7 +1227,7 @@ struct PlayHoleView: View {
         do {
             _ = try await model.api.patchLiveRound(id: liveRound.id, body: ["ended": true])
         } catch {
-            model.scorecardFetchNote = "No pudimos avisar que terminaste la vuelta. Si había una reserva, la tarjeta se busca igual cinco horas después de la salida."
+            model.scorecardFetchNote = "No pudimos avisar que terminaste la vuelta. Si había una reserva, la tarjeta se busca a partir de cinco horas después de la salida. El servidor revisa cada quince minutos."
         }
         await model.endPlay(recapLiveRoundId: liveRound.id)
     }

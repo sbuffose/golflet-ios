@@ -934,7 +934,9 @@ create table if not exists cmp_create_key (
 );
 alter table cmp_create_key add column if not exists payload_hash text;
 
--- v42: durable scorecard reads, 5 hours after the tee. The standalone file is web/db/migrations/0042_scorecard_fetch.sql.
+-- v42: durable scorecard reads. A job is due five hours after the tee. The cron is every
+-- fifteen minutes, so the first read is in the quarter hour after that instant.
+-- The standalone file is web/db/migrations/0042_scorecard_fetch.sql. No procedural blocks.
 create table if not exists scorecard_fetch (
   id uuid primary key default gen_random_uuid(),
   user_id text not null references "user"(id) on delete cascade,
@@ -953,11 +955,37 @@ create table if not exists scorecard_fetch (
   last_error text,
   round_id uuid references round(id) on delete set null,
   locked_at timestamptz,
+  lock_token text,
+  version int not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint scorecard_fetch_target check (tee_time_id is not null or live_round_id is not null)
 );
+alter table scorecard_fetch add column if not exists lock_token text;
+alter table scorecard_fetch add column if not exists version int not null default 1;
 create unique index if not exists scorecard_fetch_tee on scorecard_fetch (tee_time_id) where tee_time_id is not null;
 create unique index if not exists scorecard_fetch_live on scorecard_fetch (live_round_id) where live_round_id is not null;
 create index if not exists scorecard_fetch_due on scorecard_fetch (next_attempt_at)
   where status in ('scheduled','awaiting_card','needs_credentials','error');
+create table if not exists scorecard_sync_lease (
+  sync_key text primary key,
+  token text not null,
+  user_id text not null,
+  job_id uuid,
+  acquired_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+create index if not exists scorecard_sync_lease_expires on scorecard_sync_lease (expires_at);
+alter table club_account add column if not exists last_sync_started_at timestamptz;
+
+-- v43: a reconstructed shot can be saved with no map point. The standalone file is
+-- web/db/migrations/0043_manual_shots.sql. No procedural blocks. origin defaults to live.
+alter table live_round add column if not exists origin text not null default 'live';
+alter table shot alter column lat drop not null;
+alter table shot alter column lng drop not null;
+alter table shot add column if not exists end_lat double precision;
+alter table shot add column if not exists end_lng double precision;
+alter table shot add column if not exists end_source text;
+alter table shot add column if not exists penalty_strokes int;
+alter table shot add column if not exists distance_m real;
+alter table shot add column if not exists distance_kind text;

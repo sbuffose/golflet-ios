@@ -4,6 +4,7 @@ import { body } from "@/lib/accounts";
 import { ownLive, shotsWithDistances } from "@/lib/live";
 import { DIRECTIONS, INTENTS, LENGTHS, LIES, RESULTS } from "@/lib/shots-calc";
 import { validLatLng } from "@/lib/geo";
+import { ReconstructSchemaError, liveOrigin, updateManualShot } from "@/lib/reconstruct";
 
 type Ctx = { params: Promise<{ id: string }> };
 async function own(userId: string, id: string) {
@@ -14,7 +15,12 @@ async function own(userId: string, id: string) {
 /** Usually: set the club after hitting { club }, then the quick result { direction, length, result, mishit }. Also { lie, intent, hole, shot_number, lat, lng, accuracy_m }. */
 export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   const user = await requireUser(req); const { id } = await ctx.params; const s = await own(user.id, id);
-  const b = await body<any>(req); const sets: string[] = []; const vals: unknown[] = [id];
+  const b = await body<any>(req);
+  if (await liveOrigin(user.id, s.live_round_id) === "manual" && ("lat" in b || "lng" in b || "end_lat" in b || "end_lng" in b || "distance_m" in b || "penalty_strokes" in b)) {
+    try { return json({ shot: await updateManualShot(user.id, id, b) }); }
+    catch (e) { if (e instanceof ReconstructSchemaError) return json({ error: e.message }, 503); throw e; }
+  }
+  const sets: string[] = []; const vals: unknown[] = [id];
   const set = (col: string, v: unknown) => { vals.push(v); sets.push(`${col}=$${vals.length}`); };
   if ("club" in b) set("club", b.club == null || b.club === "" ? null : String(b.club).slice(0, 8));
   if ("lie" in b) { if (b.lie != null && !LIES.includes(b.lie)) throw new HttpError(400, "lie inválido"); set("lie", b.lie ?? null); }

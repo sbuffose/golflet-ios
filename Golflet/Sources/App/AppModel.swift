@@ -39,6 +39,7 @@ final class AppModel {
     var toastMessage: String?
     var isSignedIn: Bool
     var showsPlay = false
+    var showsReconstruct = false
     var presentedProfesor: Profesor?
     var presentedRecap: RecapTarget?
     var recurring: RecurringReport?
@@ -314,6 +315,7 @@ final class AppModel {
             unreadBadge = nil
             notificationsAvailable = false
             showsNotifications = false
+            showsReconstruct = false
             presentedProfesor = nil
             presentedInvite = nil
             presentedGroupID = nil

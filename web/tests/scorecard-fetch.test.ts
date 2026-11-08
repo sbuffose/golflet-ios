@@ -39,14 +39,20 @@ test("the first read is five hours after the tee, in Argentina, not at the morni
   assert.equal(nextAttempt(night, nextAttempt(night, null)).toISOString(), artTeeInstant("2026-11-08", "02:00").toISOString());
 });
 
-test("a sync from the morning does not satisfy an afternoon tee, and a sync already running is not a silent skip", () => {
+test("a sync from the morning does not satisfy an afternoon tee, and a live run is not a silent skip", () => {
   const stale = planDue([job({ id: "a", lastSyncAt: artTeeInstant("2026-11-07", "06:00").toISOString(), lastSyncStatus: "ok" })], afternoon);
   assert.equal(stale.actions.some(a => a.kind === "sync"), true);
   const fresh = planDue([job({ id: "a", lastSyncAt: new Date(afternoon.getTime() - 30_000).toISOString(), lastSyncStatus: "ok" })], afternoon);
   assert.equal(fresh.actions.some(a => a.kind === "reuse"), true);
   assert.equal(fresh.actions.some(a => a.kind === "sync"), false);
-  const busy = planDue([job({ id: "a", syncRunning: true })], afternoon);
+  const busy = planDue([job({ id: "a", syncRunning: true, syncStartedAt: new Date(afternoon.getTime() - 60_000).toISOString() })], afternoon);
   assert.equal(busy.actions[0].kind, "defer");
+  const leased = planDue([job({ id: "a", leaseHeld: true })], afternoon);
+  assert.equal(leased.actions[0].kind, "defer");
+  const crashed = planDue([job({ id: "a", syncRunning: true, syncStartedAt: new Date(afternoon.getTime() - 21 * 60_000).toISOString() })], afternoon);
+  assert.equal(crashed.actions.some(a => a.kind === "sync"), true);
+  const noClock = planDue([job({ id: "a", syncRunning: true, syncStartedAt: null })], afternoon);
+  assert.equal(noClock.actions.some(a => a.kind === "sync"), true);
   const deferred = applyAttempt(job({ id: "a" }), afternoon, { type: "defer", message: "Hay una actualización en curso. Reintentamos en el próximo ciclo." });
   assert.equal(deferred.attemptCount, 0);
   assert.equal(deferred.nextAttemptAt, first.toISOString());
@@ -95,18 +101,27 @@ test("one login covers every due tee, a second player waits, and the 20-hour cro
 
 test("a changed or cancelled booking is rescheduled, and exactly one card closes the job", () => {
   const rounds: RoundHit[] = [
-    { id: "r-azul", date: "2026-11-07", course: "Azul", clubCode: "118", accountId: "acc" },
-    { id: "r-mdp", date: "2026-11-07", course: "Cancha Vieja", clubCode: "209", accountId: "other" },
+    { id: "r-azul", userId: "u1", date: "2026-11-07", course: "Azul", clubCode: "118", accountId: "acc" },
+    { id: "r-mdp", userId: "u1", date: "2026-11-07", course: "Cancha Vieja", clubCode: "209", accountId: "other" },
+    { id: "r-other-user", userId: "u2", date: "2026-11-07", course: "Azul", clubCode: "118", accountId: "acc" },
   ];
   const done = reconcileJob(job({ id: "a", teeTimeId: "t1" }), null, rounds, afternoon);
   assert.equal(done.status, "complete");
   assert.equal(done.roundId, "r-azul");
+  const stranger = reconcileJob(job({ id: "a", userId: "u9", teeTimeId: "t1" }), null, rounds, afternoon);
+  assert.notEqual(stranger.status, "complete");
+  assert.equal(stranger.roundId, null);
   const two: RoundHit[] = [
-    { id: "r1", date: "2026-11-07", course: "Azul", clubCode: "118", accountId: "acc" },
-    { id: "r2", date: "2026-11-07", course: "Colorada", clubCode: "118", accountId: "acc" },
+    { id: "r1", userId: "u1", date: "2026-11-07", course: "Azul", clubCode: "118", accountId: "acc" },
+    { id: "r2", userId: "u1", date: "2026-11-07", course: "Colorada", clubCode: "118", accountId: "acc" },
   ];
   assert.equal(reconcileJob(job({ id: "a", courseLabel: "Azul" }), null, two, afternoon).roundId, "r1");
   assert.notEqual(reconcileJob(job({ id: "a", courseLabel: null }), null, two, afternoon).status, "complete");
+  const wrongCourse = reconcileJob(job({ id: "a", courseLabel: "Azul" }), null, [
+    { id: "r-colorada", userId: "u1", date: "2026-11-07", course: "Colorada", clubCode: "118", accountId: "acc" },
+  ], afternoon);
+  assert.notEqual(wrongCourse.status, "complete");
+  assert.equal(wrongCourse.roundId, null);
   const moved = reconcileJob(
     job({ id: "a", teeTimeId: "t1", lastAttemptAt: afternoon.toISOString(), attemptCount: 1, status: "awaiting_card" }),
     teeSnap({ time: "16:00" }), [], afternoon,
@@ -137,6 +152,14 @@ test("the cron, the table, and the migration are present and the daily schedule 
   assert.match(migration, /scorecard_fetch_tee/);
   assert.match(migration, /scorecard_fetch_live/);
   assert.match(migration, /needs_credentials/);
+  assert.match(migration, /scorecard_sync_lease/);
+  assert.match(migration, /lock_token/);
+  assert.match(migration, /last_sync_started_at/);
+  assert.equal(migration.includes("$$"), false);
+  assert.equal(/\bdo\s+\$/i.test(migration), false);
   assert.equal(migration.includes("delete from"), false);
   assert.equal(migration.includes("drop table"), false);
+  const scorecard = schema.slice(schema.indexOf("v42:"));
+  assert.equal(scorecard.includes("$$"), false);
+  assert.match(scorecard, /scorecard_sync_lease/);
 });

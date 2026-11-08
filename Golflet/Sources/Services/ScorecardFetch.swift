@@ -4,7 +4,8 @@ import Foundation
 /// (`/api/cron/scorecard`), no un `Task` de la app: con la app cerrada
 /// este proceso no existe. La app solo muestra `/api/scorecard-fetches`.
 ///
-/// - Primera vez: 5 horas después del tee time (hora de Argentina).
+/// - Primera vez: el servidor la marca debida 5 horas después del tee (hora de Argentina).
+///   El cron corre cada 15 minutos, así que la lectura cae en ese cuarto de hora.
 /// - Hasta el día calendario siguiente a ese primer intento: cada 1 hora.
 /// - Después: una vez por día, con un tope en el servidor.
 ///
@@ -37,7 +38,8 @@ enum ScorecardFetch {
     }
 
     /// Próximo instante en el que corresponde un sync. Si todavía no hubo
-    /// intentos, es el momento de juego más 5 horas.
+    /// intentos, es el momento de juego más 5 horas. El cron puede ejecutarla
+    /// hasta 15 minutos después.
     static func nextAttempt(playedAt: Date, lastAttempt: Date?, calendar: Calendar? = nil) -> Date {
         let calendar = calendar ?? localCalendar
         let first = playedAt.addingTimeInterval(firstDelay)
