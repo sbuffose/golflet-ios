@@ -454,12 +454,20 @@ enum GroupPhotoCache {
 enum GroupPhoto {
     static func jpegData(from data: Data, maxBytes: Int = 400_000) -> Data {
         #if canImport(UIKit)
-        guard let image = UIImage(data: data) else { return data }
+        guard let image = UIImage(data: data), image.size.width > 1, image.size.height > 1 else { return Data() }
+        let longest = max(image.size.width, image.size.height)
+        let ratio = min(1, 512 / longest)
+        let size = CGSize(width: max(1, floor(image.size.width * ratio)), height: max(1, floor(image.size.height * ratio)))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let scaled = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
         var quality: CGFloat = 0.82
-        var out = image.jpegData(compressionQuality: quality) ?? data
+        var out = scaled.jpegData(compressionQuality: quality) ?? Data()
         while out.count > maxBytes && quality > 0.28 {
             quality -= 0.14
-            out = image.jpegData(compressionQuality: quality) ?? out
+            out = scaled.jpegData(compressionQuality: quality) ?? out
         }
         return out
         #else

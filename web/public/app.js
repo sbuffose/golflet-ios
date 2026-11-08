@@ -40,7 +40,7 @@ async function api(path, opt = {}){
     const r = await fetch(path, { credentials:'same-origin', ...rest, signal: rest.signal || (ctrl && ctrl.signal), headers:{'Content-Type':'application/json', ...(rest.headers||{})} });
     if (r.status === 401) {
       if (method !== 'GET' || path === '/api/data' || path.startsWith('/api/data?')) { location.replace('/login'); throw new Error('auth'); }
-      throw Object.assign(new Error('No pudimos leer esto. La sesión sigue abierta.'), { status: 401 });
+      throw Object.assign(new Error('No pudimos leer esto. No confirmamos si la sesión sigue abierta.'), { status: 401 });
     }
     const j = await r.json().catch(()=>({}));
     if (!r.ok) throw Object.assign(new Error(j.error || 'No se pudo completar'), { status:r.status, data:j });
@@ -241,6 +241,7 @@ function vResumen(){
   const card = (r,k,href,tone) => r ? `<a class="card stat vx-tap tone-${tone}" href="${href}"><div class="k"><i class="tdot" aria-hidden="true"></i>${k}</div><div class="v num">${r.gross}<small>neto ${r.net??'—'}</small></div><div class="d">${dmy(r.date)} · ${esc(clabel(r.course_key))}</div></a>` : '';
   return `<div class="top"><span class="overline">${ranged ? `${rlabel(RANGE)} · desde ${dmy(rangeSince(RANGE))}` : `${rounds[rounds.length-1].date.slice(0,4)} – ${rounds[0].date.slice(0,4)}`}</span></div>
   <h1 class="ltitle">Resumen</h1>
+  <button type="button" class="btn wx-jump" id="wx-jump">Ver cómo afecta el clima</button>
   ${G.courses.length>1?`<div class="seg">${segBtns(segR,'seg')}</div>`:''}
   ${rangeSeg(poolAll.length)}
   ${metEntry()}
@@ -291,6 +292,18 @@ function nine(r, c, from){
     <span class="lab"></span>${hs.map(h=>`<span class="sc-s"><span class="b ${cls(h[2]==null||h[1]==null?null:h[2]-h[1])}">${h[2]??'·'}</span></span>`).join('')}<span class="tot">${tot(hs.map(h=>h[2]))}</span>
   </div>`;
 }
+function holeTally(r){
+  const holes = r.holes || [], known = holes.filter(h => h[1] != null && h[2] != null);
+  const c = { eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0, known: known.length, holes: holes.length };
+  known.forEach(h => { const d = h[2] - h[1]; if (d <= -2) c.eagles++; else if (d === -1) c.birdies++; else if (d === 0) c.pars++; else if (d === 1) c.bogeys++; else c.doubles++; });
+  return c;
+}
+function scoreKey(c){
+  if (!c.known) return '';
+  const item = (cls, n, label, mark) => `<span><span class="b ${cls}" aria-hidden="true">${mark}</span><b class="num">${n}</b> ${label}</span>`;
+  const scope = c.known < c.holes ? `<p class="foot">En ${c.known} hoyos con score. Un hoyo sin score no cuenta como par.</p>` : '';
+  return `<div class="keyrow" id="scoreline" aria-label="${c.eagles} águilas, ${c.birdies} birdies, ${c.pars} pares, ${c.bogeys} bogeys, ${c.doubles} doble o peor">${item('eagle', c.eagles, 'Águilas', '−2')}${item('birdie', c.birdies, 'Birdies', '−1')}${item('par', c.pars, 'Pares', '0')}${item('bogey', c.bogeys, 'Bogeys', '+1')}${item('double', c.doubles, 'Doble +', '+2')}</div>${scope}`;
+}
 function sRonda(id){
   const r = rounds.find(x=>x.round_id===id); if(!r) return '<p>Ronda no encontrada.</p>';
   const c = course(r.course_key), k = r.summary_counts||{};
@@ -306,10 +319,11 @@ function sRonda(id){
     ${[['Gross',r.gross??'—'],['Neto',r.net??'—'],['Dif.*',f1(r.differential_computed)],['Puesto',r.position?r.position+'º':'—']].map(([kk,v],i)=>`<div class="card mini stat" style="padding:12px 10px;${i===0?'background:var(--color-primary);color:var(--color-onPrimary)':''}"><div class="k" style="${i===0?'color:rgba(247,245,240,.6)':''}">${kk}</div><div class="v num" style="font-size:calc(25px*var(--ts,1))">${v}</div></div>`).join('')}
   </div>
   ${r.holes?.length?`<div class="card" style="margin-top:12px;padding:14px 12px">${nine(r,c,0)}<div class="sc"><span class="div"></span></div>${nine(r,c,9)}
-    <div class="keyrow"><span><span class="b eagle">2</span>Águila</span><span><span class="b birdie">3</span>Birdie</span><span><span class="b bogey">5</span>Bogey</span><span><span class="b double">6</span>Doble +</span></div></div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
-  <p class="foot"><a class="link" href="${mlink('birdies',{scope:'all',course:r.course_key,sort:'date',order:'desc'})}">${k.birdies||0} birdies</a> · <a class="link" href="${mlink('pars',{scope:'all',course:r.course_key,sort:'date',order:'desc'})}">${k.pars||0} pares</a> · <a class="link" href="${mlink('bogeys',{scope:'all',course:r.course_key,sort:'date',order:'desc'})}">${k.bogeys||0} bogeys</a> · <a class="link" href="${mlink('doubles',{scope:'all',course:r.course_key,sort:'date',order:'desc'})}">${(k.double_bogeys||0)+(k.triple_bogeys||0)+(k.worse||0)} doble o peor</a>${r.position?` · ${r.position}º de ${r.field_size}`:''}. *Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
+    ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
+  <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
   <div class="section"><h2>Tu juego</h2><span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
+  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qmsg">Sin cargar</p></div>
   <div class="fields">
     <label class="field"><span>Putts</span><input inputmode="numeric" data-k="putts" value="${r.putts??''}" placeholder="—"></label>
     <label class="field"><span>Greens</span><input inputmode="numeric" data-k="gir" value="${r.gir??''}" placeholder="—/18"></label>
@@ -333,9 +347,10 @@ function vCancha(){
   <h1 class="ltitle">Cancha</h1>
   ${G.courses.length>1?`<div class="seg">${G.courses.map(x=>`<button class="${x.key===segC?'on':''}" data-segc="${esc(x.key)}">${esc(x.label)}</button>`).join('')}</div>`:''}
   ${rangeSeg(vAll.length)}
+  <p class="cn-scope">${esc(rlabel(RANGE))} · ${esc(c.course)}. Los promedios y los hoyos de esta vista son solo de esta cancha.</p>
   <div class="hero" style="padding:20px 22px">
     <div class="overline">Cancha ${esc(c.course)} · Par ${c.par}</div>
-    <a class="vx-hlink" href="${rlink('average',{scope:'all',course:c.key,sort:'date',order:'desc'})}" style="display:flex;align-items:flex-end;gap:12px;margin-top:8px"><span class="big num" style="font-size:calc(60px*var(--tsb,1));margin:0">${f1(mean(v.map(r=>r.gross)))}</span><span style="font-size:calc(13px*var(--ts,1));color:rgba(247,245,240,.65);padding-bottom:10px">gross promedio<br>en ${v.length} tarjetas</span></a>
+    <a class="vx-hlink" href="${rlink('average',{scope:'all',course:c.key,sort:'date',order:'desc'})}" style="display:flex;align-items:flex-end;gap:12px;margin-top:8px"><span class="big num" style="font-size:calc(60px*var(--tsb,1));margin:0">${f1(mean(v.map(r=>r.gross)))}</span><span class="cn-avg">gross promedio<br>en ${v.length} tarjetas</span></a>
     <div class="meta"><a href="${rlink('best-gross',{scope:'all',course:c.key,sort:'gross',order:'asc'})}">Mejor<b class="num">${minOr(v.map(r=>r.gross))}</b></a><a href="${rlink('average',{scope:'all',course:c.key,sort:'net',order:'asc'})}">Neto prom.<b class="num">${f1(mean(v.filter(r=>r.net).map(r=>r.net)))}</b></a>${ranged?`<a href="${rlink('rounds',{scope:'all',course:c.key,sort:'date',order:'desc'})}">Tarjetas<b class="num">${vAll.length}</b></a>`:`<a href="${mlink('average',{scope:'since',year:rSince,course:c.key,sort:'date',order:'desc'})}">Desde ${rSince}<b class="num">${f1(mean(v.filter(r=>r.date>=rSince).map(r=>r.gross)))}</b></a>`}</div>
   </div>
   <div class="teechips">${Object.entries(c.tees||{}).map(([t,x])=>`<span class="teechip"><i class="tee" style="background:${TEE[t.toUpperCase()]||'#ccc'}"></i>${esc(t)} <b class="num">${f1(x.course_rating)}</b>/${x.slope}</span>`).join('')}</div>
@@ -390,7 +405,7 @@ function sHoyo(ck, n){
     <div class="dist"><div class="lbl"><span>Vos</span></div>${bar(me)}${hasG?`<div class="lbl"><span>Todos los jugadores del club</span></div>${bar(grp.map(x=>x||0))}`:''}</div>
     <div class="dkey">${names.map((nm,i)=>`<div><i style="background:${col[i]}"></i>${nm}<b class="num">${pc(me[i])}</b>${hasG?`<span class="grp">todos ${pc(grp[i])}</span>`:''}</div>`).join('')}</div>
   </div>
-  ${hasG?'':'<p class="foot">La comparación con todos los jugadores del club todavía no está cargada para esta cancha.</p>'}`;
+  ${hasG?'':'<p class="foot" id="clubcmp">La comparación con todos los jugadores del club todavía no está cargada para esta cancha.</p>'}`;
 }
 
 /* ---------- CÓMO JUGAR LA CANCHA (estrategia publicada por el club / admin) ---------- */
@@ -439,13 +454,18 @@ async function loadHowto(){
 }
 function finiteLL(p){
   if (!p || typeof p !== 'object' || p.lat == null || p.lng == null) return null;
+  if (typeof p.lat === 'string' && p.lat.trim() === '') return null;
+  if (typeof p.lng === 'string' && p.lng.trim() === '') return null;
   const lat = Number(p.lat), lng = Number(p.lng);
-  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return null;
+  return { lat, lng };
 }
 function holeTraceSVG(hole){
   const tee = finiteLL(hole && hole.tee), center = finiteLL(hole && hole.green && hole.green.center);
   if (!tee || !center) return '';
-  const pts = [tee, ...(Array.isArray(hole.line) ? hole.line.map(finiteLL).filter(Boolean) : []), center];
+  const linePts = Array.isArray(hole.line) ? hole.line.map(finiteLL).filter(Boolean) : [];
+  const straight = !linePts.length;
+  const pts = [tee, ...linePts, center];
   const lats = pts.map(p => p.lat), lngs = pts.map(p => p.lng);
   const minLa = Math.min(...lats), maxLa = Math.max(...lats), minLn = Math.min(...lngs), maxLn = Math.max(...lngs);
   const dLa = Math.max(1e-6, maxLa - minLa), dLn = Math.max(1e-6, maxLn - minLn);
@@ -453,7 +473,9 @@ function holeTraceSVG(hole){
   const xy = p => [pad + ((p.lng - minLn) / dLn) * (W - pad * 2), pad + ((maxLa - p.lat) / dLa) * (H - pad * 2)];
   const d = pts.map((p, i) => { const [x, y] = xy(p); return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`; }).join(' ');
   const [tx, ty] = xy(tee), [gx, gy] = xy(center);
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Trazado verificado del hoyo ${hole.hole}"><path d="${d}" fill="none" stroke="#0F3D2E" stroke-width="3"/><circle cx="${tx}" cy="${ty}" r="6" fill="#C8A86A"/><circle cx="${gx}" cy="${gy}" r="8" fill="#0F3D2E"/></svg>`;
+  const label = straight ? `Referencia recta del tee al green, hoyo ${hole.hole}. No es el trazado del hoyo.` : `Trazado con los puntos provistos del hoyo ${hole.hole}`;
+  const note = straight ? `<p class="msg">Referencia recta del tee al centro del green. No es el trazado del hoyo.</p>` : '';
+  return `<div class="holecard"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}"><path d="${d}" fill="none" stroke="#0F3D2E" stroke-width="3"/><circle cx="${tx}" cy="${ty}" r="6" fill="#C8A86A"/><circle cx="${gx}" cy="${gy}" r="8" fill="#0F3D2E"/></svg></div>${note}`;
 }
 async function loadHoleGeo(){
   const el = $('#holegeo'); if (!el) return;
@@ -462,15 +484,14 @@ async function loadHoleGeo(){
   try {
     const list = await api('/api/gps/courses', { timeoutMs: READ_MS });
     if (gen !== VIEW_GEN || !$('#holegeo') || +$('#holegeo').dataset.hole !== n) return;
-    const name = course(ck)?.course || '';
-    const hit = (list.courses || []).find(c => c.course_key === ck || foldN(c.course || '') === foldN(name) || foldN(c.course_label || '') === foldN(name));
+    const hit = pickGpsCourse(list.courses, ck);
     if (!hit) return miss();
     const geo = await api(`/api/gps/courses/${encodeURIComponent(hit.course_id)}`, { timeoutMs: READ_MS });
     if (gen !== VIEW_GEN || !$('#holegeo') || +$('#holegeo').dataset.hole !== n) return;
     const hole = ((geo.course || geo).holes || []).find(h => h.hole === n);
     const svg = holeTraceSVG(hole);
     const box = $('#holegeo'); if (!box || gen !== VIEW_GEN) return;
-    box.innerHTML = svg ? `<div class="holecard">${svg}</div>` : '<p class="msg">No hay un trazado verificado para este hoyo.</p>';
+    box.innerHTML = svg || '<p class="msg">No hay un trazado verificado para este hoyo.</p>';
   } catch (e) {
     const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return;
     box.innerHTML = errBox(e, 'el trazado');
@@ -657,8 +678,12 @@ async function loadScorecards(){
     const d = await api('/api/scorecard-fetches');
     const rows = d.fetches || [];
     if (!rows.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>` + rows.map(f =>
-      `<div class="card"><b>${esc(f.club_name || 'Club')}${f.course_label ? ` · ${esc(f.course_label)}` : ''}</b><span>${esc([f.date, f.time].filter(Boolean).join(' · '))}</span><span>${esc(f.label)}</span></div>`).join('');
+    const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
+    const block = (title, list) => list.length ? `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${list.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div></div></div>`).join('')}</div>` : '';
+    const open = rows.filter(f => ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status));
+    const done = rows.filter(f => f.status === 'complete');
+    const rest = rows.filter(f => !open.includes(f) && !done.includes(f));
+    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${block('En curso', open)}${block('Ya está', done)}${block('Otras', rest)}`;
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -749,7 +774,7 @@ function resolveTeeCourse(t){
 }
 function wxCardHTML(title, pin, now, fc, holes){
   const hours = (fc?.hours || []).slice(0, 6);
-  const map = pin && pin.sat ? `<img class="tw-map" alt="Mapa de ${esc(pin.title)}" src="${satUrl(pin.lat, pin.lng)}">` : '';
+  const map = pin && pin.sat && finiteLL(pin) ? `<div class="tw-mapwrap"><img class="tw-map" alt="Vista de ${esc(pin.title)}" src="${satUrl(pin.lat, pin.lng)}"></div>` : (pin && !pin.sat ? `<p class="tw-miss">Sin vista satelital de esta cancha.</p>` : '');
   const h0 = hours[0];
   const from = now && now.from_deg != null ? now.from_deg : (h0 && h0.wind_from_deg != null ? h0.wind_from_deg : null);
   const kmh = now && now.kmh != null ? now.kmh : (h0 && h0.wind_kmh != null ? h0.wind_kmh : null);
@@ -757,19 +782,25 @@ function wxCardHTML(title, pin, now, fc, holes){
   const fact = kmh != null ? `${Math.round(kmh)} km/h${from != null ? `, viene del ${windFrom(from)}` : ''}${temp != null ? ` · ${temp}°` : ''}` : null;
   const rules = window.GolfletRules;
   const rows = rules && holes && holes.length ? holes.map(h => rules.windPlay(h.hole, from, h.bearing, kmh)) : [];
+  const playable = rows.filter(p => p && p.relative && p.relative !== 'unavailable');
   const missing = rules && !rows.length ? rules.windPlay(0, from, null, kmh).text.replace(/^Hoyo 0 · /, '') : '';
+  const wind = playable.length ? `<div class="tw-holes">${playable.map(p => `<div><span>${esc(p.text)}</span></div>`).join('')}</div>` : (rows.length ? `<p class="tw-miss">No hay rumbo verificado del tee al green. El viento no se clasifica por hoyo.</p>` : (missing ? `<p class="tw-miss">${esc(missing)}</p>` : ''));
+  const driver = (typeof G !== 'undefined' && Array.isArray(G.bag) ? G.bag : []).find(b => /driver|^dr$/i.test(String(b.club || '')));
+  const carry = driver && driver.carry != null && Number.isFinite(Number(driver.carry)) ? Math.round(Number(driver.carry)) : null;
+  const bagLine = carry != null ? `<p class="foot">Driver cargado: ${carry} yd. No lo paso a metros y no elijo un palo por el viento o el frío.</p>` : '';
   return `<div class="card tw-card"><div class="overline">Clima en la cancha</div>
     ${map}
     ${fact ? `<p class="tw-now"><b>${esc(fact)}</b><span>${esc(title)}</span></p>` : `<p class="foot">No pude leer el viento de este horario.</p>`}
-    ${rows.length ? `<div class="tw-holes">${rows.map(p => `<div><span>${esc(p.text)}</span></div>`).join('')}</div>` : (missing ? `<p class="tw-miss">${esc(missing)}</p>` : '')}
+    ${wind}
     ${hours.length ? `<div class="tw-hrs">${hours.map(h => `<div><b class="num">${esc(String(h.at || '').slice(11, 16))}</b><span>${h.wind_kmh != null ? `${h.wind_kmh} km/h` : '—'}${h.wind_from ? ` ${esc(h.wind_from)}` : ''}</span><small>${h.temp_c != null ? `${h.temp_c}°` : ''}${h.rain_mm > 0 ? ` · ${h.rain_mm} mm` : ''}</small></div>`).join('')}</div>` : ''}
     ${fc?.shift ? `<p class="foot">${esc(fc.shift)}</p>` : ''}
+    ${bagLine}
     <p class="foot">Pronóstico Open-Meteo. El viento se clasifica solo con el rumbo verificado del tee al green.</p></div>`;
 }
 async function holeBearings(courseKey, courseName){
   try {
     const list = await api('/api/gps/courses');
-    const hit = (list.courses || []).find(c => c.course_key === courseKey || foldN(c.course || '') === foldN(courseName || '') || foldN(c.course_label || '') === foldN(courseName || ''));
+    const hit = pickGpsCourse(list.courses, courseKey);
     if (!hit) return [];
     const geo = await api(`/api/gps/courses/${encodeURIComponent(hit.course_id)}`);
     const hs = (geo.course || geo).holes || [];
@@ -818,10 +849,20 @@ async function fillTeePrep(t, id){
     }
   } catch (e) { if (st && gen === VIEW_GEN && $('#teest') === st) st.innerHTML = errBox(e, 'la estrategia'); }
 }
+function pickGpsCourse(rows, ck){
+  const list = Array.isArray(rows) ? rows : [];
+  const exact = list.filter(c => c && c.course_key && c.course_key === ck);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
+  const ours = course(ck);
+  if (!ours || !ours.club_name || !ours.course) return null;
+  const same = list.filter(c => c && foldN(c.club_name || '') === foldN(ours.club_name) && (foldN(c.course || '') === foldN(ours.course) || foldN(c.course_label || '') === foldN(ours.course)) && (!c.course_key || c.course_key === ck));
+  return same.length === 1 ? same[0] : null;
+}
 function coursePin(ck){
-  const c = course(ck); const lat = Number(c && c.lat), lng = Number(c && c.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { title: c.club_name || c.course || 'Cancha', lat, lng, sat: false };
+  const c = course(ck), p = finiteLL(c);
+  if (!c || !p) return null;
+  return { title: c.club_name || c.course || 'Cancha', lat: p.lat, lng: p.lng, sat: false };
 }
 async function loadCanchaWx(){
   const el = $('#cancwx'); if (!el) return;
@@ -1392,10 +1433,9 @@ function vBolsa(){
   <div class="section"><h2>Mis palos</h2><a class="badge" href="#/equipo/nuevo">+ Agregar palo</a></div><div id="equip"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
   <a class="card bagball" id="bagball" href="#/pelota"><span class="gi">${BALL_IC}</span><span class="bb-t">Pelota<small>&nbsp;</small></span>${ICON.chev}</a>
   <div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div>
-  <div class="card" style="display:flex;gap:14px;align-items:center;margin-bottom:18px"><div class="acct"><div class="logo num" id="bagcount" style="font-family:var(--font-ui);font-size:calc(17px*var(--ts,1));font-weight:var(--fw600,600)">${filled}/${bag.length}</div></div>
-    <div id="bagmsg" style="font-size:calc(14px*var(--ts,1));color:var(--color-ink2);line-height:1.4">${filled?'Palos con distancia cargada.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'}</div></div>
-  <div class="baghdr"><span>Palo</span><span>Carry</span><span>Total</span></div>
-  <div class="list">${bag.map((b,i)=>`<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—"><div class="bgps" hidden></div></div>`).join('')}</div>
+  <div class="card bagsum"><p class="bagsum-n num" id="bagcount">${filled} de ${bag.length}</p><div id="bagmsg" class="bagsum-d">${filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste.</p></div>
+  <div class="bagtable"><div class="baghdr" aria-hidden="true"><span>Palo</span><span>Carry</span><span>Total</span></div>
+  <div class="list">${bag.map((b,i)=>`<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
   <p class="foot" id="bagsaved">Tu distancia es la que manda. Al lado, lo que mediste con GPS (total, no carry). Yardas, sin datos inventados.</p>
   <div class="section"><h2>Distancias por palo</h2><span class="badge gold">GPS</span></div><div id="cdist"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div><div id="gpsrounds"></div>`;
 }
@@ -1406,7 +1446,7 @@ async function loadBagSources(){
     const find = name => d.clubs.find(x => norm(x.club) === norm(name) || norm(x.code) === norm(name));
     document.querySelectorAll('.bagrow[data-club]').forEach(row => { const c = find(row.dataset.club), el = row.querySelector('.bsrc'), gb = row.querySelector('.bgps'); if (!el || !gb) return;
       const b = G.bag.find(x => norm(x.club) === norm(row.dataset.club)), man = !!(b && (b.carry || b.total)), g = c?.gps;
-      el.textContent = man ? 'Definida por vos' : g ? 'Sin cargar · usamos GPS' : ''; el.className = 'bsrc' + (man ? ' def' : g ? ' auto' : '');
+      el.textContent = man ? 'Definida por vos' : g ? 'Sin distancia cargada · hay tiros GPS' : ''; el.className = 'bsrc' + (man ? ' def' : g ? ' auto' : '');
       if (!g) { gb.hidden = true; gb.innerHTML = ''; return; }   /* t126u: GPS block only when there are measured shots */
       const href = f => `#/palo/${encodeURIComponent(c.code)}/${f}`;
       gb.innerHTML = `<span class="bg-l">GPS</span><a href="${href('promedio')}"><span>Prom.</span><b class="num">${g.avg_yd} yd</b></a><a href="${href('tiros')}"><b class="num">${g.n}</b><span>${g.n === 1 ? 'tiro' : 'tiros'}</span></a>${g.used >= 3 ? `<a href="${href('dispersion')}"><span>Rango</span><b class="num">${g.range_yd[0]}–${g.range_yd[1]}</b><span class="num">±${g.spread_yd}</span></a>` : ''}`;
@@ -1415,9 +1455,13 @@ async function loadBagSources(){
     const bag = G.bag, st = bag.map(b => ({ man: !!(b.carry || b.total), gps: !!find(b.club)?.gps }));
     const man = st.filter(x => x.man).length, gps = st.filter(x => x.gps).length, tot = st.filter(x => x.man || x.gps).length;
     const cnt = $('#bagcount'), msg = $('#bagmsg'); if (!cnt || !msg) return;
-    cnt.textContent = `${tot}/${bag.length}`;
-    msg.textContent = !tot ? 'Todavía sin distancias. Cargá carry y total en yardas, o jugá con la app midiendo tiros, para que Golflet te sugiera el tiro en cada hoyo.'
-      : `${tot === 1 ? 'Un palo' : tot + ' palos'} con distancia: ${[man ? `${man} ${man === 1 ? 'definida' : 'definidas'} por vos` : '', gps ? `${gps} con tiros medidos por GPS` : ''].filter(Boolean).join(' · ')}.`;
+    cnt.textContent = `${tot} de ${bag.length}`;
+    msg.replaceChildren();
+    if (!tot) msg.textContent = 'Todavía sin distancias. Cargá carry y total en yardas, o jugá con la app midiendo tiros, para que Golflet te sugiera el tiro en cada hoyo.';
+    else {
+      if (man) { const s = document.createElement('span'); s.textContent = `${man} ${man === 1 ? 'definida' : 'definidas'} por vos`; msg.appendChild(s); }
+      if (gps) { const s = document.createElement('span'); s.className = 'gps'; s.textContent = `${gps} ${gps === 1 ? 'palo con tiros medidos por GPS' : 'palos con tiros medidos por GPS'}`; msg.appendChild(s); }
+    }
   } catch(e){}
 }
 /* ---------- IMPACTO EN EL HÁNDICAP (por período; /api/metrics/hcp-impact) ---------- */
@@ -2594,6 +2638,70 @@ async function doSync(id, password, save){
     onFail: e => { location.hash = '#/club/'+id; render(true); const m = $('#smsg'); if (m){ m.innerHTML = '<div class="msg err"></div>'; m.firstChild.textContent = e.message; } } });
 }
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn(...a), ms); }; };
+function bindQuick(id){
+  const box = $('#qstat'); if (!box) return;
+  const r = rounds.find(x => x.round_id === id); if (!r || !(r.holes || []).length) { box.hidden = true; return; }
+  const key = 'gl_q_' + id;
+  let rows = []; try { rows = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { rows = []; }
+  if (!Array.isArray(rows)) rows = [];
+  const holes = r.holes.filter(h => h[0] != null);
+  let idx = 0;
+  const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0] };
+  const put = (patch) => {
+    const cur = row(); const next = Object.assign({ hole: holes[idx][0] }, cur, patch);
+    if (next.putts == null && next.gir == null && !next.drive) rows = rows.filter(x => x.hole !== next.hole);
+    else { const i = rows.findIndex(x => x.hole === next.hole); if (i < 0) rows.push(next); else rows[i] = next; }
+    try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {}
+    paint();
+    const puttH = rows.filter(x => x.putts != null), girH = rows.filter(x => x.gir === true || x.gir === false);
+    const fwH = rows.filter(x => x.drive && (r.holes.find(h => h[0] === x.hole) || [])[1] !== 3);
+    const set = (k, v) => { const el = view.querySelector(`[data-k="${k}"]`); if (el) el.value = v == null ? '' : String(v); };
+    set('putts', puttH.length ? puttH.reduce((s, x) => s + x.putts, 0) : null);
+    set('gir', girH.length ? girH.filter(x => x.gir).length : null);
+    set('fir', fwH.length ? fwH.filter(x => x.drive === 'fairway').length : null);
+    const msg = $('#qmsg'); if (msg) msg.textContent = 'Guardando…';
+    const body = {
+      putts: puttH.length ? String(puttH.reduce((s, x) => s + x.putts, 0)) : '',
+      gir: girH.length ? String(girH.filter(x => x.gir).length) : '',
+      fir: fwH.length ? String(fwH.filter(x => x.drive === 'fairway').length) : '',
+    };
+    api(`/api/rounds/${id}/notes`, { method: 'PUT', body: JSON.stringify(body) }).then(({ note }) => {
+      const r0 = rounds.find(x => x.round_id === id); if (r0) Object.assign(r0, note, { notes_at: note.updated_at });
+      const gr = G.rounds.find(x => x.round_id === id); if (gr) Object.assign(gr, note, { notes_at: note.updated_at });
+      const m = $('#qmsg'); if (m) m.textContent = rows.length ? 'Guardado en tu cuenta' : 'Sin cargar';
+      const b = $('#gamebadge'); if (b) b.textContent = rows.length ? 'Cargado' : 'Sin cargar';
+      const el = $('#saved span'); if (el) el.textContent = 'Guardado en tu cuenta';
+    }).catch(() => { const m = $('#qmsg'); if (m) m.textContent = 'No se pudo guardar. Lo que marcaste sigue acá.'; });
+  };
+  const btn = (label, on, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.className = on ? 'on' : ''; b.onclick = fn; return b; };
+  const paint = () => {
+    const h = holes[idx], par = h[1], cur = row();
+    $('#qhole').textContent = `Hoyo ${h[0]}`;
+    $('#qpar').textContent = par != null ? `Par ${par}` : 'Sin par';
+    const pp = $('#qputts'); pp.replaceChildren();
+    [0, 1, 2, 3, 4].forEach(n => pp.appendChild(btn(String(n), cur.putts === n, () => put({ putts: cur.putts === n ? null : n }))));
+    if (cur.putts != null) pp.appendChild(btn('Borrar', false, () => put({ putts: null })));
+    const fwBox = $('#qfwbox'); fwBox.hidden = par === 3;
+    const fw = $('#qfw'); fw.replaceChildren();
+    if (par !== 3) [['left', 'Izquierda'], ['fairway', 'Fairway'], ['right', 'Derecha'], ['other', 'Otro']].forEach(([k, l]) => fw.appendChild(btn(l, cur.drive === k, () => put({ drive: cur.drive === k ? null : k }))));
+    const gg = $('#qgir'); gg.replaceChildren();
+    gg.appendChild(btn('Sí', cur.gir === true, () => put({ gir: cur.gir === true ? null : true })));
+    gg.appendChild(btn('No', cur.gir === false, () => put({ gir: cur.gir === false ? null : false })));
+    if (cur.gir === true || cur.gir === false) gg.appendChild(btn('Borrar', false, () => put({ gir: null })));
+    const puttH = rows.filter(x => x.putts != null), girH = rows.filter(x => x.gir === true || x.gir === false);
+    const fwH = rows.filter(x => x.drive && (r.holes.find(h2 => h2[0] === x.hole) || [])[1] !== 3);
+    const bits = [];
+    if (puttH.length) bits.push(`${puttH.reduce((s, x) => s + x.putts, 0)} putts en ${puttH.length} hoyos`);
+    if (girH.length) bits.push(`${girH.filter(x => x.gir).length} greens de ${girH.length}`);
+    if (fwH.length) bits.push(`${fwH.filter(x => x.drive === 'fairway').length} fairways de ${fwH.length} salidas`);
+    $('#qtot').textContent = bits.join(' · ');
+    const any = rows.some(x => x.putts != null || x.gir === true || x.gir === false || x.drive);
+    const msg = $('#qmsg'); if (msg && msg.textContent !== 'Guardando…' && !msg.textContent.startsWith('No se pudo')) msg.textContent = any ? 'Guardado en este dispositivo' : 'Sin cargar';
+    const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
+  };
+  box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
+  paint();
+}
 const saveNote = debounce(async (id) => {
   const r = rounds.find(x=>x.round_id===id), el = $('#saved span'); if(!r) return;
   const v = k => view.querySelector(`[data-k="${k}"]`)?.value ?? '';
@@ -2848,9 +2956,9 @@ function setTabH(){ const t = document.getElementById('tabbar'); if (!t) return;
   const vv = window.visualViewport, pr = (u) => { const d = document.createElement('div'); d.style.cssText = `position:fixed;top:0;left:-9px;width:1px;height:100${u};visibility:hidden;pointer-events:none`; document.body.appendChild(d); const hh = d.getBoundingClientRect().height; d.remove(); return hh || 0; };
   let H = Math.max(innerHeight, vv ? vv.height + vv.offsetTop : 0, CSS.supports && CSS.supports('height', '100dvh') ? pr('dvh') : 0); const L = CSS.supports && CSS.supports('height', '100lvh') ? pr('lvh') : 0; if (L) H = Math.min(H, L);
   H = Math.round(H); de.style.setProperty('--apph', H + 'px');
-  const r = t.getBoundingClientRect(), bottomBar = !!(r.height && r.top > H / 2 && innerWidth < 768);
+  const r = t.getBoundingClientRect(), bottomBar = !!(r.height && r.top > H / 2);
   de.classList.toggle('gp-tbb', bottomBar); de.style.setProperty('--tbh', bottomBar ? Math.ceil(t.offsetHeight) + 'px' : '0px');
-  const v = r.height && r.top > innerHeight / 2 ? Math.max(0, Math.ceil(innerHeight - r.top)) : 0; de.style.setProperty('--tabh', v + 'px'); }
+  de.style.setProperty('--tabh', bottomBar ? Math.ceil(t.offsetHeight) + 'px' : '0px'); }
 addEventListener('resize', setTabH); addEventListener('orientationchange', () => setTimeout(setTabH, 250)); addEventListener('pageshow', setTabH);
 if (window.visualViewport) { let vt; visualViewport.addEventListener('resize', () => { clearTimeout(vt); vt = setTimeout(setTabH, 60); }); }
 function countUp(){
@@ -2882,7 +2990,7 @@ function bind(p, isDetail){
   view.querySelectorAll('[data-sortl]').forEach(b=>b.onclick=()=>{ sortL=b.dataset.sortl; render(true); });
   view.querySelectorAll('[data-segc]').forEach(b=>b.onclick=()=>{ segC=b.dataset.segc; render(true); });
   document.querySelectorAll('[data-sync]').forEach(b=>b.onclick=e=>{ e.preventDefault(); doSync(b.dataset.sync, null, false); });
-  if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; saveNote(p[1]); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); }
+  if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; saveNote(p[1]); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
   if (p[0]==='metrica') { const m = (p[1]||'').split('?')[0]; loadMetric(m); view.querySelectorAll('[data-mswitch]').forEach(b=>b.onclick=()=>{ const st = MQ[m]||{}; location.hash = mlink(b.dataset.mswitch, { scope: st.scope||'year', year: st.year||'', course: st.course||'all', sort: st.sort==='count'?'count':'date', order:'desc', range: st.range||'' }); }); }
   if (p[0]==='gps') loadGps(p[1]);
   if (p[0]==='palo') loadPalo(p[1], p[2]);
@@ -2962,6 +3070,8 @@ function bind(p, isDetail){
 }
 addEventListener('hashchange', () => render());
 document.addEventListener('click', ev => {
+  const jump = ev.target && ev.target.closest && ev.target.closest('#wx-jump');
+  if (jump) { ev.preventDefault(); const t = document.getElementById('wxres'); if (t) t.scrollIntoView({ block: 'start' }); return; }
   const b = ev.target && ev.target.closest && ev.target.closest('#view [data-range]');
   if (!b) return;
   const k = b.getAttribute('data-range');

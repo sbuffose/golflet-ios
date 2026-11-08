@@ -110,7 +110,7 @@ enum TeeForecast {
         filled.tempC = hour.tempC
         filled.rainMm = hour.rainMm
         var lines = WeatherPlay.report(booking: filled, rounds: rounds, bag: bag, holes: holes).lines
-        lines.append(contentsOf: window.hours.map(\.line))
+        lines.append("Fuente: Open-Meteo, a la hora del tee.")
         if let shift = window.shiftLine { lines.append(shift) }
         return lines.joined(separator: "\n")
     }

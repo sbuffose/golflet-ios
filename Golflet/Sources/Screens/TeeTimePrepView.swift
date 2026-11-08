@@ -156,16 +156,17 @@ struct TeeTimePrepView: View {
                     strategyBlock
                 }
                 .padding(20)
+                .padding(.bottom, 108)
             }
         }
         .accessibilityIdentifier("screen-tee-prep")
         .safeAreaInset(edge: .top) { MetricBackBar() }
         .task(id: place.strategyCourses.map(\.key).joined(separator: "|")) {
             await loadStrategy()
-            await loadWindHoles()
         }
         .task(id: booking.id) {
             await model.refreshTeeTimes()
+            await loadWindHoles()
             await loadForecast()
         }
     }
@@ -242,6 +243,6 @@ struct TeeTimePrepView: View {
         guard !RuntimeFlags.isUITesting else { return }
         guard booking.windKmh == nil, booking.tempC == nil, booking.rainMm == nil else { return }
         guard let window = await TeeForecast.load(booking: booking), !window.hours.isEmpty else { return }
-        liveForecast = TeeForecast.playText(window: window, booking: booking, rounds: model.rounds, bag: model.bag)
+        liveForecast = TeeForecast.playText(window: window, booking: booking, rounds: model.rounds, bag: model.bag, holes: gpsHoles)
     }
 }

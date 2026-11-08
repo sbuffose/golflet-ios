@@ -932,9 +932,9 @@ final class AppModel {
     }
 
     func updateGroup(_ group: GolfletGroup, name: String?, photoJPEG: Data?) async {
-        if let photoJPEG { GroupPhotoCache.store(photoJPEG, for: group.id) }
         await run {
             let updated = try await api.updateGroup(id: group.id, name: name, photoJPEG: photoJPEG)
+            if let photoJPEG, !photoJPEG.isEmpty { GroupPhotoCache.store(photoJPEG, for: group.id) }
             replace(updated)
         }
     }
