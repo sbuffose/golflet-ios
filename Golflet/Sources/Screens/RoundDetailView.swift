@@ -471,16 +471,28 @@ struct RoundDetailView: View {
             visit: visit,
             generation: generation
         ) { note in
-            if let stamp = note.updatedAt { noteAt = stamp }
-            if let value = note.putts {
-                puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
-            }
-            if let value = note.gir {
-                girText = QuickStats.visibleTotal(current: girText, authoritative: String(value), focused: statFocus == .gir)
-            }
-            if let value = note.fir {
-                firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
-            }
+            var fields = QuickNoteFields(
+                text: noteText,
+                putts: puttsText,
+                gir: girText,
+                fir: firText,
+                noteAt: noteAt,
+                focus: noteFocus
+            )
+            QuickNoteSurface.absorb(note, into: &fields)
+            noteAt = fields.noteAt
+            puttsText = fields.putts
+            girText = fields.gir
+            firText = fields.fir
+        }
+    }
+
+    private var noteFocus: QuickNoteFocus? {
+        switch statFocus {
+        case .putts: .putts
+        case .gir: .gir
+        case .fir: .fir
+        case nil: nil
         }
     }
 
