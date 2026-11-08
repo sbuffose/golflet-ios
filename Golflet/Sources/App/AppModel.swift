@@ -730,32 +730,28 @@ final class AppModel {
             cardNote = "No hay una clave guardada para leer el club."
             return
         }
-        var added = 0
-        var anyOK = false
-        var failure: String?
+        var seen = Set<String>()
+        var reads: [CardClubRead] = []
         for club in saved {
+            let key = club.source == "app" ? "app:\(club.matricula)" : "site:\(club.accountId)"
+            if seen.contains(key) { continue }
+            seen.insert(key)
             do {
                 let result = try await api.syncAccount(id: club.accountId, password: nil, savePassword: false, progressID: UUID().uuidString)
-                if result.ok {
-                    anyOK = true
-                    added += result.newCards ?? 0
-                } else if failure == nil {
-                    failure = result.message
+                if !result.clubs.isEmpty {
+                    reads.append(contentsOf: result.clubs.map { item in
+                        CardClubRead(club: item.clubName, ok: item.ok, newRounds: item.newRounds ?? 0, message: item.message ?? "")
+                    })
+                } else {
+                    reads.append(CardClubRead(club: club.name, ok: result.ok, newRounds: result.newCards ?? 0, message: result.message))
                 }
             } catch {
-                if failure == nil { failure = "No pudimos leer el club. La tarjeta en pantalla no cambió." }
+                reads.append(CardClubRead(club: club.name, ok: false, newRounds: 0, message: "No pudimos leer el club. La tarjeta en pantalla no cambió."))
             }
         }
-        if !anyOK {
-            cardNote = failure ?? "No pudimos leer el club. La tarjeta en pantalla no cambió."
-            return
-        }
-        if added == 0 {
-            cardNote = "No hay una tarjeta nueva. La última sigue siendo la que ya ves."
-            return
-        }
-        cardNote = added == 1 ? "Llegó una tarjeta nueva." : "Llegaron \(added) tarjetas nuevas."
-        if let snap = try? await api.bootstrap() { apply(snap) }
+        cardNote = CardPullNote.text(reads)
+        let added = reads.filter(\.ok).reduce(0) { $0 + $1.newRounds }
+        if added > 0, let snap = try? await api.bootstrap() { apply(snap) }
     }
 
     func refreshReservation(id: String) async {

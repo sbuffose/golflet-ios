@@ -69,7 +69,9 @@ struct LiveGolfletAPI: GolfletAPI {
             body["password"] = password
             body["save_password"] = savePassword
         }
-        let json = try await request("POST", "/api/accounts/\(id)/sync", body: body, timeout: 180)
+        let json = try await request("POST", "/api/accounts/\(id)/sync", body: body, timeout: 180, keepBody: { status, json in
+            status == 502 && json["sync"] is [String: Any]
+        })
         return LivePayloadMapper.parseSync(json)
     }
 
@@ -278,7 +280,8 @@ struct LiveGolfletAPI: GolfletAPI {
         authorized: Bool = true,
         captureToken: Bool = false,
         timeout: TimeInterval = 30,
-        headers: [String: String] = [:]
+        headers: [String: String] = [:],
+        keepBody: ((Int, [String: Any]) -> Bool)? = nil
     ) async throws -> [String: Any] {
         guard let url = URL(string: path, relativeTo: baseURL) else { throw GolfletError.invalidClub }
         var request = URLRequest(url: url)
@@ -324,6 +327,7 @@ struct LiveGolfletAPI: GolfletAPI {
                 try KeychainStore.saveToken(token)
             }
         }
+        if keepBody?(status, json) == true { return json }
         try throwIfFailed(status: status, json: json, authorized: authorized, path: path)
         return json
     }

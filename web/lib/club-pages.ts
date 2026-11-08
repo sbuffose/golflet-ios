@@ -59,6 +59,11 @@ export function verifiedCourse(source: { venue?: string | null; course?: string 
   return { course: null, how: null };
 }
 
+/** Kept for callers that still pass the tournament title. It does not infer a course from that title. */
+export function courseFromEvent(_event: string | null | undefined, _courses: string[]): { course: null; how: null } {
+  return { course: null, how: null };
+}
+
 /** Event date when the events page doesn't list it: the next date (from `today`, up to ~70 days) with that weekday + day of month. */
 export function inferDate(weekday: number | null, day: number | null, today: string): string | null {
   if (day == null) return null;

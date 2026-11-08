@@ -502,7 +502,7 @@ const PAGEL = { bookings:'reservas', companions:'jugadores de la línea', hi_his
 function sourcesNote(clubs){
   if (!clubs?.length) return '';
   return `<div class="tt-src">${clubs.map(c => { const b = c.pages.bookings; const bad = Object.entries(c.pages).filter(([,v]) => v.status==='missing' || v.status==='error');
-    return `<div><b>${esc(c.club_name)}</b><span>${!b ? 'Todavía sin leer: se lee en la próxima actualización.' : b.status==='ok' ? `${b.items} ${b.items===1?'reserva':'reservas'} · leído ${ago(b.checked_at)}` : b.status==='empty' ? `Sin reservas próximas · leído ${ago(b.checked_at)}` : b.status==='missing' ? 'Este club no tiene la página de reservas.' : 'No pudimos leer las reservas en la última actualización.'}${bad.filter(([k])=>k!=='bookings').length ? ` · Falta: ${bad.filter(([k])=>k!=='bookings').map(([k])=>PAGEL[k]).join(', ')}` : ''}</span></div>`; }).join('')}</div>`;
+    return `<div><b>${esc(c.club_name)}</b><span>${!b ? 'Todavía sin leer: se lee en la próxima actualización.' : b.status==='ok' ? `${b.items} ${b.items===1?'reserva':'reservas'} · leído ${ago(b.checked_at)}` : b.status==='empty' ? `Sin reservas próximas · leído ${ago(b.checked_at)}` : b.status==='missing' ? 'Este club no tiene la página de reservas.' : `No pudimos leer las reservas. La última lectura sigue siendo ${ago(b.checked_at)}.`}${bad.filter(([k])=>k!=='bookings').length ? ` · Falta: ${bad.filter(([k])=>k!=='bookings').map(([k])=>PAGEL[k]).join(', ')}` : ''}</span></div>`; }).join('')}</div>`;
 }
 /* t145u: "Hola, <Nombre>" never overlaps the PRÓXIMO TEE TIME tab and is never truncated.
    1) reserve = tab width (inside the content box) + 12px gap; 2) if the greeting fits on one line at 42px → leave it;
@@ -588,15 +588,26 @@ function bringLatestCard(btn){
   if (stat) stat.textContent = 'Revisando';
   CARD_FLIGHT = (async () => {
     const results = [];
+    const seen = new Set();
     for (const a of clubs) {
+      const key = a.source === 'app' ? 'app:' + a.matricula : 'site:' + a.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
       try {
         const r = await api(`/api/accounts/${a.id}/sync`, { method:'POST', body: JSON.stringify({ _id: a.id }) });
-        results.push({ ok: !!r.sync?.ok, newRounds: r.sync?.new_rounds || 0, message: r.sync?.message || '' });
-      } catch (e) { results.push({ ok: false, newRounds: 0, message: e.message || 'No pudimos leer el club.' }); }
+        const rows = Array.isArray(r.sync?.clubs) && r.sync.clubs.length ? r.sync.clubs : [r.sync || {}];
+        for (const c of rows) results.push({ club: c.club_name || a.club_name, ok: !!c.ok, newRounds: c.new_rounds || 0, message: c.message || '' });
+      } catch (e) {
+        const rows = Array.isArray(e.data?.sync?.clubs) ? e.data.sync.clubs : [];
+        if (rows.length) { for (const c of rows) results.push({ club: c.club_name || a.club_name, ok: !!c.ok, newRounds: c.new_rounds || 0, message: c.message || '' }); }
+        else results.push({ club: a.club_name, ok: false, newRounds: 0, message: e.data?.sync?.message || e.message || 'No pudimos leer el club.' });
+      }
     }
     const added = results.filter(r => r.ok).reduce((s, r) => s + r.newRounds, 0);
+    const bad = results.filter(r => !r.ok);
     const ok = results.some(r => r.ok);
-    CARD_NOTE = !ok ? (results.find(r => r.message)?.message || 'No pudimos leer el club. La tarjeta en pantalla no cambió.') : added ? (added === 1 ? 'Llegó una tarjeta nueva.' : `Llegaron ${added} tarjetas nuevas.`) : 'No hay una tarjeta nueva. La última sigue siendo la que ya ves.';
+    const fail = bad.map(r => `${r.club}: ${r.message || 'No pudimos leer el club.'}`).join(' ');
+    CARD_NOTE = !ok ? (fail || 'No pudimos leer el club. La tarjeta en pantalla no cambió.') : bad.length ? `${added ? (added === 1 ? 'Llegó una tarjeta nueva.' : 'Llegaron ' + added + ' tarjetas nuevas.') : 'No hay una tarjeta nueva en los clubes que respondieron.'} ${fail}` : added ? (added === 1 ? 'Llegó una tarjeta nueva.' : `Llegaron ${added} tarjetas nuevas.`) : 'No hay una tarjeta nueva. La última sigue siendo la que ya ves.';
     if (stat) stat.textContent = CARD_NOTE;
     if (ok && added) { try { G = { ...G, ...(await api('/api/data')) }; derive(); render(true); } catch (e) { CARD_NOTE = 'La tarjeta llegó, pero no pudimos actualizar la lista.'; const s = $('#cardstat'); if (s) s.textContent = CARD_NOTE; } }
   })().finally(() => { CARD_FLIGHT = null; const b = $('#bring-card'); if (b) b.disabled = false; });
@@ -608,7 +619,7 @@ function refreshBooking(id, btn){
   BOOK_NOTE = 'Revisando';
   const stat = $('#bookstat'); if (stat) stat.textContent = BOOK_NOTE;
   BOOK_FLIGHT = api('/api/tee-times/check?limit=50', { method:'POST', body: JSON.stringify({ players: true, tee_id: id }) }).then(async d => {
-    BOOK_NOTE = d.fresh && d.players_read ? 'Jugadores leídos del club.' : (d.message || 'No pudimos verificar las reservas.');
+    BOOK_NOTE = d.fresh && d.players_read ? 'Jugadores leídos del club.' : (d.fresh ? (d.message || 'La reserva se leyó. Los jugadores que ya estaban siguen en pantalla.') : (d.message || 'No pudimos verificar las reservas.'));
     await loadTee(id, { quiet: true });
   }).catch(e => { BOOK_NOTE = e.message || 'No pudimos verificar las reservas.'; const s = $('#bookstat'); if (s) s.textContent = BOOK_NOTE; }).finally(() => { BOOK_FLIGHT = null; const b = $('#refresh-booking'); if (b) b.disabled = false; });
   return BOOK_FLIGHT;

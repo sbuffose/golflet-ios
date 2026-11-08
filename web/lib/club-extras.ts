@@ -10,11 +10,38 @@ import { titleCase } from "./course-names";
 import { nowAR } from "./tee-times-core";
 
 type Page = "bookings" | "companions" | "hi_history" | "calculator";
-async function status(accId: string, page: Page, st: "ok" | "empty" | "missing" | "error", message: string | null, items: number | null = null) {
+type Run = (text: string, params?: unknown[]) => Promise<any[]>;
+const dbRun: Run = (text, params) => q(text, params);
+
+/** checked_at is NOT NULL in production. A failure never inserts null and never stamps now().
+ *  A first failure leaves no row: there is no prior successful check. A later failure keeps that stamp. */
+export async function recordPageStatus(run: Run, accId: string, page: Page, st: "ok" | "empty" | "missing" | "error", message: string | null, items: number | null = null) {
   const fresh = st === "ok" || st === "empty";
-  await q(`insert into club_page_status (club_account_id, page, status, message, items, checked_at) values ($1,$2,$3,$4,$5,case when $6 then now() else null end)
-           on conflict (club_account_id, page) do update set status=excluded.status, message=excluded.message, items=excluded.items,
-             checked_at=case when $6 then now() else club_page_status.checked_at end`, [accId, page, st, message, items, fresh]);
+  if (fresh) {
+    await run(`insert into club_page_status (club_account_id, page, status, message, items, checked_at) values ($1,$2,$3,$4,$5,now())
+               on conflict (club_account_id, page) do update set status=excluded.status, message=excluded.message, items=excluded.items, checked_at=now()`,
+      [accId, page, st, message, items]);
+    return;
+  }
+  await run(`update club_page_status set status=$3, message=$4, items=$5 where club_account_id=$1 and page=$2`, [accId, page, st, message, items]);
+}
+/** keepPlayers ($16) leaves companions and partner_keys. keepCourse ($17) leaves the stored course when the events page was not read. */
+export async function writeBookingLine(run: Run, params: unknown[]) {
+  await run(`insert into tee_time (user_id, date, time, club_key, course_id, club_name, course_label, companions, source, club_account_id, external_id, start_hole, modality, event_name, course_how, partner_keys, seen_at, updated_at)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,'club',$9,$10,$11,$12,$13,$14,$15,now(),now())
+             on conflict (user_id, club_account_id, external_id) do update set date=excluded.date, time=excluded.time, club_key=excluded.club_key,
+               course_id=case when $17 then tee_time.course_id else excluded.course_id end,
+               club_name=excluded.club_name,
+               course_label=case when $17 then tee_time.course_label else excluded.course_label end,
+               companions=case when $16 then tee_time.companions else excluded.companions end,
+               start_hole=excluded.start_hole, modality=excluded.modality, event_name=excluded.event_name,
+               course_how=case when $17 then tee_time.course_how else excluded.course_how end,
+               partner_keys=case when $16 then tee_time.partner_keys else excluded.partner_keys end,
+               gone_at=null, seen_at=case when $16 then tee_time.seen_at else now() end,
+               updated_at=case when $16 then tee_time.updated_at when tee_time.companions is distinct from excluded.companions or tee_time.time<>excluded.time then now() else tee_time.updated_at end`, params);
+}
+async function status(accId: string, page: Page, st: "ok" | "empty" | "missing" | "error", message: string | null, items: number | null = null) {
+  await recordPageStatus(dbRun, accId, page, st, message, items);
 }
 const failKind = (e: unknown) => (e instanceof GolfisticsError && /\b404\b/.test(e.message) ? "missing" : "error");
 const failMsg = (e: unknown) => (e instanceof GolfisticsError ? e.message : "Error leyendo la página del club").slice(0, 160);
@@ -32,44 +59,53 @@ async function courseDir(clubKey: string | null, clubId: number, course: string 
   return r?.id ?? null;
 }
 
+export type BookingSync = { status: "ok" | "empty" | "error"; playersRead: boolean };
+
+/** What to write for one line. A failed or unrecognized line keeps the stored players. A recognized empty line may clear them. */
+export function playersForLine(light: boolean, stored: { name: string; hcp: number | null }[] | null, parsed: { recognized: boolean; players: { name: string; hcp: number | null }[] } | null): { companions: { name: string; hcp: number | null }[]; keepPlayers: boolean; read: boolean } {
+  if (light && stored) return { companions: stored, keepPlayers: true, read: false };
+  if (parsed?.recognized) return { companions: parsed.players, keepPlayers: false, read: true };
+  return { companions: stored || [], keepPlayers: !!stored, read: false };
+}
+
 /** Bookings for one club account: upsert by TorneoID. t137u: kept forever; a future booking that disappears is marked gone_at (cancelled), never deleted.
- *  Returns whether misreservas.php was actually read. A failure does not move checked_at. */
-export async function syncBookings(userId: string, acc: { id: string; club_id: number }, g: Golfistics, courses: string[], o: { light?: boolean } = {}): Promise<"ok" | "empty" | "error"> {
+ *  Returns whether misreservas.php was actually read. playersRead is true only when every placed line was recognized. A failure does not move checked_at. */
+export async function syncBookings(userId: string, acc: { id: string; club_id: number }, g: Golfistics, courses: string[], o: { light?: boolean } = {}): Promise<BookingSync> {
   let html: string;
-  try { html = await g.req("GET", "misreservas.php"); } catch (e) { await status(acc.id, "bookings", failKind(e), failMsg(e)); return "error"; }
+  try { html = await g.req("GET", "misreservas.php"); } catch (e) { await status(acc.id, "bookings", failKind(e), failMsg(e)); return { status: "error", playersRead: false }; }
   const b = parseBookings(html);
-  if (!b.recognized) { await status(acc.id, "bookings", "error", "La página de reservas no tiene el formato esperado"); return "error"; }
+  if (!b.recognized) { await status(acc.id, "bookings", "error", "La página de reservas no tiene el formato esperado"); return { status: "error", playersRead: false }; }
   const today = nowAR().date, dir = await dirFor(acc.club_id);
-  let events = new Map<string, any>();
-  if (b.rows.length) { try { events = parseEvents(await g.req("GET", "torneoshabilitadosparareservas.php")); } catch { /* date falls back to weekday + day */ } }
+  let events = new Map<string, any>(), eventsOk = false;
+  if (b.rows.length) { try { events = parseEvents(await g.req("GET", "torneoshabilitadosparareservas.php")); eventsOk = true; } catch { /* date falls back to weekday + day; the stored course stays */ } }
   const me = b.player_header ? norm(b.player_header) : null, keep: string[] = [];
-  let compOk = 0, compFail = 0;
+  let compOk = 0, compFail = 0, placed = 0;
   for (const r of b.rows) {
     const ev = events.get(r.torneo_id), date = ev?.date ?? inferDate(r.weekday, r.day, today);
     if (!date) continue;
-    const cf = verifiedCourse({ venue: ev?.venue ?? null }, courses);
-    let companions: { name: string; hcp: number | null }[] = [];
-    // t242u light check (home open): a booking we already have keeps its stored companions (the daily sync refreshes them); only new ones open their line page
-    const known = o.light ? (await q(`select companions from tee_time where user_id=$1 and club_account_id=$2 and external_id=$3 and gone_at is null`, [userId, acc.id, `${r.torneo_id}@${r.time}`]))[0] : null;
-    if (known && Array.isArray(known.companions)) { companions = known.companions; compOk++; }
-    else try {
-      const c = parseCompanions(await g.req("GET", `misjugadoresporlinea.php?TorneoID=${encodeURIComponent(r.torneo_id)}&PlayerID=${encodeURIComponent(r.player_id)}`));
-      if (c.recognized) { companions = c.players.filter(p => !me || !(norm(p.name).startsWith(me) || me.startsWith(norm(p.name)))).slice(0, 7); compOk++; } else compFail++;
-    } catch { compFail++; }
+    placed++;
+    const cf = eventsOk ? verifiedCourse({ venue: ev?.venue ?? null }, courses) : { course: null, how: null as null };
+    const known = (await q(`select companions from tee_time where user_id=$1 and club_account_id=$2 and external_id=$3 and gone_at is null`, [userId, acc.id, `${r.torneo_id}@${r.time}`]))[0];
+    const stored = known && Array.isArray(known.companions) ? known.companions as { name: string; hcp: number | null }[] : null;
+    let parsed: { recognized: boolean; players: { name: string; hcp: number | null }[] } | null = null;
+    if (!(o.light && stored)) {
+      try {
+        const c = parseCompanions(await g.req("GET", `misjugadoresporlinea.php?TorneoID=${encodeURIComponent(r.torneo_id)}&PlayerID=${encodeURIComponent(r.player_id)}`));
+        parsed = { recognized: c.recognized, players: c.recognized ? c.players.filter(p => !me || !(norm(p.name).startsWith(me) || me.startsWith(norm(p.name)))).slice(0, 7) : [] };
+      } catch { parsed = null; }
+    }
+    const line = playersForLine(!!o.light, stored, parsed);
+    if (line.read) compOk++; else if (!o.light || !stored) compFail++;
+    const companions = line.companions;
     const ext = `${r.torneo_id}@${r.time}`; keep.push(ext);
-    await q(`insert into tee_time (user_id, date, time, club_key, course_id, club_name, course_label, companions, source, club_account_id, external_id, start_hole, modality, event_name, course_how, partner_keys, seen_at, updated_at)
-             values ($1,$2,$3,$4,$5,$6,$7,$8,'club',$9,$10,$11,$12,$13,$14,$15,now(),now())
-             on conflict (user_id, club_account_id, external_id) do update set date=excluded.date, time=excluded.time, club_key=excluded.club_key, course_id=excluded.course_id,
-               club_name=excluded.club_name, course_label=excluded.course_label, companions=excluded.companions, start_hole=excluded.start_hole, modality=excluded.modality,
-               event_name=excluded.event_name, course_how=excluded.course_how, partner_keys=excluded.partner_keys, gone_at=null, seen_at=now(), updated_at=case when tee_time.companions is distinct from excluded.companions or tee_time.time<>excluded.time then now() else tee_time.updated_at end`,
-      [userId, date, r.time, dir.club_key, await courseDir(dir.club_key, acc.club_id, cf.course), dir.club_name, cf.course, JSON.stringify(companions), acc.id, ext, r.start_hole, ev?.modality ?? null, ev?.event ?? null, cf.how, companions.map(c => partnerKey(c.name)).filter(Boolean)]);
+    await writeBookingLine(dbRun, [userId, date, r.time, dir.club_key, await courseDir(dir.club_key, acc.club_id, cf.course), dir.club_name, cf.course, JSON.stringify(companions), acc.id, ext, r.start_hole, ev?.modality ?? null, ev?.event ?? null, cf.how, companions.map(c => partnerKey(c.name)).filter(Boolean), line.keepPlayers, !eventsOk]);
   }
   const nt = nowAR().time;   // only bookings still in the future count as cancelled (past ones simply leave the club page once played)
   await q(`update tee_time set gone_at=now() where club_account_id=$1 and source='club' and gone_at is null and (date > $2::date or (date = $2::date and time > $4)) and not (external_id = any($3::text[]))`, [acc.id, today, keep, nt]);
   const outcome = b.rows.length ? "ok" : "empty";
   await status(acc.id, "bookings", outcome, b.none ? "Sin reservas próximas" : null, b.rows.length);
-  if (b.rows.length) await status(acc.id, "companions", compFail && !compOk ? "error" : "ok", compFail ? `${compFail} sin leer` : null, compOk);
-  return outcome;
+  if (b.rows.length) await status(acc.id, "companions", compFail ? "error" : "ok", compFail ? `${compFail} sin leer` : null, compOk);
+  return { status: outcome, playersRead: !o.light && compFail === 0 && (outcome === "empty" || placed > 0) };
 }
 
 async function syncHi(acc: { id: string }, g: Golfistics) {
