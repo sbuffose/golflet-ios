@@ -295,6 +295,91 @@ test("a running flag older than the lease is recovered, and a live running flag 
   assert.equal(live.synced, 0);
 });
 
+test("a cancel or a reschedule between load and claim is not overwritten by the old snapshot", async (t) => {
+  if (!local) return t.skip("la URL de prueba no es local");
+  try { await reset(); } catch { return t.skip("sin postgres aislado"); }
+  const today = (await sql(`select (now() at time zone 'America/Argentina/Buenos_Aires')::date::text d`))[0].d as string;
+  await sql(`insert into "user" (id) values ('owner')`);
+  await sql(`insert into club (code, name, seeded) values ('118', 'Jockey', true)`);
+  const club = (await sql(`select id from club where code='118'`))[0].id;
+  const account = "10000000-0000-4000-8000-0000000000a1";
+  const tee = "10000000-0000-4000-8000-0000000000c1";
+  await sql(`insert into club_account (id, user_id, club_id, matricula, source, password_enc) values
+    ($1, 'owner', $2, '100', 'site', 'stored')`, [account, club]);
+  await sql(`insert into tee_time (id, user_id, club_account_id, date, time, course_label, club_name, source) values
+    ($1, 'owner', $2, $3, '08:00', 'Azul', 'Jockey', 'club')`, [tee, account, today]);
+  await enrollScorecardFetches(new Date(), sql);
+  await sql(`update scorecard_fetch set next_attempt_at = now() - interval '1 minute', status='scheduled', attempt_count=0, round_id=null, version=1`);
+  const jobId = String((await sql(`select id from scorecard_fetch`))[0].id);
+  const noClub = async () => ({ ok: true, new_rounds: 0, updated: 0, pending: 0, message: "no debe leer el club" });
+
+  let pending: null | (() => Promise<void>) = null;
+  const racing = async (text: string, params: unknown[] = []) => {
+    if (pending && text.includes("f.version = obs.version")) {
+      const mutate = pending;
+      pending = null;
+      await mutate();
+    }
+    return sql(text, params);
+  };
+
+  let calls = 0;
+  pending = async () => {
+    await sql(`update tee_time set gone_at=now() where id=$1`, [tee]);
+    await sql(`update scorecard_fetch set status='cancelled', version=version+1, last_error=null, updated_at=now() where id=$1`, [jobId]);
+  };
+  const cancelled = await runScorecardFetches({
+    sql: racing,
+    sync: async () => { calls++; return noClub(); },
+  });
+  assert.equal(calls, 0);
+  assert.equal(cancelled.synced, 0);
+  const afterCancel = (await sql(`select status, version, lock_token, attempt_count, time, course_label from scorecard_fetch where id=$1`, [jobId]))[0];
+  assert.equal(afterCancel.status, "cancelled");
+  assert.equal(Number(afterCancel.version), 2);
+  assert.equal(afterCancel.lock_token, null);
+  assert.equal(Number(afterCancel.attempt_count), 0);
+  assert.equal(String(afterCancel.time).slice(0, 5), "08:00");
+
+  await sql(`update tee_time set gone_at=null, time='08:00', course_label='Azul' where id=$1`, [tee]);
+  await sql(`update scorecard_fetch set status='scheduled', version=1, next_attempt_at=now() - interval '1 minute', time='08:00', course_label='Azul', attempt_count=0, last_attempt_at=null, last_error=null, lock_token=null, locked_at=null where id=$1`, [jobId]);
+  pending = async () => {
+    await sql(`update tee_time set time='18:00', course_label='Colorada' where id=$1`, [tee]);
+    await sql(`update scorecard_fetch set time='18:00', course_label='Colorada', played_at = played_at + interval '10 hours', next_attempt_at = now() + interval '6 hours', version=version+1, updated_at=now() where id=$1`, [jobId]);
+  };
+  const moved = await runScorecardFetches({
+    sql: racing,
+    sync: async () => { calls++; return noClub(); },
+  });
+  assert.equal(calls, 0);
+  assert.equal(moved.synced, 0);
+  const afterMove = (await sql(`select status, version, time, course_label, next_attempt_at > now() as later from scorecard_fetch where id=$1`, [jobId]))[0];
+  assert.equal(afterMove.status, "scheduled");
+  assert.equal(Number(afterMove.version), 2);
+  assert.equal(String(afterMove.time).slice(0, 5), "18:00");
+  assert.equal(afterMove.course_label, "Colorada");
+  assert.equal(afterMove.later, true);
+
+  await sql(`update tee_time set time='08:00', course_label='Azul' where id=$1`, [tee]);
+  await sql(`update scorecard_fetch f set status='scheduled', version=1, time='08:00', course_label='Azul',
+      next_attempt_at=now() - interval '1 minute', attempt_count=0, last_attempt_at=null, last_error=null, lock_token=null, locked_at=null,
+      played_at=(t.date + t.time::time) at time zone 'America/Argentina/Buenos_Aires', date=t.date
+    from tee_time t where t.id=$2 and f.id=$1`, [jobId, tee]);
+  pending = async () => {
+    await sql(`update scorecard_fetch set played_at = now() - interval '15 days' where id=$1`, [jobId]);
+  };
+  const expired = await runScorecardFetches({
+    sql: racing,
+    sync: async () => { calls++; return noClub(); },
+  });
+  assert.equal(calls, 0);
+  assert.equal(expired.synced, 0);
+  const afterAge = (await sql(`select status, version, played_at < now() - interval '14 days' as old from scorecard_fetch where id=$1`, [jobId]))[0];
+  assert.equal(afterAge.status, "scheduled");
+  assert.equal(Number(afterAge.version), 1);
+  assert.equal(afterAge.old, true);
+});
+
 test("cron auth rejects a missing secret and dispatches only the matching bearer, without reading a club", async () => {
   const previous = process.env.CRON_SECRET;
   process.env.CRON_SECRET = "scratch-cron-secret";

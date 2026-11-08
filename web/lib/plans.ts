@@ -12,6 +12,7 @@ import { bagDistances, clubCoder } from "./shot-samples";
 import { userClubs } from "./live";
 import { courseGeometry, resolveCourseId } from "./course-geo";
 import { isPutter } from "./shots-calc";
+import { gpsShotSql } from "./gps-shot";
 import { DEFAULT_MIN_PER_HOLE, MIN_GPS_SHOTS, WIND_MODEL, cleanShots, dispersion, frame, holeSchedule, holeWindEffect, shotFrame, windAt, wxAt, windComp, aimPoint,
   type Hourly, type Sample, type LL } from "./plan-core";
 
@@ -58,8 +59,8 @@ async function mapMeta(clubCode: string, course: string) {
 /* ---------- own pace (live rounds), else the §50 estimate, else 14 min ---------- */
 export async function ownPace(userId: string, clubId: number | null, course: string | null) {
   const rows = await q(`select extract(epoch from (coalesce(l.ended_at, mx.last) - mn.first))/60 mins, mx.holes
-      from live_round l join lateral (select min(taken_at) first from shot s where s.live_round_id=l.id) mn on true
-      join lateral (select max(taken_at) last, count(distinct hole)::int holes from shot s where s.live_round_id=l.id) mx on true
+      from live_round l join lateral (select min(taken_at) first from shot s where s.live_round_id=l.id and ${gpsShotSql("s")}) mn on true
+      join lateral (select max(taken_at) last, count(distinct hole)::int holes from shot s where s.live_round_id=l.id and ${gpsShotSql("s")}) mx on true
       where l.user_id=$1 and mx.holes >= 9 and mn.first is not null order by l.date desc limit 10`, [userId]);
   const per = rows.map((r: any) => +r.mins / r.holes).filter((x: number) => x >= 6 && x <= 25).sort((a: number, b: number) => a - b);
   if (per.length >= 2) return { min_per_hole: Math.round(per[per.length >> 1] * 10) / 10, source: "propio" as const, rounds: per.length };

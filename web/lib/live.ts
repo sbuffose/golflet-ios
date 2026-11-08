@@ -3,8 +3,22 @@ import { q } from "./db";
 import { HttpError } from "./http";
 import { visibleRoundIds } from "./data";
 import { computeDistances, DEFAULT_CLUBS, type ClubDef, type Greens, type ShotIn } from "./shots-calc";
+import { gpsShotSql } from "./gps-shot";
+import { isUndefinedColumn } from "./scorecard-lease";
 
 export const LIVE_COLS = `l.id, l.club_code, l.vm_course, l.club_id, l.course, l.date::text as date, l.tee, l.started_at, l.ended_at, l.current_hole, l.round_id, l.updated_at, l.players, l.modality, l.pace_alert_at`;
+export async function listLiveRounds(userId: string) {
+  const listed = (origin: boolean) => `select ${LIVE_COLS}, (select count(*)::int from shot s where s.live_round_id=l.id and ${gpsShotSql("s")}) as shots,
+      (select id from round_recap rr where rr.live_round_id=l.id) as recap_id
+    from live_round l where l.user_id=$1 ${origin ? "and coalesce(l.origin, 'live') = 'live'" : ""}
+    order by l.date desc, l.started_at desc limit 100`;
+  try { return await q(listed(true), [userId]); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "origin")) throw e;
+    return q(listed(false), [userId]);
+  }
+}
+
 export async function ownLive(userId: string, id: string) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(404, "No encontrado");
   const [l] = await q(`select ${LIVE_COLS} from live_round l where l.id=$1 and l.user_id=$2`, [id, userId]);
@@ -41,7 +55,7 @@ export async function greensFor(clubCode: string | null, vmCourse: string | null
 }
 export const SHOT_COLS = `s.id, s.client_id, s.hole, s.shot_number, s.lat, s.lng, s.accuracy_m, s.taken_at, s.club, s.lie, s.result, s.direction, s.length, s.mishit, s.intent, s.source`;
 export async function shotsWithDistances(live: any) {
-  const rows = await q<ShotIn>(`select ${SHOT_COLS} from shot s where s.live_round_id=$1 order by s.hole, s.shot_number, s.taken_at`, [live.id]);
+  const rows = await q<ShotIn>(`select ${SHOT_COLS} from shot s where s.live_round_id=$1 and ${gpsShotSql("s")} order by s.hole, s.shot_number, s.taken_at`, [live.id]);
   return computeDistances(rows, await greensFor(live.club_code, live.vm_course));
 }
 export async function userClubs(userId: string): Promise<ClubDef[]> {

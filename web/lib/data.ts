@@ -4,6 +4,7 @@ import { competitionByKey } from "./competition";
 import { applyHolesOverride, parTotal } from "./course-override";
 import { clubDisplayName } from "./course-names";
 import { roundChips } from "./metrics";
+import { gpsPuttSql, gpsShotSql, manualPuttSql } from "./gps-shot";
 
 export const DEFAULT_BAG = ["Driver", "Madera 3", "Híbrido", "Hierro 4", "Hierro 5", "Hierro 6", "Hierro 7", "Hierro 8", "Hierro 9", "PW", "GW", "SW", "LW"]
   .map(club => ({ club, carry: null as number | null, total: null as number | null }));
@@ -51,8 +52,9 @@ export async function buildData(userId: string) {
   const rows = ids.length ? await q(`select r.id, r.club_account_id, r.date::text as date, r.course, r.data, r.holes, a.club_id,
         n.putts, n.gir, n.fir, n.notes, n.updated_at as notes_at,
         (select rr.id from round_recap rr where rr.round_id=r.id) as recap_id,
-        (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and s.lat is not null and coalesce(s.source,'gps')='gps') as gps_shots,
-        (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and (s.club ~* '^(pt|putter)$' or s.lie='green')) as gps_putts
+        (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and ${gpsShotSql("s")}) as gps_shots,
+        (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and ${gpsPuttSql("s")}) as gps_putts,
+        (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and ${manualPuttSql("s")}) as manual_putts
       from round r join club_account a on a.id=r.club_account_id left join round_note n on n.round_id=r.id
       where r.club_account_id = any($1) order by r.date desc`, [ids]) : [];
   const clubName = new Map(accounts.map(a => [a.club_id, a.club_name]));
@@ -71,7 +73,7 @@ export async function buildData(userId: string) {
       course_key: other ? `x:${played}:${r.course}` : `${r.club_id}:${r.course}`,
       course_label: other ? (r.course && r.course !== played ? `${r.course} · ${played}` : played) : null,
       putts: r.putts, gir: r.gir, fir: r.fir, notes: r.notes, notes_at: r.notes_at,
-      recap_id: r.recap_id ?? null, gps_shots: r.gps_shots ?? 0,
+      recap_id: r.recap_id ?? null, gps_shots: r.gps_shots ?? 0, manual_putts: r.manual_putts ?? 0,
       ...roundChips({ holes: r.holes, summary_counts: r.data.summary_counts, is_9_holes: r.data.is_9_holes }, r.putts, r.gps_putts),
     };
   });

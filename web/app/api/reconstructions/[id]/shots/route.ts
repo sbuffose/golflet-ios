@@ -29,7 +29,7 @@ export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   const { id } = await ctx.params;
   const b = await body<any>(req);
   if (!b.shot_id) return json({ error: "Falta el golpe" }, 400);
-  try { return json({ shot: await updateManualShot(user.id, String(b.shot_id), b) }); }
+  try { return json({ shot: await updateManualShot(user.id, id, String(b.shot_id), b) }); }
   catch (e) { return fail(e); }
 });
 
