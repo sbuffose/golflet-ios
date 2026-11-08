@@ -759,7 +759,7 @@ final class AppModel {
             await flight.value
             return
         }
-        let task = Task { @MainActor in await self.performRefreshBooking(id) }
+        let task = Task { @MainActor in await self.performRefreshBooking(id: id) }
         bookingFlight = task
         await task.value
         bookingFlight = nil
