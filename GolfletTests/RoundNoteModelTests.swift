@@ -403,6 +403,243 @@ final class RoundNoteModelTests: XCTestCase {
         XCTAssertEqual(MockAPIClient.holeMarkEntries, 1)
     }
 
+    func testACurrentQueueStillSendsTheFollowingMark() async throws {
+        let model = try makeModel()
+        let visit = RoundVisit()
+        visit.enter()
+        let queue = QuickWorkQueue()
+        let park = Park()
+        MockAPIClient.onSaveHoleMark = { await park.park() }
+        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: 1)
+        let first = HoleMark(hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6)
+        let secondMark = HoleMark(hole: 2, putts: 4, gir: false, drive: "left", rev: 6)
+        var painted = 0
+        _ = scheduleMark(queue: queue, model: model, visit: visit, identity: identity, mark: first, wait: {}) { painted += 1 }
+        await until("la primera marca no llegó a salir") { park.parked == 1 }
+        let second = scheduleMark(queue: queue, model: model, visit: visit, identity: identity, mark: secondMark, wait: {}) { painted += 1 }
+        park.release()
+        await second.value
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 2)
+        XCTAssertEqual(painted, 2)
+    }
+
+    func testAQueuedMarkDoesNotAdoptTheNextVisit() async throws {
+        let model = try makeModel()
+        let visit = RoundVisit()
+        visit.enter()
+        let queue = QuickWorkQueue()
+        let park = Park()
+        MockAPIClient.onSaveHoleMark = { await park.park() }
+        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: 1)
+        let mark = HoleMark(hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6)
+        model.writeHoleCache(
+            roundId: "r-cola",
+            session: identity.session,
+            present: [HoleExtra(roundId: "r-cola", hole: 1, putts: 2, gir: true, fairway: "hit")],
+            clear: []
+        )
+        var painted = false
+        let paintStale = {
+            painted = true
+            model.writeHoleCache(
+                roundId: "r-cola",
+                session: identity.session,
+                present: [HoleExtra(roundId: "r-cola", hole: 1, putts: 9, gir: false, fairway: "left")],
+                clear: []
+            )
+        }
+        _ = scheduleMark(queue: queue, model: model, visit: visit, identity: identity, mark: mark, wait: {}, onScreen: paintStale)
+        await until("la marca en viaje no llegó a salir") { park.parked == 1 }
+        var waited = false
+        let queued = scheduleMark(queue: queue, model: model, visit: visit, identity: identity, mark: mark, wait: { waited = true }, onScreen: paintStale)
+        visit.leave()
+        visit.enter()
+        park.release()
+        await queued.value
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 1)
+        XCTAssertFalse(waited)
+        XCTAssertFalse(painted)
+        XCTAssertEqual(model.notes.extras(for: "r-cola").first?.putts, 2)
+
+        let current = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: 1)
+        let freshMark = HoleMark(hole: 2, putts: 4, gir: false, drive: "left", rev: 6)
+        let again = scheduleMark(queue: queue, model: model, visit: visit, identity: current, mark: freshMark, wait: {}) { painted = true }
+        await again.value
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 2)
+        XCTAssertTrue(painted)
+    }
+
+    func testAQueuedMarkDoesNotAdoptTheNextSession() async throws {
+        let model = try makeModel()
+        model.user = player("demo")
+        model.rounds = [sample("r1", putts: 7, gir: 1, fir: 1, notesAt: newerStamp)]
+        let visit = RoundVisit()
+        visit.enter()
+        let queue = QuickWorkQueue()
+        let park = Park()
+        MockAPIClient.onSaveHoleMark = { await park.park() }
+        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: 1)
+        let mark = HoleMark(hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6)
+        var touchedModel = false
+        var painted = false
+        _ = scheduleMark(queue: queue, model: model, visit: visit, identity: identity, mark: mark, wait: {}, onModel: { touchedModel = true }) { painted = true }
+        await until("la marca en viaje no llegó a salir") { park.parked == 1 }
+        let queued = scheduleMark(queue: queue, model: model, visit: visit, identity: identity, mark: mark, wait: {}) { painted = true }
+        await model.signOut()
+        await model.signInGolfistics(matricula: "124", clave: "ok", savePassword: false)
+        let current = model.sessionEpoch
+        model.writeHoleCache(
+            roundId: "r-nueva",
+            session: current,
+            present: [HoleExtra(roundId: "r-nueva", hole: 1, putts: 2, gir: true, fairway: "hit")],
+            clear: []
+        )
+        park.release()
+        await queued.value
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 1)
+        XCTAssertFalse(touchedModel)
+        XCTAssertFalse(painted)
+        XCTAssertEqual(model.user?.id, "demo")
+        XCTAssertNotEqual(model.sessionEpoch, identity.session)
+        XCTAssertFalse(model.rounds.contains { $0.putts == 4242 })
+        XCTAssertEqual(model.notes.extras(for: "r-nueva").first?.putts, 2)
+
+        visit.enter()
+        let fresh = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: 1)
+        let freshMark = HoleMark(hole: 2, putts: 4, gir: false, drive: "left", rev: 6)
+        let again = scheduleMark(queue: queue, model: model, visit: visit, identity: fresh, mark: freshMark, wait: {}) { painted = true }
+        await again.value
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 2)
+        XCTAssertTrue(painted)
+    }
+
+    func testAScheduledLoadDoesNotFetchForTheNextVisit() async throws {
+        let model = try makeModel()
+        let visit = RoundVisit()
+        visit.enter()
+        let queue = QuickWorkQueue()
+        var loadGen = 1
+        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+        var applied = false
+        let job = queue.enqueueLoad(
+            identity: identity,
+            replace: true,
+            model: model,
+            visit: visit,
+            load: { loadGen },
+            read: { await model.readHoleMarks(roundId: "r-carga", session: identity.session) },
+            apply: { _ in applied = true }
+        )
+        visit.leave()
+        visit.enter()
+        loadGen = 2
+        queue.dropLoad()
+        await job.value
+        XCTAssertEqual(MockAPIClient.holeReadEntries, 0)
+        XCTAssertFalse(applied)
+
+        let current = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+        let fresh = queue.enqueueLoad(
+            identity: current,
+            replace: true,
+            model: model,
+            visit: visit,
+            load: { loadGen },
+            read: { await model.readHoleMarks(roundId: "r-carga", session: current.session) },
+            apply: { _ in applied = true }
+        )
+        await fresh.value
+        XCTAssertEqual(MockAPIClient.holeReadEntries, 1)
+        XCTAssertTrue(applied)
+    }
+
+    func testAMarkWaitingOnALoadDoesNotPostAfterLeave() async throws {
+        let model = try makeModel()
+        let visit = RoundVisit()
+        visit.enter()
+        let queue = QuickWorkQueue()
+        let park = Park()
+        MockAPIClient.onHoleMarks = { await park.park() }
+        var loadGen = 1
+        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+        var applied = false
+        let load = queue.enqueueLoad(
+            identity: identity,
+            replace: true,
+            model: model,
+            visit: visit,
+            load: { loadGen },
+            read: { await model.readHoleMarks(roundId: "r-espera", session: identity.session) },
+            apply: { _ in
+                applied = true
+                model.writeHoleCache(
+                    roundId: "r-espera",
+                    session: identity.session,
+                    present: [HoleExtra(roundId: "r-espera", hole: 1, putts: 9, gir: true, fairway: "hit")],
+                    clear: []
+                )
+            }
+        )
+        await until("la lectura no llegó a salir") { park.parked == 1 }
+        let mark = HoleMark(hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6)
+        var painted = false
+        var reachedLoad = false
+        let queued = scheduleMark(queue: queue, model: model, visit: visit, identity: identity, mark: mark, wait: {
+            reachedLoad = true
+            await load.value
+        }) { painted = true }
+        await until("la marca no llegó a esperar la lectura") { reachedLoad }
+        visit.leave()
+        visit.enter()
+        loadGen = 2
+        queue.dropLoad()
+        park.release()
+        await queued.value
+        XCTAssertEqual(MockAPIClient.holeReadEntries, 1)
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 0)
+        XCTAssertFalse(applied)
+        XCTAssertFalse(painted)
+        XCTAssertNil(model.notes.extras(for: "r-espera").first)
+
+        let current = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+        let freshMark = HoleMark(hole: 2, putts: 4, gir: false, drive: "left", rev: 6)
+        let again = scheduleMark(queue: queue, model: model, visit: visit, identity: current, mark: freshMark, wait: {}) { painted = true }
+        await again.value
+        XCTAssertEqual(MockAPIClient.holeMarkEntries, 1)
+        XCTAssertTrue(painted)
+    }
+
+    private func scheduleMark(
+        queue: QuickWorkQueue,
+        model: AppModel,
+        visit: RoundVisit,
+        identity: QuickWorkIdentity,
+        mark: HoleMark,
+        wait: @escaping @MainActor () async -> Void,
+        onModel: @escaping @MainActor () -> Void = {},
+        onScreen: @escaping @MainActor () -> Void
+    ) -> Task<Void, Never> {
+        queue.enqueueMark(identity: identity, model: model, visit: visit, waitForAccount: wait) {
+            await QuickDispatch.runMark(
+                identity: identity,
+                model: model,
+                visit: visit,
+                send: { await model.sendHoleMark(roundId: "r-cola", session: identity.session, mark: mark) },
+                onModel: { _ in onModel() },
+                onScreen: { _ in onScreen() },
+                onFailure: { _ in }
+            )
+        }
+    }
+
+    private func until(_ label: String, _ ready: () -> Bool) async {
+        for _ in 0..<80 {
+            if ready() { return }
+            try? await Task.sleep(nanoseconds: 15_000_000)
+        }
+        XCTFail(label)
+    }
+
     private func makeModel() throws -> AppModel {
         MockAPIClient.scriptedRoundNotes = []
         MockAPIClient.scriptedSnapshots = []
@@ -477,5 +714,31 @@ final class RoundNoteModelTests: XCTestCase {
             bag: [],
             hiHistory: []
         )
+    }
+}
+
+@MainActor
+private final class Park {
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var open = false
+    private(set) var parked = 0
+
+    func park() async {
+        if open { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            if self.open {
+                cont.resume()
+                return
+            }
+            self.waiters.append(cont)
+            self.parked += 1
+        }
+    }
+
+    func release() {
+        open = true
+        let held = waiters
+        waiters.removeAll()
+        held.forEach { $0.resume() }
     }
 }
