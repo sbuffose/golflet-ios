@@ -46,19 +46,15 @@ export function parseEvents(html: string) {
   return map;
 }
 
-/** Course from the event name: the course's name (or its first 4 letters, e.g. "COLO") in the text, else a single color
- *  square matching a course named after that color (🟥 Colorada/Roja, 🟦 Azul, 🟩 Verde). Null when it isn't clear. */
-export function courseFromEvent(event: string | null, courses: string[]): { course: string | null; how: "nombre" | "color" | null } {
-  if (!event || !courses.length) return { course: null, how: null };
-  const U = event.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const norm = (s: string) => s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const words = (s: string) => norm(s).split(/\s+/).filter(w => w.length >= 4 && !/^CANCHA$/.test(w));
-  const byName = courses.filter(c => words(c).some(w => new RegExp(`\\b${w.slice(0, 4)}`).test(U)));
-  if (byName.length === 1) return { course: byName[0], how: "nombre" };
-  const colors = new Set([...event.matchAll(/🟥|🟦|🟩|🟨|⬛|⬜/gu)].map(m => m[0]));
-  if (colors.size === 1) {
-    const re = ({ "🟥": /COLORAD|ROJ/, "🟦": /AZUL/, "🟩": /VERDE/, "🟨": /AMARILL/, "⬛": /NEGR/, "⬜": /BLANC/ } as Record<string, RegExp>)[[...colors][0]];
-    const hit = courses.filter(c => re.test(norm(c))); if (hit.length === 1) return { course: hit[0], how: "color" };
+const foldCourse = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/** The course is the one the reservation source names exactly (the venue or an explicit course cell).
+ *  The tournament title is not a course: no 4-letter prefix and no color square. */
+export function verifiedCourse(source: { venue?: string | null; course?: string | null }, courses: string[]): { course: string | null; how: "fuente" | null } {
+  const want = new Map(courses.map(c => c.trim()).filter(Boolean).map(c => [foldCourse(c), c]));
+  for (const raw of [source.course, source.venue]) {
+    const key = foldCourse(raw || "");
+    if (key && want.has(key)) return { course: want.get(key)!, how: "fuente" };
   }
   return { course: null, how: null };
 }

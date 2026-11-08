@@ -1,8 +1,32 @@
 import Foundation
 
+struct ReservationRefresh: Sendable {
+    var fresh: Bool
+    var playersRead: Bool
+    var message: String?
+    var teeTimes: [TeeTime]
+}
+
 extension LiveGolfletAPI {
     func teeTimes() async throws -> [TeeTime] {
         TeeTimesParser.list(from: try await request("GET", TeeTimesAPIPaths.list))
+    }
+
+    func refreshBookings() async throws -> ReservationRefresh {
+        parseRefresh(try await request("POST", "/api/tee-times/check?limit=50", body: [:], timeout: 60))
+    }
+
+    func refreshReservation(id: String) async throws -> ReservationRefresh {
+        parseRefresh(try await request("POST", "/api/tee-times/check?limit=50", body: ["players": true, "tee_id": id], timeout: 60))
+    }
+
+    private func parseRefresh(_ json: [String: Any]) -> ReservationRefresh {
+        ReservationRefresh(
+            fresh: json["fresh"] as? Bool ?? false,
+            playersRead: json["players_read"] as? Bool ?? false,
+            message: json["message"] as? String,
+            teeTimes: TeeTimesParser.list(from: json)
+        )
     }
 
     func scorecardFetches() async throws -> [ScorecardFetchJob] {
@@ -47,6 +71,18 @@ extension MockAPIClient {
             return []
         }
         return Self.mockBookings()
+    }
+
+    func refreshBookings() async throws -> ReservationRefresh {
+        ReservationRefresh(fresh: true, playersRead: false, message: nil, teeTimes: try await teeTimes())
+    }
+
+    func refreshReservation(id: String) async throws -> ReservationRefresh {
+        var rows = try await teeTimes()
+        if let index = rows.firstIndex(where: { $0.id == id }) {
+            rows[index].companions = ["Jugador leído del club"]
+        }
+        return ReservationRefresh(fresh: true, playersRead: true, message: nil, teeTimes: rows)
     }
 
     private static func mockBookings() -> [TeeTime] {

@@ -1,6 +1,8 @@
 /* Cargar una vuelta ya jugada. El mapa se mueve bajo la mira, igual que en el juego.
    El punto que se deja es manual. La distancia entre dos puntos es estimada. No hay GPS ni tarjeta del club. */
 (function () {
+  let api = () => Promise.reject(new Error("api is not defined"));
+  let esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const TILE = (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
   const CLUBS = ["Dr", "3W", "5W", "Hy", "4i", "5i", "6i", "7i", "8i", "9i", "PW", "GW", "SW", "LW", "Pt"];
   const RESULTS = [["fairway", "Fairway"], ["green", "Green"], ["rough", "Rough"], ["bunker", "Bunker"], ["water", "Agua"], ["ob", "OB"], ["penalty", "Pena"], ["holed", "Embocada"], ["other", "Otro"]];
@@ -255,5 +257,8 @@
     };
   }
 
-  window.GolfletRecon = { open };
+  window.GolfletRecon = {
+    init(deps) { if (deps?.api) api = deps.api; if (deps?.esc) esc = deps.esc; },
+    open,
+  };
 })();

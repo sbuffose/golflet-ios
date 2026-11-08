@@ -159,7 +159,7 @@ final class TeeTimesParserTests: XCTestCase {
         XCTAssertEqual(bookings.first?.course, "Cancha Vieja")
     }
 
-    func testMdpWithoutACourseUsesTheClubAndBothCanchas() {
+    func testMdpWithoutACourseDoesNotGuessBothCanchas() {
         let booking = TeeTime(
             id: "tt-mdp",
             startsAt: Date(timeIntervalSince1970: 1_762_527_600),
@@ -169,17 +169,12 @@ final class TeeTimesParserTests: XCTestCase {
             companions: ["Buffo Agustin"]
         )
         let place = TeeCourseResolve.place(booking: booking, rounds: [], courses: [])
-        XCTAssertEqual(place.canchaTitle, "Mar del Plata Golf Club")
-        XCTAssertEqual(place.strategyCourses.map(\.name), ["Cancha Vieja", "Cancha Nueva"])
-        XCTAssertEqual(place.strategyCourses.map(\.key), ["7:Cancha Vieja", "7:Cancha Nueva"])
-        let summary = TeeTimePrep.strategySummary(place: place, strategy: nil)
-        XCTAssertTrue(summary.contains("Cancha Vieja"))
-        XCTAssertTrue(summary.contains("Cancha Nueva"))
-        XCTAssertFalse(summary.contains("Sin el nombre"))
+        XCTAssertEqual(place.canchaTitle, "La reserva no especifica la cancha.")
+        XCTAssertTrue(place.strategyCourses.isEmpty)
         XCTAssertEqual(TeeTimePrep.forecastText(booking: booking, rounds: [], bag: []), "Este horario no trae pronóstico.")
     }
 
-    func testMdpUsesTheCourseFromHisCards() {
+    func testMdpDoesNotTakeTheCourseFromHisCards() {
         let booking = TeeTime(
             id: "tt-mdp",
             startsAt: Date(timeIntervalSince1970: 1_762_527_600),
@@ -191,9 +186,8 @@ final class TeeTimesParserTests: XCTestCase {
         let older = sampleRound(course: "Cancha Vieja", date: Date(timeIntervalSince1970: 1_700_000_000))
         let newer = sampleRound(course: "Cancha Nueva", date: Date(timeIntervalSince1970: 1_750_000_000))
         let place = TeeCourseResolve.place(booking: booking, rounds: [older, newer], courses: [])
-        XCTAssertEqual(place.canchaTitle, "Cancha Nueva")
-        XCTAssertEqual(place.strategyCourses.map(\.name), ["Cancha Nueva"])
-        XCTAssertEqual(place.strategyCourses.first?.courseId, "209-mdp-nueva")
+        XCTAssertEqual(place.canchaTitle, "La reserva no especifica la cancha.")
+        XCTAssertTrue(place.strategyCourses.isEmpty)
     }
 
     func testForecastUsesRealWindAndDoesNotInventTheRest() {

@@ -62,8 +62,16 @@ final class AppModel {
     var showsGroups = false
     var inviteShare: InviteSharePayload?
     var teeTimes: [TeeTime] = []
+    var teeNote = ""
+    var cardNote = ""
+    var bookingNote = ""
+    var cardBusy = false
+    var bookingBusy = false
     var scorecardFetches: [ScorecardFetchJob] = []
     var scorecardFetchNote: String?
+    private var teeFlight: Task<Void, Never>?
+    private var cardFlight: Task<Void, Never>?
+    private var bookingFlight: Task<Void, Never>?
     var playSettings = PlaySettingsStore.load()
     var needsClub: NeedsClubPayload?
     var pendingClubID: Int?
@@ -661,12 +669,36 @@ final class AppModel {
     func refreshTeeTimes() async {
         guard isSignedIn else {
             teeTimes = []
+            teeNote = ""
             scorecardFetches = []
             scorecardFetchNote = nil
             return
         }
-        if let remote = try? await api.teeTimes() {
-            teeTimes = remote
+        if let flight = teeFlight {
+            await flight.value
+            return
+        }
+        let task = Task { @MainActor in await self.performTeeRefresh() }
+        teeFlight = task
+        await task.value
+        teeFlight = nil
+    }
+
+    private func performTeeRefresh() async {
+        teeNote = "Revisando"
+        do {
+            let read = try await api.refreshBookings()
+            if read.fresh {
+                teeTimes = read.teeTimes
+                teeNote = "Leídas del club."
+            } else {
+                teeNote = read.message ?? "No pudimos verificar las reservas."
+                if teeTimes.isEmpty, let cached = try? await api.teeTimes() { teeTimes = cached }
+            }
+        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
+            teeNote = "Sin conexión: mostramos la última lectura."
+        } catch {
+            teeNote = "No pudimos verificar las reservas."
         }
         await refreshScorecardFetches()
         if let next = nextTeeTime {
@@ -675,6 +707,84 @@ final class AppModel {
                 when: next.chipWhen,
                 deepLink: "golflet://inicio"
             ))
+        }
+    }
+
+    func bringLatestCard() async {
+        if let flight = cardFlight {
+            await flight.value
+            return
+        }
+        let task = Task { @MainActor in await self.performBringCard() }
+        cardFlight = task
+        await task.value
+        cardFlight = nil
+    }
+
+    private func performBringCard() async {
+        cardBusy = true
+        cardNote = "Revisando"
+        defer { cardBusy = false }
+        let saved = clubs.filter { $0.passwordSaved && !$0.isDemo }
+        if saved.isEmpty {
+            cardNote = "No hay una clave guardada para leer el club."
+            return
+        }
+        var added = 0
+        var anyOK = false
+        var failure: String?
+        for club in saved {
+            do {
+                let result = try await api.syncAccount(id: club.accountId, password: nil, savePassword: false, progressID: UUID().uuidString)
+                if result.ok {
+                    anyOK = true
+                    added += result.newCards ?? 0
+                } else if failure == nil {
+                    failure = result.message
+                }
+            } catch {
+                if failure == nil { failure = "No pudimos leer el club. La tarjeta en pantalla no cambió." }
+            }
+        }
+        if !anyOK {
+            cardNote = failure ?? "No pudimos leer el club. La tarjeta en pantalla no cambió."
+            return
+        }
+        if added == 0 {
+            cardNote = "No hay una tarjeta nueva. La última sigue siendo la que ya ves."
+            return
+        }
+        cardNote = added == 1 ? "Llegó una tarjeta nueva." : "Llegaron \(added) tarjetas nuevas."
+        if let snap = try? await api.bootstrap() { apply(snap) }
+    }
+
+    func refreshReservation(id: String) async {
+        if let flight = bookingFlight {
+            await flight.value
+            return
+        }
+        let task = Task { @MainActor in await self.performRefreshBooking(id) }
+        bookingFlight = task
+        await task.value
+        bookingFlight = nil
+    }
+
+    private func performRefreshBooking(id: String) async {
+        bookingBusy = true
+        bookingNote = "Revisando"
+        defer { bookingBusy = false }
+        do {
+            let read = try await api.refreshReservation(id: id)
+            if read.fresh && read.playersRead {
+                if !read.teeTimes.isEmpty { teeTimes = read.teeTimes }
+                bookingNote = "Jugadores leídos del club."
+            } else {
+                bookingNote = read.message ?? "No pudimos verificar las reservas."
+            }
+        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
+            bookingNote = "Sin conexión: mostramos la última lectura."
+        } catch {
+            bookingNote = "No pudimos verificar las reservas."
         }
     }
 
