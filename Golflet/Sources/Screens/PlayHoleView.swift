@@ -250,7 +250,6 @@ struct PlayHoleView: View {
             Circle().fill(color).frame(width: 3, height: 3)
         }
         .accessibilityIdentifier("play-reticle")
-        .background(Color.clear.accessibilityIdentifier("play-track").frame(width: 1, height: 1))
     }
 
     private var shotRail: some View {
@@ -295,7 +294,13 @@ struct PlayHoleView: View {
                 .lineLimit(1)
                 .shadow(radius: 2)
             Spacer()
-            Color.clear.frame(width: 44, height: 44)
+            Text("TRACK")
+                .font(GType.label)
+                .foregroundStyle(p.ink)
+                .frame(width: 64, height: 44)
+                .background(Capsule().fill(Color.white.opacity(0.96)))
+                .accessibilityIdentifier("play-track")
+                .accessibilityLabel("TRACK")
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)

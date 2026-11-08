@@ -1012,19 +1012,15 @@ final class AppModel {
     }
 
     func createGroup(name: String, photoJPEG: Data?, idempotencyKey: String? = nil) async {
-        var opened: String?
         await run {
             let group = try await api.createGroup(name: name, photoJPEG: photoJPEG, idempotencyKey: idempotencyKey)
             if !groups.contains(where: { $0.id == group.id }) {
                 groups.insert(group, at: 0)
             }
-            opened = group.id
-            showsCreateGroup = false
+            if let invite = group.invite, invite.enabled {
+                inviteShare = InviteSharePayload(groupName: group.name, url: invite.url)
+            }
             await refreshGroups()
-        }
-        if let opened {
-            try? await Task.sleep(for: .milliseconds(400))
-            presentedGroupID = opened
         }
     }
 
