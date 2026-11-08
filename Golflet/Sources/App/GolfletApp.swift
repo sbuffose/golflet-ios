@@ -37,6 +37,7 @@ struct GolfletApp: App {
                         Task {
                             await model.flushOffline()
                             await model.consumeIntent()
+                            await model.refreshTeeTimes()
                             model.publishWidgetSnapshot()
                         }
                     }

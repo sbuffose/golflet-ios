@@ -81,6 +81,8 @@ struct HoleSatelliteMap: UIViewRepresentable {
     var trackMode: Bool
     var heading: Double
     var animateCamera: Bool
+    var focus: GPSCoord
+    var focusID: String
     var onCenter: (GPSCoord) -> Void
     var onTarget: (GPSCoord) -> Void
 
@@ -103,15 +105,19 @@ struct HoleSatelliteMap: UIViewRepresentable {
         context.coordinator.onCenter = onCenter
         context.coordinator.onTarget = onTarget
         context.coordinator.trackMode = trackMode
-        if context.coordinator.holeNumber != holeNumber {
-            context.coordinator.holeNumber = holeNumber
-            map.removeOverlays(map.overlays)
-            map.removeAnnotations(map.annotations)
-            addRings(map)
-            let meters = max(120.0, Double(PlayMath.meters(from: tee, to: pin)) * 1.45)
-            let mid = CLLocationCoordinate2D(latitude: (tee.lat + pin.lat) / 2, longitude: (tee.lng + pin.lng) / 2)
-            let camera = MKMapCamera(lookingAtCenter: mid, fromDistance: meters, pitch: 0, heading: heading)
-            map.setCamera(camera, animated: animateCamera)
+        let holeChanged = context.coordinator.holeNumber != holeNumber
+        let focusChanged = context.coordinator.focusID != focusID
+        if holeChanged || focusChanged {
+            if holeChanged {
+                context.coordinator.holeNumber = holeNumber
+                map.removeOverlays(map.overlays)
+                map.removeAnnotations(map.annotations)
+                addRings(map)
+            }
+            context.coordinator.focusID = focusID
+            let meters = max(90.0, Double(PlayMath.meters(from: tee, to: pin)) * 0.72)
+            let camera = MKMapCamera(lookingAtCenter: focus.cl, fromDistance: meters, pitch: 0, heading: heading)
+            map.setCamera(camera, animated: animateCamera && !holeChanged)
         }
         refreshShots(map)
         refreshAnnotations(map, context: context)
@@ -153,6 +159,7 @@ struct HoleSatelliteMap: UIViewRepresentable {
         var onCenter: (GPSCoord) -> Void
         var onTarget: (GPSCoord) -> Void
         var holeNumber = 0
+        var focusID = ""
         var trackMode = false
         var dragging = false
 

@@ -1,0 +1,39 @@
+{
+  "name": "platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "prebuild": "node admin-ui/gen.mjs && node web-build/gen-recap-rules.mjs && node web-build/gen-plan-core.mjs && node web-build/gen-match-core.mjs && node web-build/gen-play-rules.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/gateway": "^4.0.128",
+    "@neondatabase/serverless": "^1.2.0",
+    "ai": "^7.0.155",
+    "better-auth": "^1.7.14",
+    "cheerio": "^1.2.0",
+    "next": "16.4.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/ws": "^8.18.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.3",
+    "pg": "^8.23.1",
+    "puppeteer-core": "^25.16.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  }
+}

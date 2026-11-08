@@ -595,6 +595,20 @@ struct TeeTime: Identifiable, Hashable, Sendable {
     }
 }
 
+struct ScorecardFetchJob: Identifiable, Hashable, Sendable {
+    var id: String
+    var teeTimeId: String?
+    var date: String
+    var time: String
+    var clubName: String
+    var course: String
+    var status: String
+    var label: String
+    var lastError: String?
+    var roundId: String?
+    var attemptCount: Int
+}
+
 struct PlayerProfile: Hashable, Sendable {
     var displayName: String
     var initials: String

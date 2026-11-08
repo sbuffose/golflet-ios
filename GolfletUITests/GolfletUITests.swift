@@ -31,6 +31,7 @@ final class GolfletUITests: XCTestCase {
         let forecast = first(app, "tee-prep-forecast")
         XCTAssertTrue(forecast.waitForExistence(timeout: 3))
         XCTAssertTrue(forecast.label.contains("pronóstico"), "Apareció un pronóstico inventado: \(forecast.label)")
+        saveShot("07_reserva")
         let strategy = first(app, "tee-prep-strategy")
         XCTAssertTrue(strategy.waitForExistence(timeout: 6), "Falta la estrategia")
         XCTAssertFalse(strategy.label.contains("Todavía no hay"), "La estrategia de Azul no cargó: \(strategy.label)")
@@ -42,6 +43,11 @@ final class GolfletUITests: XCTestCase {
             first(app, "last-round-card").tap()
             XCTAssertTrue(waitFor(app, "screen-ronda", timeout: 6))
             saveShot("04_ronda")
+            let game = first(app, "edit-game")
+            if game.waitForExistence(timeout: 2), game.isHittable {
+                game.tap()
+                saveShot("04_ronda_juego")
+            }
             dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
@@ -249,7 +255,7 @@ final class GolfletUITests: XCTestCase {
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8), "No se abrió el hoyo GPS")
         XCTAssertTrue(waitFor(app, "distance-center", timeout: 4))
-        XCTAssertTrue(first(app, "play-hit").waitForExistence(timeout: 4), "Falta ENTER para marcar el golpe")
+        XCTAssertTrue(first(app, "play-set").waitForExistence(timeout: 4), "Falta SET para confirmar el tee")
         XCTAssertTrue(first(app, "play-track").waitForExistence(timeout: 2), "Falta TRACK")
         saveShot("17_play_hoyo")
         if first(app, "play-hole-picker").waitForExistence(timeout: 3) {
@@ -264,7 +270,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-strategy-hole", timeout: 6))
         saveShot("23_play_strategy_full")
         dismissIfPresent(app, "close-strategy")
-        first(app, "play-hit").tap()
+        confirmMarksThenEnter(app)
         let saved = first(app, "play-shot-0")
         XCTAssertTrue(saved.waitForExistence(timeout: 4), "ENTER no guardó el golpe")
         XCTAssertFalse(first(app, "club-Dr").exists, "El teléfono no tiene que pedir el palo")
@@ -425,7 +431,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
-        first(app, "play-hit").tap()
+        confirmMarksThenEnter(app)
         XCTAssertTrue(
             app.alerts.buttons["Pasar al hoyo"].waitForExistence(timeout: 6)
                 || first(app, "play-advance-confirm").waitForExistence(timeout: 2),
@@ -513,6 +519,11 @@ final class GolfletUITests: XCTestCase {
         first(app, "home-group-g-jockey").tap()
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No entró al grupo")
         saveShot("41_inicio_hcp_grupos")
+        let photo = first(app, "group-edit-photo")
+        if photo.waitForExistence(timeout: 2) {
+            reveal(app, photo)
+            saveShot("41_grupo_foto")
+        }
     }
 
     func testHomeHcpCreateGroupWhenEmpty() throws {
@@ -776,10 +787,8 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6), "Empezar ronda con GPS no abrió Jugar")
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
-        XCTAssertTrue(first(app, "play-hit").waitForExistence(timeout: 4))
-        XCTAssertEqual(first(app, "play-hit").label, "ENTER")
         XCTAssertTrue(first(app, "play-reticle").exists || first(app, "play-aim-label").exists, "Falta el mapa de mira")
-        first(app, "play-hit").tap()
+        confirmMarksThenEnter(app)
         let savedShot = first(app, "play-shot-0")
         reveal(app, savedShot)
         XCTAssertTrue(savedShot.waitForExistence(timeout: 4), "Ya pegué no guardó el GPS del golpe")
@@ -855,6 +864,10 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        assertFits(app, "play-set")
+        first(app, "play-set").tap()
+        XCTAssertTrue(first(app, "play-set").waitForExistence(timeout: 3))
+        first(app, "play-set").tap()
         assertFits(app, "play-hit")
         reveal(app, first(app, "play-putts-plus"))
         assertFits(app, "play-putts-plus")
@@ -1140,6 +1153,18 @@ final class GolfletUITests: XCTestCase {
         } else {
             first(app, "auth-submit").tap()
         }
+    }
+
+    private func confirmMarksThenEnter(_ app: XCUIApplication) {
+        if first(app, "play-set").waitForExistence(timeout: 3) {
+            first(app, "play-set").tap()
+            if first(app, "play-set").waitForExistence(timeout: 2) {
+                first(app, "play-set").tap()
+            }
+        }
+        XCTAssertTrue(first(app, "play-hit").waitForExistence(timeout: 4), "Falta ENTER para marcar el golpe")
+        XCTAssertEqual(first(app, "play-hit").label, "ENTER")
+        first(app, "play-hit").tap()
     }
 
     private func first(_ app: XCUIApplication, _ id: String) -> XCUIElement {

@@ -172,6 +172,13 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
+        .fullScreenCover(isPresented: bindings.showsReconstruct) {
+            NavigationStack {
+                ReconstructView()
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .fullScreenCover(isPresented: bindings.showsPlay) {
             NavigationStack {
                 PlayCourseView()

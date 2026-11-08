@@ -110,7 +110,12 @@ struct GroupDetailView: View {
 
     private func savePhoto(_ data: Data) async {
         guard let group, !data.isEmpty else { return }
-        await model.updateGroup(group, name: nil, photoJPEG: GroupPhoto.jpegData(from: data))
+        let jpeg = GroupPhoto.jpegData(from: data)
+        guard !jpeg.isEmpty else {
+            model.errorMessage = "No pudimos leer esa foto. La anterior sigue igual."
+            return
+        }
+        await model.updateGroup(group, name: nil, photoJPEG: jpeg)
     }
 
     @ViewBuilder
