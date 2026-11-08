@@ -31,6 +31,7 @@ final class GolfletUITests: XCTestCase {
         let forecast = first(app, "tee-prep-forecast")
         XCTAssertTrue(forecast.waitForExistence(timeout: 3))
         XCTAssertTrue(forecast.label.contains("pronóstico"), "Apareció un pronóstico inventado: \(forecast.label)")
+        saveShot("07_reserva")
         let strategy = first(app, "tee-prep-strategy")
         XCTAssertTrue(strategy.waitForExistence(timeout: 6), "Falta la estrategia")
         XCTAssertFalse(strategy.label.contains("Todavía no hay"), "La estrategia de Azul no cargó: \(strategy.label)")
@@ -42,6 +43,11 @@ final class GolfletUITests: XCTestCase {
             first(app, "last-round-card").tap()
             XCTAssertTrue(waitFor(app, "screen-ronda", timeout: 6))
             saveShot("04_ronda")
+            let game = first(app, "edit-game")
+            if game.waitForExistence(timeout: 2), game.isHittable {
+                game.tap()
+                saveShot("04_ronda_juego")
+            }
             dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
             XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         }
@@ -513,6 +519,11 @@ final class GolfletUITests: XCTestCase {
         first(app, "home-group-g-jockey").tap()
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No entró al grupo")
         saveShot("41_inicio_hcp_grupos")
+        let photo = first(app, "group-edit-photo")
+        if photo.waitForExistence(timeout: 2) {
+            reveal(app, photo)
+            saveShot("41_grupo_foto")
+        }
     }
 
     func testHomeHcpCreateGroupWhenEmpty() throws {
