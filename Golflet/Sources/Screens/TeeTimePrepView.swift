@@ -164,7 +164,10 @@ struct TeeTimePrepView: View {
             await loadStrategy()
             await loadWindHoles()
         }
-        .task(id: booking.id) { await loadForecast() }
+        .task(id: booking.id) {
+            await model.refreshTeeTimes()
+            await loadForecast()
+        }
     }
 
     private var strategyBlock: some View {

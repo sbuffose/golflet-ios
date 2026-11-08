@@ -52,6 +52,14 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
+        .onAppear {
+            Task { await model.refreshTeeTimes() }
+        }
+        .onChange(of: model.selectedTab) { _, tab in
+            if tab == .inicio {
+                Task { await model.refreshTeeTimes() }
+            }
+        }
         .navigationDestination(for: HomeMoreRoute.self) { route in
             switch route {
             case .resumen: SummaryView()
