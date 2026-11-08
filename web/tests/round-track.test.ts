@@ -98,7 +98,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await page.setRequestInterception(true);
     page.on("request", req => {
       const host = new URL(req.url()).hostname;
-      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      if (host !== "127.0.0.1" && host !== "localhost" && host !== "server.arcgisonline.com") req.abort();
       else req.continue();
     });
     mkdirSync(ART, { recursive: true });
@@ -135,6 +135,11 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
         setBottom: sr?.bottom || 0,
         barDisplay: bar ? getComputedStyle(bar).display : "",
         prompt: document.querySelector("#tkro")?.textContent || "",
+        promptH: document.querySelector("#tkro")?.getBoundingClientRect().height || 0,
+        holeChip: document.querySelector("#tk-hole b")?.textContent || "",
+        frame: document.querySelector("#tkmap")?.getAttribute("data-frame") || "",
+        aimLat: document.querySelector("#tkmap")?.getAttribute("data-aim-lat") || "",
+        tileZ: Number(document.querySelector("#tkmap")?.getAttribute("data-tile-z") || 0),
         salida: text.includes("Salida en la mira"),
         caida: text.includes("Caída en la mira"),
         borrar: text.includes("Borrar puntos"),
@@ -156,8 +161,12 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(layout.borrar, false);
     assert.equal(layout.essay, false);
     assert.equal(layout.hole, "");
+    assert.equal(layout.holeChip, "Hoyo 1");
+    assert.equal(layout.frame, "overview");
+    assert.equal(layout.aimLat.startsWith("-34.601"), true);
+    assert.ok(layout.tileZ >= 15 && layout.tileZ <= 17, `tile ${layout.tileZ}`);
+    assert.equal(layout.prompt, "");
     assert.equal(layout.cancel, "Cancelar");
-    assert.match(layout.prompt, /confirmar la salida/);
     assert.match(await page.evaluate(() => location.hash), /ronda=r-nov/);
     assert.deepEqual(cardWrites(calls), []);
     assert.equal(calls.some(c => c.method === "GET" && c.path === "/api/gps/courses/course-fixture"), true);
@@ -172,13 +181,19 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await page.mouse.up();
     const afterPan = await page.$eval("#tkmap", el => el.getAttribute("data-cx"));
     assert.notEqual(afterPan, beforePan);
-    await page.click("#play-zoom-in");
+    await page.click("#play-zoom-out");
     const afterZoom = await page.$eval("#tkmap", el => Number(el.getAttribute("data-z")));
-    assert.ok(afterZoom > beforeZoom);
+    assert.ok(afterZoom < beforeZoom);
+    assert.ok(Number(await page.$eval("#tkmap", el => el.getAttribute("data-tile-z"))) <= 17);
     assert.deepEqual(cardWrites(calls), []);
     await page.screenshot({ path: join(ART, "track-map.png") });
     await page.click("#play-set");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("marcar el hoyo"));
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-frame") === "tee");
+    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /salida/);
+    assert.ok((await page.$eval("#tkro", el => el.getBoundingClientRect().height)) < 40);
+    assert.deepEqual(cardWrites(calls), []);
+    await page.click("#play-set");
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
     assert.match(await page.$eval("#tkro", el => el.textContent || ""), /yd/);
     assert.notEqual(await page.$("#play-cancel"), null);
     assert.deepEqual(cardWrites(calls), []);
@@ -271,7 +286,7 @@ test("a round does not open another club's course when only the course name matc
     await page.setRequestInterception(true);
     page.on("request", req => {
       const host = new URL(req.url()).hostname;
-      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      if (host !== "127.0.0.1" && host !== "localhost" && host !== "server.arcgisonline.com") req.abort();
       else req.continue();
     });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-a`, { waitUntil: "networkidle0" });
@@ -365,7 +380,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await page.click("#round-track");
     await page.waitForSelector("#play-cancel");
     await page.click("#play-cancel");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("marcar el hoyo"));
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
     await page.click("#play-cancel");
     await page.waitForSelector("#play-hit");
   };
@@ -375,7 +390,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await page.setRequestInterception(true);
     page.on("request", req => {
       const host = new URL(req.url()).hostname;
-      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      if (host !== "127.0.0.1" && host !== "localhost" && host !== "server.arcgisonline.com") req.abort();
       else req.continue();
     });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
@@ -509,7 +524,7 @@ test("a stored shot with no point stays unknown and the next shot does not start
     await page.setRequestInterception(true);
     page.on("request", req => {
       const host = new URL(req.url()).hostname;
-      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      if (host !== "127.0.0.1" && host !== "localhost" && host !== "server.arcgisonline.com") req.abort();
       else req.continue();
     });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-saved`, { waitUntil: "networkidle0" });
@@ -623,7 +638,7 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
     await page.setRequestInterception(true);
     page.on("request", req => {
       const host = new URL(req.url()).hostname;
-      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      if (host !== "127.0.0.1" && host !== "localhost" && host !== "server.arcgisonline.com") req.abort();
       else req.continue();
     });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
@@ -631,7 +646,7 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
     await page.click("#round-track");
     await page.waitForSelector("#play-cancel");
     await page.click("#play-cancel");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("marcar el hoyo"));
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
     await page.click("#play-cancel");
     await page.waitForSelector("#play-hit");
     await page.click("#play-hit");
@@ -654,7 +669,7 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
     assert.notEqual(panned.dots[0].cx, first.cx);
     assert.ok(Math.hypot(panned.lastX - panned.midX, panned.lastY - panned.midY) < 3);
     assert.ok(Math.hypot(panned.dots[0].cx - panned.midX, panned.dots[0].cy - panned.midY) > 20);
-    await page.click("#play-zoom-in");
+    await page.click("#play-zoom-out");
     const zoomed = await place();
     assert.notEqual(zoomed.dots[0].cx, panned.dots[0].cx);
     assert.equal(zoomed.dots[0].lat, first.lat);

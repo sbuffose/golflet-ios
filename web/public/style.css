@@ -118,6 +118,13 @@ button{font:inherit;color:inherit}
 .rt-track .s{display:block;color:rgba(247,245,240,.72);white-space:normal;overflow:visible}
 .rt-track .chev{stroke:var(--color-onPrimary)}
 .rt-mark{flex:none;background:#fff;color:var(--color-accent);font-weight:650;font-size:calc(12px*var(--ts,1));letter-spacing:.04em;border-radius:999px;padding:6px 10px}
+.recon-entry{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;min-height:56px;margin:14px 0 4px;padding:12px 14px;background:var(--color-primary);color:var(--color-onPrimary);text-decoration:none;border-radius:var(--radius-lg);box-shadow:var(--shadow-card);overflow:visible}
+.recon-entry b{flex:1;min-width:0;font-size:calc(16px*var(--ts,1));font-weight:650;line-height:1.25;white-space:normal;overflow:visible;text-overflow:clip}
+.recon-go{flex:none;color:var(--color-accent);font-size:22px;font-weight:650;line-height:1}
+.rc-pick{margin-top:8px}
+.rc-pick label.s{display:flex;flex-direction:column;gap:6px;margin-top:12px;white-space:normal;overflow:visible}
+.rc-pick input,.rc-pick select{box-sizing:border-box;display:block;width:100%;max-width:100%;min-height:44px;margin:0;border:1px solid var(--color-hair,#E6E2D8);border-radius:10px;padding:8px 10px;background:#fff;color:var(--color-ink);font-size:max(16px,1em)}
+.rc-pick .btn{margin-top:14px}
 .warnmark{color:var(--color-negative);font-size:calc(9px*var(--ts,1));vertical-align:super;margin-left:1px;font-weight:var(--fw700,700)}
 
 /* inputs */
@@ -2431,8 +2438,14 @@ html.gp-fix #view .tk-host,html.gp-fix #jugbody.tk-host{flex:1 1 auto;min-height
 .tk-cn{flex:1;text-align:center;font-size:14px;font-weight:650;text-shadow:0 1px 8px rgba(0,0,0,.55);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tk-chips{position:absolute;top:calc(60px + env(safe-area-inset-top));left:12px;right:12px;z-index:4;display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .tk-chip{background:rgba(15,61,46,.86);color:#F6F7F9;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:650}
-.tk-ro{position:absolute;left:50%;top:calc(42% + 22px);transform:translateX(-50%);z-index:4;background:#fff;color:#0B2545;border-radius:14px;padding:8px 14px;text-align:center;min-width:132px;box-shadow:0 4px 16px rgba(0,0,0,.28);pointer-events:none}
-.tk-ro b{display:block;font-size:22px;line-height:1.15}
+.tk-ro{position:absolute;left:50%;top:calc(42% + 18px);transform:translateX(-50%);z-index:4;background:#fff;color:#0B2545;border-radius:999px;padding:5px 12px;text-align:center;max-width:calc(100% - 32px);box-shadow:0 4px 16px rgba(0,0,0,.28);pointer-events:none}
+.tk-ro b{display:block;font-size:14px;font-weight:650;line-height:1.2}
+.tk-setup b{white-space:nowrap}
+.tk-hole{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 52px);transform:translateX(-50%);z-index:5;display:flex;align-items:baseline;gap:8px;max-width:calc(100% - 28px);padding:4px 10px;border-radius:999px;background:rgba(11,37,69,.92);color:#F6F7F9;pointer-events:none}
+.tk-hole b{font-size:14px;font-weight:700;white-space:nowrap}
+.tk-hole span{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk-maperr{position:absolute;left:16px;right:16px;top:46%;z-index:6;background:#fff;color:#0B2545;border-radius:14px;padding:12px 14px;text-align:center}
+.tk-maperr button{margin-top:8px}
 .tk-ro small{display:block;font-size:12.5px;color:#3E4C62;font-weight:600}
 .tk-ro em{display:block;font-style:normal;font-size:11px;color:#6B7686;margin-top:3px}
 .tk-dock{position:absolute;left:0;right:0;bottom:0;z-index:5;padding:10px 14px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,rgba(8,18,14,.55) 18%,rgba(8,18,14,.92))}

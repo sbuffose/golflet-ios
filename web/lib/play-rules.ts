@@ -32,6 +32,100 @@ export const MES_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", 
 
 const norm = (d: number) => ((d % 360) + 360) % 360;
 
+/** Esri World Imagery at Cancha Vieja hole 1 serves real golf pixels through zoom 17.
+ *  Zoom 18 and 19 answer HTTP 200 with the grey "Map data not yet available" tile. */
+export const IMAGERY_ZOOM_MAX = 17;
+
+export function projectLL(lat: number, lng: number): [number, number] {
+  const x = (lng + 180) / 360;
+  const s = Math.sin(lat * Math.PI / 180);
+  const y = 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+  return [x, y];
+}
+
+function havMeters(a: LL, b: LL): number | null {
+  if (![a.lat, a.lng, b.lat, b.lng].every(Number.isFinite)) return null;
+  const Re = 6371000, t = (x: number) => x * Math.PI / 180, dLa = t(b.lat - a.lat), dLo = t(b.lng - a.lng);
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(t(a.lat)) * Math.cos(t(b.lat)) * Math.sin(dLo / 2) ** 2;
+  return 2 * Re * Math.asin(Math.sqrt(h));
+}
+
+/** A hole axis exists only when both ends are known and the distance is one hole. Nothing is invented. */
+export function holeSpan(tee: LL | null | undefined, flag: LL | null | undefined): { meters: number; bearing: number } | null {
+  const a = tee ? knownPoint(tee.lat, tee.lng) : null;
+  const b = flag ? knownPoint(flag.lat, flag.lng) : null;
+  if (!a || !b || (a.lat === b.lat && a.lng === b.lng)) return null;
+  const meters = havMeters(a, b);
+  const bearing = bearingDeg(a, b);
+  if (meters == null || bearing == null || meters < 40 || meters > 700) return null;
+  return { meters, bearing };
+}
+
+export type FrameMode = "overview" | "tee" | "flag" | "play" | "point";
+export type HoleFrame = { mode: FrameMode; z: number; cx: number; cy: number; bearing: number | null; aimLat: number; aimLng: number };
+
+const clampNum = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
+function pointFrame(p: LL): HoleFrame {
+  const [cx, cy] = projectLL(p.lat, p.lng);
+  return { mode: "point", z: IMAGERY_ZOOM_MAX, cx, cy, bearing: null, aimLat: p.lat, aimLng: p.lng };
+}
+
+/** Overview puts the reticle on the flag, tee down-screen. Tee and flag cameras move to that end. */
+export function frameHole(
+  tee: LL | null | undefined,
+  flag: LL | null | undefined,
+  mode: FrameMode,
+  view: { width: number; height: number },
+  ball?: LL | null,
+): HoleFrame | null {
+  const a = tee ? knownPoint(tee.lat, tee.lng) : null;
+  const b = flag ? knownPoint(flag.lat, flag.lng) : null;
+  const span = holeSpan(a, b);
+  const height = Math.max(1, view?.height || 844);
+  if (!span || !a || !b) {
+    if (a && b) return null;
+    const only = a || b;
+    return only ? pointFrame(only) : null;
+  }
+  const [fx, fy] = projectLL(b.lat, b.lng);
+  const [tx, ty] = projectLL(a.lat, a.lng);
+  const dist = Math.hypot(tx - fx, ty - fy);
+  if (!(dist > 0)) return null;
+  const overviewZ = clampNum(Math.log2(Math.max(96, height * 0.36) / (dist * 256)), 15, IMAGERY_ZOOM_MAX + 0.8);
+  const tight = clampNum(overviewZ + 1.15, 16, IMAGERY_ZOOM_MAX + 0.8);
+  if (mode === "flag") return { mode, z: tight, cx: fx, cy: fy, bearing: span.bearing, aimLat: b.lat, aimLng: b.lng };
+  if (mode === "tee") return { mode, z: tight, cx: tx, cy: ty, bearing: span.bearing, aimLat: a.lat, aimLng: a.lng };
+  if (mode === "play") {
+    const aim = ball ? knownPoint(ball.lat, ball.lng) : a;
+    if (!aim) return null;
+    const [ax, ay] = projectLL(aim.lat, aim.lng);
+    return { mode: "play", z: overviewZ, cx: ax, cy: ay, bearing: span.bearing, aimLat: aim.lat, aimLng: aim.lng };
+  }
+  return { mode: "overview", z: overviewZ, cx: fx, cy: fy, bearing: span.bearing, aimLat: b.lat, aimLng: b.lng };
+}
+
+export function screenOf(lat: number, lng: number, cam: { z: number; cx: number; cy: number; bearing: number | null }, view: { width: number; height: number }): [number, number] | null {
+  const p = knownPoint(lat, lng);
+  if (!p) return null;
+  const [x, y] = projectLL(p.lat, p.lng);
+  const n = 2 ** cam.z;
+  const px = (x - cam.cx) * n * 256, py = (y - cam.cy) * n * 256;
+  const rad = -(cam.bearing || 0) * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
+  return [view.width / 2 + px * c - py * s, view.height * 0.42 + px * s + py * c];
+}
+
+export function worldTile(lat: number, lng: number, z: number): { z: number; x: number; y: number } | null {
+  const p = knownPoint(lat, lng);
+  if (!p) return null;
+  const zi = Math.max(0, Math.min(IMAGERY_ZOOM_MAX, Math.floor(z)));
+  const n = 2 ** zi;
+  const [x, y] = projectLL(p.lat, p.lng);
+  const tx = Math.floor(x * n), ty = Math.floor(y * n);
+  if (!Number.isFinite(tx) || !Number.isFinite(ty)) return null;
+  return { z: zi, x: tx, y: ty };
+}
+
 export function bearingDeg(a: LL | null | undefined, b: LL | null | undefined): number | null {
   if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(a.lng) || !Number.isFinite(b.lat) || !Number.isFinite(b.lng)) return null;
   const t = (x: number) => x * Math.PI / 180, dLo = t(b.lng - a.lng);

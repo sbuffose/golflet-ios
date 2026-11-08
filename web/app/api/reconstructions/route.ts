@@ -13,7 +13,7 @@ export const GET = handle(async (req: Request) => {
     where a.user_id=$1 order by r.date desc limit 40`, [user.id]);
   let manual: any[] = [];
   try {
-    manual = await q(`select id, date::text as date, course, club_code, vm_course, round_id from live_round
+    manual = await q(`select id, date::text as date, course, club_code, vm_course, round_id, current_hole from live_round
       where user_id=$1 and origin='manual' order by date desc limit 20`, [user.id]);
   } catch (e) {
     const missingOrigin = e instanceof Error && (e as { code?: string }).code === "42703" && /origin/.test(e.message);
@@ -21,7 +21,7 @@ export const GET = handle(async (req: Request) => {
   }
   return json({
     rounds: rounds.map((r: any) => ({ id: String(r.id), date: String(r.date).slice(0, 10), course: r.course, club_name: r.club_name, club_code: r.club_code })),
-    reconstructions: manual.map((r: any) => ({ id: String(r.id), date: String(r.date).slice(0, 10), course: r.course, club_code: r.club_code, vm_course: r.vm_course, round_id: r.round_id })),
+    reconstructions: manual.map((r: any) => ({ id: String(r.id), date: String(r.date).slice(0, 10), course: r.course, club_code: r.club_code, vm_course: r.vm_course, round_id: r.round_id, current_hole: Number(r.current_hole) || 1 })),
   });
 });
 
