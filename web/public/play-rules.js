@@ -6,6 +6,7 @@
  *  Meteorological wind is where it comes FROM. A shot is holed only on the cup. */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HI_UNIDENTIFIED = exports.MES_FULL = exports.MES = exports.MONTHS_VISIBLE = exports.PUTT_M = exports.CUP_M = void 0;
+exports.knownPoint = knownPoint;
 exports.bearingDeg = bearingDeg;
 exports.windRelative = windRelative;
 exports.windPlay = windPlay;
@@ -25,6 +26,25 @@ exports.officialIndex = officialIndex;
 exports.hiCardLine = hiCardLine;
 exports.hiAttribution = hiAttribution;
 exports.matchRoundCourse = matchRoundCourse;
+/** Same rule as validLatLng: a blank endpoint is unknown, a numeric zero is real, and (0, 0) is not a point. */
+function knownPoint(lat, lng) {
+    const a = knownCoord(lat), b = knownCoord(lng);
+    if (a == null || b == null || Math.abs(a) > 90 || Math.abs(b) > 180 || (a === 0 && b === 0))
+        return null;
+    return { lat: a, lng: b };
+}
+function knownCoord(value) {
+    if (typeof value === "number")
+        return Number.isFinite(value) ? value : null;
+    if (typeof value === "string") {
+        const text = value.trim();
+        if (!text || !/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(text))
+            return null;
+        const n = Number(text);
+        return Number.isFinite(n) ? n : null;
+    }
+    return null;
+}
 exports.CUP_M = 1.2;
 exports.PUTT_M = 25;
 exports.MONTHS_VISIBLE = 6;
