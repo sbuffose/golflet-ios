@@ -247,6 +247,8 @@ final class QuickStatsTests: XCTestCase {
     func testOlderNoteDoesNotReplaceTheVisibleTotalAndAFocusedFieldStays() {
         XCTAssertFalse(QuickStats.noteIsNewer(previous: "2026-11-08T04:00:02.000Z", next: "2026-11-08T04:00:01.000Z"))
         XCTAssertTrue(QuickStats.noteIsNewer(previous: "2026-11-08T04:00:01.000Z", next: "2026-11-08T04:00:02.000Z"))
+        XCTAssertFalse(QuickStats.noteIsNewer(previous: "2026-11-08T04:21:33.367Z", next: "2026-11-08T04:21:33.165Z"))
+        XCTAssertTrue(QuickStats.noteIsNewer(previous: "2026-11-08T04:21:33.165Z", next: "2026-11-08T04:21:33.166Z"))
         XCTAssertFalse(QuickStats.noteIsNewer(previous: "2026-11-08T04:00:02.000Z", next: nil))
         XCTAssertEqual(QuickStats.visibleTotal(current: "32", authoritative: "7", focused: false), "7")
         XCTAssertEqual(QuickStats.visibleTotal(current: "6", authoritative: "7", focused: true), "6")

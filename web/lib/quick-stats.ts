@@ -351,6 +351,9 @@ export function noteAuthority(
 export function noteIsNewer(previous: string | null | undefined, next: string | null | undefined): boolean {
   if (!next) return false;
   if (!previous) return true;
+  const earlier = Date.parse(previous);
+  const later = Date.parse(next);
+  if (Number.isFinite(earlier) && Number.isFinite(later)) return later >= earlier;
   return String(next) >= String(previous);
 }
 
@@ -435,15 +438,18 @@ export async function writeAuthoritativeNote(run: SqlRun, input: {
   return noteRow(note);
 }
 
-/** Single statement. A concurrent GIR-only write cannot put the previous putts back. */
+/** Single statement. A concurrent GIR-only write cannot put the previous putts back.
+ *  now() is the transaction start, so a transaction that began earlier and waited
+ *  on the round lock would publish an older stamp than the note it follows.
+ *  The stamp is taken when this statement runs, and it is at least 1ms after the row it replaces. */
 export const NOTE_UPSERT = `insert into round_note (round_id, user_id, putts, gir, fir, notes, updated_at)
-  values ($1,$2,$3,$4,$5,$6,now())
+  values ($1,$2,$3,$4,$5,$6,clock_timestamp())
   on conflict (round_id) do update set
     putts = case when $7 then excluded.putts else round_note.putts end,
     gir = case when $8 then excluded.gir else round_note.gir end,
     fir = case when $9 then excluded.fir else round_note.fir end,
     notes = case when $10 then excluded.notes else round_note.notes end,
-    updated_at = now()
+    updated_at = greatest(clock_timestamp(), round_note.updated_at + interval '1 millisecond')
   returning putts, gir, fir, notes, updated_at`;
 
 /**

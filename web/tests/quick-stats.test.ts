@@ -152,6 +152,13 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   assert.match(HOLE_MARK_UPSERT, /round_hole_mark\.rev < excluded\.rev/);
   assert.equal(HOLE_MARK_UPSERT.includes("<="), false);
   assert.match(NOTE_UPSERT, /case when \$8 then excluded\.gir else round_note\.gir end/);
+  assert.match(NOTE_UPSERT, /clock_timestamp\(\)/);
+  assert.match(NOTE_UPSERT, /interval '1 millisecond'/);
+  assert.equal(NOTE_UPSERT.includes("now()"), false);
+  assert.match(src, /function shownRound/);
+  assert.match(src, /shownRound\(\) !== id/);
+  assert.match(src, /queueNoteSave/);
+  assert.match(src, /pending\.viewGen !== VIEW_GEN/);
   const migration = readFileSync(new URL("../db/migrations/0044_round_hole_mark.sql", import.meta.url));
   assert.equal(createHash("sha256").update(migration).digest("hex"), "b6ffd94559ee8393c0ee0275623583a79cbafbf7a778486ac10e4c03e4b35dac");
 });
@@ -216,7 +223,11 @@ test("a stale board does not choose the total, zero is a total, and a missing ho
   assert.equal(manual.fir, 8);
   assert.equal(noteIsNewer("2026-11-08T03:00:01.000Z", "2026-11-08T03:00:00.000Z"), false);
   assert.equal(noteIsNewer("2026-11-08T03:00:00.000Z", "2026-11-08T03:00:01.000Z"), true);
+  assert.equal(noteIsNewer("2026-11-08T04:21:33.367Z", "2026-11-08T04:21:33.165Z"), false);
+  assert.equal(noteIsNewer("2026-11-08T04:21:33.165Z", "2026-11-08T04:21:33.166Z"), true);
   assert.equal(js.noteIsNewer("2026-11-08T03:00:01.000Z", "2026-11-08T03:00:00.000Z"), false);
+  assert.equal(js.noteIsNewer("2026-11-08T04:21:33.367Z", "2026-11-08T04:21:33.165Z"), false);
+  assert.equal(js.noteIsNewer("2026-11-08T04:21:33.165Z", "2026-11-08T04:21:33.166Z"), true);
 });
 
 test("a stale cached hole does not enter the total, and the next edit uses the saved rev", () => {

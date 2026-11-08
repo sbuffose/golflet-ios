@@ -2661,6 +2661,14 @@ async function doSync(id, password, save){
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn(...a), ms); }; };
 const noteSeen = new Map();
 const notePending = new Map();
+const noteTimers = new Map();
+function shownRound() {
+  const box = document.querySelector('#qstat');
+  return box && box.isConnected ? (box.dataset.rid || '') : '';
+}
+function dropNoteEdits() {
+  for (const [id, pending] of notePending) if (!pending || pending.viewGen !== VIEW_GEN) notePending.delete(id);
+}
 function roundNotePrevious(id) {
   if (noteSeen.has(id)) return noteSeen.get(id) || '';
   const found = rounds.find(x => x.round_id === id);
@@ -2680,14 +2688,16 @@ function acceptRoundNote(id, note) {
   };
   write(round);
   write(G.rounds.find(x => x.round_id === id));
+  if (shownRound() !== id) return true;
   const pending = notePending.get(id);
+  const pendingHere = pending && pending.viewGen === VIEW_GEN ? pending : null;
   ['putts', 'gir', 'fir'].forEach(k => {
     if (!(k in note)) return;
     const input = view.querySelector(`.fields input[data-k="${k}"]`);
     if (!input) return;
     const shown = note[k] == null ? '' : String(note[k]);
     const previousShown = before[k] == null ? '' : String(before[k]);
-    const pendingValue = pending && pending.values ? pending.values[k] : undefined;
+    const pendingValue = pendingHere && pendingHere.values ? pendingHere.values[k] : undefined;
     const inflight = pendingValue != null && input.value === String(pendingValue) && input.value !== previousShown && input.value !== shown;
     if (document.activeElement === input || inflight) return;
     if (input.value !== shown) input.value = shown;
@@ -2696,7 +2706,7 @@ function acceptRoundNote(id, note) {
 }
 function releaseNoteEdit(id, sent) {
   const round = rounds.find(x => x.round_id === id);
-  if (!round || !sent) return;
+  if (!round || !sent || shownRound() !== id) return;
   ['putts', 'gir', 'fir'].forEach(k => {
     const input = view.querySelector(`.fields input[data-k="${k}"]`);
     if (!input) return;
@@ -2808,20 +2818,20 @@ function bindQuick(id){
             syncBoard();
             if (saved.note && Q.noteIsNewer(roundNotePrevious(id), saved.note.updated_at)) acceptRoundNote(id, saved.note);
           }
-          if (mine !== gen) return;
+          if (mine !== gen || !box.isConnected) return;
           if (outcome !== 'saved') { phase = 'conflict'; paint(); return; }
         }
-        if (mine !== gen) return;
+        if (mine !== gen || !box.isConnected) return;
         phase = 'saved';
         readFailed = false;
         const b = $('#gamebadge'); if (b) b.textContent = rows.length ? 'Cargado' : 'Sin cargar';
         paint();
       } catch (e) {
-        if (mine !== gen) return;
+        if (mine !== gen || !box.isConnected) return;
         phase = e && e.status === 409 ? 'conflict' : 'error';
         paint();
       }
-    }).catch(() => { if (mine === gen && phase === 'saving') { phase = 'error'; paint(); } });
+    }).catch(() => { if (mine === gen && phase === 'saving' && box.isConnected) { phase = 'error'; paint(); } });
   };
   const put = (patch) => {
     if (phase === 'conflict' || readFailed) return;
@@ -2845,6 +2855,7 @@ function bindQuick(id){
   };
   const btn = (label, on, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.className = on ? 'on' : ''; b.onclick = fn; return b; };
   const paint = () => {
+    if (!box.isConnected) return;
     const h = holes[idx], par = h[1], cur = row();
     $('#qhole').textContent = `Hoyo ${h[0]}`;
     $('#qpar').textContent = par != null ? `Par ${par}` : 'Sin par';
@@ -2884,22 +2895,24 @@ function bindQuick(id){
   box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
   paint();
 }
-const saveNote = debounce(async (id) => {
-  const r = rounds.find(x=>x.round_id===id), el = $('#saved span'); if(!r) return;
-  const v = k => view.querySelector(`.fields input[data-k="${k}"]`)?.value ?? '';
-  const sent = { putts: v('putts').trim(), gir: v('gir').trim(), fir: v('fir').trim() };
-  const gen = notePending.get(id)?.gen || 0;
+function queueNoteSave(id, sent, gen, viewGen) {
+  clearTimeout(noteTimers.get(id));
+  noteTimers.set(id, setTimeout(() => { noteTimers.delete(id); saveNote(id, sent, gen, viewGen); }, 700));
+}
+const saveNote = async (id, sent, gen, viewGen) => {
+  const r = rounds.find(x=>x.round_id===id); if(!r || !sent) return;
+  const here = () => shownRound() === id && VIEW_GEN === viewGen;
   const body = { putts: sent.putts, gir: sent.gir, fir: sent.fir };
   try { const { note } = await api(`/api/rounds/${id}/notes`, { method:'PUT', body: JSON.stringify(body) });
-    const applied = acceptRoundNote(id, note);
+    acceptRoundNote(id, note);
     const pending = notePending.get(id);
-    const stillThis = !pending || pending.gen === gen;
-    if (stillThis) notePending.delete(id);
-    if (stillThis) releaseNoteEdit(id, sent);
-    if (!applied && !stillThis) return;
-    if (el && stillThis) el.textContent = 'Guardado en tu cuenta'; const gb = $('#gamebadge'); if (gb && stillThis && (note.putts!=null||note.gir!=null||note.fir!=null)) gb.textContent = 'Cargado'; }
-  catch(e){ if (el) el.textContent = e.status===400 ? 'Revisá los números (putts 0–99, greens y fairways 0–18)' : 'No se pudo guardar: '+e.message; }
-}, 700);
+    if (pending && pending.gen === gen && pending.viewGen === viewGen) notePending.delete(id);
+    if (!here()) return;
+    releaseNoteEdit(id, sent);
+    const el = $('#saved span'); if (el) el.textContent = 'Guardado en tu cuenta';
+    const gb = $('#gamebadge'); if (gb && (note.putts!=null||note.gir!=null||note.fir!=null)) gb.textContent = 'Cargado'; }
+  catch(e){ if (!here()) return; const el = $('#saved span'); if (el) el.textContent = e.status===400 ? 'Revisá los números (putts 0–99, greens y fairways 0–18)' : 'No se pudo guardar: '+e.message; }
+};
 const saveBag = debounce(async () => {
   try { const { bag } = await api('/api/bag', { method:'PUT', body: JSON.stringify({ bag: G.bag }) }); G.bag = bag; window.GolfletPlan?.invalidateClubs?.(); const f = $('#bagsaved'); if (f) f.textContent = 'Guardado en tu cuenta.'; }
   catch(e){ toast('No se pudo guardar la bolsa', 'err'); }
@@ -3071,6 +3084,7 @@ function asideAccount(active){
 function render(keepScroll){
   if (!G) return;
   VIEW_GEN++;
+  dropNoteEdits();
   if (REC && !location.hash.includes(REC.id.replace('live:',''))) micAbort();
   const p = (location.hash.replace(/^#\/?/,'') || 'inicio').split('/').map((x,i,a) => a[0]==='metrica' && i===1 ? x : decodeURIComponent(x));
   if (p.length === 1 && p[0].includes('?')) {            // #/resumen?range=3m — period lives in the URL
@@ -3179,7 +3193,7 @@ function bind(p, isDetail){
   view.querySelectorAll('[data-sortl]').forEach(b=>b.onclick=()=>{ sortL=b.dataset.sortl; render(true); });
   view.querySelectorAll('[data-segc]').forEach(b=>b.onclick=()=>{ segC=b.dataset.segc; render(true); });
   document.querySelectorAll('[data-sync]').forEach(b=>b.onclick=e=>{ e.preventDefault(); doSync(b.dataset.sync, null, false); });
-  if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('.fields input[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; const id = p[1]; const gen = (notePending.get(id)?.gen || 0) + 1; const values = {}; view.querySelectorAll('.fields input[data-k]').forEach(inp => { values[inp.dataset.k] = inp.value; }); notePending.set(id, { gen, values }); saveNote(id); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
+  if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('.fields input[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; const id = p[1]; const gen = (notePending.get(id)?.gen || 0) + 1; const values = {}; view.querySelectorAll('.fields input[data-k]').forEach(inp => { values[inp.dataset.k] = inp.value.trim(); }); notePending.set(id, { gen, values, viewGen: VIEW_GEN }); queueNoteSave(id, values, gen, VIEW_GEN); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
   if (p[0]==='metrica') { const m = (p[1]||'').split('?')[0]; loadMetric(m); view.querySelectorAll('[data-mswitch]').forEach(b=>b.onclick=()=>{ const st = MQ[m]||{}; location.hash = mlink(b.dataset.mswitch, { scope: st.scope||'year', year: st.year||'', course: st.course||'all', sort: st.sort==='count'?'count':'date', order:'desc', range: st.range||'' }); }); }
   if (p[0]==='gps') loadGps(p[1]);
   if (p[0]==='palo') loadPalo(p[1], p[2]);

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Pool, type PoolClient } from "pg";
 import { withTransaction } from "../lib/db";
-import { HOLE_MARK_UPSERT, NOTE_UPSERT, notePatch, writeAuthoritativeNote, writeHoleMark, type HoleRef } from "../lib/quick-stats";
+import { HOLE_MARK_UPSERT, NOTE_UPSERT, noteIsNewer, notePatch, writeAuthoritativeNote, writeHoleMark, type HoleRef } from "../lib/quick-stats";
 
 const TEST_DATABASE_URL = process.env.GOLFLET_TEST_DATABASE_URL || "postgres://golflet_test:golflet_test@127.0.0.1:5432/golflet_scorecard_test";
 const local = /@(127\.0\.0\.1|localhost)(:|\/)/.test(TEST_DATABASE_URL);
@@ -321,5 +321,64 @@ test("two devices writing different holes leave the server total, not either sna
     c?.release();
     a.release();
     b.release();
+  }
+});
+
+test("a transaction that began earlier publishes a later note stamp than the note it waited on", async (t) => {
+  if (!local) return t.skip("la URL de prueba no es local");
+  let setup: PoolClient | null = null;
+  try {
+    setup = await open();
+    for (const statement of DDL.split(";").map(part => part.trim()).filter(Boolean)) await setup.query(statement);
+  } catch (e) {
+    return t.skip(`sin postgres aislado: ${e instanceof Error ? e.message : "error"}`);
+  } finally {
+    setup?.release();
+  }
+
+  const user = "stamp-order";
+  const fast = randomUUID();
+  const round = randomUUID();
+  const early = await open();
+  const reader = await open();
+  try {
+    const first = await early.query(NOTE_UPSERT, [fast, user, 3, 1, 1, null, true, true, true, false]);
+    const second = await early.query(NOTE_UPSERT, [fast, user, 4, 1, 1, null, true, true, true, false]);
+    const floor = new Date(second.rows[0].updated_at).getTime() - new Date(first.rows[0].updated_at).getTime();
+    assert.ok(floor >= 1, `la marca siguiente tiene que avanzar al menos 1 ms, avanzó ${floor}`);
+
+    await seedPair(early, round, user);
+    await early.query("BEGIN");
+    const started = await early.query(`select now() as tx`);
+    const sleeping = early.query(`select pg_sleep(0.35)`);
+    await new Promise(resolve => setTimeout(resolve, 40));
+    const notes = await withTransaction(run => writeAuthoritativeNote(run, {
+      roundId: round, userId: user, card: card2, client: notePatch({ putts: "6", gir: "1", fir: "1" }),
+    }), () => open());
+    await sleeping;
+    const saved = await writeHoleMark((sql, params) => run(early, sql, params), {
+      roundId: round, userId: user, card: card2,
+      incoming: { hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6 },
+    });
+    await early.query("COMMIT");
+    const txStart = new Date(started.rows[0].tx).getTime();
+    const noteAt = Date.parse(String(notes?.updated_at));
+    const markAt = Date.parse(String(saved.note?.updated_at));
+    assert.equal(notes?.putts, 3);
+    assert.equal(saved.note?.putts, 4);
+    assert.ok(noteAt > txStart, "la nota se cerró después de que empezara la transacción que espera");
+    assert.ok(markAt > noteAt, "el total que se cierra después no puede llevar la hora de inicio");
+    assert.equal(noteIsNewer(notes?.updated_at, saved.note?.updated_at), true);
+    const stored = await reader.query(`select putts, gir, fir, notes, updated_at from round_note where round_id=$1`, [round]);
+    assert.equal(Number(stored.rows[0].putts), 4);
+    assert.equal(Number(stored.rows[0].gir), 1);
+    assert.equal(Number(stored.rows[0].fir), 1);
+    assert.equal(stored.rows[0].notes, "existente");
+    assert.equal(new Date(stored.rows[0].updated_at).toISOString(), saved.note?.updated_at);
+  } finally {
+    await reader.query(`delete from round_hole_mark where user_id=$1`, [user]).catch(() => {});
+    await reader.query(`delete from round_note where user_id=$1`, [user]).catch(() => {});
+    early.release();
+    reader.release();
   }
 });

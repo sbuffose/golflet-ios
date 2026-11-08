@@ -59,14 +59,14 @@ struct RoundDetailView: View {
             .environment(model)
         }
         .onAppear {
+            leftRound = false
             extras = Dictionary(uniqueKeysWithValues: model.notes.extras(for: round.roundId).map { ($0.hole, $0) })
-            noteText = model.notes.note(for: round.roundId)?.text ?? round.notes ?? ""
-            if let putts = round.putts {
-                puttsText = String(putts)
-            }
-            girText = round.gir.map(String.init) ?? ""
-            firText = round.fir.map(String.init) ?? ""
-            if let notesAt = round.notesAt {
+            let source = model.rounds.first { $0.roundId == round.roundId } ?? round
+            noteText = model.notes.note(for: round.roundId)?.text ?? source.notes ?? ""
+            puttsText = source.putts.map(String.init) ?? ""
+            girText = source.gir.map(String.init) ?? ""
+            firText = source.fir.map(String.init) ?? ""
+            if let notesAt = source.notesAt {
                 let stamp = ISO8601DateFormatter()
                 stamp.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 noteAt = stamp.string(from: notesAt)
@@ -452,13 +452,26 @@ struct RoundDetailView: View {
         Task {
             try? await Task.sleep(nanoseconds: 600_000_000)
             guard !Task.isCancelled else { return }
-            await model.saveRoundNotes(
+            guard let note = await model.saveRoundNotes(
                 roundId: round.roundId,
                 putts: Int(puttsText),
                 gir: Int(girText),
                 fir: Int(firText),
                 text: noteText
-            )
+            ) else { return }
+            let stamp = note.updatedAt
+            guard QuickStats.noteIsNewer(previous: noteAt, next: stamp) else { return }
+            if let stamp { noteAt = stamp }
+            guard !leftRound else { return }
+            if let value = note.putts {
+                puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
+            }
+            if let value = note.gir {
+                girText = QuickStats.visibleTotal(current: girText, authoritative: String(value), focused: statFocus == .gir)
+            }
+            if let value = note.fir {
+                firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
+            }
         }
     }
 
@@ -594,16 +607,18 @@ struct RoundDetailView: View {
                 if let value = savedWrite.note.putts { fields["putts"] = value }
                 if let value = savedWrite.note.gir { fields["gir"] = value }
                 if let value = savedWrite.note.fir { fields["fir"] = value }
-                if let value = fields["putts"] {
-                    puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
+                if !leftRound {
+                    if let value = fields["putts"] {
+                        puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
+                    }
+                    if let value = fields["gir"] {
+                        girText = QuickStats.visibleTotal(current: girText, authoritative: String(value), focused: statFocus == .gir)
+                    }
+                    if let value = fields["fir"] {
+                        firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
+                    }
                 }
-                if let value = fields["gir"] {
-                    girText = QuickStats.visibleTotal(current: girText, authoritative: String(value), focused: statFocus == .gir)
-                }
-                if let value = fields["fir"] {
-                    firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
-                }
-                if !fields.isEmpty { model.applyStatFields(roundId: round.roundId, fields: fields) }
+                model.applyStatFields(roundId: round.roundId, fields: fields, notesAt: QuickStats.noteDate(stamp))
             }
             quickError = ""
             quickConflict = false
