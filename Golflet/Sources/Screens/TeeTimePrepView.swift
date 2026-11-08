@@ -102,6 +102,7 @@ struct TeeTimePrepView: View {
     let booking: TeeTime
     @State private var strategy: CourseStrategy?
     @State private var liveForecast: String?
+    @State private var teeHour: ForecastHour?
     @State private var gpsHoles: [GPSHole] = []
 
     private var shown: TeeTime {
@@ -148,6 +149,7 @@ struct TeeTimePrepView: View {
                         block("Tarjeta del club", job.label, "tee-prep-scorecard")
                     }
                     block("Cancha", place.canchaTitle, "tee-prep-cancha")
+                    holeWindBlock
                     block(
                         "Pronóstico",
                         liveForecast ?? TeeTimePrep.forecastText(booking: booking, rounds: model.rounds, bag: model.bag, holes: gpsHoles),
@@ -169,6 +171,55 @@ struct TeeTimePrepView: View {
             await loadWindHoles()
             await loadForecast()
         }
+    }
+
+    @ViewBuilder private var holeWindBlock: some View {
+        if let hour = teeHour {
+            let rows = HoleWind.rows(holes: gpsHoles, windFromDeg: hour.windFromDeg.map(Double.init), speedKmh: hour.windKmh)
+            let classified = HoleWind.classified(rows)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Cómo va a estar")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                Text(hourCaption(hour))
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                if classified.rows.isEmpty {
+                    Text(gpsHoles.isEmpty
+                         ? "No hay geometría verificada de esta cancha."
+                         : "No hay rumbo verificado del tee al green. El viento no se clasifica por hoyo.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                } else {
+                    ForEach(classified.rows) { hole in
+                        Text(hole.line)
+                            .font(GType.body)
+                            .foregroundStyle(p.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if classified.omitted > 0 {
+                        Text(classified.omitted == 1
+                             ? "Un hoyo sin rumbo verificado no se clasifica."
+                             : "\(classified.omitted) hoyos sin rumbo verificado no se clasifican.")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("tee-hole-wind")
+        }
+    }
+
+    private func hourCaption(_ hour: ForecastHour) -> String {
+        var parts = ["Pronóstico \(TeeForecast.hourLabel(hour.date))"]
+        if let windKmh = hour.windKmh {
+            var wind = "\(windKmh) km/h"
+            if let from = hour.windFromES { wind += " del \(from)" }
+            parts.append(wind)
+        }
+        parts.append("Open-Meteo")
+        return parts.joined(separator: " · ")
     }
 
     private var strategyBlock: some View {
@@ -240,9 +291,13 @@ struct TeeTimePrepView: View {
 
     private func loadForecast() async {
         liveForecast = nil
+        teeHour = nil
         guard !RuntimeFlags.isUITesting else { return }
-        guard booking.windKmh == nil, booking.tempC == nil, booking.rainMm == nil else { return }
-        guard let window = await TeeForecast.load(booking: booking), !window.hours.isEmpty else { return }
+        guard let window = await TeeForecast.load(booking: booking) else { return }
+        if let hour = window.hours.first, hour.windKmh != nil || hour.windFromDeg != nil {
+            teeHour = hour
+        }
+        guard booking.windKmh == nil, booking.tempC == nil, booking.rainMm == nil, !window.hours.isEmpty else { return }
         liveForecast = TeeForecast.playText(window: window, booking: booking, rounds: model.rounds, bag: model.bag, holes: gpsHoles)
     }
 }
