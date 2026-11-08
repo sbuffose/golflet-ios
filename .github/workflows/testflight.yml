@@ -293,7 +293,7 @@ jobs:
 
   testflight:
     needs: [build, unit-tests, ui-tests]
-    if: (github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && github.head_ref == 'cursor/golflet-parity-fixes-9cbb')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: macos-15
     timeout-minutes: 25
 
