@@ -460,6 +460,54 @@ final class RoundNoteModelTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testACancelledInFlightNoteDoesNotSurfaceTheFailure() async throws {
+        let model = try makeModel()
+        model.rounds = [sample("r1", putts: 32, gir: 10, fir: 8, notes: "vieja", notesAt: olderStamp)]
+        let visit = RoundVisit()
+        visit.enter()
+        let park = Park()
+        MockAPIClient.onSaveRoundNotes = { await park.park() }
+        let screen = NoteScreen(model: model, visit: visit, roundId: "r1")
+        screen.fields = QuickNoteFields(text: "alfa", putts: "7", gir: "1", fir: "1", noteAt: "", focus: nil)
+        screen.push(delay: 0)
+        await until("la nota A no llegó a salir") { park.parked == 1 }
+        visit.leave()
+        screen.saver.cancel()
+        MockAPIClient.failNextRoundNote = true
+        park.release()
+        try await Task.sleep(nanoseconds: 40_000_000)
+        XCTAssertEqual(MockAPIClient.noteEntries, 1)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(screen.paints, 0)
+        XCTAssertEqual(screen.retriggers, 0)
+        XCTAssertEqual(model.rounds[0].putts, 32)
+        XCTAssertEqual(model.notes.note(for: "r1")?.text, "alfa")
+        XCTAssertEqual(model.rounds[0].notes, "alfa")
+    }
+
+    func testACurrentNoteFailureStaysVisible() async throws {
+        let model = try makeModel()
+        model.rounds = [sample("r1", putts: 32, gir: 10, fir: 8, notes: "vieja", notesAt: olderStamp)]
+        let visit = RoundVisit()
+        visit.enter()
+        let park = Park()
+        MockAPIClient.onSaveRoundNotes = { await park.park() }
+        let screen = NoteScreen(model: model, visit: visit, roundId: "r1")
+        screen.fields = QuickNoteFields(text: "alfa", putts: "7", gir: "1", fir: "1", noteAt: "", focus: nil)
+        screen.push(delay: 0)
+        await until("la nota vigente no llegó a salir") { park.parked == 1 }
+        MockAPIClient.failNextRoundNote = true
+        park.release()
+        try await Task.sleep(nanoseconds: 40_000_000)
+        XCTAssertEqual(MockAPIClient.noteEntries, 1)
+        XCTAssertEqual(model.errorMessage, "fallo")
+        XCTAssertEqual(screen.paints, 0)
+        XCTAssertEqual(screen.retriggers, 0)
+        XCTAssertEqual(model.rounds[0].putts, 32)
+        XCTAssertEqual(model.notes.note(for: "r1")?.text, "alfa")
+        XCTAssertEqual(model.rounds[0].notes, "alfa")
+    }
+
     func testAPriorAccountCompletionIsIgnoredAndAStaleSessionIsNotSent() async throws {
         let model = try makeModel()
         model.user = player("demo")

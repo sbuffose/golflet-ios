@@ -460,7 +460,16 @@ final class AppModel {
     /// `session` is the generation captured when the edit was scheduled.
     /// A mismatch before the request does not send. A mismatch after the request
     /// leaves the server write alone and does not touch this account.
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, text: String, session: Int, draft: Int? = nil) async -> QuickTotals? {
+    func saveRoundNotes(
+        roundId: String,
+        putts: Int?,
+        gir: Int?,
+        fir: Int?,
+        text: String,
+        session: Int,
+        draft: Int? = nil,
+        showsError: @escaping @MainActor () -> Bool = { true }
+    ) async -> QuickTotals? {
         guard sessionStill(session) else { return nil }
         let ownsDraft = draft == nil || noteDraftStill(roundId, draft!)
         if ownsDraft {
@@ -486,6 +495,7 @@ final class AppModel {
         } catch {
             guard sessionStill(session) else { return nil }
             guard draft == nil || noteDraftStill(roundId, draft!) else { return nil }
+            guard showsError() else { return nil }
             errorMessage = error.localizedDescription
             return nil
         }
