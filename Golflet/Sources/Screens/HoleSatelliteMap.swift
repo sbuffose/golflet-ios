@@ -98,6 +98,8 @@ struct HoleSatelliteMap: UIViewRepresentable {
         map.showsCompass = false
         map.pointOfInterestFilter = .excludingAll
         map.delegate = context.coordinator
+        map.isAccessibilityElement = false
+        map.accessibilityElementsHidden = true
         return map
     }
 
