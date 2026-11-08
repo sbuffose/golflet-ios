@@ -100,8 +100,18 @@ final class AppModel {
     let api: any GolfletAPI
     let notes: NotesStore
     private var reopenClubsAfterFailure = false
-    /// Bumped on sign-in and sign-out so a snapshot already in flight cannot land on the next account.
+    /// Bumped on sign-in and sign-out. Same user id is a new generation.
     private var snapshotEpoch = 0
+    var sessionEpoch: Int { snapshotEpoch }
+
+    func sessionStill(_ epoch: Int) -> Bool {
+        epoch == snapshotEpoch && isAuthenticated
+    }
+
+    private func rotateSession() {
+        snapshotEpoch += 1
+        notes.clearQuickCache()
+    }
 
     init(api: any GolfletAPI, notes: NotesStore) {
         self.api = api
@@ -288,7 +298,7 @@ final class AppModel {
     }
 
     func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async {
-        snapshotEpoch += 1
+        rotateSession()
         if !isSignedIn { hasPlayerSnapshot = false }
         lastLinkMatricula = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
         lastLinkClave = clave
@@ -315,7 +325,7 @@ final class AppModel {
     func signOut() async {
         await run {
             try await api.signOut()
-            snapshotEpoch += 1
+            rotateSession()
             isSignedIn = false
             user = nil
             clubs = []
@@ -424,7 +434,11 @@ final class AppModel {
         }
     }
 
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, text: String) async -> QuickTotals? {
+    /// `session` is the generation captured when the edit was scheduled.
+    /// A mismatch before the request does not send. A mismatch after the request
+    /// leaves the server write alone and does not touch this account.
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, text: String, session: Int) async -> QuickTotals? {
+        guard sessionStill(session) else { return nil }
         notes.saveNote(roundId: roundId, text: text)
         if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
             rounds[index].notes = text
@@ -434,15 +448,52 @@ final class AppModel {
         }
         do {
             let note = try await api.saveRoundNotes(roundId: roundId, putts: putts, gir: gir, fir: fir, notes: text)
+            guard sessionStill(session) else { return nil }
             var fields: [String: Int] = [:]
             if let value = note.putts { fields["putts"] = value }
             if let value = note.gir { fields["gir"] = value }
             if let value = note.fir { fields["fir"] = value }
-            guard applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(note.updatedAt)) else { return nil }
+            guard applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(note.updatedAt), session: session) else { return nil }
             return note
         } catch {
+            guard sessionStill(session) else { return nil }
             errorMessage = error.localizedDescription
             return nil
+        }
+    }
+
+    func readHoleMarks(roundId: String, session: Int) async -> QuickRoundResult<[HoleMark]> {
+        guard sessionStill(session) else { return .notSent }
+        do {
+            let marks = try await api.holeMarks(roundId: roundId)
+            guard sessionStill(session) else { return .ignored }
+            return .value(marks)
+        } catch {
+            guard sessionStill(session) else { return .ignored }
+            return .failed(error)
+        }
+    }
+
+    func sendHoleMark(roundId: String, session: Int, mark: HoleMark) async -> QuickRoundResult<HoleMarkSave> {
+        guard sessionStill(session) else { return .notSent }
+        do {
+            let saved = try await api.saveHoleMark(roundId: roundId, mark: mark)
+            guard sessionStill(session) else { return .ignored }
+            return .value(saved)
+        } catch {
+            guard sessionStill(session) else { return .ignored }
+            return .failed(error)
+        }
+    }
+
+    /// Hole-extra cache for this account only. A stale generation writes nothing.
+    func writeHoleCache(roundId: String, session: Int, present: [HoleExtra], clear: Set<Int>) {
+        guard sessionStill(session) else { return }
+        for hole in clear {
+            notes.clearExtra(roundId: roundId, hole: hole)
+        }
+        for row in present {
+            notes.upsertExtra(row)
         }
     }
 
@@ -461,7 +512,8 @@ final class AppModel {
     /// Writes the present stats only when this stamp is the round's newest.
     /// A missing key leaves that total alone. An older stamp writes nothing.
     @discardableResult
-    func applyStatFields(roundId: String, fields: [String: Int], notesAt: Date? = nil) -> Bool {
+    func applyStatFields(roundId: String, fields: [String: Int], notesAt: Date? = nil, session: Int) -> Bool {
+        guard sessionStill(session) else { return false }
         guard QuickStats.noteIsNewer(previous: storedNoteDate(roundId: roundId), next: notesAt) else { return false }
         if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
             if let value = fields["putts"] { rounds[index].putts = value }

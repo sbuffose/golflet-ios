@@ -102,6 +102,15 @@ final class NotesStore {
         try? context.save()
     }
 
+    /// Drops round notes and hole extras. The bag stays.
+    func clearQuickCache() {
+        let notes = (try? context.fetch(FetchDescriptor<RoundNote>())) ?? []
+        notes.forEach { context.delete($0) }
+        let extras = (try? context.fetch(FetchDescriptor<HoleExtra>())) ?? []
+        extras.forEach { context.delete($0) }
+        try? context.save()
+    }
+
     func clearExtra(roundId: String, hole: Int) {
         let targetRound = roundId
         let targetHole = hole

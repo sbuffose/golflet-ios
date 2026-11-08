@@ -25,6 +25,8 @@ struct RoundDetailView: View {
     @State private var loadGen = 0
     @State private var loadChain: Task<Void, Never>?
     @State private var saveChain: Task<Void, Never>?
+    @State private var visit = RoundVisit()
+    @State private var noteSaver = QuickNoteSaver()
     @State private var noteAt = ""
     @FocusState private var statFocus: StatField?
 
@@ -60,6 +62,7 @@ struct RoundDetailView: View {
         }
         .onAppear {
             leftRound = false
+            visit.enter()
             extras = Dictionary(uniqueKeysWithValues: model.notes.extras(for: round.roundId).map { ($0.hole, $0) })
             let source = model.rounds.first { $0.roundId == round.roundId } ?? round
             noteText = model.notes.note(for: round.roundId)?.text ?? source.notes ?? ""
@@ -80,7 +83,11 @@ struct RoundDetailView: View {
             loadChain = nil
             await ensureLoaded().value
         }
-        .onDisappear { leftRound = true }
+        .onDisappear {
+            leftRound = true
+            visit.leave()
+            noteSaver.cancel()
+        }
         .safeAreaInset(edge: .top) {
             HStack {
                 Spacer()
@@ -448,19 +455,20 @@ struct RoundDetailView: View {
     }
 
     private func persistNotes() {
-        model.notes.saveNote(roundId: round.roundId, text: noteText)
-        Task {
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            guard !Task.isCancelled else { return }
-            guard let note = await model.saveRoundNotes(
-                roundId: round.roundId,
-                putts: Int(puttsText),
-                gir: Int(girText),
-                fir: Int(firText),
-                text: noteText
-            ) else { return }
+        let session = model.sessionEpoch
+        let generation = visit.generation
+        noteSaver.schedule(
+            model: model,
+            roundId: round.roundId,
+            text: noteText,
+            putts: Int(puttsText),
+            gir: Int(girText),
+            fir: Int(firText),
+            session: session,
+            visit: visit,
+            generation: generation
+        ) { note in
             if let stamp = note.updatedAt { noteAt = stamp }
-            guard !leftRound else { return }
             if let value = note.putts {
                 puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
             }
@@ -525,7 +533,8 @@ struct RoundDetailView: View {
         }
     }
 
-    private func showAccount() {
+    private func showAccount(session: Int) {
+        guard model.sessionStill(session) else { return }
         let board = QuickStats.projectBoard(account: Array(accountMarks.values), edits: pendingEdits())
         var next: [Int: HoleExtra] = [:]
         for mark in board where mark.putts != nil || mark.gir != nil || mark.drive?.isEmpty == false {
@@ -539,13 +548,15 @@ struct RoundDetailView: View {
             )
         }
         extras = next
+        var present: [HoleExtra] = []
+        var clear = Set<Int>()
         for mark in accountMarks.values {
             if mark.putts == nil && mark.gir == nil && (mark.drive ?? "").isEmpty {
-                model.notes.clearExtra(roundId: round.roundId, hole: mark.hole)
+                clear.insert(mark.hole)
                 continue
             }
             let par = round.holes.first { $0.number == mark.hole }?.par ?? 0
-            model.notes.upsertExtra(HoleExtra(
+            present.append(HoleExtra(
                 roundId: round.roundId,
                 hole: mark.hole,
                 putts: mark.putts,
@@ -555,15 +566,19 @@ struct RoundDetailView: View {
         }
         let keep = Set(accountMarks.keys).union(pending.keys)
         for stored in model.notes.extras(for: round.roundId) where !keep.contains(stored.hole) {
-            model.notes.clearExtra(roundId: round.roundId, hole: stored.hole)
+            clear.insert(stored.hole)
         }
+        model.writeHoleCache(roundId: round.roundId, session: session, present: present, clear: clear)
     }
 
     private func commit(hole: Int) async {
         guard !quickConflict else { return }
         guard let edit = pending[hole] else { return }
         let sent = edit
-        guard QuickStats.sendDecision(accountReady: accountReady, stillHere: !leftRound) == "send" else {
+        let session = model.sessionEpoch
+        let generation = visit.generation
+        guard model.sessionStill(session), visit.allows(generation) else { return }
+        guard QuickStats.sendDecision(accountReady: accountReady, stillHere: visit.allows(generation)) == "send" else {
             if !accountReady {
                 needsRetry = true
                 quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
@@ -583,27 +598,44 @@ struct RoundDetailView: View {
         let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: merged.putts, gir: merged.gir, fairway: par == 3 ? nil : QuickStats.localFairway(drive))
         extras[hole] = extra
         let mark = HoleMark(hole: hole, putts: merged.putts, gir: merged.gir, drive: drive, rev: merged.rev)
-        do {
-            let savedWrite = try await model.api.saveHoleMark(roundId: round.roundId, mark: mark)
-            let saved = savedWrite.mark
-            guard QuickStats.phaseAfter(sent: merged.rev, responseRev: saved.rev, conflict: nil) == "saved" else {
+        let attempt = await model.sendHoleMark(roundId: round.roundId, session: session, mark: mark)
+        switch attempt {
+        case .notSent, .ignored:
+            return
+        case .failed(let error):
+            guard model.sessionStill(session), visit.allows(generation) else { return }
+            if let golf = error as? GolfletError, case .http(let status, _) = golf, status == 409 {
                 quickConflict = true
                 needsRetry = true
                 quickError = QuickStats.saveMessage("conflict")
                 return
             }
-            accountMarks = Dictionary(uniqueKeysWithValues: QuickStats.acceptSaved(account: Array(accountMarks.values), saved: saved).map { ($0.hole, $0) })
-            revByHole = Dictionary(uniqueKeysWithValues: accountMarks.map { ($0.key, $0.value.rev) })
-            if let current = pending[hole], current.touched == sent.touched, current.putts == sent.putts, current.gir == sent.gir, current.fairway == sent.fairway {
-                pending[hole] = nil
+            needsRetry = true
+            quickError = QuickStats.saveMessage("error")
+        case .value(let savedWrite):
+            guard model.sessionStill(session) else { return }
+            let saved = savedWrite.mark
+            guard QuickStats.phaseAfter(sent: merged.rev, responseRev: saved.rev, conflict: nil) == "saved" else {
+                guard visit.allows(generation) else { return }
+                quickConflict = true
+                needsRetry = true
+                quickError = QuickStats.saveMessage("conflict")
+                return
             }
-            showAccount()
             let stamp = savedWrite.note.updatedAt
             var fields: [String: Int] = [:]
             if let value = savedWrite.note.putts { fields["putts"] = value }
             if let value = savedWrite.note.gir { fields["gir"] = value }
             if let value = savedWrite.note.fir { fields["fir"] = value }
-            if model.applyStatFields(roundId: round.roundId, fields: fields, notesAt: QuickStats.noteDate(stamp)) {
+            let accepted = model.applyStatFields(roundId: round.roundId, fields: fields, notesAt: QuickStats.noteDate(stamp), session: session)
+            guard visit.allows(generation) else { return }
+            accountMarks = Dictionary(uniqueKeysWithValues: QuickStats.acceptSaved(account: Array(accountMarks.values), saved: saved).map { ($0.hole, $0) })
+            revByHole = Dictionary(uniqueKeysWithValues: accountMarks.map { ($0.key, $0.value.rev) })
+            if let current = pending[hole], current.touched == sent.touched, current.putts == sent.putts, current.gir == sent.gir, current.fairway == sent.fairway {
+                pending[hole] = nil
+            }
+            showAccount(session: session)
+            if accepted {
                 if let stamp { noteAt = stamp }
                 if !leftRound {
                     if let value = fields["putts"] {
@@ -620,18 +652,6 @@ struct RoundDetailView: View {
             quickError = ""
             quickConflict = false
             needsRetry = false
-        } catch let error as GolfletError {
-            if case .http(let status, _) = error, status == 409 {
-                quickConflict = true
-                needsRetry = true
-                quickError = QuickStats.saveMessage("conflict")
-                return
-            }
-            needsRetry = true
-            quickError = QuickStats.saveMessage("error")
-        } catch {
-            needsRetry = true
-            quickError = QuickStats.saveMessage("error")
         }
     }
 
@@ -678,9 +698,19 @@ struct RoundDetailView: View {
     }
 
     private func loadAccountMarks(force: Bool, gen: Int) async {
-        do {
-            let marks = try await model.api.holeMarks(roundId: round.roundId)
-            guard gen == loadGen else { return }
+        let session = model.sessionEpoch
+        let generation = visit.generation
+        let read = await model.readHoleMarks(roundId: round.roundId, session: session)
+        guard gen == loadGen, model.sessionStill(session), visit.allows(generation) else { return }
+        switch read {
+        case .notSent, .ignored:
+            return
+        case .failed:
+            if accountReady, !force { return }
+            accountReady = false
+            needsRetry = true
+            quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
+        case .value(let marks):
             if !force, accountReady { return }
             var loaded: [Int: HoleMark] = [:]
             for mark in marks {
@@ -688,16 +718,10 @@ struct RoundDetailView: View {
             }
             accountMarks = loaded
             revByHole = Dictionary(uniqueKeysWithValues: loaded.map { ($0.key, $0.value.rev) })
-            showAccount()
+            showAccount(session: session)
             accountReady = true
             quickError = ""
             quickConflict = false
-        } catch {
-            guard gen == loadGen else { return }
-            if accountReady, !force { return }
-            accountReady = false
-            needsRetry = true
-            quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
         }
     }
 }
