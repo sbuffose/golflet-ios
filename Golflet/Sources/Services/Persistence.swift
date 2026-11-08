@@ -102,6 +102,18 @@ final class NotesStore {
         try? context.save()
     }
 
+    func clearExtra(roundId: String, hole: Int) {
+        let targetRound = roundId
+        let targetHole = hole
+        let descriptor = FetchDescriptor<HoleExtra>(
+            predicate: #Predicate { $0.roundId == targetRound && $0.hole == targetHole }
+        )
+        if let existing = try? context.fetch(descriptor).first {
+            context.delete(existing)
+            try? context.save()
+        }
+    }
+
     func bag() -> [BagClub] {
         var descriptor = FetchDescriptor<BagClubRecord>(sortBy: [SortDescriptor(\.sortIndex)])
         let rows = (try? context.fetch(descriptor)) ?? []

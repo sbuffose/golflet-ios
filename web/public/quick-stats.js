@@ -1,5 +1,6 @@
 /* Per-hole quick stats. Same rules as web/lib/quick-stats.ts.
-   A partial sample never becomes the round total, and an older rev never wins. */
+   A partial sample never becomes the round total.
+   The same rev is idempotent only when the payload matches. A clear keeps its rev. */
 (function (root) {
   var DRIVES = { left: 1, fairway: 1, right: 1, other: 1, hit: 1 };
   function has(body, key) { return Object.prototype.hasOwnProperty.call(body || {}, key); }
@@ -41,18 +42,74 @@
     if (!DRIVES[s]) throw new Error("Salida inválida");
     return s === "hit" ? "fairway" : s;
   }
-  function applyMark(stored, incoming) {
+  function puttsOf(v) {
+    if (v == null || v === "") return null;
+    var n = Number(v);
+    if (!Number.isInteger(n) || n < 0 || n > 6) throw new Error("Putts inválidos");
+    return n;
+  }
+  function girOf(v) {
+    if (v == null || v === "") return null;
+    if (v === true || v === false) return v;
+    throw new Error("Green inválido");
+  }
+  function samePayload(a, b) {
+    return a.hole === b.hole && a.putts === b.putts && a.gir === b.gir && a.drive === b.drive;
+  }
+  function applyMark(stored, incoming, card) {
     var hole = Number(incoming.hole), rev = Number(incoming.rev);
     if (!Number.isInteger(hole) || hole < 1 || hole > 18) throw new Error("Hoyo inválido");
     if (!Number.isInteger(rev) || rev < 1 || rev > 1000000) throw new Error("Versión inválida");
-    if (stored && rev < stored.rev) return { mark: stored, applied: false };
-    return { mark: {
+    var onCard = null;
+    (card || []).forEach(function (h) { if (h && h.hole === hole) onCard = h; });
+    if (!onCard) throw new Error("Ese hoyo no está en la tarjeta");
+    var mark = {
       hole: hole,
-      putts: has(incoming, "putts") ? (incoming.putts == null || incoming.putts === "" ? null : Number(incoming.putts)) : (stored ? stored.putts : null),
-      gir: has(incoming, "gir") ? (incoming.gir == null || incoming.gir === "" ? null : incoming.gir) : (stored ? stored.gir : null),
+      putts: has(incoming, "putts") ? puttsOf(incoming.putts) : (stored ? stored.putts : null),
+      gir: has(incoming, "gir") ? girOf(incoming.gir) : (stored ? stored.gir : null),
       drive: has(incoming, "drive") ? canonDrive(incoming.drive) : (stored ? stored.drive : null),
       rev: rev
-    }, applied: true };
+    };
+    if (onCard.par === 3 && mark.drive) throw new Error("Un par 3 no lleva fairway");
+    if (!stored) return { mark: mark, applied: true, conflict: null, idempotent: false };
+    if (rev < stored.rev) return { mark: stored, applied: false, conflict: "stale", idempotent: false };
+    if (rev === stored.rev) {
+      if (samePayload(mark, stored)) return { mark: stored, applied: true, conflict: null, idempotent: true };
+      return { mark: stored, applied: false, conflict: "revision", idempotent: false };
+    }
+    return { mark: mark, applied: true, conflict: null, idempotent: false };
+  }
+  function nextHoleRev(storedRev) {
+    var n = Number(storedRev);
+    if (!Number.isInteger(n) || n < 1) return 1;
+    return n + 1;
+  }
+  function seedHoleRevs(marks) {
+    var out = {};
+    (marks || []).forEach(function (mark) {
+      var hole = Number(mark && mark.hole), rev = Number(mark && mark.rev);
+      if (Number.isInteger(hole) && Number.isInteger(rev) && rev >= 1) out[String(hole)] = rev;
+    });
+    return out;
+  }
+  function planHoleSend(revs, hole, alreadyRev) {
+    var frozen = Number(alreadyRev);
+    if (Number.isInteger(frozen) && frozen >= 1) return frozen;
+    var table = revs || {};
+    return nextHoleRev(table[String(hole)]);
+  }
+  function interpretSave(sentRev, response) {
+    if (!response || response.conflict === "revision" || response.conflict === "stale") return "conflict";
+    if (response.applied === true && Number(response.mark && response.mark.rev) === sentRev) return "saved";
+    return "conflict";
+  }
+  function phaseAfter(sentRev, response) { return interpretSave(sentRev, response); }
+  function saveMessage(phase) {
+    if (phase === "saving") return "Guardando…";
+    if (phase === "saved") return "Guardado en tu cuenta";
+    if (phase === "conflict") return "Otra edición llegó antes. Tocá reintentar para traer la cuenta.";
+    if (phase === "error") return "No se pudo guardar. Lo que marcaste sigue acá.";
+    return "Sin cargar";
   }
   function shouldCommit(sentRev, latestRev, responseRev) {
     return sentRev === latestRev && responseRev === sentRev;
@@ -60,5 +117,9 @@
   function accountView(totals, marks, holes) {
     return { totals: totals, fields: noteFields(marks, holes) };
   }
-  root.GolfletQuick = { noteFields: noteFields, mergeNote: mergeNote, applyMark: applyMark, shouldCommit: shouldCommit, accountView: accountView };
+  root.GolfletQuick = {
+    noteFields: noteFields, mergeNote: mergeNote, applyMark: applyMark, shouldCommit: shouldCommit, accountView: accountView,
+    nextHoleRev: nextHoleRev, seedHoleRevs: seedHoleRevs, planHoleSend: planHoleSend,
+    interpretSave: interpretSave, phaseAfter: phaseAfter, saveMessage: saveMessage
+  };
 })(typeof window !== "undefined" ? window : globalThis);

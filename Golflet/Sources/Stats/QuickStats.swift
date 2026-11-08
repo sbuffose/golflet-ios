@@ -11,6 +11,13 @@ struct QuickTotals: Equatable, Sendable {
     var fir: Int?
 }
 
+struct MarkWrite: Equatable, Sendable {
+    var mark: HoleMark
+    var applied: Bool
+    var conflict: String?
+    var idempotent: Bool
+}
+
 struct HoleMark: Equatable, Sendable {
     var hole: Int
     var putts: Int?
@@ -42,17 +49,64 @@ enum QuickStats {
         return fields
     }
 
-    static func apply(stored: HoleMark?, incoming: HoleMark) -> (mark: HoleMark, applied: Bool) {
-        if let stored, incoming.rev < stored.rev {
-            return (stored, false)
-        }
+    /// Same rev and same payload is a retry. Same rev and a different payload does not write.
+    /// A lower rev is stale, including a write that arrives after the hole was cleared.
+    static func apply(stored: HoleMark?, incoming: HoleMark) -> MarkWrite {
         var mark = incoming
         mark.drive = accountDrive(incoming.drive)
-        return (mark, true)
+        guard let stored else {
+            return MarkWrite(mark: mark, applied: true, conflict: nil, idempotent: false)
+        }
+        if mark.rev < stored.rev {
+            return MarkWrite(mark: stored, applied: false, conflict: "stale", idempotent: false)
+        }
+        if mark.rev == stored.rev {
+            if samePayload(stored, mark) {
+                return MarkWrite(mark: stored, applied: true, conflict: nil, idempotent: true)
+            }
+            return MarkWrite(mark: stored, applied: false, conflict: "revision", idempotent: false)
+        }
+        return MarkWrite(mark: mark, applied: true, conflict: nil, idempotent: false)
+    }
+
+    static func nextRev(stored: Int?) -> Int {
+        guard let stored, stored >= 1 else { return 1 }
+        return stored + 1
+    }
+
+    static func accepts(hole: Int, drive: String?, holes: [QuickHole]) -> Bool {
+        guard let card = holes.first(where: { $0.hole == hole }) else { return false }
+        if card.par == 3, drive != nil { return false }
+        return true
+    }
+
+    static func driveForAccount(par: Int, fairway: String?) -> String? {
+        if par == 3 { return nil }
+        return accountDrive(fairway)
+    }
+
+    /// A finished response is saved or a conflict. It does not stay on a spinner.
+    static func phaseAfter(sent: Int, responseRev: Int, conflict: String?) -> String {
+        if conflict == "revision" || conflict == "stale" { return "conflict" }
+        if conflict == nil, responseRev == sent { return "saved" }
+        return "conflict"
+    }
+
+    static func saveMessage(_ phase: String) -> String {
+        switch phase {
+        case "saving": return "Guardando…"
+        case "saved": return "Guardado en tu cuenta"
+        case "conflict": return "Otra edición llegó antes. Reintentá para traer la cuenta."
+        default: return "No se pudo guardar. Lo que marcaste sigue en el teléfono."
+        }
     }
 
     static func shouldCommit(sent: Int, latest: Int, response: Int) -> Bool {
         sent == latest && response == sent
+    }
+
+    private static func samePayload(_ stored: HoleMark, _ incoming: HoleMark) -> Bool {
+        stored.hole == incoming.hole && stored.putts == incoming.putts && stored.gir == incoming.gir && stored.drive == incoming.drive
     }
 
     static func accountView(totals: QuickTotals, marks: [HoleMark], holes: [QuickHole]) -> (totals: QuickTotals, fields: [String: Int]) {

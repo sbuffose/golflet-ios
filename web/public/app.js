@@ -323,7 +323,7 @@ function sRonda(id){
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
   <div class="section"><h2>Tu juego</h2><span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
-  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qmsg">Sin cargar</p></div>
+  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
   <div class="fields">
     <label class="field"><span>Putts</span><input inputmode="numeric" data-k="putts" value="${r.putts??''}" placeholder="—"></label>
     <label class="field"><span>Greens</span><input inputmode="numeric" data-k="gir" value="${r.gir??''}" placeholder="—/18"></label>
@@ -2668,8 +2668,10 @@ function bindQuick(id){
   if (!Array.isArray(rows)) rows = [];
   const holes = r.holes.filter(h => h[0] != null);
   const holeRefs = holes.map(h => ({ hole: h[0], par: h[1] == null ? null : h[1] }));
-  let idx = 0, latest = 0, unsaved = false, fromAccount = false, chain = Promise.resolve();
-  const touched = new Set();
+  let idx = 0, gen = 0, phase = 'idle', chain = Promise.resolve();
+  let revs = {}, seeded = false;
+  const drafts = new Map();
+  const visible = marks => (marks || []).filter(m => m.putts != null || m.gir === true || m.gir === false || m.drive).map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
   const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0], putts: null, gir: null, drive: null };
   const remember = () => { try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {} };
   const applyTotals = (note, fields) => {
@@ -2677,45 +2679,84 @@ function bindQuick(id){
     write(rounds.find(x => x.round_id === id));
     write(G.rounds.find(x => x.round_id === id));
   };
-  const fail = (mine) => {
-    unsaved = true; fromAccount = false;
-    if (mine !== latest) return;
-    const m = $('#qmsg'); if (m) m.textContent = 'No se pudo guardar. Lo que marcaste sigue acá.';
+  const seedPromise = api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`).then(d => {
+    if (!d || !Array.isArray(d.marks) || !Q) throw new Error('marcas');
+    revs = Q.seedHoleRevs(d.marks);
+    seeded = true;
+    if (gen === 0) {
+      rows = visible(d.marks);
+      phase = rows.length ? 'saved' : 'idle';
+      remember();
+      paint();
+    }
+  }).catch(() => { seeded = false; });
+  const reloadAccount = () => {
+    phase = 'saving';
+    drafts.clear();
+    const mine = ++gen;
+    paint();
+    api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`).then(d => {
+      if (mine !== gen || !d || !Array.isArray(d.marks) || !Q) return;
+      revs = Q.seedHoleRevs(d.marks);
+      seeded = true;
+      rows = visible(d.marks);
+      phase = rows.length ? 'saved' : 'idle';
+      remember();
+      paint();
+    }).catch(() => { if (mine !== gen) return; phase = 'error'; paint(); });
   };
   const send = (mine) => {
     chain = chain.then(async () => {
-      if (mine !== latest) return;
-      if (!Q) { fail(mine); return; }
+      if (mine !== gen) return;
+      if (!Q) { phase = 'error'; paint(); return; }
       try {
-        for (const hole of touched) {
-          if (mine !== latest) return;
-          const mark = rows.find(x => x.hole === hole) || { hole, putts: null, gir: null, drive: null };
-          const saved = await api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`, { method: 'PUT', body: JSON.stringify({ hole: mark.hole, putts: mark.putts ?? null, gir: mark.gir ?? null, drive: mark.drive ?? null, rev: mine }) });
-          const responseRev = saved && saved.mark ? Number(saved.mark.rev) : 0;
-          if (!Q.shouldCommit(mine, latest, responseRev)) return;
+        await seedPromise;
+        if (mine !== gen) return;
+        if (!seeded) { phase = 'error'; paint(); return; }
+        for (const hole of [...drafts.keys()]) {
+          if (mine !== gen) return;
+          const draft = drafts.get(hole);
+          if (!draft) continue;
+          draft.rev = Q.planHoleSend(revs, draft.hole, draft.rev);
+          const body = { hole: draft.hole, putts: draft.putts ?? null, gir: draft.gir ?? null, drive: draft.drive ?? null, rev: draft.rev };
+          const saved = await api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`, { method: 'PUT', body: JSON.stringify(body) });
+          const outcome = Q.phaseAfter(body.rev, saved);
+          if (outcome === 'saved') {
+            revs[String(body.hole)] = Number(saved.mark.rev);
+            if (drafts.get(hole) && drafts.get(hole).rev === body.rev) drafts.delete(hole);
+          }
+          if (mine !== gen) return;
+          if (outcome !== 'saved') { phase = 'conflict'; paint(); return; }
         }
+        if (mine !== gen) return;
         const fields = Q.noteFields(rows, holeRefs);
         if (Object.keys(fields).length) {
           const { note } = await api(`/api/rounds/${encodeURIComponent(id)}/notes`, { method: 'PUT', body: JSON.stringify(fields) });
-          if (!Q.shouldCommit(mine, latest, mine)) return;
+          if (mine !== gen) return;
           applyTotals(note, fields);
         }
-        if (mine !== latest) return;
-        unsaved = false; fromAccount = true;
-        const m = $('#qmsg'); if (m) m.textContent = rows.length ? 'Guardado en tu cuenta' : 'Sin cargar';
+        if (mine !== gen) return;
+        phase = 'saved';
         const b = $('#gamebadge'); if (b) b.textContent = rows.length ? 'Cargado' : 'Sin cargar';
-      } catch (e) { fail(mine); }
-    }).catch(() => {});
+        paint();
+      } catch (e) {
+        if (mine !== gen) return;
+        phase = e && e.status === 409 ? 'conflict' : 'error';
+        paint();
+      }
+    }).catch(() => { if (mine === gen && phase === 'saving') { phase = 'error'; paint(); } });
   };
   const put = (patch) => {
-    const cur = row(); const next = Object.assign({ hole: holes[idx][0], putts: null, gir: null, drive: null }, cur, patch);
-    touched.add(next.hole);
+    if (phase === 'conflict') return;
+    const cur = row();
+    const next = Object.assign({ hole: holes[idx][0], putts: null, gir: null, drive: null }, cur, patch);
+    if (holes[idx][1] === 3) next.drive = null;
     if (next.putts == null && next.gir == null && !next.drive) rows = rows.filter(x => x.hole !== next.hole);
     else { const i = rows.findIndex(x => x.hole === next.hole); if (i < 0) rows.push(next); else rows[i] = next; }
-    const mine = ++latest;
-    unsaved = false; fromAccount = false;
+    drafts.set(next.hole, { hole: next.hole, putts: next.putts ?? null, gir: next.gir ?? null, drive: next.drive || null, rev: 0 });
+    phase = 'saving';
+    const mine = ++gen;
     remember();
-    const msg = $('#qmsg'); if (msg) msg.textContent = 'Guardando…';
     paint();
     send(mine);
   };
@@ -2743,20 +2784,20 @@ function bindQuick(id){
     $('#qtot').textContent = bits.length ? `${bits.join(' · ')}. En los hoyos marcados. El total de la tarjeta queda igual hasta completar cada hoyo.` : '';
     const any = rows.some(x => x.putts != null || x.gir === true || x.gir === false || x.drive);
     const msg = $('#qmsg');
-    if (msg && msg.textContent !== 'Guardando…') {
-      if (unsaved) msg.textContent = 'No se pudo guardar. Lo que marcaste sigue acá.';
-      else if (any && fromAccount) msg.textContent = 'Guardado en tu cuenta';
-      else msg.textContent = any ? 'Guardado en este dispositivo' : 'Sin cargar';
+    if (msg) {
+      if (phase === 'idle') msg.textContent = any ? 'Guardado en este dispositivo' : 'Sin cargar';
+      else if (phase === 'saved') msg.textContent = any ? Q.saveMessage('saved') : 'Sin cargar';
+      else msg.textContent = Q ? Q.saveMessage(phase) : 'No se pudo guardar. Lo que marcaste sigue acá.';
+    }
+    const retry = $('#qretry');
+    if (retry) {
+      retry.hidden = phase !== 'conflict' && phase !== 'error';
+      retry.onclick = () => { if (phase === 'conflict') reloadAccount(); else { phase = 'saving'; const mine = ++gen; paint(); send(mine); } };
     }
     const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
   };
   box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
   paint();
-  api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`).then(d => {
-    if (latest !== 0 || !d || !Array.isArray(d.marks)) return;
-    rows = d.marks.map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
-    fromAccount = true; unsaved = false; remember(); paint();
-  }).catch(() => { if (latest !== 0) return; if (rows.length) { unsaved = true; paint(); } });
 }
 const saveNote = debounce(async (id) => {
   const r = rounds.find(x=>x.round_id===id), el = $('#saved span'); if(!r) return;

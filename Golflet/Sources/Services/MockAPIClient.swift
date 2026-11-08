@@ -213,14 +213,11 @@ struct MockAPIClient: GolfletAPI {
         defer { Self.sessionLock.unlock() }
         var rows = Self.holeMarksByRound[roundId] ?? [:]
         let result = QuickStats.apply(stored: rows[mark.hole], incoming: mark)
-        if result.applied {
-            if result.mark.putts == nil, result.mark.gir == nil, result.mark.drive == nil {
-                rows[mark.hole] = nil
-            } else {
-                rows[mark.hole] = result.mark
-            }
-            Self.holeMarksByRound[roundId] = rows
+        if result.conflict != nil {
+            throw GolfletError.http(status: 409, message: QuickStats.saveMessage("conflict"))
         }
+        rows[mark.hole] = result.mark
+        Self.holeMarksByRound[roundId] = rows
         return result.mark
     }
 

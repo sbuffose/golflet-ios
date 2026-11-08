@@ -14,7 +14,12 @@ struct RoundDetailView: View {
     @State private var showsGameEditor = false
     @State private var showsRecap = false
     @State private var quickError = ""
+    @State private var quickConflict = false
     @State private var markRev = 0
+    @State private var revByHole: [Int: Int] = [:]
+    @State private var accountReady = false
+    @State private var loadGen = 0
+    @State private var loadChain: Task<Void, Never>?
     @State private var saveChain: Task<Void, Never>?
 
     var body: some View {
@@ -55,7 +60,10 @@ struct RoundDetailView: View {
             firText = round.fir.map(String.init) ?? ""
         }
         .task(id: round.roundId) {
-            await loadAccountMarks()
+            accountReady = false
+            loadGen += 1
+            loadChain = nil
+            await ensureLoaded().value
         }
         .safeAreaInset(edge: .top) {
             HStack {
@@ -271,6 +279,12 @@ struct RoundDetailView: View {
                     .font(GType.label)
                     .foregroundStyle(p.ink)
                     .accessibilityIdentifier("quick-save-error")
+                if quickConflict {
+                    Button("Reintentar") { Task { await reloadAccount() } }
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("quick-save-retry")
+                }
             }
             if showsGameEditor {
                 VStack(spacing: 8) {
@@ -432,65 +446,131 @@ struct RoundDetailView: View {
     }
 
     private func update(hole: Int, putts: Int?, gir: Bool?, fairway: String?) {
+        if quickConflict { return }
         markRev += 1
-        let sent = markRev
-        let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: putts, gir: gir, fairway: fairway)
-        extras[hole] = extra
-        model.notes.upsertExtra(extra)
+        let generation = markRev
         let previous = saveChain
         let task = Task { @MainActor in
             await previous?.value
-            guard sent == markRev else { return }
+            await ensureLoaded().value
+            guard generation == markRev else { return }
+            guard accountReady, !quickConflict else {
+                if !accountReady {
+                    quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
+                }
+                return
+            }
             let holes = round.holes.map { QuickHole(hole: $0.number, par: $0.par) }
+            let par = round.holes.first { $0.number == hole }?.par ?? 0
+            let drive = QuickStats.driveForAccount(par: par, fairway: fairway)
+            guard QuickStats.accepts(hole: hole, drive: drive, holes: holes) else {
+                quickError = "Ese hoyo no está en la tarjeta."
+                return
+            }
+            let sent = QuickStats.nextRev(stored: revByHole[hole])
+            revByHole[hole] = sent
+            let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: putts, gir: gir, fairway: par == 3 ? nil : fairway)
+            extras[hole] = extra
+            model.notes.upsertExtra(extra)
             let marks = extras.values.map {
-                HoleMark(hole: $0.hole, putts: $0.putts, gir: $0.gir, drive: QuickStats.accountDrive($0.fairway), rev: sent)
+                HoleMark(hole: $0.hole, putts: $0.putts, gir: $0.gir, drive: QuickStats.accountDrive($0.fairway), rev: revByHole[$0.hole] ?? sent)
             }
             let fields = QuickStats.noteFields(marks: marks, holes: holes)
             do {
-                let mark = HoleMark(hole: hole, putts: putts, gir: gir, drive: QuickStats.accountDrive(fairway), rev: sent)
+                let mark = HoleMark(hole: hole, putts: putts, gir: gir, drive: drive, rev: sent)
                 let saved = try await model.api.saveHoleMark(roundId: round.roundId, mark: mark)
-                guard QuickStats.shouldCommit(sent: sent, latest: markRev, response: saved.rev) else {
-                    if sent == markRev { quickError = "No se pudo guardar. Lo que marcaste sigue en el teléfono." }
+                guard generation == markRev else { return }
+                guard QuickStats.phaseAfter(sent: sent, responseRev: saved.rev, conflict: nil) == "saved" else {
+                    quickConflict = true
+                    quickError = QuickStats.saveMessage("conflict")
                     return
                 }
+                revByHole[hole] = saved.rev
                 if !fields.isEmpty {
                     try await model.api.saveNoteFields(roundId: round.roundId, fields: fields)
-                    guard sent == markRev else { return }
+                    guard generation == markRev else { return }
                     if let value = fields["putts"] { puttsText = String(value) }
                     if let value = fields["gir"] { girText = String(value) }
                     if let value = fields["fir"] { firText = String(value) }
                     model.applyStatFields(roundId: round.roundId, fields: fields)
                 }
                 quickError = ""
+                quickConflict = false
+            } catch let error as GolfletError {
+                guard generation == markRev else { return }
+                if case .http(let status, _) = error, status == 409 {
+                    quickConflict = true
+                    quickError = QuickStats.saveMessage("conflict")
+                    return
+                }
+                quickError = QuickStats.saveMessage("error")
             } catch {
-                guard sent == markRev else { return }
-                quickError = "No se pudo guardar. Lo que marcaste sigue en el teléfono."
+                guard generation == markRev else { return }
+                quickError = QuickStats.saveMessage("error")
             }
         }
         saveChain = task
     }
 
-    private func loadAccountMarks() async {
+    private func ensureLoaded() -> Task<Void, Never> {
+        if let loadChain { return loadChain }
+        let gen = loadGen
+        let job = Task { @MainActor in
+            await loadAccountMarks(force: false, gen: gen)
+        }
+        loadChain = job
+        return job
+    }
+
+    private func reloadAccount() async {
+        markRev += 1
+        loadGen += 1
+        let gen = loadGen
+        quickConflict = false
+        accountReady = false
+        let job = Task { @MainActor in
+            await loadAccountMarks(force: true, gen: gen)
+        }
+        loadChain = job
+        await job.value
+    }
+
+    private func loadAccountMarks(force: Bool, gen: Int) async {
         do {
             let marks = try await model.api.holeMarks(roundId: round.roundId)
-            guard markRev == 0, !marks.isEmpty else { return }
+            guard gen == loadGen else { return }
+            if !force, accountReady { return }
             var next: [Int: HoleExtra] = [:]
+            var revs: [Int: Int] = [:]
             for mark in marks {
-                let extra = HoleExtra(
-                    roundId: round.roundId,
-                    hole: mark.hole,
-                    putts: mark.putts,
-                    gir: mark.gir,
-                    fairway: QuickStats.localFairway(mark.drive)
-                )
-                next[mark.hole] = extra
-                model.notes.upsertExtra(extra)
+                revs[mark.hole] = mark.rev
+                let visible = mark.putts != nil || mark.gir != nil || mark.drive?.isEmpty == false
+                if visible {
+                    let extra = HoleExtra(
+                        roundId: round.roundId,
+                        hole: mark.hole,
+                        putts: mark.putts,
+                        gir: mark.gir,
+                        fairway: QuickStats.localFairway(mark.drive)
+                    )
+                    next[mark.hole] = extra
+                    model.notes.upsertExtra(extra)
+                } else {
+                    model.notes.clearExtra(roundId: round.roundId, hole: mark.hole)
+                }
+            }
+            for (hole, extra) in extras where next[hole] == nil && revs[hole] == nil {
+                next[hole] = extra
             }
             extras = next
-            markRev = max(markRev, marks.map(\.rev).max() ?? 0)
+            revByHole = revs
+            accountReady = true
             quickError = ""
+            quickConflict = false
         } catch {
-            guard markRev == 0 else { return }
+            guard gen == loadGen else { return }
+            if accountReady, !force { return }
+            accountReady = false
             quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
         }
     }
