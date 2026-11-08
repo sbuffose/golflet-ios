@@ -23,6 +23,17 @@ final class ParityFixesTests: XCTestCase {
         )
     }
 
+    func testRoundTrackMatchesThisCourseAndDoesNotGuess() {
+        let azul = Course(clubCode: "118", clubName: "Jockey", name: "Azul", holes: [])
+        let colorado = Course(clubCode: "118", clubName: "Jockey", name: "Colorado", holes: [])
+        let other = Course(clubCode: "200", clubName: "Otro", name: "Azul", holes: [])
+        let matched = RoundTrackCourse.match(courses: [azul, colorado, other], clubCode: "118", name: "Azul")
+        XCTAssertEqual(matched?.name, "Azul")
+        XCTAssertEqual(matched?.clubCode, "118")
+        XCTAssertNil(RoundTrackCourse.match(courses: [azul, other], clubCode: "", name: "Azul"))
+        XCTAssertEqual(RoundTrackCourse.match(courses: [colorado], clubCode: "", name: "colorado")?.clubCode, "118")
+    }
+
     func testWindFromConventionAndMissingBearing() {
         XCTAssertEqual(HoleWind.degrees(from: "N"), 0)
         XCTAssertEqual(HoleWind.degrees(from: "sur"), 180)

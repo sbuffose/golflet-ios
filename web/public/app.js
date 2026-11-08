@@ -300,9 +300,9 @@ function holeTally(r){
 }
 function scoreKey(c){
   if (!c.known) return '';
-  const item = (cls, n, label, mark) => `<span><span class="b ${cls}" aria-hidden="true">${mark}</span><b class="num">${n}</b> ${label}</span>`;
+  const item = (cls, n, label, spoken) => `<span aria-label="${n} ${spoken}"><span class="b ${cls}" aria-hidden="true">${n}</span> ${label}</span> `;
   const scope = c.known < c.holes ? `<p class="foot">En ${c.known} hoyos con score. Un hoyo sin score no cuenta como par.</p>` : '';
-  return `<div class="keyrow" id="scoreline" aria-label="${c.eagles} águilas, ${c.birdies} birdies, ${c.pars} pares, ${c.bogeys} bogeys, ${c.doubles} doble o peor">${item('eagle', c.eagles, 'Águilas', '−2')}${item('birdie', c.birdies, 'Birdies', '−1')}${item('par', c.pars, 'Pares', '0')}${item('bogey', c.bogeys, 'Bogeys', '+1')}${item('double', c.doubles, 'Doble +', '+2')}</div>${scope}`;
+  return `<div class="keyrow" id="scoreline">${item('eagle', c.eagles, 'Águilas', 'águilas')}${item('birdie', c.birdies, 'Birdies', 'birdies')}${item('par', c.pars, 'Pares', 'pares')}${item('bogey', c.bogeys, 'Bogeys', 'bogeys')}${item('double', c.doubles, 'Doble +', 'doble o peor')}</div>${scope}`;
 }
 function sRonda(id){
   const r = rounds.find(x=>x.round_id===id); if(!r) return '<p>Ronda no encontrada.</p>';
@@ -323,6 +323,7 @@ function sRonda(id){
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
   <div class="section"><h2>Tu juego</h2><span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
+  <a class="card row rt-track" id="round-track" href="#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&amp;hole=1"><span class="rt-mark">TRACK</span><span class="body"><span class="t">Registrar mis tiros</span><span class="s">Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.</span></span>${ICON.chev}</a>
   <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
   <div class="fields">
     <label class="field"><span>Putts</span><input inputmode="numeric" data-k="putts" value="${r.putts??''}" placeholder="—"></label>
@@ -2891,6 +2892,8 @@ function bindQuick(id){
       retry.onclick = () => { if (phase === 'conflict') reloadAccount(); else retryLoad(); };
     }
     const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
+    const track = document.getElementById('round-track');
+    if (track) track.setAttribute('href', `#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&hole=${h[0]}`);
   };
   box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
   paint();
@@ -3114,7 +3117,7 @@ function render(keepScroll){
   else if (p[0]==='privado'){ detail = sPrivado(); base = 'resumen'; }
   else if (p[0]==='pelota'){ detail = sPelota(); base = 'cuenta'; }
   else if (p[0]==='sorteos'){ detail = sSorteos(); base = 'cuenta'; }
-  else if (p[0]==='reconstruir'){ detail = `<div id="recon" data-id="${esc(p[1] || '')}"></div>`; base = 'rondas'; }
+  else if (p[0]==='reconstruir'){ detail = `<div id="recon" data-id="${esc((p[1] || '').split('?')[0])}"></div>`; base = 'rondas'; }
   else if (p[0]==='jugar'){ detail = sJugar(p[1]); base = 'resumen'; }
   else if (p[0].split('?')[0]==='metricas'){ detail = sMetricas(p[1], p[2]); base = 'resumen'; }
   else if (p[0]==='notificaciones'){ detail = sNotifs(); base = 'inicio'; }

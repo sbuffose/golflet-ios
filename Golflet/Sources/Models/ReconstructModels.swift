@@ -66,6 +66,32 @@ struct ReconstructionShot: Identifiable, Equatable, Sendable {
     }
 }
 
+struct RoundTrackContext: Equatable, Sendable {
+    var roundId: String
+    var date: Date
+    var courseName: String
+    var clubCode: String
+    var hole: Int
+}
+
+enum RoundTrackCourse {
+    static func match(courses: [Course], clubCode: String, name: String) -> Course? {
+        let wanted = fold(name)
+        guard !wanted.isEmpty else { return nil }
+        let named = courses.filter { fold($0.name) == wanted }
+        if !clubCode.isEmpty, let both = named.first(where: { $0.clubCode == clubCode }) {
+            return both
+        }
+        return named.count == 1 ? named[0] : nil
+    }
+
+    private static func fold(_ text: String) -> String {
+        text.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+    }
+}
+
 enum ReconstructionCourseId {
     static func make(clubCode: String, course: String) -> String {
         let folded = course.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
