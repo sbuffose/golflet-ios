@@ -9,6 +9,7 @@ struct QuickTotals: Equatable, Sendable {
     var putts: Int?
     var gir: Int?
     var fir: Int?
+    var updatedAt: String? = nil
 }
 
 struct HoleMarkSave: Equatable, Sendable {
@@ -153,6 +154,28 @@ enum QuickStats {
 
     static func shouldCommit(sent: Int, latest: Int, response: Int) -> Bool {
         sent == latest && response == sent
+    }
+
+    /// A note that left the server earlier does not replace the one already on screen.
+    static func noteIsNewer(previous: String?, next: String?) -> Bool {
+        guard let next, !next.isEmpty else { return false }
+        guard let previous, !previous.isEmpty else { return true }
+        if let earlier = stamp(previous), let later = stamp(next) { return later >= earlier }
+        return next >= previous
+    }
+
+    /// The field that has focus keeps what the player is typing. The others take the accepted total.
+    static func visibleTotal(current: String, authoritative: String, focused: Bool) -> String {
+        focused ? current : authoritative
+    }
+
+    private static func stamp(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: value)
     }
 
     private static func samePayload(_ stored: HoleMark, _ incoming: HoleMark) -> Bool {

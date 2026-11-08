@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Pool, type PoolClient } from "pg";
+import { withTransaction } from "../lib/db";
 import { HOLE_MARK_UPSERT, NOTE_UPSERT, notePatch, writeAuthoritativeNote, writeHoleMark, type HoleRef } from "../lib/quick-stats";
 
 const TEST_DATABASE_URL = process.env.GOLFLET_TEST_DATABASE_URL || "postgres://golflet_test:golflet_test@127.0.0.1:5432/golflet_scorecard_test";
@@ -36,7 +37,7 @@ let pool: Pool | null = null;
 async function db() {
   if (!local) throw new Error("La base de prueba no es local");
   if (!pool) {
-    pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 4, connectionTimeoutMillis: 2000 });
+    pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 8, connectionTimeoutMillis: 2000 });
     pool.on("error", () => {});
   }
   return pool;
@@ -287,6 +288,35 @@ test("two devices writing different holes leave the server total, not either sna
 
     await a.query(`delete from round_hole_mark where user_id=$1`, [user]);
     await a.query(`delete from round_note where user_id=$1`, [user]);
+
+    const wrapped = randomUUID();
+    const wrapUser = "handler-tx";
+    await a.query(`insert into round_note (round_id, user_id, putts, gir, fir, notes) values ($1,$2,32,10,8,'existente')`, [wrapped, wrapUser]);
+    await a.query(HOLE_MARK_UPSERT, [wrapped, wrapUser, 1, 2, true, "fairway", 5]);
+    await a.query(HOLE_MARK_UPSERT, [wrapped, wrapUser, 2, 1, false, "left", 4]);
+    const connect = () => open();
+    const [left, right] = await Promise.all([
+      withTransaction(run => writeHoleMark(run, {
+        roundId: wrapped, userId: wrapUser, card: card2,
+        incoming: { hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6 },
+      }), connect),
+      withTransaction(run => writeHoleMark(run, {
+        roundId: wrapped, userId: wrapUser, card: card2,
+        incoming: { hole: 2, putts: 4, gir: true, drive: "left", rev: 5 },
+      }), connect),
+    ]);
+    const storedWrap = await a.query(`select putts, gir, fir, notes from round_note where round_id=$1`, [wrapped]);
+    assert.equal(Number(storedWrap.rows[0].putts), 7);
+    assert.equal(Number(storedWrap.rows[0].gir), 2);
+    assert.equal(Number(storedWrap.rows[0].fir), 1);
+    assert.equal(storedWrap.rows[0].notes, "existente");
+    assert.equal([left, right].some(item => item.note?.putts === 7), true);
+    const ignoredWrap = await withTransaction(run => writeAuthoritativeNote(run, {
+      roundId: wrapped, userId: wrapUser, card: card2, client: notePatch({ putts: "6", gir: "1", fir: "1" }),
+    }), connect);
+    assert.equal(ignoredWrap?.putts, 7);
+    await a.query(`delete from round_hole_mark where round_id=$1`, [wrapped]);
+    await a.query(`delete from round_note where round_id=$1`, [wrapped]);
   } finally {
     c?.release();
     a.release();

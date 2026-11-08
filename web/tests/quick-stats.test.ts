@@ -120,6 +120,10 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   assert.match(quick, /projectBoard/);
   assert.match(quick, /acceptSaved/);
   assert.match(quick, /noteIsNewer/);
+  assert.match(quick, /acceptRoundNote\(id, saved\.note\)/);
+  assert.match(src, /function acceptRoundNote/);
+  assert.match(src, /activeElement === input/);
+  assert.match(src, /function releaseNoteEdit/);
   assert.equal(quick.includes("noteFields(Q.projectBoard"), false);
   assert.equal(quick.includes("/notes"), false);
   assert.equal(quick.includes("if (!rows.some"), false);
@@ -141,6 +145,8 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   assert.match(marksRoute, /withTransaction/);
   assert.equal(notesRoute.includes("select putts"), false);
   assert.match(notesRoute, /writeAuthoritativeNote/);
+  assert.match(notesRoute, /isUndefinedTable/);
+  assert.match(notesRoute, /round_hole_mark/);
   assert.match(marksRoute, /writeHoleMark/);
   assert.match(readFileSync(new URL("../lib/quick-stats.ts", import.meta.url), "utf8"), /pg_advisory_xact_lock/);
   assert.match(HOLE_MARK_UPSERT, /round_hole_mark\.rev < excluded\.rev/);

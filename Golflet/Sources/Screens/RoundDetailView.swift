@@ -25,6 +25,10 @@ struct RoundDetailView: View {
     @State private var loadGen = 0
     @State private var loadChain: Task<Void, Never>?
     @State private var saveChain: Task<Void, Never>?
+    @State private var noteAt = ""
+    @FocusState private var statFocus: StatField?
+
+    private enum StatField: Hashable { case putts, gir, fir }
 
     var body: some View {
         GScreen(id: "screen-ronda") {
@@ -62,6 +66,11 @@ struct RoundDetailView: View {
             }
             girText = round.gir.map(String.init) ?? ""
             firText = round.fir.map(String.init) ?? ""
+            if let notesAt = round.notesAt {
+                let stamp = ISO8601DateFormatter()
+                stamp.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                noteAt = stamp.string(from: notesAt)
+            }
         }
         .task(id: round.roundId) {
             leftRound = false
@@ -277,9 +286,9 @@ struct RoundDetailView: View {
                     .accessibilityIdentifier("edit-game")
             }
             HStack(spacing: 10) {
-                gameField("Putts", $puttsText)
-                gameField("Greens", $girText)
-                gameField("Fairways", $firText)
+                gameField("Putts", $puttsText, .putts)
+                gameField("Greens", $girText, .gir)
+                gameField("Fairways", $firText, .fir)
             }
             if !quickError.isEmpty {
                 Text(quickError)
@@ -303,7 +312,7 @@ struct RoundDetailView: View {
         }
     }
 
-    private func gameField(_ label: String, _ text: Binding<String>) -> some View {
+    private func gameField(_ label: String, _ text: Binding<String>, _ field: StatField) -> some View {
         GCard(radius: 16, padding: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(label)
@@ -313,6 +322,7 @@ struct RoundDetailView: View {
                     .font(GType.statM)
                     .tabular()
                     .keyboardType(.numberPad)
+                    .focused($statFocus, equals: field)
                     .onChange(of: text.wrappedValue) { _, _ in persistNotes() }
             }
         }
@@ -577,14 +587,24 @@ struct RoundDetailView: View {
                 pending[hole] = nil
             }
             showAccount()
-            var fields: [String: Int] = [:]
-            if let value = savedWrite.note.putts { fields["putts"] = value }
-            if let value = savedWrite.note.gir { fields["gir"] = value }
-            if let value = savedWrite.note.fir { fields["fir"] = value }
-            if let value = fields["putts"] { puttsText = String(value) }
-            if let value = fields["gir"] { girText = String(value) }
-            if let value = fields["fir"] { firText = String(value) }
-            if !fields.isEmpty { model.applyStatFields(roundId: round.roundId, fields: fields) }
+            let stamp = savedWrite.note.updatedAt
+            if QuickStats.noteIsNewer(previous: noteAt, next: stamp) {
+                if let stamp { noteAt = stamp }
+                var fields: [String: Int] = [:]
+                if let value = savedWrite.note.putts { fields["putts"] = value }
+                if let value = savedWrite.note.gir { fields["gir"] = value }
+                if let value = savedWrite.note.fir { fields["fir"] = value }
+                if let value = fields["putts"] {
+                    puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
+                }
+                if let value = fields["gir"] {
+                    girText = QuickStats.visibleTotal(current: girText, authoritative: String(value), focused: statFocus == .gir)
+                }
+                if let value = fields["fir"] {
+                    firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
+                }
+                if !fields.isEmpty { model.applyStatFields(roundId: round.roundId, fields: fields) }
+            }
             quickError = ""
             quickConflict = false
             needsRetry = false

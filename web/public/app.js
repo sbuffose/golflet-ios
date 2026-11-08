@@ -2659,6 +2659,52 @@ async function doSync(id, password, save){
     onFail: e => { location.hash = '#/club/'+id; render(true); const m = $('#smsg'); if (m){ m.innerHTML = '<div class="msg err"></div>'; m.firstChild.textContent = e.message; } } });
 }
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn(...a), ms); }; };
+const noteSeen = new Map();
+const notePending = new Map();
+function roundNotePrevious(id) {
+  if (noteSeen.has(id)) return noteSeen.get(id) || '';
+  const found = rounds.find(x => x.round_id === id);
+  return found && found.notes_at || '';
+}
+function acceptRoundNote(id, note) {
+  const Q = window.GolfletQuick;
+  const previous = roundNotePrevious(id);
+  if (!Q || !note || !Q.noteIsNewer(previous, note.updated_at)) return false;
+  const round = rounds.find(x => x.round_id === id);
+  const before = { putts: round ? round.putts : null, gir: round ? round.gir : null, fir: round ? round.fir : null };
+  noteSeen.set(id, note.updated_at || previous);
+  const write = (target) => {
+    if (!target) return;
+    ['putts', 'gir', 'fir'].forEach(k => { if (k in note) target[k] = note[k]; });
+    if (note.updated_at) target.notes_at = note.updated_at;
+  };
+  write(round);
+  write(G.rounds.find(x => x.round_id === id));
+  const pending = notePending.get(id);
+  ['putts', 'gir', 'fir'].forEach(k => {
+    if (!(k in note)) return;
+    const input = view.querySelector(`.fields input[data-k="${k}"]`);
+    if (!input) return;
+    const shown = note[k] == null ? '' : String(note[k]);
+    const previousShown = before[k] == null ? '' : String(before[k]);
+    const pendingValue = pending && pending.values ? pending.values[k] : undefined;
+    const inflight = pendingValue != null && input.value === String(pendingValue) && input.value !== previousShown && input.value !== shown;
+    if (document.activeElement === input || inflight) return;
+    if (input.value !== shown) input.value = shown;
+  });
+  return true;
+}
+function releaseNoteEdit(id, sent) {
+  const round = rounds.find(x => x.round_id === id);
+  if (!round || !sent) return;
+  ['putts', 'gir', 'fir'].forEach(k => {
+    const input = view.querySelector(`.fields input[data-k="${k}"]`);
+    if (!input) return;
+    if (input.value.trim() !== String(sent[k] ?? '').trim()) return;
+    const shown = round[k] == null ? '' : String(round[k]);
+    if (input.value !== shown) input.value = shown;
+  });
+}
 function bindQuick(id){
   const box = $('#qstat'); if (!box) return;
   const r = rounds.find(x => x.round_id === id); if (!r || !(r.holes || []).length) { box.hidden = true; return; }
@@ -2669,16 +2715,11 @@ function bindQuick(id){
   const holes = r.holes.filter(h => h[0] != null);
   const holeRefs = holes.map(h => ({ hole: h[0], par: h[1] == null ? null : h[1] }));
   let idx = 0, gen = 0, phase = 'idle', chain = Promise.resolve();
-  let revs = {}, seeded = false, readFailed = false, accountBoard = [], noteAt = '';
+  let revs = {}, seeded = false, readFailed = false, accountBoard = [];
   const drafts = new Map();
   const visible = marks => (marks || []).filter(m => m.putts != null || m.gir === true || m.gir === false || m.drive).map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
   const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0], putts: null, gir: null, drive: null };
   const remember = () => { if (!seeded) return; try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {} };
-  const applyTotals = (note, fields) => {
-    const write = (target) => { if (!target || !note) return; Object.keys(fields).forEach(k => { if (k in note) target[k] = note[k]; }); if (note.updated_at) target.notes_at = note.updated_at; };
-    write(rounds.find(x => x.round_id === id));
-    write(G.rounds.find(x => x.round_id === id));
-  };
   const syncBoard = () => {
     const projected = Q.projectBoard(accountBoard, [...drafts.values()]);
     revs = projected.revs;
@@ -2765,13 +2806,7 @@ function bindQuick(id){
             accountBoard = Q.acceptSaved(accountBoard, { hole: body.hole, putts: mark.putts ?? null, gir: mark.gir ?? null, drive: mark.drive ?? null, rev: Number(mark.rev) });
             if (drafts.get(hole) && drafts.get(hole).rev === body.rev) drafts.delete(hole);
             syncBoard();
-            const note = saved.note;
-            if (note && Q.noteIsNewer(noteAt, note.updated_at)) {
-              const fields = {};
-              ['putts', 'gir', 'fir'].forEach(k => { if (note[k] != null && note[k] !== '') fields[k] = note[k]; });
-              noteAt = note.updated_at || noteAt;
-              if (Object.keys(fields).length) applyTotals(note, fields);
-            }
+            if (saved.note && Q.noteIsNewer(roundNotePrevious(id), saved.note.updated_at)) acceptRoundNote(id, saved.note);
           }
           if (mine !== gen) return;
           if (outcome !== 'saved') { phase = 'conflict'; paint(); return; }
@@ -2851,11 +2886,18 @@ function bindQuick(id){
 }
 const saveNote = debounce(async (id) => {
   const r = rounds.find(x=>x.round_id===id), el = $('#saved span'); if(!r) return;
-  const v = k => view.querySelector(`[data-k="${k}"]`)?.value ?? '';
-  const body = { putts: v('putts').trim(), gir: v('gir').trim(), fir: v('fir').trim() };   // the written note is no longer edited on the web; the server keeps it
+  const v = k => view.querySelector(`.fields input[data-k="${k}"]`)?.value ?? '';
+  const sent = { putts: v('putts').trim(), gir: v('gir').trim(), fir: v('fir').trim() };
+  const gen = notePending.get(id)?.gen || 0;
+  const body = { putts: sent.putts, gir: sent.gir, fir: sent.fir };
   try { const { note } = await api(`/api/rounds/${id}/notes`, { method:'PUT', body: JSON.stringify(body) });
-    Object.assign(r, note, { notes_at: note.updated_at }); const gr = G.rounds.find(x=>x.round_id===id); if (gr) Object.assign(gr, note, { notes_at: note.updated_at });
-    if (el) el.textContent = 'Guardado en tu cuenta'; const gb = $('#gamebadge'); if (gb) gb.textContent = (note.putts!=null||note.gir!=null||note.fir!=null)?'Cargado':'Sin cargar'; }
+    const applied = acceptRoundNote(id, note);
+    const pending = notePending.get(id);
+    const stillThis = !pending || pending.gen === gen;
+    if (stillThis) notePending.delete(id);
+    if (stillThis) releaseNoteEdit(id, sent);
+    if (!applied && !stillThis) return;
+    if (el && stillThis) el.textContent = 'Guardado en tu cuenta'; const gb = $('#gamebadge'); if (gb && stillThis && (note.putts!=null||note.gir!=null||note.fir!=null)) gb.textContent = 'Cargado'; }
   catch(e){ if (el) el.textContent = e.status===400 ? 'Revisá los números (putts 0–99, greens y fairways 0–18)' : 'No se pudo guardar: '+e.message; }
 }, 700);
 const saveBag = debounce(async () => {
@@ -3137,7 +3179,7 @@ function bind(p, isDetail){
   view.querySelectorAll('[data-sortl]').forEach(b=>b.onclick=()=>{ sortL=b.dataset.sortl; render(true); });
   view.querySelectorAll('[data-segc]').forEach(b=>b.onclick=()=>{ segC=b.dataset.segc; render(true); });
   document.querySelectorAll('[data-sync]').forEach(b=>b.onclick=e=>{ e.preventDefault(); doSync(b.dataset.sync, null, false); });
-  if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; saveNote(p[1]); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
+  if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('.fields input[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; const id = p[1]; const gen = (notePending.get(id)?.gen || 0) + 1; const values = {}; view.querySelectorAll('.fields input[data-k]').forEach(inp => { values[inp.dataset.k] = inp.value; }); notePending.set(id, { gen, values }); saveNote(id); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
   if (p[0]==='metrica') { const m = (p[1]||'').split('?')[0]; loadMetric(m); view.querySelectorAll('[data-mswitch]').forEach(b=>b.onclick=()=>{ const st = MQ[m]||{}; location.hash = mlink(b.dataset.mswitch, { scope: st.scope||'year', year: st.year||'', course: st.course||'all', sort: st.sort==='count'?'count':'date', order:'desc', range: st.range||'' }); }); }
   if (p[0]==='gps') loadGps(p[1]);
   if (p[0]==='palo') loadPalo(p[1], p[2]);
