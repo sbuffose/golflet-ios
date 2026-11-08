@@ -195,6 +195,48 @@ export function sendDecision(accountReady: boolean, stillHere: boolean): "send" 
   return "send";
 }
 
+export type BoardMark = { hole: number; putts: number | null; gir: boolean | null; drive: string | null; rev: number };
+
+/**
+ * The account is the whole board. A draft replaces only the fields it touched.
+ * A cached hole that the account does not have, and that this edit did not touch, is not on the board.
+ */
+export function projectBoard(
+  marks: Array<{ hole: number; putts: number | null; gir: boolean | null; drive: string | null; rev: number }>,
+  locals: OpenHole[],
+): { rows: BoardMark[]; revs: Record<string, number> } {
+  const absorbed = absorbAccountMarks(marks, locals);
+  const overlay = new Map(absorbed.holes.map(row => [row.hole, row]));
+  const seen = new Set<number>();
+  const rows: BoardMark[] = [];
+  for (const mark of marks) {
+    const hole = Number(mark.hole);
+    if (!Number.isInteger(hole) || seen.has(hole)) continue;
+    seen.add(hole);
+    const merged = overlay.get(hole);
+    rows.push(merged
+      ? { hole, putts: merged.putts, gir: merged.gir, drive: merged.drive, rev: merged.rev }
+      : { hole, putts: mark.putts ?? null, gir: mark.gir ?? null, drive: mark.drive ?? null, rev: Number(mark.rev) || 0 });
+  }
+  for (const merged of absorbed.holes) {
+    if (seen.has(merged.hole)) continue;
+    rows.push({ hole: merged.hole, putts: merged.putts, gir: merged.gir, drive: merged.drive, rev: merged.rev });
+  }
+  rows.sort((a, b) => a.hole - b.hole);
+  return { rows, revs: absorbed.revs };
+}
+
+/** The accepted row becomes the account snapshot, so the next edit takes the next rev. */
+export function acceptSaved(marks: BoardMark[], saved: BoardMark): BoardMark[] {
+  return [...marks.filter(mark => mark.hole !== saved.hole), {
+    hole: saved.hole,
+    putts: saved.putts ?? null,
+    gir: saved.gir ?? null,
+    drive: saved.drive ?? null,
+    rev: saved.rev,
+  }].sort((a, b) => a.hole - b.hole);
+}
+
 /** A retry keeps the rev it already sent. A new edit takes the seeded account rev plus one. */
 export function planHoleSend(revs: Record<string, number> | null | undefined, hole: number, alreadyRev?: number | null): number {
   const frozen = Number(alreadyRev);

@@ -92,6 +92,28 @@ enum QuickStats {
         return "send"
     }
 
+    struct HoleEdit: Equatable, Sendable {
+        var hole: Int
+        var local: HoleMark
+        var touched: FieldTouch
+    }
+
+    /// The account is the whole board. An edit replaces only the fields it touched.
+    static func projectBoard(account: [HoleMark], edits: [HoleEdit]) -> [HoleMark] {
+        var by: [Int: HoleMark] = [:]
+        for mark in account { by[mark.hole] = mark }
+        for edit in edits {
+            let base = account.first { $0.hole == edit.hole }
+            by[edit.hole] = mergeAccount(account: base, local: edit.local, touched: edit.touched)
+        }
+        return by.values.sorted { $0.hole < $1.hole }
+    }
+
+    /// The accepted row is the account snapshot. The next edit of that hole takes its rev plus one.
+    static func acceptSaved(account: [HoleMark], saved: HoleMark) -> [HoleMark] {
+        (account.filter { $0.hole != saved.hole } + [saved]).sorted { $0.hole < $1.hole }
+    }
+
     static func nextRev(stored: Int?) -> Int {
         guard let stored, stored >= 1 else { return 1 }
         return stored + 1

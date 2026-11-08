@@ -2669,41 +2669,32 @@ function bindQuick(id){
   const holes = r.holes.filter(h => h[0] != null);
   const holeRefs = holes.map(h => ({ hole: h[0], par: h[1] == null ? null : h[1] }));
   let idx = 0, gen = 0, phase = 'idle', chain = Promise.resolve();
-  let revs = {}, seeded = false, readFailed = false;
+  let revs = {}, seeded = false, readFailed = false, accountBoard = [];
   const drafts = new Map();
   const visible = marks => (marks || []).filter(m => m.putts != null || m.gir === true || m.gir === false || m.drive).map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
   const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0], putts: null, gir: null, drive: null };
-  const remember = () => { try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {} };
+  const remember = () => { if (!seeded) return; try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {} };
   const applyTotals = (note, fields) => {
     const write = (target) => { if (!target || !note) return; Object.keys(fields).forEach(k => { if (k in note) target[k] = note[k]; }); if (note.updated_at) target.notes_at = note.updated_at; };
     write(rounds.find(x => x.round_id === id));
     write(G.rounds.find(x => x.round_id === id));
   };
-  const showMerged = (merged) => {
-    const i = rows.findIndex(x => x.hole === merged.hole);
-    const show = merged.putts != null || merged.gir === true || merged.gir === false || merged.drive;
-    if (!show) { if (i >= 0) rows.splice(i, 1); return; }
-    const next = { hole: merged.hole, putts: merged.putts, gir: merged.gir, drive: merged.drive };
-    if (i < 0) rows.push(next); else rows[i] = next;
+  const syncBoard = () => {
+    const projected = Q.projectBoard(accountBoard, [...drafts.values()]);
+    revs = projected.revs;
+    projected.rows.forEach(rowMark => {
+      const draft = drafts.get(rowMark.hole);
+      if (!draft) return;
+      draft.putts = rowMark.putts;
+      draft.gir = rowMark.gir;
+      draft.drive = rowMark.drive;
+    });
+    rows = visible(projected.rows);
+    return projected;
   };
   const applyAccount = (marks) => {
-    const locals = [...drafts.values()];
-    const absorbed = Q.absorbAccountMarks(marks, locals);
-    revs = absorbed.revs;
-    absorbed.holes.forEach(merged => {
-      const draft = drafts.get(merged.hole);
-      if (!draft) return;
-      draft.putts = merged.putts;
-      draft.gir = merged.gir;
-      draft.drive = merged.drive;
-      showMerged(merged);
-    });
-    if (!locals.length) rows = visible(marks);
-    else (marks || []).forEach(m => {
-      if (drafts.has(m.hole)) return;
-      if (m.putts == null && m.gir !== true && m.gir !== false && !m.drive) return;
-      if (!rows.some(x => x.hole === m.hole)) rows.push({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null });
-    });
+    accountBoard = (marks || []).map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: Number(m.rev) || 0 }));
+    syncBoard();
     seeded = true;
     readFailed = false;
   };
@@ -2770,14 +2761,16 @@ function bindQuick(id){
           const saved = await api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`, { method: 'PUT', body: JSON.stringify(body) });
           const outcome = Q.phaseAfter(body.rev, saved);
           if (outcome === 'saved') {
-            revs[String(body.hole)] = Number(saved.mark.rev);
+            const mark = saved.mark || body;
+            accountBoard = Q.acceptSaved(accountBoard, { hole: body.hole, putts: mark.putts ?? null, gir: mark.gir ?? null, drive: mark.drive ?? null, rev: Number(mark.rev) });
             if (drafts.get(hole) && drafts.get(hole).rev === body.rev) drafts.delete(hole);
+            syncBoard();
           }
           if (mine !== gen) return;
           if (outcome !== 'saved') { phase = 'conflict'; paint(); return; }
         }
         if (mine !== gen) return;
-        const fields = Q.noteFields(rows, holeRefs);
+        const fields = Q.noteFields(Q.projectBoard(accountBoard, [...drafts.values()]).rows, holeRefs);
         if (Object.keys(fields).length) {
           const { note } = await api(`/api/rounds/${encodeURIComponent(id)}/notes`, { method: 'PUT', body: JSON.stringify(fields) });
           if (mine !== gen) return;
