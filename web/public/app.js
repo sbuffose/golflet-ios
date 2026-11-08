@@ -2669,7 +2669,7 @@ function bindQuick(id){
   const holes = r.holes.filter(h => h[0] != null);
   const holeRefs = holes.map(h => ({ hole: h[0], par: h[1] == null ? null : h[1] }));
   let idx = 0, gen = 0, phase = 'idle', chain = Promise.resolve();
-  let revs = {}, seeded = false;
+  let revs = {}, seeded = false, readFailed = false;
   const drafts = new Map();
   const visible = marks => (marks || []).filter(m => m.putts != null || m.gir === true || m.gir === false || m.drive).map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
   const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0], putts: null, gir: null, drive: null };
@@ -2679,31 +2679,72 @@ function bindQuick(id){
     write(rounds.find(x => x.round_id === id));
     write(G.rounds.find(x => x.round_id === id));
   };
+  const showMerged = (merged) => {
+    const i = rows.findIndex(x => x.hole === merged.hole);
+    const show = merged.putts != null || merged.gir === true || merged.gir === false || merged.drive;
+    if (!show) { if (i >= 0) rows.splice(i, 1); return; }
+    const next = { hole: merged.hole, putts: merged.putts, gir: merged.gir, drive: merged.drive };
+    if (i < 0) rows.push(next); else rows[i] = next;
+  };
+  const applyAccount = (marks) => {
+    const locals = [...drafts.values()];
+    const absorbed = Q.absorbAccountMarks(marks, locals);
+    revs = absorbed.revs;
+    absorbed.holes.forEach(merged => {
+      const draft = drafts.get(merged.hole);
+      if (!draft) return;
+      draft.putts = merged.putts;
+      draft.gir = merged.gir;
+      draft.drive = merged.drive;
+      showMerged(merged);
+    });
+    if (!locals.length) rows = visible(marks);
+    else (marks || []).forEach(m => {
+      if (drafts.has(m.hole)) return;
+      if (m.putts == null && m.gir !== true && m.gir !== false && !m.drive) return;
+      if (!rows.some(x => x.hole === m.hole)) rows.push({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null });
+    });
+    seeded = true;
+    readFailed = false;
+  };
   const seedPromise = api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`).then(d => {
     if (!d || !Array.isArray(d.marks) || !Q) throw new Error('marcas');
-    revs = Q.seedHoleRevs(d.marks);
-    seeded = true;
-    if (gen === 0) {
-      rows = visible(d.marks);
-      phase = rows.length ? 'saved' : 'idle';
-      remember();
-      paint();
-    }
-  }).catch(() => { seeded = false; });
+    applyAccount(d.marks);
+    if (!drafts.size) phase = rows.length ? 'saved' : 'idle';
+    remember();
+    paint();
+  }).catch(() => {
+    seeded = false;
+    readFailed = true;
+    phase = 'error';
+    if (box.isConnected) paint();
+  });
   const reloadAccount = () => {
     phase = 'saving';
+    readFailed = false;
     drafts.clear();
     const mine = ++gen;
     paint();
     api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`).then(d => {
       if (mine !== gen || !d || !Array.isArray(d.marks) || !Q) return;
-      revs = Q.seedHoleRevs(d.marks);
-      seeded = true;
-      rows = visible(d.marks);
+      applyAccount(d.marks);
       phase = rows.length ? 'saved' : 'idle';
       remember();
       paint();
-    }).catch(() => { if (mine !== gen) return; phase = 'error'; paint(); });
+    }).catch(() => { if (mine !== gen) return; seeded = false; readFailed = true; phase = 'error'; paint(); });
+  };
+  const retryLoad = () => {
+    phase = 'saving';
+    readFailed = false;
+    const mine = ++gen;
+    paint();
+    api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`).then(d => {
+      if (mine !== gen || !d || !Array.isArray(d.marks) || !Q) return;
+      applyAccount(d.marks);
+      remember();
+      if (drafts.size) send(mine);
+      else { phase = rows.length ? 'saved' : 'idle'; paint(); }
+    }).catch(() => { if (mine !== gen) return; seeded = false; readFailed = true; phase = 'error'; paint(); });
   };
   const send = (mine) => {
     chain = chain.then(async () => {
@@ -2712,13 +2753,20 @@ function bindQuick(id){
       try {
         await seedPromise;
         if (mine !== gen) return;
-        if (!seeded) { phase = 'error'; paint(); return; }
+        if (Q.sendDecision(seeded, box.isConnected) !== 'send') {
+          if (!box.isConnected) return;
+          readFailed = true;
+          phase = 'error';
+          paint();
+          return;
+        }
         for (const hole of [...drafts.keys()]) {
           if (mine !== gen) return;
           const draft = drafts.get(hole);
           if (!draft) continue;
           draft.rev = Q.planHoleSend(revs, draft.hole, draft.rev);
-          const body = { hole: draft.hole, putts: draft.putts ?? null, gir: draft.gir ?? null, drive: draft.drive ?? null, rev: draft.rev };
+          const par = (holes.find(h => h[0] === draft.hole) || [])[1];
+          const body = { hole: draft.hole, putts: draft.putts ?? null, gir: draft.gir ?? null, drive: par === 3 ? null : (draft.drive ?? null), rev: draft.rev };
           const saved = await api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`, { method: 'PUT', body: JSON.stringify(body) });
           const outcome = Q.phaseAfter(body.rev, saved);
           if (outcome === 'saved') {
@@ -2737,6 +2785,7 @@ function bindQuick(id){
         }
         if (mine !== gen) return;
         phase = 'saved';
+        readFailed = false;
         const b = $('#gamebadge'); if (b) b.textContent = rows.length ? 'Cargado' : 'Sin cargar';
         paint();
       } catch (e) {
@@ -2747,13 +2796,19 @@ function bindQuick(id){
     }).catch(() => { if (mine === gen && phase === 'saving') { phase = 'error'; paint(); } });
   };
   const put = (patch) => {
-    if (phase === 'conflict') return;
+    if (phase === 'conflict' || readFailed) return;
+    const holeNo = holes[idx][0];
     const cur = row();
-    const next = Object.assign({ hole: holes[idx][0], putts: null, gir: null, drive: null }, cur, patch);
+    const prev = drafts.get(holeNo);
+    const touched = { putts: !!(prev && prev.touched && prev.touched.putts), gir: !!(prev && prev.touched && prev.touched.gir), drive: !!(prev && prev.touched && prev.touched.drive) };
+    if (Object.prototype.hasOwnProperty.call(patch, 'putts')) touched.putts = true;
+    if (Object.prototype.hasOwnProperty.call(patch, 'gir')) touched.gir = true;
+    if (Object.prototype.hasOwnProperty.call(patch, 'drive')) touched.drive = true;
+    const next = Object.assign({ hole: holeNo, putts: null, gir: null, drive: null }, cur, patch);
     if (holes[idx][1] === 3) next.drive = null;
     if (next.putts == null && next.gir == null && !next.drive) rows = rows.filter(x => x.hole !== next.hole);
     else { const i = rows.findIndex(x => x.hole === next.hole); if (i < 0) rows.push(next); else rows[i] = next; }
-    drafts.set(next.hole, { hole: next.hole, putts: next.putts ?? null, gir: next.gir ?? null, drive: next.drive || null, rev: 0 });
+    drafts.set(holeNo, { hole: holeNo, putts: next.putts ?? null, gir: next.gir ?? null, drive: next.drive || null, rev: 0, touched });
     phase = 'saving';
     const mine = ++gen;
     remember();
@@ -2785,14 +2840,16 @@ function bindQuick(id){
     const any = rows.some(x => x.putts != null || x.gir === true || x.gir === false || x.drive);
     const msg = $('#qmsg');
     if (msg) {
-      if (phase === 'idle') msg.textContent = any ? 'Guardado en este dispositivo' : 'Sin cargar';
+      if (readFailed && phase === 'error') msg.textContent = 'No se pudo leer la cuenta. Los totales de la tarjeta siguen igual.';
+      else if (!seeded && phase === 'idle') msg.textContent = 'Leyendo la cuenta…';
+      else if (phase === 'idle') msg.textContent = any ? 'Guardado en este dispositivo' : 'Sin cargar';
       else if (phase === 'saved') msg.textContent = any ? Q.saveMessage('saved') : 'Sin cargar';
       else msg.textContent = Q ? Q.saveMessage(phase) : 'No se pudo guardar. Lo que marcaste sigue acá.';
     }
     const retry = $('#qretry');
     if (retry) {
       retry.hidden = phase !== 'conflict' && phase !== 'error';
-      retry.onclick = () => { if (phase === 'conflict') reloadAccount(); else { phase = 'saving'; const mine = ++gen; paint(); send(mine); } };
+      retry.onclick = () => { if (phase === 'conflict') reloadAccount(); else retryLoad(); };
     }
     const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
   };

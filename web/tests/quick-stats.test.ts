@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { HttpError } from "../lib/http-error";
 import {
   accountView, applyMark, applyPresentColumns, boundedCourseKey, cardHoles, HOLE_MARK_UPSERT, mergeNote,
-  noteFields, notePatch, NOTE_UPSERT, phaseAfter, planHoleSend, saveMessage, seedHoleRevs, settleWrite, shouldCommit,
+  absorbAccountMarks, mergeAccountHole, noteFields, notePatch, NOTE_UPSERT, phaseAfter, planHoleSend, saveMessage, seedHoleRevs, sendDecision, settleWrite, shouldCommit,
 } from "../lib/quick-stats";
 
 const PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
@@ -26,6 +26,9 @@ type QuickJS = {
   planHoleSend: typeof planHoleSend;
   phaseAfter: typeof phaseAfter;
   saveMessage: typeof saveMessage;
+  absorbAccountMarks: typeof absorbAccountMarks;
+  mergeAccountHole: typeof mergeAccountHole;
+  sendDecision: typeof sendDecision;
 };
 const sandbox = { window: {} as { GolfletQuick: QuickJS } };
 vm.runInNewContext(readFileSync(new URL("../public/quick-stats.js", import.meta.url), "utf8"), sandbox);
@@ -111,9 +114,14 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   assert.match(src, /\/hole-marks/);
   const quick = src.slice(src.indexOf("function bindQuick"), src.indexOf("const saveNote"));
   assert.match(quick, /await seedPromise/);
+  assert.match(quick, /absorbAccountMarks/);
+  assert.match(quick, /sendDecision\(seeded, box\.isConnected\)/);
+  assert.match(quick, /if \(!box\.isConnected\) return/);
   assert.match(quick, /planHoleSend/);
   assert.match(quick, /phaseAfter/);
+  assert.match(quick, /retryLoad/);
   assert.match(quick, /id="qretry"|#qretry/);
+  assert.equal(quick.includes("if (gen === 0)"), false);
   assert.equal(quick.includes("rev: mine"), false);
   assert.equal(quick.includes("latest"), false);
   assert.equal(quick.includes("textContent !== 'Guardando"), false);
@@ -129,6 +137,36 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   assert.match(NOTE_UPSERT, /case when \$8 then excluded\.gir else round_note\.gir end/);
   const migration = readFileSync(new URL("../db/migrations/0044_round_hole_mark.sql", import.meta.url));
   assert.equal(createHash("sha256").update(migration).digest("hex"), "b6ffd94559ee8393c0ee0275623583a79cbafbf7a778486ac10e4c03e4b35dac");
+});
+
+test("a tap before the account read keeps untouched GIR and drive, and a failed read or a left screen does not send", () => {
+  const account = [{ hole: 1, putts: 2, gir: true, drive: "fairway", rev: 5 }];
+  const early = { hole: 1, putts: 3, gir: null, drive: null, touched: { putts: true, gir: false, drive: false } };
+  const absorbed = absorbAccountMarks(account, [early]);
+  const stored = { hole: 1, putts: 2, gir: true, drive: "fairway", rev: 5 };
+  assert.deepEqual(absorbed.holes[0], { hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6 });
+  assert.notDeepEqual(absorbed.holes[0], { hole: 1, putts: 3, gir: null, drive: null, rev: 6 });
+  const wiped = applyMark(stored, { hole: 1, putts: 3, gir: null, drive: null, rev: 6 }, holes);
+  assert.equal(wiped.applied, true);
+  assert.equal(wiped.mark.gir, null);
+  assert.equal(wiped.mark.drive, null);
+  const kept = applyMark(stored, absorbed.holes[0], holes);
+  assert.equal(kept.applied, true);
+  assert.equal(kept.mark.putts, 3);
+  assert.equal(kept.mark.gir, true);
+  assert.equal(kept.mark.drive, "fairway");
+  assert.equal(kept.mark.rev, 6);
+  assert.deepEqual(noteFields([kept.mark], holes), {});
+  const cleared = mergeAccountHole(stored, { hole: 1, putts: 2, gir: null, drive: "fairway", touched: { putts: false, gir: true, drive: false } });
+  assert.deepEqual(cleared, { hole: 1, putts: 2, gir: null, drive: "fairway" });
+  assert.equal(sendDecision(false, true), "hold");
+  assert.equal(sendDecision(true, false), "hold");
+  assert.equal(sendDecision(true, true), "send");
+  assert.equal(JSON.stringify(js.absorbAccountMarks(account, [early])), JSON.stringify(absorbed));
+  assert.equal(JSON.stringify(js.mergeAccountHole(stored, early)), JSON.stringify(mergeAccountHole(stored, early)));
+  assert.equal(js.sendDecision(false, true), "hold");
+  assert.equal(js.sendDecision(true, false), "hold");
+  assert.equal(js.sendDecision(true, true), "send");
 });
 
 test("reloading rev 5 sends rev 6, and a rejected rev 1 is a conflict rather than Guardando", () => {

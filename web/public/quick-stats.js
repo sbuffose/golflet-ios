@@ -98,6 +98,30 @@
     var table = revs || {};
     return nextHoleRev(table[String(hole)]);
   }
+  function mergeAccountHole(account, local) {
+    var touched = (local && local.touched) || {};
+    return {
+      hole: local.hole,
+      putts: touched.putts ? local.putts : (account ? account.putts ?? null : null),
+      gir: touched.gir ? local.gir : (account ? account.gir ?? null : null),
+      drive: touched.drive ? local.drive : (account ? account.drive ?? null : null)
+    };
+  }
+  function absorbAccountMarks(marks, locals) {
+    var by = {};
+    (marks || []).forEach(function (mark) { by[mark.hole] = mark; });
+    var revs = seedHoleRevs(marks);
+    var holes = (locals || []).map(function (local) {
+      var merged = mergeAccountHole(by[local.hole] || null, local);
+      merged.rev = planHoleSend(revs, local.hole, 0);
+      return merged;
+    });
+    return { holes: holes, revs: revs };
+  }
+  function sendDecision(accountReady, stillHere) {
+    if (!accountReady || !stillHere) return "hold";
+    return "send";
+  }
   function interpretSave(sentRev, response) {
     if (!response || response.conflict === "revision" || response.conflict === "stale") return "conflict";
     if (response.applied === true && Number(response.mark && response.mark.rev) === sentRev) return "saved";
@@ -120,6 +144,7 @@
   root.GolfletQuick = {
     noteFields: noteFields, mergeNote: mergeNote, applyMark: applyMark, shouldCommit: shouldCommit, accountView: accountView,
     nextHoleRev: nextHoleRev, seedHoleRevs: seedHoleRevs, planHoleSend: planHoleSend,
+    mergeAccountHole: mergeAccountHole, absorbAccountMarks: absorbAccountMarks, sendDecision: sendDecision,
     interpretSave: interpretSave, phaseAfter: phaseAfter, saveMessage: saveMessage
   };
 })(typeof window !== "undefined" ? window : globalThis);

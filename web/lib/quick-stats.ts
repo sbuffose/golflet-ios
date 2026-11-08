@@ -159,6 +159,42 @@ export function seedHoleRevs(marks: { hole?: number; rev?: number }[] | null | u
   return out;
 }
 
+export type FieldTouch = { putts: boolean; gir: boolean; drive: boolean };
+export type OpenHole = { hole: number; putts: number | null; gir: boolean | null; drive: string | null; touched: FieldTouch };
+
+/** Untouched fields stay on the account row. A tap before the read does not blank them. */
+export function mergeAccountHole(
+  account: { putts: number | null; gir: boolean | null; drive: string | null } | null,
+  local: OpenHole,
+): { hole: number; putts: number | null; gir: boolean | null; drive: string | null } {
+  return {
+    hole: local.hole,
+    putts: local.touched.putts ? local.putts : (account?.putts ?? null),
+    gir: local.touched.gir ? local.gir : (account?.gir ?? null),
+    drive: local.touched.drive ? local.drive : (account?.drive ?? null),
+  };
+}
+
+/** Apply the account snapshot to edits that started before it arrived. */
+export function absorbAccountMarks(
+  marks: Array<{ hole: number; putts: number | null; gir: boolean | null; drive: string | null; rev: number }>,
+  locals: OpenHole[],
+) {
+  const by = new Map(marks.map(mark => [mark.hole, mark]));
+  const revs = seedHoleRevs(marks);
+  const holes = locals.map(local => {
+    const merged = mergeAccountHole(by.get(local.hole) ?? null, local);
+    return { ...merged, rev: planHoleSend(revs, local.hole, 0) };
+  });
+  return { holes, revs };
+}
+
+/** No account snapshot, or the screen is already gone: do not write. */
+export function sendDecision(accountReady: boolean, stillHere: boolean): "send" | "hold" {
+  if (!accountReady || !stillHere) return "hold";
+  return "send";
+}
+
 /** A retry keeps the rev it already sent. A new edit takes the seeded account rev plus one. */
 export function planHoleSend(revs: Record<string, number> | null | undefined, hole: number, alreadyRev?: number | null): number {
   const frozen = Number(alreadyRev);
