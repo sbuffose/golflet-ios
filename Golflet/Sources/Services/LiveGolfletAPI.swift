@@ -126,7 +126,12 @@ struct LiveGolfletAPI: GolfletAPI {
 
     private static func quickNote(_ json: [String: Any]?) -> QuickTotals {
         guard let json else { return QuickTotals(putts: nil, gir: nil, fir: nil) }
-        return QuickTotals(putts: intOrNil(json["putts"]), gir: intOrNil(json["gir"]), fir: intOrNil(json["fir"]))
+        return QuickTotals(
+            putts: intOrNil(json["putts"]),
+            gir: intOrNil(json["gir"]),
+            fir: intOrNil(json["fir"]),
+            updatedAt: json["updated_at"] as? String
+        )
     }
 
     private static func holeMark(_ json: [String: Any]?) -> HoleMark? {

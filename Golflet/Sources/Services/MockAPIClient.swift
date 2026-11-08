@@ -16,6 +16,7 @@ struct MockAPIClient: GolfletAPI {
     private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
     private static var holeMarksByRound: [String: [Int: HoleMark]] = [:]
+    private static var noteClock = 0
     static var pendingNeedsClub = false
 
     init(autoSession: Bool = true) {
@@ -220,7 +221,9 @@ struct MockAPIClient: GolfletAPI {
         Self.holeMarksByRound[roundId] = rows
         let holes = rows.keys.sorted().map { QuickHole(hole: $0, par: 4) }
         let fields = QuickStats.noteFields(marks: Array(rows.values), holes: holes)
-        return HoleMarkSave(mark: result.mark, note: QuickTotals(putts: fields["putts"], gir: fields["gir"], fir: fields["fir"]))
+        Self.noteClock += 1
+        let stamp = String(format: "2026-11-08T04:%02d:%02d.000Z", Self.noteClock / 60, Self.noteClock % 60)
+        return HoleMarkSave(mark: result.mark, note: QuickTotals(putts: fields["putts"], gir: fields["gir"], fir: fields["fir"], updatedAt: stamp))
     }
 
     func holeMarks(roundId: String) async throws -> [HoleMark] {
