@@ -32,20 +32,10 @@
     return { roundId: params.get("ronda") || "", hole: hole >= 1 && hole <= 18 ? String(hole) : "" };
   }
 
-  function normName(value) {
-    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-  }
-
   function matchCourse(official, courses) {
-    const name = normName(official?.course);
-    if (!name) return null;
-    const club = normName(official.club_name);
-    const named = (courses || []).filter(c => normName(c.course || c.course_label || c.label) === name);
-    if (club) {
-      const both = named.find(c => normName(c.club_name || c.club) === club);
-      if (both) return both;
-    }
-    return named.length === 1 ? named[0] : null;
+    const rules = window.GolfletRules;
+    if (!rules || typeof rules.matchRoundCourse !== "function") return null;
+    return rules.matchRoundCourse(official, courses);
   }
 
   function open(root) {

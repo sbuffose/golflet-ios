@@ -32,6 +32,7 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertEqual(matched?.clubCode, "118")
         XCTAssertNil(RoundTrackCourse.match(courses: [azul, other], clubCode: "", name: "Azul"))
         XCTAssertEqual(RoundTrackCourse.match(courses: [colorado], clubCode: "", name: "colorado")?.clubCode, "118")
+        XCTAssertNil(RoundTrackCourse.match(courses: [other], clubCode: "118", name: "Azul"))
     }
 
     func testWindFromConventionAndMissingBearing() {

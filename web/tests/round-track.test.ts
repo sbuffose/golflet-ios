@@ -130,3 +130,59 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await new Promise<void>(r => server.close(() => r()));
   }
 });
+
+test("a round does not open another club's course when only the course name matches", { timeout: 60_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+  const calls: { method: string; path: string }[] = [];
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
+    const json = (body: unknown, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (url.pathname.startsWith("/api/")) {
+      for await (const chunk of req) void chunk;
+      calls.push({ method: req.method || "GET", path: url.pathname });
+      if (url.pathname === "/api/data") return json({
+        user: { name: "TEST-ONLY", first_name: "TEST-ONLY", pending_first_sync: false },
+        player: { name: "TEST-ONLY", handicap_index: 8 }, hi_history: [],
+        clubs: [{ id: "a", club_name: "Club A", rounds: 1, last_sync_status: "ok", last_sync_at: "2026-11-02T12:00:00Z", password_saved: false, source: "site" }],
+        courses: [{ key: "a1", course: "Principal", label: "Principal", club_name: "Club A", par: 72, tees: {}, holes: [] }],
+        rounds: [{ round_id: "r-a", id: "r-a", date: "2026-11-02", valid_card: true, gross: 80, net: 74, is_9_holes: false, differential_computed: 4, course_key: "a1", course: "Principal", course_label: "Principal", club_name: "Club A", tournament: "TEST-ONLY", holes: [[1, 4, 4]] }],
+      });
+      if (url.pathname === "/api/gps/courses") return json({ courses: [{ course_id: "200-principal", club_code: "200", club_name: "Club B", course: "Principal", course_label: "Principal" }] });
+      if (url.pathname === "/api/gps/courses/200-principal") return json({ course: { holes: [{ hole: 1, tee: { lat: -38, lng: -57 }, green: { center: { lat: -38.001, lng: -57.001 } } }] } });
+      if (url.pathname === "/api/reconstructions" && req.method === "GET") return json({ rounds: [{ id: "r-a", date: "2026-11-02", course: "Principal", club_name: "Club A", club_code: "118" }], reconstructions: [] });
+      if (req.method === "POST") return json({ live_round: { id: "should-not-create" } }, 201);
+      return json({});
+    }
+    const file = url.pathname === "/" ? "/index.html" : url.pathname;
+    try {
+      const buf = await readFile(new URL(file.slice(1), ROOT));
+      res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" });
+      res.end(buf);
+    } catch { res.writeHead(404); res.end("missing"); }
+  });
+  await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const { default: puppeteer } = await import("puppeteer-core");
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true });
+    await page.setRequestInterception(true);
+    page.on("request", req => {
+      const host = new URL(req.url()).hostname;
+      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      else req.continue();
+    });
+    await page.goto(`http://127.0.0.1:${port}/#/ronda/r-a`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("#round-track");
+    await page.click("#round-track");
+    await page.waitForSelector("#rc-course");
+    await page.waitForFunction(() => (document.querySelector("#rc-err")?.textContent || "").includes("Elegí la cancha"));
+    assert.equal(await page.$("#rc-map"), null);
+    assert.equal(calls.some(c => c.path === "/api/gps/courses/200-principal"), false);
+    assert.equal(calls.some(c => c.method === "POST"), false);
+  } finally {
+    await browser.close();
+    await new Promise<void>(r => server.close(() => r()));
+  }
+});

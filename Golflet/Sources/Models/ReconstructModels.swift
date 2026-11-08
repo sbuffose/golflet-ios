@@ -79,8 +79,9 @@ enum RoundTrackCourse {
         let wanted = fold(name)
         guard !wanted.isEmpty else { return nil }
         let named = courses.filter { fold($0.name) == wanted }
-        if !clubCode.isEmpty, let both = named.first(where: { $0.clubCode == clubCode }) {
-            return both
+        if !clubCode.isEmpty {
+            let same = named.filter { $0.clubCode == clubCode }
+            return same.count == 1 ? same[0] : nil
         }
         return named.count == 1 ? named[0] : nil
     }
