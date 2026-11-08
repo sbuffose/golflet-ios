@@ -100,7 +100,7 @@ enum TeeForecast {
         return Window(hours: hours, pinTitle: pin.title, lat: pin.lat, lng: pin.lng, failed: hours.isEmpty)
     }
 
-    static func playText(window: Window, booking: TeeTime, rounds: [Round], bag: [BagClub]) -> String {
+    static func playText(window: Window, booking: TeeTime, rounds: [Round], bag: [BagClub], holes: [GPSHole] = []) -> String {
         guard let hour = window.hours.first, hour.windKmh != nil || hour.tempC != nil || hour.rainMm != nil else {
             return "No pude leer el viento de este horario."
         }
@@ -109,8 +109,8 @@ enum TeeForecast {
         filled.windFrom = hour.windFromES
         filled.tempC = hour.tempC
         filled.rainMm = hour.rainMm
-        var lines = WeatherPlay.report(booking: filled, rounds: rounds, bag: bag).lines
-        lines.append(contentsOf: window.hours.map(\.line))
+        var lines = WeatherPlay.report(booking: filled, rounds: rounds, bag: bag, holes: holes).lines
+        lines.append("Fuente: Open-Meteo, a la hora del tee.")
         if let shift = window.shiftLine { lines.append(shift) }
         return lines.joined(separator: "\n")
     }

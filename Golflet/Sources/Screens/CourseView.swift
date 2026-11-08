@@ -230,12 +230,10 @@ struct CourseView: View {
     }
 
     private var strategyCard: some View {
-        NavigationLink {
-            StrategyCourseView(
-                courseKey: CourseIdentity.key(for: model.selectedCourseName),
-                courseName: model.selectedCourseName
-            )
-        } label: {
+        NavigationLink(value: MetricRoute.strategy(
+            courseKey: CourseIdentity.key(for: model.selectedCourseName),
+            courseName: model.selectedCourseName
+        )) {
             GCard(radius: 22, padding: 16) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {

@@ -37,6 +37,7 @@ struct HomeView: View {
                         }
                         lastRound
                         teeTimesCard
+                        scorecardFetchCard
                         yearRow
                         recurring
                         groups
@@ -51,6 +52,14 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-inicio")
+        .onAppear {
+            Task { await model.refreshTeeTimes() }
+        }
+        .onChange(of: model.selectedTab) { _, tab in
+            if tab == .inicio {
+                Task { await model.refreshTeeTimes() }
+            }
+        }
         .navigationDestination(for: HomeMoreRoute.self) { route in
             switch route {
             case .resumen: SummaryView()
@@ -206,6 +215,41 @@ struct HomeView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("play-start")
             .padding(.top, 6)
+            Button { model.showsReconstruct = true } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cargar una vuelta ya jugada")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text("Marcá cada golpe. El punto es manual y la distancia, estimada.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink.opacity(0.65))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("reconstruct-start")
+            Button {
+                Task { await model.bringLatestCard() }
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Traer última tarjeta")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text(model.cardNote.isEmpty ? "Lee el club con la clave guardada." : model.cardNote)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink.opacity(0.65))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(model.cardBusy)
+            .accessibilityIdentifier("bring-latest-card")
         }
     }
 
@@ -389,6 +433,44 @@ struct HomeView: View {
         .id("home-tee-times")
         .accessibilityIdentifier("home-tee-times")
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var scorecardFetchCard: some View {
+        if !model.scorecardFetches.isEmpty || model.scorecardFetchNote != nil {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Tarjeta del club")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                GCard(radius: 22, padding: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let note = model.scorecardFetchNote, !note.isEmpty {
+                            Text(note)
+                                .font(GType.body)
+                                .foregroundStyle(p.ink2)
+                                .accessibilityIdentifier("home-scorecard-error")
+                        }
+                        ForEach(model.scorecardFetches) { job in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(job.clubName.isEmpty ? "Club" : job.clubName)
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                if !job.course.isEmpty || !job.time.isEmpty {
+                                    Text([job.date, job.time, job.course].filter { !$0.isEmpty }.joined(separator: " · "))
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink2)
+                                }
+                                Text(job.label)
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink)
+                            }
+                            .accessibilityIdentifier("home-scorecard-\(job.id)")
+                        }
+                    }
+                }
+            }
+            .accessibilityIdentifier("home-scorecard-fetches")
+        }
     }
 
     private func teeTimeRow(_ booking: TeeTime) -> some View {

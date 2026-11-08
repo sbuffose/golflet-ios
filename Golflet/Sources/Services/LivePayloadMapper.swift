@@ -32,7 +32,9 @@ enum LivePayloadMapper {
             profile: PlayerProfile(
                 displayName: display,
                 initials: initials(display),
-                currentHandicap: playerHI ?? hiHistory.last?.handicap ?? rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 0,
+                currentHandicap: OfficialHandicap.latest(player: playerHI, history: hiHistory)
+                    ?? rounds.sorted { $0.date > $1.date }.first?.handicapIndex
+                    ?? 0,
                 firstName: firstName
             ),
             clubs: clubs,
@@ -132,10 +134,11 @@ enum LivePayloadMapper {
         return items.compactMap { item in
             let id = item["account_id"] ?? item["id"]
             let accountId = (id as? String) ?? (JSONFlex.int(from: id).map(String.init)) ?? ""
-            guard !accountId.isEmpty else { return nil }
+            let clubName = item["club_name"] as? String ?? item["name"] as? String ?? ""
+            guard !accountId.isEmpty || !clubName.isEmpty else { return nil }
             return SyncClubResult(
                 accountId: accountId,
-                clubName: item["club_name"] as? String ?? item["name"] as? String ?? "Club",
+                clubName: clubName.isEmpty ? "Club" : clubName,
                 ok: JSONFlex.bool(from: item["ok"]) ?? true,
                 newRounds: JSONFlex.int(from: item["new_rounds"] ?? item["new"]),
                 updated: JSONFlex.int(from: item["updated"]),

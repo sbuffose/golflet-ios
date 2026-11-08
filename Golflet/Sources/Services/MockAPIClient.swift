@@ -15,7 +15,42 @@ struct MockAPIClient: GolfletAPI {
     private static var mockPasswordSaved = true
     private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
+    private static var holeMarksByRound: [String: [Int: HoleMark]] = [:]
+    private static var noteClock = 0
+    /// Tests queue the note a late response should return. Empty in the app.
+    static var scriptedRoundNotes: [QuickTotals] = []
+    /// Tests queue a bootstrap snapshot. Empty in the app.
+    static var scriptedSnapshots: [AppSnapshot] = []
+    /// Tests queue one scorecard-fetch response. Empty in the app.
+    static var scriptedScorecardFetches: [[ScorecardFetchJob]] = []
+    /// Tests make the next card sync report new rounds. Nil in the app.
+    static var scriptedNewRounds: Int? = nil
+    /// Tests run this once, inside bootstrap, before the snapshot returns.
+    static var onBootstrap: (@MainActor () async -> Void)?
+    static var onSaveRoundNotes: (@MainActor () async -> Void)?
+    static var onSaveHoleMark: (@MainActor () async -> Void)?
+    static var onHoleMarks: (@MainActor () async -> Void)?
+    static var noteEntries = 0
+    /// Tests fail the next note save after its hook. False in the app.
+    static var failNextRoundNote = false
+    static var holeMarkEntries = 0
+    static var holeReadEntries = 0
     static var pendingNeedsClub = false
+
+    private static func take(_ hook: inout (@MainActor () async -> Void)?) -> (@MainActor () async -> Void)? {
+        sessionLock.lock()
+        let taken = hook
+        hook = nil
+        sessionLock.unlock()
+        return taken
+    }
+
+    static func dequeueScorecardFetches() -> [ScorecardFetchJob]? {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        guard !scriptedScorecardFetches.isEmpty else { return nil }
+        return scriptedScorecardFetches.removeFirst()
+    }
 
     init(autoSession: Bool = true) {
         self.autoSession = autoSession
@@ -110,6 +145,21 @@ struct MockAPIClient: GolfletAPI {
 
     func bootstrap() async throws -> AppSnapshot {
         guard isAuthenticated else { throw GolfletError.notAuthenticated }
+        let hook: (@MainActor () async -> Void)? = {
+            Self.sessionLock.lock()
+            let hook = Self.onBootstrap
+            Self.onBootstrap = nil
+            Self.sessionLock.unlock()
+            return hook
+        }()
+        if let hook { await hook() }
+        let queued: AppSnapshot? = {
+            Self.sessionLock.lock()
+            defer { Self.sessionLock.unlock() }
+            guard !Self.scriptedSnapshots.isEmpty else { return nil }
+            return Self.scriptedSnapshots.removeFirst()
+        }()
+        if let queued { return queued }
         let linked = isLinked
         let rounds = linked ? try await loadRounds() : []
         let courses = linked ? try await loadCourses() : []
@@ -162,6 +212,13 @@ struct MockAPIClient: GolfletAPI {
     func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult {
         _ = id
         _ = password
+        Self.sessionLock.lock()
+        let scripted = Self.scriptedNewRounds
+        if scripted != nil { Self.scriptedNewRounds = nil }
+        Self.sessionLock.unlock()
+        if let scripted {
+            return demoSyncResult(message: "Datos de demostración al día", newCards: scripted)
+        }
         if savePassword {
             Self.sessionLock.lock()
             Self.mockPasswordSaved = true
@@ -194,12 +251,65 @@ struct MockAPIClient: GolfletAPI {
         KeychainStore.delete(clubCode: mdpCode)
     }
 
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws {
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws -> QuickTotals {
         _ = roundId
-        _ = putts
-        _ = gir
-        _ = fir
         _ = notes
+        let hook = Self.take(&Self.onSaveRoundNotes)
+        Self.noteEntries += 1
+        if let hook { await hook() }
+        let fail: Bool = {
+            Self.sessionLock.lock()
+            defer { Self.sessionLock.unlock() }
+            let value = Self.failNextRoundNote
+            Self.failNextRoundNote = false
+            return value
+        }()
+        if fail { throw GolfletError.http(status: 500, message: "fallo") }
+        Self.sessionLock.lock()
+        if !Self.scriptedRoundNotes.isEmpty {
+            let note = Self.scriptedRoundNotes.removeFirst()
+            Self.sessionLock.unlock()
+            return note
+        }
+        Self.noteClock += 1
+        let clock = Self.noteClock
+        Self.sessionLock.unlock()
+        let stamp = String(format: "2026-11-08T04:%02d:%02d.000Z", clock / 60, clock % 60)
+        return QuickTotals(putts: putts, gir: gir, fir: fir, updatedAt: stamp)
+    }
+
+    func saveNoteFields(roundId: String, fields: [String: Int]) async throws {
+        _ = roundId
+        _ = fields
+    }
+
+    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave {
+        let hook = Self.take(&Self.onSaveHoleMark)
+        Self.holeMarkEntries += 1
+        if let hook { await hook() }
+        Self.sessionLock.lock()
+        defer { Self.sessionLock.unlock() }
+        var rows = Self.holeMarksByRound[roundId] ?? [:]
+        let result = QuickStats.apply(stored: rows[mark.hole], incoming: mark)
+        if result.conflict != nil {
+            throw GolfletError.http(status: 409, message: QuickStats.saveMessage("conflict"))
+        }
+        rows[mark.hole] = result.mark
+        Self.holeMarksByRound[roundId] = rows
+        let holes = rows.keys.sorted().map { QuickHole(hole: $0, par: 4) }
+        let fields = QuickStats.noteFields(marks: Array(rows.values), holes: holes)
+        Self.noteClock += 1
+        let stamp = String(format: "2026-11-08T04:%02d:%02d.000Z", Self.noteClock / 60, Self.noteClock % 60)
+        return HoleMarkSave(mark: result.mark, note: QuickTotals(putts: fields["putts"], gir: fields["gir"], fir: fields["fir"], updatedAt: stamp))
+    }
+
+    func holeMarks(roundId: String) async throws -> [HoleMark] {
+        let hook = Self.take(&Self.onHoleMarks)
+        Self.holeReadEntries += 1
+        if let hook { await hook() }
+        Self.sessionLock.lock()
+        defer { Self.sessionLock.unlock() }
+        return (Self.holeMarksByRound[roundId] ?? [:]).values.sorted { $0.hole < $1.hole }
     }
 
     func saveBag(_ items: [BagClub]) async throws -> [BagClub] { items }

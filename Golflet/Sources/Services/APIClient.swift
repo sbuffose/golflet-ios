@@ -14,7 +14,10 @@ protocol GolfletAPI: Sendable {
     func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult
     func forgetPassword(accountId: String) async throws
     func unlink(accountId: String) async throws
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws -> QuickTotals
+    func saveNoteFields(roundId: String, fields: [String: Int]) async throws
+    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave
+    func holeMarks(roundId: String) async throws -> [HoleMark]
     func saveBag(_ items: [BagClub]) async throws -> [BagClub]
     func pollSyncProgress(progressID: String) async -> SyncAPIProgress?
 
@@ -47,7 +50,7 @@ protocol GolfletAPI: Sendable {
     func saveProfesorMatchAnswers(_ answers: ProfesorMatchAnswers) async throws -> ProfesorMatchAnswers
     func profesorMatches() async throws -> [ProfesorMatch]
     func groups() async throws -> [GolfletGroup]
-    func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup
+    func createGroup(name: String, photoJPEG: Data?, idempotencyKey: String?) async throws -> GolfletGroup
     func group(id: String) async throws -> GolfletGroup
     func updateGroup(id: String, name: String?, photoJPEG: Data?) async throws -> GolfletGroup
     func inviteByMatricula(groupID: String, matricula: String) async throws -> GolfletGroup
@@ -77,14 +80,28 @@ protocol GolfletAPI: Sendable {
     func userSettings() async throws -> TextPrefs
     func saveUserSettings(_ prefs: TextPrefs) async throws -> TextPrefs
     func teeTimes() async throws -> [TeeTime]
+    func refreshBookings() async throws -> ReservationRefresh
+    func refreshReservation(id: String) async throws -> ReservationRefresh
+    func scorecardFetches() async throws -> [ScorecardFetchJob]
     func playSettings() async throws -> PlaySettings
     func savePlaySettings(_ settings: PlaySettings) async throws -> PlaySettings
     func paceConfig(courseId: String?, clubCode: String?, players: Int?, modality: String?) async throws -> PaceConfig
     func liveRoundPace(id: String) async throws -> LiveRoundPace
     func markPaceAlerted(id: String) async throws
+    func reconstructionSetup() async throws -> ReconstructionSetup
+    func createReconstruction(date: String, courseId: String, roundId: String?) async throws -> ReconstructionRound
+    func reconstructionShots(liveRoundId: String) async throws -> [ReconstructionShot]
+    func saveReconstructionShot(liveRoundId: String, shot: ReconstructionDraft) async throws -> ReconstructionShot
+    func updateReconstructionShot(liveRoundId: String, shotId: String, shot: ReconstructionDraft) async throws -> ReconstructionShot
+    func deleteReconstructionShot(liveRoundId: String, shotId: String) async throws
+    func courseCenters(courseId: String) async throws -> [Int: ReconstructionPoint]
 }
 
 extension GolfletAPI {
+    func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup {
+        try await createGroup(name: name, photoJPEG: photoJPEG, idempotencyKey: nil)
+    }
+
     func createLiveRound(courseId: String?, tee: String?) async throws -> LiveRound {
         try await createLiveRound(courseId: courseId, tee: tee, players: PaceDefaults.players, modality: PaceDefaults.modality)
     }

@@ -13,6 +13,23 @@ struct RoundDetailView: View {
     @State private var extras: [Int: HoleExtra] = [:]
     @State private var showsGameEditor = false
     @State private var showsRecap = false
+    @State private var quickError = ""
+    @State private var quickConflict = false
+    @State private var needsRetry = false
+    @State private var leftRound = false
+    @State private var pending: [Int: PendingHole] = [:]
+    @State private var markRev = 0
+    @State private var revByHole: [Int: Int] = [:]
+    @State private var accountReady = false
+    @State private var accountMarks: [Int: HoleMark] = [:]
+    @State private var loadGen = 0
+    @State private var queue = QuickWorkQueue()
+    @State private var visit = RoundVisit()
+    @State private var noteSaver = QuickNoteSaver()
+    @State private var noteAt = ""
+    @FocusState private var statFocus: StatField?
+
+    private enum StatField: Hashable { case putts, gir, fir }
 
     var body: some View {
         GScreen(id: "screen-ronda") {
@@ -43,13 +60,33 @@ struct RoundDetailView: View {
             .environment(model)
         }
         .onAppear {
+            leftRound = false
+            visit.enter()
             extras = Dictionary(uniqueKeysWithValues: model.notes.extras(for: round.roundId).map { ($0.hole, $0) })
-            noteText = model.notes.note(for: round.roundId)?.text ?? round.notes ?? ""
-            if let putts = round.putts {
-                puttsText = String(putts)
+            let source = model.rounds.first { $0.roundId == round.roundId } ?? round
+            noteText = model.notes.note(for: round.roundId)?.text ?? source.notes ?? ""
+            puttsText = source.putts.map(String.init) ?? ""
+            girText = source.gir.map(String.init) ?? ""
+            firText = source.fir.map(String.init) ?? ""
+            if let notesAt = source.notesAt {
+                let stamp = ISO8601DateFormatter()
+                stamp.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                noteAt = stamp.string(from: notesAt)
             }
-            girText = round.gir.map(String.init) ?? ""
-            firText = round.fir.map(String.init) ?? ""
+        }
+        .task(id: round.roundId) {
+            leftRound = false
+            accountReady = false
+            accountMarks = [:]
+            loadGen += 1
+            queue.dropLoad()
+            let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+            await enqueueLoad(identity: identity, replace: true, force: false).value
+        }
+        .onDisappear {
+            leftRound = true
+            visit.leave()
+            noteSaver.cancel()
         }
         .safeAreaInset(edge: .top) {
             HStack {
@@ -156,15 +193,18 @@ struct RoundDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             holeTable(Array(round.holes.prefix(9)), totalLabel: "IDA", total: round.outScore)
             holeTable(Array(round.holes.suffix(from: min(9, round.holes.count))), totalLabel: "VTA", total: round.inScore)
-            HStack(spacing: 14) {
-                legend(.eagleOrBetter, "Águila")
-                legend(.birdie, "Birdie")
-                legend(.bogey, "Bogey")
-                legend(.doubleOrWorse, "Doble+")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], alignment: .leading, spacing: 8) {
+                legend(.eagleOrBetter, "Águila", categoryCount(.eagleOrBetter))
+                legend(.birdie, "Birdie", categoryCount(.birdie))
+                legend(.par, "Par", categoryCount(.par))
+                legend(.bogey, "Bogey", categoryCount(.bogey))
+                legend(.doubleOrWorse, "Doble+", categoryCount(.doubleOrWorse))
             }
-            Text(caption)
-                .font(GType.label)
-                .foregroundStyle(p.ink3)
+            if !caption.isEmpty {
+                Text(caption)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+            }
         }
     }
 
@@ -213,13 +253,31 @@ struct RoundDetailView: View {
         }
     }
 
-    private func legend(_ result: HoleResult, _ label: String) -> some View {
+    private func categoryCount(_ result: HoleResult) -> Int {
+        let known = round.holes.filter { $0.strokes != nil && $0.result != .unknown }
+        if !known.isEmpty {
+            return known.filter { $0.result == result }.count
+        }
+        switch result {
+        case .eagleOrBetter:
+            return ScoreCounts.resolvedEagles(reported: round.counts.eagles, holes: round.holes)
+        case .birdie: return round.counts.birdies
+        case .par: return round.counts.pars
+        case .bogey: return round.counts.bogeys
+        case .doubleOrWorse: return round.counts.doubles + round.counts.triples + round.counts.worse
+        case .unknown: return 0
+        }
+    }
+
+    private func legend(_ result: HoleResult, _ label: String, _ count: Int) -> some View {
         HStack(spacing: 4) {
-            ScoreMark(strokes: result == .eagleOrBetter ? 2 : result == .birdie ? 3 : result == .bogey ? 5 : 6, result: result, diameter: 16)
+            ScoreMark(strokes: count, result: result, diameter: 22)
             Text(label)
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
+                .lineLimit(1)
         }
+        .accessibilityLabel("\(count) \(label)")
     }
 
     private var gameStats: some View {
@@ -235,9 +293,24 @@ struct RoundDetailView: View {
                     .accessibilityIdentifier("edit-game")
             }
             HStack(spacing: 10) {
-                gameField("Putts", $puttsText)
-                gameField("Greens", $girText)
-                gameField("Fairways", $firText)
+                gameField("Putts", $puttsText, .putts)
+                gameField("Greens", $girText, .gir)
+                gameField("Fairways", $firText, .fir)
+            }
+            if !quickError.isEmpty {
+                Text(quickError)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink)
+                    .accessibilityIdentifier("quick-save-error")
+                if quickConflict || needsRetry {
+                    Button("Reintentar") {
+                        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+                        Task { await retryLoad(scheduled: identity) }
+                    }
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("quick-save-retry")
+                }
             }
             if showsGameEditor {
                 VStack(spacing: 8) {
@@ -249,7 +322,7 @@ struct RoundDetailView: View {
         }
     }
 
-    private func gameField(_ label: String, _ text: Binding<String>) -> some View {
+    private func gameField(_ label: String, _ text: Binding<String>, _ field: StatField) -> some View {
         GCard(radius: 16, padding: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(label)
@@ -259,6 +332,7 @@ struct RoundDetailView: View {
                     .font(GType.statM)
                     .tabular()
                     .keyboardType(.numberPad)
+                    .focused($statFocus, equals: field)
                     .onChange(of: text.wrappedValue) { _, _ in persistNotes() }
             }
         }
@@ -266,38 +340,54 @@ struct RoundDetailView: View {
 
     private func holeEditor(_ hole: HoleScore) -> some View {
         let extra = extras[hole.number]
-        return HStack {
-            Text("\(hole.number)")
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Hoyo \(hole.number)")
                 .font(GFont.ui(14, weight: .semibold))
-                .tabular()
-                .frame(width: 24)
-            Stepper(value: Binding(
-                get: { extra?.putts ?? 0 },
-                set: { update(hole: hole.number, putts: $0, gir: extra?.gir, fairway: extra?.fairway) }
-            ), in: 0...6) {
-                Text("Putts \(extra?.putts.map(String.init) ?? "—")")
-                    .font(GType.label)
-            }
-            Toggle("GIR", isOn: Binding(
-                get: { extra?.gir ?? false },
-                set: { update(hole: hole.number, putts: extra?.putts, gir: $0, fairway: extra?.fairway) }
-            ))
-            .labelsHidden()
-            .tint(p.primary)
-            if hole.par != 3 {
-                Picker("FW", selection: Binding(
-                    get: { extra?.fairway ?? "na" },
-                    set: { update(hole: hole.number, putts: extra?.putts, gir: extra?.gir, fairway: $0) }
-                )) {
-                    Text("—").tag("na")
-                    Text("Hit").tag("hit")
-                    Text("Izq").tag("left")
-                    Text("Der").tag("right")
+                .foregroundStyle(p.ink)
+            HStack(spacing: 6) {
+                ForEach(0...4, id: \.self) { n in
+                    statChip("\(n)", on: extra?.putts == n) {
+                        update(hole: hole.number, putts: extra?.putts == n ? nil : n, touch: .putts)
+                    }
                 }
-                .pickerStyle(.menu)
+            }
+            HStack(spacing: 6) {
+                statChip("GIR sí", on: extra?.gir == true) {
+                    update(hole: hole.number, gir: extra?.gir == true ? nil : true, touch: .gir)
+                }
+                statChip("GIR no", on: extra?.gir == false) {
+                    update(hole: hole.number, gir: extra?.gir == false ? nil : false, touch: .gir)
+                }
+            }
+            if hole.par != 3 {
+                HStack(spacing: 6) {
+                    statChip("Izquierda", on: extra?.fairway == "left") {
+                        update(hole: hole.number, fairway: extra?.fairway == "left" ? nil : "left", touch: .fairway)
+                    }
+                    statChip("Fairway", on: extra?.fairway == "hit") {
+                        update(hole: hole.number, fairway: extra?.fairway == "hit" ? nil : "hit", touch: .fairway)
+                    }
+                    statChip("Derecha", on: extra?.fairway == "right") {
+                        update(hole: hole.number, fairway: extra?.fairway == "right" ? nil : "right", touch: .fairway)
+                    }
+                }
             }
         }
-        .font(GType.label)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+    }
+
+    private func statChip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(GType.label)
+                .foregroundStyle(on ? p.onPrimary : p.ink)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(on ? p.primary : p.surface)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var recapButton: some View {
@@ -364,37 +454,308 @@ struct RoundDetailView: View {
     }
 
     private var caption: String {
-        let b = round.counts
-        let eagles = ScoreCounts.resolvedEagles(reported: b.eagles, holes: round.holes)
-        let dif = differential.map { "Diferencial estimado por Golflet: \(FormatAR.one($0))." } ?? ""
-        return ScorecardSummary.line(
-            eagles: eagles,
-            birdies: b.birdies,
-            pars: b.pars,
-            bogeys: b.bogeys,
-            doubles: b.doubles,
-            differentialNote: dif
-        )
+        differential.map { "Diferencial estimado por Golflet: \(FormatAR.one($0))." } ?? ""
     }
 
     private func persistNotes() {
-        model.notes.saveNote(roundId: round.roundId, text: noteText)
-        Task {
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            guard !Task.isCancelled else { return }
-            await model.saveRoundNotes(
-                roundId: round.roundId,
-                putts: Int(puttsText),
-                gir: Int(girText),
-                fir: Int(firText),
-                text: noteText
+        let session = model.sessionEpoch
+        let generation = visit.generation
+        noteSaver.schedule(
+            model: model,
+            roundId: round.roundId,
+            text: noteText,
+            putts: Int(puttsText),
+            gir: Int(girText),
+            fir: Int(firText),
+            session: session,
+            visit: visit,
+            generation: generation
+        ) { note in
+            var fields = QuickNoteFields(
+                text: noteText,
+                putts: puttsText,
+                gir: girText,
+                fir: firText,
+                noteAt: noteAt,
+                focus: noteFocus
             )
+            QuickNoteSurface.absorb(note, into: &fields)
+            noteAt = fields.noteAt
+            puttsText = fields.putts
+            girText = fields.gir
+            firText = fields.fir
         }
     }
 
-    private func update(hole: Int, putts: Int?, gir: Bool?, fairway: String?) {
-        let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: putts, gir: gir, fairway: fairway)
+    private var noteFocus: QuickNoteFocus? {
+        switch statFocus {
+        case .putts: .putts
+        case .gir: .gir
+        case .fir: .fir
+        case nil: nil
+        }
+    }
+
+    private struct PendingHole {
+        var putts: Int?
+        var gir: Bool?
+        var fairway: String?
+        var touched: QuickStats.FieldTouch
+    }
+
+    private enum HoleTouch { case putts, gir, fairway }
+
+    private func update(hole: Int, putts: Int? = nil, gir: Bool? = nil, fairway: String? = nil, touch: HoleTouch) {
+        if quickConflict || needsRetry { return }
+        var edit = pending[hole] ?? PendingHole(putts: nil, gir: nil, fairway: nil, touched: .init(putts: false, gir: false, drive: false))
+        switch touch {
+        case .putts:
+            edit.putts = putts
+            edit.touched.putts = true
+        case .gir:
+            edit.gir = gir
+            edit.touched.gir = true
+        case .fairway:
+            edit.fairway = fairway
+            edit.touched.drive = true
+        }
+        pending[hole] = edit
+        let current = extras[hole]
+        let par = round.holes.first { $0.number == hole }?.par ?? 0
+        let extra = HoleExtra(
+            roundId: round.roundId,
+            hole: hole,
+            putts: edit.touched.putts ? edit.putts : current?.putts,
+            gir: edit.touched.gir ? edit.gir : current?.gir,
+            fairway: par == 3 ? nil : (edit.touched.drive ? edit.fairway : current?.fairway)
+        )
         extras[hole] = extra
-        model.notes.upsertExtra(extra)
+        markRev += 1
+        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+        queue.enqueueMark(
+            identity: identity,
+            model: model,
+            visit: visit,
+            waitForAccount: { await self.ensureLoaded(identity: identity).value },
+            commit: { await self.commit(hole: hole, identity: identity) }
+        )
+    }
+
+    private func pendingEdits() -> [QuickStats.HoleEdit] {
+        pending.map { hole, edit in
+            let par = round.holes.first { $0.number == hole }?.par ?? 0
+            let local = HoleMark(hole: hole, putts: edit.putts, gir: edit.gir, drive: QuickStats.driveForAccount(par: par, fairway: edit.fairway), rev: 0)
+            return QuickStats.HoleEdit(hole: hole, local: local, touched: edit.touched)
+        }
+    }
+
+    private func showAccount(session: Int) {
+        guard model.sessionStill(session) else { return }
+        let board = QuickStats.projectBoard(account: Array(accountMarks.values), edits: pendingEdits())
+        var next: [Int: HoleExtra] = [:]
+        for mark in board where mark.putts != nil || mark.gir != nil || mark.drive?.isEmpty == false {
+            let par = round.holes.first { $0.number == mark.hole }?.par ?? 0
+            next[mark.hole] = HoleExtra(
+                roundId: round.roundId,
+                hole: mark.hole,
+                putts: mark.putts,
+                gir: mark.gir,
+                fairway: par == 3 ? nil : QuickStats.localFairway(mark.drive)
+            )
+        }
+        extras = next
+        var present: [HoleExtra] = []
+        var clear = Set<Int>()
+        for mark in accountMarks.values {
+            if mark.putts == nil && mark.gir == nil && (mark.drive ?? "").isEmpty {
+                clear.insert(mark.hole)
+                continue
+            }
+            let par = round.holes.first { $0.number == mark.hole }?.par ?? 0
+            present.append(HoleExtra(
+                roundId: round.roundId,
+                hole: mark.hole,
+                putts: mark.putts,
+                gir: mark.gir,
+                fairway: par == 3 ? nil : QuickStats.localFairway(mark.drive)
+            ))
+        }
+        let keep = Set(accountMarks.keys).union(pending.keys)
+        for stored in model.notes.extras(for: round.roundId) where !keep.contains(stored.hole) {
+            clear.insert(stored.hole)
+        }
+        model.writeHoleCache(roundId: round.roundId, session: session, present: present, clear: clear)
+    }
+
+    private func commit(hole: Int, identity: QuickWorkIdentity) async {
+        guard !quickConflict else { return }
+        guard let edit = pending[hole] else { return }
+        let sent = edit
+        guard QuickDispatch.visitStill(identity, model: model, visit: visit) else { return }
+        guard QuickStats.sendDecision(accountReady: accountReady, stillHere: visit.allows(identity.generation)) == "send" else {
+            if !accountReady {
+                needsRetry = true
+                quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
+            }
+            return
+        }
+        let holes = round.holes.map { QuickHole(hole: $0.number, par: $0.par) }
+        let par = round.holes.first { $0.number == hole }?.par ?? 0
+        let account = accountMarks[hole]
+        let local = HoleMark(hole: hole, putts: edit.putts, gir: edit.gir, drive: QuickStats.driveForAccount(par: par, fairway: edit.fairway), rev: 0)
+        let merged = QuickStats.mergeAccount(account: account, local: local, touched: edit.touched)
+        let drive = par == 3 ? nil : merged.drive
+        guard QuickStats.accepts(hole: hole, drive: drive, holes: holes) else {
+            quickError = "Ese hoyo no está en la tarjeta."
+            return
+        }
+        let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: merged.putts, gir: merged.gir, fairway: par == 3 ? nil : QuickStats.localFairway(drive))
+        extras[hole] = extra
+        let mark = HoleMark(hole: hole, putts: merged.putts, gir: merged.gir, drive: drive, rev: merged.rev)
+        await QuickDispatch.runMark(
+            identity: identity,
+            model: model,
+            visit: visit,
+            send: { await self.model.sendHoleMark(roundId: self.round.roundId, session: identity.session, mark: mark) },
+            onModel: { savedWrite in
+                self.keepMarkTotal(savedWrite, roundId: self.round.roundId, identity: identity)
+            },
+            onScreen: { savedWrite in
+                self.showSavedMark(savedWrite, hole: hole, sent: sent, mergedRev: merged.rev, identity: identity)
+            },
+            onFailure: { error in
+                self.showMarkFailure(error)
+            }
+        )
+    }
+
+    private func keepMarkTotal(_ savedWrite: HoleMarkSave, roundId: String, identity: QuickWorkIdentity) {
+        var fields: [String: Int] = [:]
+        if let value = savedWrite.note.putts { fields["putts"] = value }
+        if let value = savedWrite.note.gir { fields["gir"] = value }
+        if let value = savedWrite.note.fir { fields["fir"] = value }
+        _ = model.applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(savedWrite.note.updatedAt), session: identity.session)
+    }
+
+    private func showSavedMark(_ savedWrite: HoleMarkSave, hole: Int, sent: PendingHole, mergedRev: Int, identity: QuickWorkIdentity) {
+        let saved = savedWrite.mark
+        guard QuickStats.phaseAfter(sent: mergedRev, responseRev: saved.rev, conflict: nil) == "saved" else {
+            quickConflict = true
+            needsRetry = true
+            quickError = QuickStats.saveMessage("conflict")
+            return
+        }
+        var fields: [String: Int] = [:]
+        if let value = savedWrite.note.putts { fields["putts"] = value }
+        if let value = savedWrite.note.gir { fields["gir"] = value }
+        if let value = savedWrite.note.fir { fields["fir"] = value }
+        let accepted = model.applyStatFields(roundId: round.roundId, fields: fields, notesAt: QuickStats.noteDate(savedWrite.note.updatedAt), session: identity.session)
+        accountMarks = Dictionary(uniqueKeysWithValues: QuickStats.acceptSaved(account: Array(accountMarks.values), saved: saved).map { ($0.hole, $0) })
+        revByHole = Dictionary(uniqueKeysWithValues: accountMarks.map { ($0.key, $0.value.rev) })
+        if let current = pending[hole], current.touched == sent.touched, current.putts == sent.putts, current.gir == sent.gir, current.fairway == sent.fairway {
+            pending[hole] = nil
+        }
+        showAccount(session: identity.session)
+        if accepted {
+            if let stamp = savedWrite.note.updatedAt { noteAt = stamp }
+            if !leftRound {
+                if let value = fields["putts"] {
+                    puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
+                }
+                if let value = fields["gir"] {
+                    girText = QuickStats.visibleTotal(current: girText, authoritative: String(value), focused: statFocus == .gir)
+                }
+                if let value = fields["fir"] {
+                    firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
+                }
+            }
+        }
+        quickError = ""
+        quickConflict = false
+        needsRetry = false
+    }
+
+    private func showMarkFailure(_ error: Error) {
+        if let golf = error as? GolfletError, case .http(let status, _) = golf, status == 409 {
+            quickConflict = true
+            needsRetry = true
+            quickError = QuickStats.saveMessage("conflict")
+            return
+        }
+        needsRetry = true
+        quickError = QuickStats.saveMessage("error")
+    }
+
+    private func retryLoad(scheduled: QuickWorkIdentity) async {
+        guard QuickDispatch.visitStill(scheduled, model: model, visit: visit) else { return }
+        if quickConflict {
+            pending.removeAll()
+            needsRetry = false
+            await reloadAccount(session: scheduled.session, generation: scheduled.generation)
+            return
+        }
+        needsRetry = false
+        leftRound = false
+        await reloadAccount(session: scheduled.session, generation: scheduled.generation)
+        let continued = QuickWorkIdentity(session: scheduled.session, generation: scheduled.generation, load: loadGen)
+        guard accountReady, QuickDispatch.visitStill(continued, model: model, visit: visit) else {
+            needsRetry = !accountReady && QuickDispatch.visitStill(continued, model: model, visit: visit)
+            return
+        }
+        for hole in pending.keys.sorted() {
+            guard QuickDispatch.visitStill(continued, model: model, visit: visit) else { return }
+            await commit(hole: hole, identity: continued)
+        }
+    }
+
+    private func ensureLoaded(identity: QuickWorkIdentity) -> Task<Void, Never> {
+        enqueueLoad(identity: identity, replace: false, force: false)
+    }
+
+    private func enqueueLoad(identity: QuickWorkIdentity, replace: Bool, force: Bool) -> Task<Void, Never> {
+        queue.enqueueLoad(
+            identity: identity,
+            replace: replace,
+            model: model,
+            visit: visit,
+            load: { self.loadGen },
+            read: { await self.model.readHoleMarks(roundId: self.round.roundId, session: identity.session) },
+            apply: { self.absorb($0, force: force, identity: identity) }
+        )
+    }
+
+    private func reloadAccount(session: Int, generation: Int) async {
+        let opener = QuickWorkIdentity(session: session, generation: generation, load: loadGen)
+        guard QuickDispatch.visitStill(opener, model: model, visit: visit) else { return }
+        markRev += 1
+        loadGen += 1
+        quickConflict = false
+        accountReady = false
+        let identity = QuickWorkIdentity(session: session, generation: generation, load: loadGen)
+        await enqueueLoad(identity: identity, replace: true, force: true).value
+    }
+
+    private func absorb(_ read: QuickRoundResult<[HoleMark]>, force: Bool, identity: QuickWorkIdentity) {
+        switch read {
+        case .notSent, .ignored:
+            return
+        case .failed:
+            if accountReady, !force { return }
+            accountReady = false
+            needsRetry = true
+            quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
+        case .value(let marks):
+            if !force, accountReady { return }
+            var loaded: [Int: HoleMark] = [:]
+            for mark in marks {
+                loaded[mark.hole] = mark
+            }
+            accountMarks = loaded
+            revByHole = Dictionary(uniqueKeysWithValues: loaded.map { ($0.key, $0.value.rev) })
+            showAccount(session: identity.session)
+            accountReady = true
+            quickError = ""
+            quickConflict = false
+        }
     }
 }

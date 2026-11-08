@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#F6F7F9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Golflet">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<title>Golflet · Profesores</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="auth ct">
+  <a class="ct-back" href="/login">‹ Volver</a>
+  <div class="brand"><img src="/icons/icon-192.png" alt=""><b>Golflet</b></div>
+  <h1 class="ltitle" style="font-size:34px">Golflet para profesores</h1>
+  <p class="foot" style="font-size:15px;margin-top:8px">Tus alumnos comparten con vos sus números y, si quieren, sus audios post juego. Vos ves solo lo que cada uno elige.</p>
+  <div id="pg" class="card" style="margin-top:18px"><span class="spin"></span></div>
+</main>
+<script>
+(function(){
+  const el = document.getElementById('pg');
+  fetch('/api/app-config').then(r => r.json()).catch(() => ({})).then(c => {
+    // Profesor sign-up / claim needs a verification email: gated until an email sender is configured.
+    if (!c.profesor_accounts_enabled) {
+      el.innerHTML = '<span class="pg-badge">Pronto</span><h2 class="pg-t">Estamos activando las cuentas de profesor</h2>'
+        + '<p class="pg-p">Si ya te anotaste o te sumamos a Golflet, tu cuenta está pendiente de activación. Te vamos a avisar cuando puedas entrar.</p>'
+        + '<a class="btn" href="/contacto.html?tipo=profesor" style="text-decoration:none;display:inline-block">Todavía no me anoté</a>';
+      return;
+    }
+    el.innerHTML = '<h2 class="pg-t">Tu cuenta de profesor</h2><p class="pg-p">Si te sumamos a Golflet, te mandamos un link por email para crear tu contraseña.</p><a class="btn" href="/login" style="text-decoration:none;display:inline-block">Entrar</a>';
+  });
+})();
+</script>
+<style>.pg-badge{display:inline-block;background:#C8102E;color:#0B2545;font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
+.pg-t{font-size:20px;font-weight:600;letter-spacing:-.02em;margin:12px 0 6px}.pg-p{margin:0 0 16px;color:var(--color-ink2);line-height:1.45;font-size:15px}</style>
+</body>
+</html>

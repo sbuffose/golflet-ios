@@ -69,7 +69,9 @@ struct LiveGolfletAPI: GolfletAPI {
             body["password"] = password
             body["save_password"] = savePassword
         }
-        let json = try await request("POST", "/api/accounts/\(id)/sync", body: body, timeout: 180)
+        let json = try await request("POST", "/api/accounts/\(id)/sync", body: body, timeout: 180, keepBody: { status, json in
+            status == 502 && json["sync"] is [String: Any]
+        })
         return LivePayloadMapper.parseSync(json)
     }
 
@@ -86,12 +88,71 @@ struct LiveGolfletAPI: GolfletAPI {
         _ = try await request("DELETE", "/api/accounts/\(accountId)")
     }
 
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws {
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws -> QuickTotals {
         var body: [String: Any] = ["notes": notes]
         if let putts { body["putts"] = putts } else { body["putts"] = "" }
         if let gir { body["gir"] = gir } else { body["gir"] = "" }
         if let fir { body["fir"] = fir } else { body["fir"] = "" }
+        let json = try await request("PUT", "/api/rounds/\(roundId)/notes", body: body)
+        return Self.quickNote(json["note"] as? [String: Any])
+    }
+
+    func saveNoteFields(roundId: String, fields: [String: Int]) async throws {
+        var body: [String: Any] = [:]
+        for key in ["putts", "gir", "fir"] {
+            if let value = fields[key] { body[key] = value }
+        }
+        if body.isEmpty { return }
         _ = try await request("PUT", "/api/rounds/\(roundId)/notes", body: body)
+    }
+
+    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave {
+        let body: [String: Any] = [
+            "hole": mark.hole,
+            "rev": mark.rev,
+            "putts": mark.putts ?? NSNull(),
+            "gir": mark.gir ?? NSNull(),
+            "drive": mark.drive ?? NSNull()
+        ]
+        let json = try await request("PUT", "/api/rounds/\(roundId)/hole-marks", body: body)
+        let saved = Self.holeMark(json["mark"] as? [String: Any]) ?? mark
+        return HoleMarkSave(mark: saved, note: Self.quickNote(json["note"] as? [String: Any]))
+    }
+
+    func holeMarks(roundId: String) async throws -> [HoleMark] {
+        let json = try await request("GET", "/api/rounds/\(roundId)/hole-marks")
+        let rows = json["marks"] as? [[String: Any]] ?? []
+        return rows.compactMap(Self.holeMark)
+    }
+
+    private static func quickNote(_ json: [String: Any]?) -> QuickTotals {
+        guard let json else { return QuickTotals(putts: nil, gir: nil, fir: nil) }
+        return QuickTotals(
+            putts: intOrNil(json["putts"]),
+            gir: intOrNil(json["gir"]),
+            fir: intOrNil(json["fir"]),
+            updatedAt: json["updated_at"] as? String
+        )
+    }
+
+    private static func holeMark(_ json: [String: Any]?) -> HoleMark? {
+        guard let json else { return nil }
+        let hole = (json["hole"] as? NSNumber).map { $0.intValue } ?? json["hole"] as? Int
+        let rev = (json["rev"] as? NSNumber).map { $0.intValue } ?? json["rev"] as? Int
+        guard let hole, let rev else { return nil }
+        return HoleMark(hole: hole, putts: intOrNil(json["putts"]), gir: boolOrNil(json["gir"]), drive: json["drive"] as? String, rev: rev)
+    }
+
+    private static func intOrNil(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber else { return nil }
+        if CFGetTypeID(number) == CFBooleanGetTypeID() { return nil }
+        return number.intValue
+    }
+
+    private static func boolOrNil(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber else { return nil }
+        if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue }
+        return nil
     }
 
     func saveBag(_ items: [BagClub]) async throws -> [BagClub] {
@@ -277,7 +338,9 @@ struct LiveGolfletAPI: GolfletAPI {
         body: [String: Any]? = nil,
         authorized: Bool = true,
         captureToken: Bool = false,
-        timeout: TimeInterval = 30
+        timeout: TimeInterval = 30,
+        headers: [String: String] = [:],
+        keepBody: ((Int, [String: Any]) -> Bool)? = nil
     ) async throws -> [String: Any] {
         guard let url = URL(string: path, relativeTo: baseURL) else { throw GolfletError.invalidClub }
         var request = URLRequest(url: url)
@@ -288,6 +351,9 @@ struct LiveGolfletAPI: GolfletAPI {
         if authorized {
             guard let token = KeychainStore.loadToken() else { throw GolfletError.notAuthenticated }
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        for (field, value) in headers where !value.isEmpty {
+            request.setValue(value, forHTTPHeaderField: field)
         }
         if let body {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -320,6 +386,7 @@ struct LiveGolfletAPI: GolfletAPI {
                 try KeychainStore.saveToken(token)
             }
         }
+        if keepBody?(status, json) == true { return json }
         try throwIfFailed(status: status, json: json, authorized: authorized, path: path)
         return json
     }

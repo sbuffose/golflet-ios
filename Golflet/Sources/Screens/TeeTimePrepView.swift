@@ -14,77 +14,16 @@ struct TeePlace: Equatable, Sendable {
     var hasCourse: Bool { !strategyCourses.isEmpty }
 }
 
-/// La reserva a veces trae el club y deja la cancha vacía.
-/// Si él ya jugó ahí, usa esa cancha. Si el club tiene una sola, esa.
-/// Si tiene dos, las ofrece para elegir. No inventa pronóstico.
+/// La cancha sale solo si la reserva la nombra. Una tarjeta anterior o las dos canchas del club no la completan.
 enum TeeCourseResolve {
     static func place(booking: TeeTime, rounds: [Round], courses: [Course]) -> TeePlace {
+        _ = rounds
+        _ = courses
         let explicit = trim(booking.course)
         if !explicit.isEmpty, fold(explicit) != fold(booking.clubName) {
             return TeePlace(canchaTitle: explicit, strategyCourses: [match(name: explicit)])
         }
-        if let played = latestPlayed(booking: booking, rounds: rounds) {
-            return TeePlace(canchaTitle: played.name, strategyCourses: [played])
-        }
-        let listed = unique(courses.filter { sameClub($0.clubCode, $0.clubName, booking) && !trim($0.name).isEmpty }.map { match(name: $0.name) })
-        if listed.count == 1, let only = listed.first {
-            return TeePlace(canchaTitle: only.name, strategyCourses: [only])
-        }
-        let known = knownCourses(booking)
-        if known.count == 1, let only = known.first {
-            return TeePlace(canchaTitle: only.name, strategyCourses: [only])
-        }
-        if !known.isEmpty {
-            return TeePlace(canchaTitle: clubTitle(booking), strategyCourses: known)
-        }
-        if listed.count > 1 {
-            return TeePlace(canchaTitle: clubTitle(booking), strategyCourses: listed)
-        }
-        let club = clubTitle(booking)
-        if !club.isEmpty {
-            return TeePlace(canchaTitle: club, strategyCourses: [])
-        }
-        return TeePlace(canchaTitle: "La reserva no trae el nombre de la cancha.", strategyCourses: [])
-    }
-
-    static func knownCourses(_ booking: TeeTime) -> [TeeCourseMatch] {
-        let club = fold(booking.clubName)
-        if booking.clubCode == "209" || club.contains("mar del plata") {
-            return [
-                match(name: "Cancha Vieja", key: "7:Cancha Vieja", courseId: "209-mdp-vieja"),
-                match(name: "Cancha Nueva", key: "7:Cancha Nueva", courseId: "209-mdp-nueva")
-            ]
-        }
-        if booking.clubCode == "118" || club.contains("jockey") {
-            return [
-                match(name: "Azul", key: "1:Azul", courseId: "118-jockey-azul"),
-                match(name: "Colorada", key: "1:Colorada", courseId: "118-jockey-colorada")
-            ]
-        }
-        return []
-    }
-
-    private static func latestPlayed(booking: TeeTime, rounds: [Round]) -> TeeCourseMatch? {
-        let hits = rounds
-            .filter { sameClub($0.clubCode, $0.clubName, booking) || sameClub($0.clubCode, $0.clubPlayed ?? "", booking) }
-            .filter { !trim($0.course).isEmpty && fold($0.course) != fold(booking.clubName) }
-            .sorted { $0.date > $1.date }
-        guard let course = hits.first?.course else { return nil }
-        return match(name: trim(course))
-    }
-
-    private static func sameClub(_ code: String, _ name: String, _ booking: TeeTime) -> Bool {
-        if !booking.clubCode.isEmpty, code == booking.clubCode { return true }
-        let club = fold(booking.clubName)
-        guard !club.isEmpty, club != "club" else { return false }
-        let other = fold(name)
-        guard other.count >= 4 else { return false }
-        return other == club || other.contains(club) || club.contains(other)
-    }
-
-    private static func clubTitle(_ booking: TeeTime) -> String {
-        let name = trim(booking.clubName)
-        return name == "Club" ? "" : name
+        return TeePlace(canchaTitle: "La reserva no especifica la cancha.", strategyCourses: [])
     }
 
     private static func match(name: String, key: String? = nil, courseId: String? = nil) -> TeeCourseMatch {
@@ -93,11 +32,6 @@ enum TeeCourseResolve {
             key: key ?? CourseIdentity.key(for: name),
             courseId: courseId ?? CourseIdentity.id(for: name)
         )
-    }
-
-    private static func unique(_ matches: [TeeCourseMatch]) -> [TeeCourseMatch] {
-        var seen = Set<String>()
-        return matches.filter { seen.insert(fold($0.name)).inserted }
     }
 
     private static func trim(_ value: String) -> String {
@@ -123,8 +57,8 @@ enum TeeTimePrep {
     }
 
     /// Numbers only when the tee time sent them. A text forecast is shown as-is.
-    static func forecastText(booking: TeeTime, rounds: [Round], bag: [BagClub]) -> String {
-        let report = WeatherPlay.report(booking: booking, rounds: rounds, bag: bag)
+    static func forecastText(booking: TeeTime, rounds: [Round], bag: [BagClub], holes: [GPSHole] = []) -> String {
+        let report = WeatherPlay.report(booking: booking, rounds: rounds, bag: bag, holes: holes)
         if report.hasNumbers {
             let lines = report.lines.filter { !$0.hasPrefix("Horario:") }
             if !lines.isEmpty { return lines.joined(separator: "\n") }
@@ -168,9 +102,14 @@ struct TeeTimePrepView: View {
     let booking: TeeTime
     @State private var strategy: CourseStrategy?
     @State private var liveForecast: String?
+    @State private var gpsHoles: [GPSHole] = []
+
+    private var shown: TeeTime {
+        model.teeTimes.first { $0.id == booking.id } ?? booking
+    }
 
     private var place: TeePlace {
-        TeeCourseResolve.place(booking: booking, rounds: model.rounds, courses: model.courses)
+        TeeCourseResolve.place(booking: shown, rounds: model.rounds, courses: model.courses)
     }
 
     var body: some View {
@@ -178,33 +117,58 @@ struct TeeTimePrepView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(booking.chipWhen)
+                        Text(shown.chipWhen)
                             .font(GType.largeTitle)
                             .foregroundStyle(p.ink)
-                        Text(booking.clubName)
+                        Text(shown.clubName)
                             .font(GType.section)
                             .foregroundStyle(p.ink)
-                        if let partners = booking.companionsLine {
+                        if let partners = shown.companionsLine {
                             Text(partners)
                                 .font(GType.body)
                                 .foregroundStyle(p.ink2)
+                                .accessibilityIdentifier("tee-prep-players")
                         }
+                        Button {
+                            Task { await model.refreshReservation(id: booking.id) }
+                        } label: {
+                            Text("Actualizar reserva")
+                                .font(GType.headline)
+                        }
+                        .disabled(model.bookingBusy)
+                        .accessibilityIdentifier("refresh-booking")
+                        if !model.bookingNote.isEmpty {
+                            Text(model.bookingNote)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                                .accessibilityIdentifier("tee-prep-booking-note")
+                        }
+                    }
+                    if let job = model.scorecardFetches.first(where: { $0.teeTimeId == booking.id }) {
+                        block("Tarjeta del club", job.label, "tee-prep-scorecard")
                     }
                     block("Cancha", place.canchaTitle, "tee-prep-cancha")
                     block(
                         "Pronóstico",
-                        liveForecast ?? TeeTimePrep.forecastText(booking: booking, rounds: model.rounds, bag: model.bag),
+                        liveForecast ?? TeeTimePrep.forecastText(booking: booking, rounds: model.rounds, bag: model.bag, holes: gpsHoles),
                         "tee-prep-forecast"
                     )
                     strategyBlock
                 }
                 .padding(20)
+                .padding(.bottom, 108)
             }
         }
         .accessibilityIdentifier("screen-tee-prep")
         .safeAreaInset(edge: .top) { MetricBackBar() }
-        .task(id: place.strategyCourses.map(\.key).joined(separator: "|")) { await loadStrategy() }
-        .task(id: booking.id) { await loadForecast() }
+        .task(id: place.strategyCourses.map(\.key).joined(separator: "|")) {
+            await loadStrategy()
+        }
+        .task(id: booking.id) {
+            await model.refreshTeeTimes()
+            await loadWindHoles()
+            await loadForecast()
+        }
     }
 
     private var strategyBlock: some View {
@@ -220,9 +184,7 @@ struct TeeTimePrepView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityIdentifier("tee-prep-strategy")
                     ForEach(place.strategyCourses) { course in
-                        NavigationLink {
-                            StrategyCourseView(courseKey: course.key, courseName: course.name)
-                        } label: {
+                        NavigationLink(value: MetricRoute.strategy(courseKey: course.key, courseName: course.name)) {
                             HStack {
                                 Text(place.strategyCourses.count == 1 ? "Cómo jugar la cancha" : course.name)
                                     .font(GType.headline)
@@ -264,11 +226,23 @@ struct TeeTimePrepView: View {
         strategy = try? await model.api.courseStrategy(courseKey: course.key, courseId: course.courseId)
     }
 
+    private func loadWindHoles() async {
+        gpsHoles = []
+        guard place.strategyCourses.count == 1, let course = place.strategyCourses.first else { return }
+        if let cached = CourseCache.load(courseId: course.courseId) {
+            gpsHoles = cached.detail.holes
+            return
+        }
+        if let remote = try? await model.api.gpsCourse(id: course.courseId, lat: nil, lng: nil) {
+            gpsHoles = remote.holes
+        }
+    }
+
     private func loadForecast() async {
         liveForecast = nil
         guard !RuntimeFlags.isUITesting else { return }
         guard booking.windKmh == nil, booking.tempC == nil, booking.rainMm == nil else { return }
         guard let window = await TeeForecast.load(booking: booking), !window.hours.isEmpty else { return }
-        liveForecast = TeeForecast.playText(window: window, booking: booking, rounds: model.rounds, bag: model.bag)
+        liveForecast = TeeForecast.playText(window: window, booking: booking, rounds: model.rounds, bag: model.bag, holes: gpsHoles)
     }
 }

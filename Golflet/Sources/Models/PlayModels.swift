@@ -588,7 +588,7 @@ enum StrategyLevel: String, Hashable, CaseIterable, Sendable {
     var chip: String {
         switch self {
         case .general: return "General"
-        case .scratch: return "Scratch"
+        case .scratch: return "Hándicap bajo"
         case .medio: return "Hándicap medio"
         case .alto: return "Hándicap alto"
         }
@@ -658,13 +658,21 @@ struct HoleStrategy: Hashable, Sendable, Identifiable {
     }
 
     func resolvedClub(level: StrategyLevel) -> String? {
-        if level != .general, let club = variants[level]?.teeClub, !club.isEmpty { return club }
-        return teeClub
+        if level != .general {
+            let club = variants[level]?.teeClub?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return club.isEmpty ? nil : club
+        }
+        let club = teeClub?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return club.isEmpty ? nil : club
     }
 
     func resolvedPlan(level: StrategyLevel) -> String? {
-        if level != .general, let plan = variants[level]?.plan, !plan.isEmpty { return plan }
-        return planText
+        if level != .general {
+            let plan = variants[level]?.plan?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return plan.isEmpty ? nil : plan
+        }
+        let plan = planText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return plan.isEmpty ? nil : plan
     }
 }
 

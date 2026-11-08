@@ -6,6 +6,7 @@ import Observation
 final class AppModel {
     var user: GolfletUser?
     var profile = PlayerProfile(displayName: "Jugador Demo", initials: "JD", currentHandicap: 3.1)
+    var officialHistory: [HIPoint] = []
     var clubs: [LinkedClub] = []
     var rounds: [Round] = []
     var courses: [Course] = []
@@ -38,6 +39,7 @@ final class AppModel {
     var toastMessage: String?
     var isSignedIn: Bool
     var showsPlay = false
+    var showsReconstruct = false
     var presentedProfesor: Profesor?
     var presentedRecap: RecapTarget?
     var recurring: RecurringReport?
@@ -60,6 +62,16 @@ final class AppModel {
     var showsGroups = false
     var inviteShare: InviteSharePayload?
     var teeTimes: [TeeTime] = []
+    var teeNote = ""
+    var cardNote = ""
+    var bookingNote = ""
+    var cardBusy = false
+    var bookingBusy = false
+    var scorecardFetches: [ScorecardFetchJob] = []
+    var scorecardFetchNote: String?
+    private var teeFlight: Task<Void, Never>?
+    private var cardFlight: Task<Void, Never>?
+    private var bookingFlight: Task<Void, Never>?
     var playSettings = PlaySettingsStore.load()
     var needsClub: NeedsClubPayload?
     var pendingClubID: Int?
@@ -88,7 +100,41 @@ final class AppModel {
     let api: any GolfletAPI
     let notes: NotesStore
     private var reopenClubsAfterFailure = false
-    private var scorecardFetchTask: Task<Void, Never>?
+    /// Bumped on sign-in and sign-out. Same user id is a new generation.
+    private var snapshotEpoch = 0
+    var sessionEpoch: Int { snapshotEpoch }
+
+    func sessionStill(_ epoch: Int) -> Bool {
+        epoch == snapshotEpoch && isAuthenticated
+    }
+
+    /// Latest local note draft per round. An older save must not paint over it.
+    private var noteDrafts: [String: Int] = [:]
+
+    private func rotateSession() {
+        snapshotEpoch += 1
+        noteDrafts = [:]
+        notes.clearQuickCache()
+    }
+
+    /// The text the player has now. Returns the token of this draft.
+    @discardableResult
+    func stageNoteDraft(roundId: String, text: String) -> Int {
+        let token = (noteDrafts[roundId] ?? 0) + 1
+        noteDrafts[roundId] = token
+        notes.saveNote(roundId: roundId, text: text)
+        if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
+            rounds[index].notes = text
+        }
+        if presentedRound?.roundId == roundId {
+            presentedRound?.notes = text
+        }
+        return token
+    }
+
+    func noteDraftStill(_ roundId: String, _ token: Int) -> Bool {
+        noteDrafts[roundId] == token
+    }
 
     init(api: any GolfletAPI, notes: NotesStore) {
         self.api = api
@@ -111,7 +157,12 @@ final class AppModel {
 
     var isAuthenticated: Bool { isSignedIn }
     var isLive: Bool { !api.persistsLocally }
-    var home: HomeSnapshot { StatsEngine.home(rounds: rounds) }
+    var home: HomeSnapshot {
+        StatsEngine.home(
+            rounds: rounds,
+            officialIndex: OfficialHandicap.latest(player: profile.currentHandicap, history: officialHistory)
+        )
+    }
     var groupedCourseNames: [String] { StatsEngine.groupedCourseNames(from: courseFilterOptions) }
 
     var courseFilterOptions: [CourseFilter] {
@@ -155,8 +206,13 @@ final class AppModel {
             isLoaded = true
             return
         }
+        let epoch = snapshotEpoch
         do {
             let snap = try await api.bootstrap()
+            guard epoch == snapshotEpoch, isAuthenticated else {
+                isLoaded = true
+                return
+            }
             apply(snap)
             if api.persistsLocally {
                 bag = notes.bag()
@@ -175,6 +231,7 @@ final class AppModel {
             await refreshProfesores()
             await refreshTeeTimes()
             await refreshPlaySettings()
+            guard epoch == snapshotEpoch, isAuthenticated else { return }
             hasPlayerSnapshot = true
             isLoaded = true
             await consumeIntent()
@@ -264,6 +321,7 @@ final class AppModel {
     }
 
     func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async {
+        rotateSession()
         if !isSignedIn { hasPlayerSnapshot = false }
         lastLinkMatricula = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
         lastLinkClave = clave
@@ -288,14 +346,14 @@ final class AppModel {
     }
 
     func signOut() async {
-        scorecardFetchTask?.cancel()
-        scorecardFetchTask = nil
         await run {
             try await api.signOut()
+            rotateSession()
             isSignedIn = false
             user = nil
             clubs = []
             rounds = []
+            presentedRound = nil
             courses = []
             tees = []
             holeStats = []
@@ -309,10 +367,14 @@ final class AppModel {
             unreadBadge = nil
             notificationsAvailable = false
             showsNotifications = false
+            showsReconstruct = false
             presentedProfesor = nil
             presentedInvite = nil
             presentedGroupID = nil
             inviteShare = nil
+            teeTimes = []
+            scorecardFetches = []
+            scorecardFetchNote = nil
             needsClub = nil
             pendingClubID = nil
             hasPlayerSnapshot = false
@@ -395,26 +457,115 @@ final class AppModel {
         }
     }
 
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, text: String) async {
-        notes.saveNote(roundId: roundId, text: text)
-        if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
-            rounds[index].putts = putts
-            rounds[index].gir = gir
-            rounds[index].fir = fir
-            rounds[index].notes = text
-            rounds[index].notesAt = Date()
-        }
-        if presentedRound?.roundId == roundId {
-            presentedRound?.putts = putts
-            presentedRound?.gir = gir
-            presentedRound?.fir = fir
-            presentedRound?.notes = text
+    /// `session` is the generation captured when the edit was scheduled.
+    /// A mismatch before the request does not send. A mismatch after the request
+    /// leaves the server write alone and does not touch this account.
+    func saveRoundNotes(
+        roundId: String,
+        putts: Int?,
+        gir: Int?,
+        fir: Int?,
+        text: String,
+        session: Int,
+        draft: Int? = nil,
+        showsError: @escaping @MainActor () -> Bool = { true }
+    ) async -> QuickTotals? {
+        guard sessionStill(session) else { return nil }
+        let ownsDraft = draft == nil || noteDraftStill(roundId, draft!)
+        if ownsDraft {
+            notes.saveNote(roundId: roundId, text: text)
+            if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
+                rounds[index].notes = text
+            }
+            if presentedRound?.roundId == roundId {
+                presentedRound?.notes = text
+            }
         }
         do {
-            try await api.saveRoundNotes(roundId: roundId, putts: putts, gir: gir, fir: fir, notes: text)
+            let note = try await api.saveRoundNotes(roundId: roundId, putts: putts, gir: gir, fir: fir, notes: text)
+            guard sessionStill(session) else { return nil }
+            var fields: [String: Int] = [:]
+            if let value = note.putts { fields["putts"] = value }
+            if let value = note.gir { fields["gir"] = value }
+            if let value = note.fir { fields["fir"] = value }
+            let applied = applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(note.updatedAt), session: session)
+            guard draft == nil || noteDraftStill(roundId, draft!) else { return nil }
+            guard applied else { return nil }
+            return note
         } catch {
+            guard sessionStill(session) else { return nil }
+            guard draft == nil || noteDraftStill(roundId, draft!) else { return nil }
+            guard showsError() else { return nil }
             errorMessage = error.localizedDescription
+            return nil
         }
+    }
+
+    func readHoleMarks(roundId: String, session: Int) async -> QuickRoundResult<[HoleMark]> {
+        guard sessionStill(session) else { return .notSent }
+        do {
+            let marks = try await api.holeMarks(roundId: roundId)
+            guard sessionStill(session) else { return .ignored }
+            return .value(marks)
+        } catch {
+            guard sessionStill(session) else { return .ignored }
+            return .failed(error)
+        }
+    }
+
+    func sendHoleMark(roundId: String, session: Int, mark: HoleMark) async -> QuickRoundResult<HoleMarkSave> {
+        guard sessionStill(session) else { return .notSent }
+        do {
+            let saved = try await api.saveHoleMark(roundId: roundId, mark: mark)
+            guard sessionStill(session) else { return .ignored }
+            return .value(saved)
+        } catch {
+            guard sessionStill(session) else { return .ignored }
+            return .failed(error)
+        }
+    }
+
+    /// Hole-extra cache for this account only. A stale generation writes nothing.
+    func writeHoleCache(roundId: String, session: Int, present: [HoleExtra], clear: Set<Int>) {
+        guard sessionStill(session) else { return }
+        for hole in clear {
+            notes.clearExtra(roundId: roundId, hole: hole)
+        }
+        for row in present {
+            notes.upsertExtra(row)
+        }
+    }
+
+    /// The newest stamp already stored for this round, from the list or the open copy.
+    func storedNoteDate(roundId: String) -> Date? {
+        let listed = rounds.first { $0.roundId == roundId }?.notesAt
+        let shown = presentedRound?.roundId == roundId ? presentedRound?.notesAt : nil
+        switch (listed, shown) {
+        case let (a?, b?): return a > b ? a : b
+        case let (a?, nil): return a
+        case let (nil, b?): return b
+        default: return nil
+        }
+    }
+
+    /// Writes the present stats only when this stamp is the round's newest.
+    /// A missing key leaves that total alone. An older stamp writes nothing.
+    @discardableResult
+    func applyStatFields(roundId: String, fields: [String: Int], notesAt: Date? = nil, session: Int) -> Bool {
+        guard sessionStill(session) else { return false }
+        guard QuickStats.noteIsNewer(previous: storedNoteDate(roundId: roundId), next: notesAt) else { return false }
+        if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
+            if let value = fields["putts"] { rounds[index].putts = value }
+            if let value = fields["gir"] { rounds[index].gir = value }
+            if let value = fields["fir"] { rounds[index].fir = value }
+            rounds[index].notesAt = notesAt
+        }
+        guard presentedRound?.roundId == roundId else { return true }
+        if let value = fields["putts"] { presentedRound?.putts = value }
+        if let value = fields["gir"] { presentedRound?.gir = value }
+        if let value = fields["fir"] { presentedRound?.fir = value }
+        presentedRound?.notesAt = notesAt
+        return true
     }
 
     func updateBagClub(name: String, carry: Int?, total: Int?) {
@@ -437,18 +588,6 @@ final class AppModel {
     }
 
     func endPlay(recapLiveRoundId: String?) {
-        if let round = activeLiveRound {
-            let when = round.startedAt ?? Date()
-            var anchors = ScorecardFetchStore.load()
-            anchors = ScorecardFetch.mergePlayed(
-                at: when,
-                clubCode: round.clubCode ?? "",
-                course: round.course ?? "",
-                into: anchors
-            )
-            ScorecardFetchStore.save(anchors)
-            armScorecardFetches()
-        }
         showsPlay = false
         activeLiveRound = nil
         activeCourse = nil
@@ -663,16 +802,38 @@ final class AppModel {
     func refreshTeeTimes() async {
         guard isSignedIn else {
             teeTimes = []
+            teeNote = ""
+            scorecardFetches = []
+            scorecardFetchNote = nil
             return
         }
-        if let remote = try? await api.teeTimes() {
-            teeTimes = remote
+        if let flight = teeFlight {
+            await flight.value
+            return
         }
-        var anchors = ScorecardFetchStore.load()
-        anchors = ScorecardFetch.mergeTeeTimes(teeTimes, into: anchors)
-        anchors = ScorecardFetch.settle(anchors, rounds: rounds)
-        ScorecardFetchStore.save(anchors)
-        armScorecardFetches()
+        let task = Task { @MainActor in await self.performTeeRefresh() }
+        teeFlight = task
+        await task.value
+        teeFlight = nil
+    }
+
+    private func performTeeRefresh() async {
+        teeNote = "Revisando"
+        do {
+            let read = try await api.refreshBookings()
+            if read.fresh {
+                teeTimes = read.teeTimes
+                teeNote = "Leídas del club."
+            } else {
+                teeNote = read.message ?? "No pudimos verificar las reservas."
+                if teeTimes.isEmpty, let cached = try? await api.teeTimes() { teeTimes = cached }
+            }
+        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
+            teeNote = "Sin conexión: mostramos la última lectura."
+        } catch {
+            teeNote = "No pudimos verificar las reservas."
+        }
+        await refreshScorecardFetches()
         if let next = nextTeeTime {
             publishWidgetSnapshot(next: NextRoundHint(
                 course: next.course.isEmpty ? next.clubName : next.course,
@@ -682,57 +843,113 @@ final class AppModel {
         }
     }
 
-    /// Golfistics sync for a scorecard that should already be posted.
-    /// The cadence lives in `ScorecardFetch`: 6h after the tee time or the
-    /// played mark, then hourly until the next calendar day, then once a day.
-    /// This path does not open the sync screen. A sync the person started
-    /// themselves keeps the turn.
-    private func armScorecardFetches() {
-        scorecardFetchTask?.cancel()
-        guard isSignedIn, !RuntimeFlags.isUITesting else { return }
-        scorecardFetchTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.runDueScorecardFetches()
-                let wait = self?.secondsUntilScorecardFetch() ?? 3600
-                try? await Task.sleep(for: .seconds(min(max(wait, 30), 3600)))
-            }
-        }
-    }
-
-    private func secondsUntilScorecardFetch() -> TimeInterval {
-        let anchors = ScorecardFetch.settle(ScorecardFetchStore.load(), rounds: rounds)
-        guard let next = anchors.map({ ScorecardFetch.nextAttempt(playedAt: $0.at, lastAttempt: $0.lastAttempt) }).min() else {
-            return 3600
-        }
-        return max(0, next.timeIntervalSinceNow)
-    }
-
-    private func runDueScorecardFetches() async {
-        guard isSignedIn, syncSession == nil, !isBusy else { return }
-        var anchors = ScorecardFetch.settle(ScorecardFetchStore.load(), rounds: rounds)
-        let due = ScorecardFetch.due(anchors, now: Date())
-        guard !due.isEmpty else {
-            ScorecardFetchStore.save(anchors)
+    func bringLatestCard() async {
+        if let flight = cardFlight {
+            await flight.value
             return
         }
-        let targets = ScorecardFetch.clubsToSync(due: due, clubs: clubs)
-        var synced = false
-        for club in targets {
-            let progressID = UUID().uuidString
-            if let result = try? await api.syncAccount(
-                id: club.accountId,
-                password: nil,
-                savePassword: false,
-                progressID: progressID
-            ), result.ok {
-                synced = true
+        let task = Task { @MainActor in await self.performBringCard() }
+        cardFlight = task
+        await task.value
+        cardFlight = nil
+    }
+
+    private func performBringCard() async {
+        cardBusy = true
+        cardNote = "Revisando"
+        defer { cardBusy = false }
+        let epoch = snapshotEpoch
+        let saved = clubs.filter { $0.passwordSaved && !$0.isDemo }
+        if saved.isEmpty {
+            cardNote = "No hay una clave guardada para leer el club."
+            return
+        }
+        var seen = Set<String>()
+        var reads: [CardClubRead] = []
+        for club in saved {
+            let key = club.source == "app" ? "app:\(club.matricula)" : "site:\(club.accountId)"
+            if seen.contains(key) { continue }
+            seen.insert(key)
+            do {
+                let result = try await api.syncAccount(id: club.accountId, password: nil, savePassword: false, progressID: UUID().uuidString)
+                if !result.clubs.isEmpty {
+                    reads.append(contentsOf: result.clubs.map { item in
+                        CardClubRead(club: item.clubName, ok: item.ok, newRounds: item.newRounds ?? 0, message: item.message ?? "")
+                    })
+                } else {
+                    reads.append(CardClubRead(club: club.name, ok: result.ok, newRounds: result.newCards ?? 0, message: result.message))
+                }
+            } catch {
+                reads.append(CardClubRead(club: club.name, ok: false, newRounds: 0, message: "No pudimos leer el club. La tarjeta en pantalla no cambió."))
             }
         }
-        anchors = ScorecardFetch.markAttempted(anchors, ids: Set(due.map(\.id)), at: Date())
-        ScorecardFetchStore.save(anchors)
-        guard synced, let snap = try? await api.bootstrap() else { return }
-        apply(snap)
-        ScorecardFetchStore.save(ScorecardFetch.settle(ScorecardFetchStore.load(), rounds: rounds))
+        cardNote = CardPullNote.text(reads)
+        let added = reads.filter(\.ok).reduce(0) { $0 + $1.newRounds }
+        if added > 0, let snap = try? await api.bootstrap(), epoch == snapshotEpoch, isAuthenticated {
+            apply(snap)
+        }
+    }
+
+    func refreshReservation(id: String) async {
+        if let flight = bookingFlight {
+            await flight.value
+            return
+        }
+        let task = Task { @MainActor in await self.performRefreshBooking(id: id) }
+        bookingFlight = task
+        await task.value
+        bookingFlight = nil
+    }
+
+    private func performRefreshBooking(id: String) async {
+        bookingBusy = true
+        bookingNote = "Revisando"
+        defer { bookingBusy = false }
+        do {
+            let read = try await api.refreshReservation(id: id)
+            if read.fresh && read.playersRead {
+                if !read.teeTimes.isEmpty { teeTimes = read.teeTimes }
+                bookingNote = "Jugadores leídos del club."
+            } else {
+                bookingNote = read.message ?? "No pudimos verificar las reservas."
+            }
+        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
+            bookingNote = "Sin conexión: mostramos la última lectura."
+        } catch {
+            bookingNote = "No pudimos verificar las reservas."
+        }
+    }
+
+    /// Reads the server's scorecard jobs. The cron does the Golfistics read.
+    func refreshScorecardFetches() async {
+        guard isSignedIn else {
+            scorecardFetches = []
+            scorecardFetchNote = nil
+            return
+        }
+        let epoch = snapshotEpoch
+        do {
+            let jobs = try await api.scorecardFetches()
+            guard epoch == snapshotEpoch, isAuthenticated else { return }
+            scorecardFetches = jobs
+            let known = Set(rounds.map(\.roundId))
+            let arrived = jobs.contains { job in
+                job.status == "complete" && job.roundId.map { !known.contains($0) } == true
+            }
+            if arrived {
+                do {
+                    let snap = try await api.bootstrap()
+                    guard epoch == snapshotEpoch, isAuthenticated else { return }
+                    apply(snap)
+                } catch {
+                    scorecardFetchNote = "La tarjeta figura lista, pero no pudimos actualizar la lista."
+                    return
+                }
+            }
+            scorecardFetchNote = nil
+        } catch {
+            scorecardFetchNote = error.localizedDescription
+        }
     }
 
     func refreshProfesores() async {
@@ -794,10 +1011,12 @@ final class AppModel {
         }
     }
 
-    func createGroup(name: String, photoJPEG: Data?) async {
+    func createGroup(name: String, photoJPEG: Data?, idempotencyKey: String? = nil) async {
         await run {
-            let group = try await api.createGroup(name: name, photoJPEG: photoJPEG)
-            groups.insert(group, at: 0)
+            let group = try await api.createGroup(name: name, photoJPEG: photoJPEG, idempotencyKey: idempotencyKey)
+            if !groups.contains(where: { $0.id == group.id }) {
+                groups.insert(group, at: 0)
+            }
             if let invite = group.invite, invite.enabled {
                 inviteShare = InviteSharePayload(groupName: group.name, url: invite.url)
             }
@@ -850,9 +1069,9 @@ final class AppModel {
     }
 
     func updateGroup(_ group: GolfletGroup, name: String?, photoJPEG: Data?) async {
-        if let photoJPEG { GroupPhotoCache.store(photoJPEG, for: group.id) }
         await run {
             let updated = try await api.updateGroup(id: group.id, name: name, photoJPEG: photoJPEG)
+            if let photoJPEG, !photoJPEG.isEmpty { GroupPhotoCache.store(photoJPEG, for: group.id) }
             replace(updated)
         }
     }
@@ -1155,11 +1374,61 @@ final class AppModel {
         }
     }
 
+    /// The stored round whose note stamp is newest, from the list or the open copy.
+    private func freshestStoredRound(_ roundId: String) -> Round? {
+        let listed = rounds.first { $0.roundId == roundId }
+        let shown = presentedRound?.roundId == roundId ? presentedRound : nil
+        switch (listed?.notesAt, shown?.notesAt) {
+        case let (listedAt?, shownAt?):
+            return listedAt >= shownAt ? listed : shown
+        case (_?, nil):
+            return listed
+        case (nil, _?):
+            return shown
+        default:
+            return listed ?? shown
+        }
+    }
+
+    /// Card fields come from the snapshot. Putts, greens, fairways, text and the stamp
+    /// stay when the snapshot is older or omits them. Zero is a present total.
+    private func reconcileRound(_ incoming: Round) -> Round {
+        guard let stored = freshestStoredRound(incoming.roundId), let storedAt = stored.notesAt else {
+            return incoming
+        }
+        if QuickStats.noteIsNewer(previous: storedAt, next: incoming.notesAt) {
+            var next = incoming
+            if next.putts == nil { next.putts = stored.putts }
+            if next.gir == nil { next.gir = stored.gir }
+            if next.fir == nil { next.fir = stored.fir }
+            if next.notes == nil { next.notes = stored.notes }
+            return next
+        }
+        var kept = incoming
+        kept.putts = stored.putts
+        kept.gir = stored.gir
+        kept.fir = stored.fir
+        kept.notes = stored.notes
+        kept.notesAt = storedAt
+        return kept
+    }
+
+    /// The list is the snapshot. Note fields stay when this account already has a newer stamp.
+    /// A round the snapshot no longer has is not put back. Another account replaces the list.
     private func apply(_ snap: AppSnapshot) {
+        let sameAccount = user?.id == nil || user?.id == snap.user?.id
+        let incoming = sameAccount ? snap.rounds.map(reconcileRound) : snap.rounds
+        let shownID = presentedRound?.roundId
         user = snap.user
         profile = snap.profile
+        officialHistory = snap.hiHistory
         clubs = snap.clubs
-        rounds = snap.rounds
+        rounds = incoming
+        if let shownID, sameAccount, let fresh = incoming.first(where: { $0.roundId == shownID }) {
+            presentedRound = fresh
+        } else {
+            presentedRound = nil
+        }
         courses = snap.courses
         tees = snap.tees
         holeStats = snap.holeStats

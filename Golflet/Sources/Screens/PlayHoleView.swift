@@ -26,9 +26,11 @@ struct PlayHoleView: View {
     @State private var holeRecords: [Int: LiveHoleRecord] = [:]
     @State private var draftPutts: [Int: Int] = [:]
     @State private var pinStep: PinStep = .idle
-    @State private var markMode: MarkMode = .aim
+    @State private var markMode: MarkMode = .track
     @State private var mapCenter: GPSCoord?
     @State private var aimTarget: GPSCoord?
+    @State private var track = TrackSession.State()
+    @State private var chosenClub: String?
     @State private var waterAsk = false
     @State private var droppedClientIDs: Set<String> = []
 
@@ -51,26 +53,26 @@ struct PlayHoleView: View {
             holeMap
                 .ignoresSafeArea()
             reticle
-                .opacity(markMode == .track ? 1 : 0)
                 .allowsHitTesting(false)
             VStack(spacing: 8) {
                 topBar
-                HStack {
-                    if showsWind {
-                        windChip
+                HStack(alignment: .top) {
+                    shotRail
+                    Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if showsWind {
+                            windChip
+                        }
+                        if liveRound.modality == "match" || liveRound.modality == "fourball" {
+                            matchChip
+                        }
                     }
-                    if liveRound.modality == "match" || liveRound.modality == "fourball" {
-                        matchChip
-                    }
-                    Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 12)
                 Spacer(minLength: 0)
-                if markMode == .track {
-                    trackReadout
-                } else {
-                    aimReadout
-                }
+                compactStrategy
+                    .padding(.horizontal, 12)
+                    .accessibilityElement(children: .contain)
                 dock
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -184,11 +186,27 @@ struct PlayHoleView: View {
         }
     }
 
-    private var landingPoint: GPSCoord {
-        if markMode == .track {
-            return mapCenter ?? playerCoord
+    private var cursor: GPSCoord { mapCenter ?? focusPoint }
+
+    private var landingPoint: GPSCoord { cursor }
+
+    private var focusPoint: GPSCoord {
+        switch track.phase {
+        case .confirmTee:
+            return teeCoord
+        case .confirmFlag:
+            return pinCoord
+        default:
+            if let ball = track.ball {
+                return GPSCoord(lat: ball.lat, lng: ball.lng)
+            }
+            return playerCoord
         }
-        return aimTarget ?? pinCoord
+    }
+
+    private var focusID: String {
+        let lat = track.ball.map { String(format: "%.5f", $0.lat) } ?? "x"
+        return "\(hole)-\(track.phase)-\(track.marks.count)-\(lat)"
     }
 
     private var markLie: SGLie? {
@@ -210,9 +228,11 @@ struct PlayHoleView: View {
             shotPoints: played,
             rings: geo.rings,
             line: geo.line.isEmpty ? [teeCoord, pinCoord] : geo.line,
-            trackMode: markMode == .track,
+            trackMode: true,
             heading: HoleGeoMath.heading(from: teeCoord, to: pinCoord),
             animateCamera: !reduceMotion,
+            focus: focusPoint,
+            focusID: focusID,
             onCenter: { next in
                 if let mapCenter, abs(mapCenter.lat - next.lat) < 0.0000004, abs(mapCenter.lng - next.lng) < 0.0000004 {
                     return
@@ -224,11 +244,38 @@ struct PlayHoleView: View {
     }
 
     private var reticle: some View {
-        ZStack {
-            Circle().stroke(Color(hex: BrandHex.red), lineWidth: 3).frame(width: 22, height: 22).background(Circle().fill(Color.white))
-            Circle().fill(Color(hex: BrandHex.red)).frame(width: 3, height: 3)
+        let penalty = track.phase == .penaltyWhere || track.phase == .relief || track.phase == .drop
+        let color = penalty ? Color(hex: BrandHex.red) : Color(hex: BrandHex.navy)
+        return ZStack {
+            Circle().stroke(color, lineWidth: 3).frame(width: 22, height: 22).background(Circle().fill(Color.white))
+            Circle().fill(color).frame(width: 3, height: 3)
         }
         .accessibilityIdentifier("play-reticle")
+    }
+
+    private var shotRail: some View {
+        let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
+        return VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { _, shot in
+                Text("\(shot.shotNumber). \(shot.club ?? "Golpe")")
+                    .font(GFont.ui(11, weight: .semibold))
+                    .foregroundStyle(p.ink)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.94))
+                    .clipShape(Capsule())
+            }
+            ForEach(track.marks.filter(\.drop)) { mark in
+                Text("Drop")
+                    .font(GFont.ui(11, weight: .semibold))
+                    .foregroundStyle(p.onPrimary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(p.accent)
+                    .clipShape(Capsule())
+                    .accessibilityIdentifier("play-drop-mark-\(mark.id)")
+            }
+        }
     }
 
     private var topBar: some View {
@@ -241,27 +288,36 @@ struct PlayHoleView: View {
                     .background(Circle().fill(Color.white.opacity(0.96)))
             }
             .accessibilityIdentifier("play-close")
-            Spacer()
+            Spacer(minLength: 8)
             Text(course.course)
                 .font(GType.headline)
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .shadow(radius: 2)
-            Spacer()
-            Button {
-                markMode = markMode == .track ? .aim : .track
-            } label: {
-                Text(markMode == .track ? "AIM" : "TRACK")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink)
-                    .frame(width: 64, height: 44)
-                    .background(Capsule().fill(Color.white.opacity(0.96)))
-            }
-            .accessibilityLabel(markMode == .track ? "AIM. Apuntar." : "TRACK. Marcar el golpe.")
-            .accessibilityIdentifier("play-track")
+            Spacer(minLength: 8)
+            trackBadge
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Visible TRACK chip. A plain `Text` in this bar is merged with the course
+    /// name, so XCUITest never sees `play-track`. A button stays its own element.
+    /// Tapping it does not leave track mode.
+    private var trackBadge: some View {
+        Button(action: {}) {
+            Text("TRACK")
+                .font(GType.label)
+                .foregroundStyle(p.ink)
+                .frame(width: 64, height: 44)
+                .background(Capsule().fill(Color.white.opacity(0.96)))
+        }
+        .buttonStyle(.plain)
+        .layoutPriority(1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("TRACK")
+        .accessibilityIdentifier("play-track")
     }
 
     private var windChip: some View {
@@ -286,91 +342,18 @@ struct PlayHoleView: View {
             .accessibilityIdentifier("play-match")
     }
 
-    private var trackReadout: some View {
-        let dist = PlayMath.yards(from: playerCoord, to: mapCenter ?? playerCoord)
-        let toPin = PlayMath.yards(from: mapCenter ?? playerCoord, to: pinCoord)
-        let onCup = PlayMath.meters(from: mapCenter ?? playerCoord, to: pinCoord) < 3
-        return VStack(spacing: 2) {
-            if onCup {
-                Text("En el hoyo")
-                    .font(GType.headline)
-                    .foregroundStyle(p.ink)
-            } else {
-                Text("\(dist) yd")
-                    .font(GType.statM)
-                    .tabular()
-                    .foregroundStyle(p.ink)
-                Text(markLie.map { "\($0.rawValue) · \(toPin) yd al hoyo" } ?? "\(toPin) yd al hoyo")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-            }
-            Text("Arrastrá el mapa hasta donde terminó el golpe")
-                .font(GType.label)
-                .foregroundStyle(p.ink3)
-        }
-        .padding(10)
-        .background(Color.white.opacity(0.96))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .accessibilityIdentifier("play-track-label")
-    }
-
-    private var aimReadout: some View {
-        let target = aimTarget ?? pinCoord
-        let toTarget = PlayMath.yards(from: playerCoord, to: target)
-        let targetToPin = PlayMath.yards(from: target, to: pinCoord)
-        let meters = Double(PlayMath.meters(from: playerCoord, to: target))
-        let club = PrototypeBag.suggest(meters: meters, bag: model.bag.map(\.name), i7: nil)
-        return VStack(spacing: 2) {
-            Text("\(toTarget) yd")
-                .font(GType.statM)
-                .tabular()
-                .foregroundStyle(p.ink)
-            Text("\(targetToPin) yd al green · \(PrototypeBag.label(club.0))")
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
-                .accessibilityIdentifier("play-suggested-club")
-            Text("Arrastrá el objetivo")
-                .font(GType.label)
-                .foregroundStyle(p.ink3)
-        }
-        .padding(10)
-        .background(Color.white.opacity(0.96))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Mira")
-        .accessibilityIdentifier("play-aim-label")
-    }
-
     private var dock: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 12) {
-                Button("Salir") { model.showsPlay = false }
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
-                    .accessibilityIdentifier("play-close")
-                GProbe(id: "play-track", label: "TRACK")
-                GProbe(id: "play-aim-label", label: "Mira")
-                GProbe(id: "play-reticle", label: "Mira")
+            VStack(alignment: .leading, spacing: 10) {
+                Text(statusLine)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("play-aim-label")
                 distances
                 holeNav
-                if waterAsk {
-                    waterPrompt
-                }
-                HStack(spacing: 8) {
-                    Button("Deshacer") { undoLast() }
-                        .font(GType.headline)
-                        .foregroundStyle(p.ink)
-                        .accessibilityIdentifier("play-undo")
-                    if markMode == .track {
-                        Button("En el hoyo") { Task { await hit(holed: true) } }
-                            .font(GType.headline)
-                            .foregroundStyle(p.primary)
-                            .accessibilityIdentifier("play-in-hole")
-                    }
-                    hitButton
-                }
+                markActions
                 greenTools
-                compactStrategy
                 holeShots
                 accuracy
                 Text("El palo lo marca el Apple Watch o el sensor, cuando estén conectados.")
@@ -381,11 +364,147 @@ struct PlayHoleView: View {
                 footer
             }
             .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 20)
+            .padding(.top, 10)
+            .padding(.bottom, 16)
         }
-        .frame(maxHeight: 380)
-        .background(.ultraThinMaterial)
+        .frame(maxHeight: 248)
+        .background(Color.white.opacity(0.96))
+    }
+
+    private var statusLine: String {
+        switch track.phase {
+        case .tracking, .penaltyWhere:
+            let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
+            if TrackSession.onCup(meters: meters) { return "En el hoyo" }
+            if let feet = TrackSession.puttFeet(meters: meters) { return "\(feet) pies al hoyo" }
+            return "\(PlayMath.yards(from: playerCoord, to: cursor)) yd · \(track.prompt)"
+        default:
+            return track.prompt
+        }
+    }
+
+    @ViewBuilder
+    private var markActions: some View {
+        switch track.phase {
+        case .confirmTee, .confirmFlag, .drop:
+            HStack(spacing: 8) {
+                if track.phase == .drop {
+                    cancelButton
+                }
+                setButton
+            }
+        case .relief:
+            HStack(spacing: 8) {
+                Button("Otra vez") { track = TrackSession.reload(track) }
+                    .font(GType.headline)
+                    .foregroundStyle(p.onPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(p.accent)
+                    .clipShape(Capsule())
+                    .accessibilityIdentifier("play-reload")
+                Button("Drop") { track = TrackSession.chooseDrop(track) }
+                    .font(GType.headline)
+                    .foregroundStyle(p.onPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(p.accent)
+                    .clipShape(Capsule())
+                    .accessibilityIdentifier("play-drop")
+                cancelButton
+            }
+        case .tracking, .penaltyWhere:
+            HStack(spacing: 8) {
+                if track.phase == .tracking {
+                    Button("P") { track = TrackSession.beginPenalty(track) }
+                        .font(GType.headline)
+                        .foregroundStyle(p.onPrimary)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(p.accent))
+                        .accessibilityIdentifier("play-penalty")
+                } else {
+                    cancelButton
+                }
+                clubMenu
+                enterButton
+            }
+        }
+    }
+
+    private var setButton: some View {
+        Button {
+            let point = TrackPoint(lat: cursor.lat, lng: cursor.lng)
+            track = TrackSession.set(track, at: point)
+        } label: {
+            Text("SET")
+                .font(GType.headline)
+                .foregroundStyle(p.onPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("play-set")
+    }
+
+    private var enterButton: some View {
+        Button {
+            Task { await confirmEnter() }
+        } label: {
+            Text("ENTER")
+                .font(GType.headline)
+                .foregroundStyle(p.onPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("play-hit")
+        .accessibilityLabel("ENTER")
+    }
+
+    private var cancelButton: some View {
+        Button("Cancelar") { cancelMark() }
+            .font(GType.headline)
+            .foregroundStyle(p.ink)
+            .accessibilityIdentifier("play-penalty-cancel")
+    }
+
+    private var clubMenu: some View {
+        Menu {
+            Button("Sin palo") { chosenClub = nil }
+            ForEach(model.bag, id: \.name) { club in
+                Button(club.name) { chosenClub = club.name }
+            }
+        } label: {
+            Text(chosenClub ?? "Palo")
+                .font(GType.label)
+                .foregroundStyle(p.ink)
+                .lineLimit(1)
+                .frame(minWidth: 52, minHeight: 40)
+                .padding(.horizontal, 8)
+                .background(p.surface)
+                .clipShape(Capsule())
+        }
+        .accessibilityIdentifier("play-club")
+    }
+
+    private func confirmEnter() async {
+        let point = TrackPoint(lat: cursor.lat, lng: cursor.lng)
+        let onCup = TrackSession.onCup(meters: Double(PlayMath.meters(from: cursor, to: pinCoord)))
+        let outcome = TrackSession.enter(track, at: point, club: chosenClub, onCup: onCup)
+        guard outcome.recorded else { return }
+        let penalty = outcome.state.marks.last?.penalty == true
+        track = outcome.state
+        await hit(holed: outcome.holed, penalty: penalty)
+    }
+
+    private func cancelMark() {
+        let posted = track.phase == .relief || track.phase == .drop
+        track = TrackSession.cancel(track)
+        if posted { undoLast() }
     }
 
     private var holeNav: some View {
@@ -434,20 +553,6 @@ struct PlayHoleView: View {
         return parts.joined(separator: " · ")
     }
 
-    private var waterPrompt: some View {
-        HStack {
-            Text("¿Penalidad de agua?")
-                .font(GType.headline)
-                .foregroundStyle(p.ink)
-            Spacer()
-            Button("Sí") { Task { await hit(holed: false, penalty: true) } }
-                .accessibilityIdentifier("play-water-yes")
-            Button("No") { waterAsk = false }
-                .accessibilityIdentifier("play-water-no")
-        }
-        .accessibilityIdentifier("play-water")
-    }
-
     private var distances: some View {
         distanceValues(here: location.coordinate, green: current?.green)
     }
@@ -492,7 +597,7 @@ struct PlayHoleView: View {
                 .font(GType.overline)
                 .foregroundStyle(p.ink3)
             Text(value.map(String.init) ?? "—")
-                .font(hero ? GFont.ui(52, weight: .semibold) : GType.statL)
+                .font(hero ? GFont.ui(22, weight: .semibold) : GType.headline)
                 .tabular()
                 .foregroundStyle(p.ink)
                 .minimumScaleFactor(0.55)
@@ -508,23 +613,12 @@ struct PlayHoleView: View {
 
     @ViewBuilder
     private var compactStrategy: some View {
-        if let hole = strategy?.hole(hole) {
-            Button { showsStrategy = true } label: {
-                GCard(radius: 22, padding: 16) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        StrategyHoleCard(hole: hole, courseKey: course.courseKey, compact: true)
-                        Text("Ver plan")
-                            .font(GType.headline)
-                            .foregroundStyle(p.onPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(p.primary)
-                            .clipShape(Capsule())
-                    }
-                }
+        if let plan = strategy?.hole(hole) {
+            CompactPlanControl(title: plan.planTitle ?? "Cómo jugar el hoyo") {
+                showsStrategy = true
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("strategy-compact")
+            .frame(maxWidth: .infinity)
+            .frame(height: 32)
         }
     }
 
@@ -583,23 +677,6 @@ struct PlayHoleView: View {
                 .tabular()
                 .foregroundStyle(p.ink3)
         }
-    }
-
-    private var hitButton: some View {
-        Button {
-            Task { await hit() }
-        } label: {
-            Text("ENTER")
-                .font(GFont.ui(22, weight: .semibold))
-                .foregroundStyle(p.onPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(p.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("play-hit")
-        .accessibilityLabel("ENTER")
     }
 
     private var holeShots: some View {
@@ -1032,7 +1109,9 @@ struct PlayHoleView: View {
         aimTarget = nil
         mapCenter = nil
         waterAsk = false
-        markMode = .aim
+        markMode = .track
+        track = TrackSession.State()
+        chosenClub = nil
         pinStep = .idle
         lastManualChange = Date()
         PlayHaptics.holeChange()
@@ -1081,12 +1160,9 @@ struct PlayHoleView: View {
     }
 
     private func hit(holed: Bool = false, penalty: Bool = false) async {
-        if !penalty, !holed, markLie == .agua, !waterAsk {
-            waterAsk = true
-            return
-        }
         waterAsk = false
-        let here = holed ? pinCoord : landingPoint
+        let confirmed = holed && TrackSession.onCup(meters: Double(PlayMath.meters(from: landingPoint, to: pinCoord)))
+        let here = confirmed ? pinCoord : landingPoint
         let draft = ShotDraft(
             clientId: String(UUID().uuidString.prefix(32)),
             hole: hole,
@@ -1094,9 +1170,9 @@ struct PlayHoleView: View {
             lng: here.lng,
             accuracyM: location.accuracyM,
             takenAt: Date(),
-            club: nil,
+            club: chosenClub,
             lie: penalty ? SGLie.agua.rawValue : markLie?.rawValue,
-            result: holed ? "hoyo" : nil,
+            result: confirmed ? "hoyo" : nil,
             direction: nil,
             length: nil,
             mishit: false,
@@ -1154,7 +1230,11 @@ struct PlayHoleView: View {
 
     private func endRound() async {
         await savePuttsIfNeeded()
-        _ = try? await model.api.patchLiveRound(id: liveRound.id, body: ["ended": true])
+        do {
+            _ = try await model.api.patchLiveRound(id: liveRound.id, body: ["ended": true])
+        } catch {
+            model.scorecardFetchNote = "No pudimos avisar que terminaste la vuelta. Si había una reserva, la tarjeta se busca a partir de cinco horas después de la salida. El servidor revisa cada quince minutos."
+        }
         await model.endPlay(recapLiveRoundId: liveRound.id)
     }
 
@@ -1232,5 +1312,98 @@ struct PlayHoleView: View {
         paceAlertText = PaceEngine.fallbackAlertText(elapsed: elapsed, expected: expected)
         updatePace { $0.alertedHole10 = true }
         showsPaceAlert = true
+    }
+}
+
+/// Visible plan chip. A SwiftUI `Text`/`Button` in this stack does not publish
+/// `strategy-compact` to XCUITest. A UIKit control does, and it opens the plan.
+private struct CompactPlanControl: UIViewRepresentable {
+    var title: String
+    var action: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    func makeUIView(context: Context) -> CompactPlanChip {
+        let chip = CompactPlanChip()
+        chip.addTarget(context.coordinator, action: #selector(Coordinator.fire), for: .touchUpInside)
+        chip.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        chip.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return chip
+    }
+
+    func updateUIView(_ chip: CompactPlanChip, context: Context) {
+        context.coordinator.action = action
+        chip.apply(title: title)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: CompactPlanChip, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 320, height: 32)
+    }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func fire() { action() }
+    }
+}
+
+private final class CompactPlanChip: UIControl {
+    private let titleLabel = UILabel()
+    private let verLabel = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = true
+        accessibilityIdentifier = "strategy-compact"
+        accessibilityTraits = .button
+        backgroundColor = UIColor.white.withAlphaComponent(0.96)
+        layer.cornerRadius = 16
+        clipsToBounds = true
+        let font = UIFont(name: "Geist-Medium", size: 12.5) ?? .systemFont(ofSize: 12.5, weight: .medium)
+        titleLabel.font = font
+        titleLabel.textColor = UIColor(red: 14 / 255, green: 27 / 255, blue: 44 / 255, alpha: 1)
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.isAccessibilityElement = false
+        verLabel.font = font
+        verLabel.text = "Ver"
+        verLabel.textColor = UIColor(red: 200 / 255, green: 16 / 255, blue: 46 / 255, alpha: 1)
+        verLabel.isAccessibilityElement = false
+        addSubview(titleLabel)
+        addSubview(verLabel)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func apply(title: String) {
+        titleLabel.text = title
+        accessibilityLabel = title
+        accessibilityIdentifier = "strategy-compact"
+        isAccessibilityElement = true
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let verSize = verLabel.intrinsicContentSize
+        verLabel.frame = CGRect(
+            x: bounds.width - 12 - verSize.width,
+            y: (bounds.height - verSize.height) / 2,
+            width: verSize.width,
+            height: verSize.height
+        )
+        let titleWidth = max(0, verLabel.frame.minX - 20)
+        let titleHeight = titleLabel.intrinsicContentSize.height
+        titleLabel.frame = CGRect(
+            x: 12,
+            y: (bounds.height - titleHeight) / 2,
+            width: titleWidth,
+            height: titleHeight
+        )
+    }
+
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: 32)
     }
 }

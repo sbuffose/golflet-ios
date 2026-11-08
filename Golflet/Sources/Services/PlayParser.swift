@@ -126,7 +126,7 @@ enum PlayParser {
             greenLeave: blob["green_leave"] as? String,
             greenNotes: blob["green_notes"] as? String,
             variants: [
-                .scratch: variant(variants["scratch"]),
+                .scratch: variant(variants["scratch"]) ?? variant(variants["bajo"]) ?? variant(variants["low"]) ?? variant(variants["hcp_bajo"]),
                 .medio: variant(variants["medio"]),
                 .alto: variant(variants["alto"])
             ].compactMapValues { $0 },

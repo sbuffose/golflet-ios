@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Golflet · Sync lab</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/style.css">
+<style>
+  body{background:var(--color-bg)}
+  .lab-under{padding:calc(env(safe-area-inset-top) + 18px) 18px 0;max-width:480px;margin:0 auto}
+  .lab-badge{position:fixed;right:10px;bottom:10px;z-index:99;font:600 10px/1 var(--font-ui);letter-spacing:.14em;text-transform:uppercase;background:rgba(0,0,0,.55);color:#fff;padding:6px 8px;border-radius:6px}
+  .rec .lab-badge{display:none}
+</style>
+</head>
+<body>
+<!-- Demo harness only: progress here is SIMULATED (?demo=1) to preview/record the styles. The app uses /api/sync-progress. -->
+<div id="app"><main id="view" class="lab-under">
+  <div class="top"><span class="overline">Golflet</span><span class="avatar">SB</span></div>
+  <h1 class="ltitle"><span class="soft">Hola,</span> <span class="accent">Sebastian</span></h1>
+  <div class="hero" style="min-height:220px"><div class="overline">Handicap Index</div><div class="big num">3,1</div>
+    <div class="meta"><div>Tarjetas<b class="num" id="lab-n">97</b></div><div>Mejor gross<b class="num">72</b></div><div>Promedio 2026<b class="num">78,7</b></div></div></div>
+</main>
+<div id="sheet-root"><div class="sheet-bg"></div><div class="sheet"><div class="grabber"></div><div class="ga-host"></div></div></div></div>
+<div class="lab-badge">Demo · progreso simulado</div>
+<script src="/sync-anim.js"></script>
+<script src="/sync-live.js"></script>
+<script src="/sync-kit.js"></script>
+<script src="/sync-tracer.js"></script>
+<script src="/sync-booklet.js"></script>
+<script>
+/* SIMULATED multi-club sync (tus clubes → Jockey Club Argentino, then Mar del Plata Golf Club).
+   Synthetic cards (no real data, no network). Progress snapshots are quantized to the app's 700 ms poll. */
+(function(){
+  const q = new URLSearchParams(location.search), style = q.get('style') || 'booklet';
+  if (q.get('rec')) document.documentElement.classList.add('rec');
+  document.body.classList.add('sheet-open');
+  const host = document.querySelector('.ga-host'), sheet = document.querySelector('.sheet');
+  const anim = GolfletSync.mount(host, { club: 'tus clubes', style });
+  window.__anim = anim;
+  let seed = +(q.get('seed') || 7); const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const PAR = { Azul: [5,5,4,4,3,4,4,5,4,5,3,4,4,3,4,3,4,4], Colorada: [4,4,3,5,4,4,4,3,4,5,5,3,4,4,5,4,3,4], 'Cancha Vieja': [4,4,4,3,4,4,3,5,4,4,3,4,4,4,3,4,5,4] };
+  const iso = d => d.toISOString().slice(0, 10);
+  function strokes(par){ return par.map(p => { const r = rnd(); const v = r < (p === 5 ? .005 : .0004) ? -2 : r < .155 ? -1 : r < .6 ? 0 : r < .91 ? 1 : r < .975 ? 2 : 3; return p + v; }); }
+  function cards(n, from, to, courses, weekendOnly){ const out = [], a = +new Date(from), b = +new Date(to);
+    while (out.length < n){ const d = new Date(a + rnd() * (b - a)); if (weekendOnly && ![0, 6].includes(d.getUTCDay()) && rnd() < .85) continue;
+      const course = courses[Math.floor(rnd() * courses.length)], par = PAR[course], st = strokes(par);
+      out.push({ date: iso(d), course, par, st, gross: st.reduce((x, y) => x + y, 0) }); }
+    return out.sort((x, y) => x.date < y.date ? 1 : -1); }
+  const JKY = cards(97, '2025-01-04', '2026-10-25', ['Colorada', 'Azul'], true);
+  const MDP = cards(16, '2025-01-02', '2026-02-28', ['Cancha Vieja'], false).map(c => (c.date = c.date.replace(/-(0[3-9]|1[0-2])-/, '-01-'), c)).sort((x, y) => x.date < y.date ? 1 : -1);
+  const OTHER_CLUBS = [['Olivos Golf Club', 'Olivos'], ['Links Pinamar', 'Links Pinamar'], ['San Andrés Golf Club', 'San Andrés'], ['Pilará Golf', 'Pilará'], ['Hindú Club', 'Hindú']];
+  const OTHERS = Array.from({ length: 20 }, () => { const [club, course] = OTHER_CLUBS[Math.floor(rnd() * OTHER_CLUBS.length)]; const d = new Date(+new Date('2025-01-01') + rnd() * 6.6e10);
+    return { date: iso(d), club, course, gross: 74 + Math.floor(rnd() * 9), other: true }; })
+    .concat(MDP.slice(0, 3).map(c => ({ date: c.date, club: 'Mar del Plata Golf Club', course: c.course, gross: c.gross, other: true })));  // also seen as local cards later
+
+  /* JS mirror of lib/sync-stats.ts StatsTracker */
+  const T = { rounds: 0, rounds_with_holes: 0, holes: 0, eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles_plus: 0, dates: new Set(), seen: new Map(), best: null, last: null };
+  function add(c, club){ const key = `${c.date}|${c.gross}`, holes = c.st ? c.par.map((p, i) => ({ hole: i + 1, par: p, strokes: c.st[i] })) : [];
+    const prev = T.seen.get(key); if (prev && (prev.holes || !holes.length)) return;
+    if (!prev){ T.rounds++; T.dates.add(c.date); if (!T.best || c.gross < T.best.gross) T.best = { gross: c.gross, date: c.date, course: c.course }; }
+    if (holes.length){ T.rounds_with_holes++; for (const h of holes){ T.holes++; const v = h.strokes - h.par; v <= -2 ? T.eagles++ : v === -1 ? T.birdies++ : v === 0 ? T.pars++ : v === 1 ? T.bogeys++ : T.doubles_plus++; } }
+    T.seen.set(key, { holes: holes.length > 0 });
+    T.last = { date: c.date, course: c.course, club: c.club || club, gross: c.gross, par: c.par ? c.par.reduce((a, b) => a + b, 0) : null, other_course: !!c.other, holes }; }
+  function snap(){ const bm = new Map(); for (const d of T.dates){ const m = d.slice(0, 7); bm.set(m, (bm.get(m) || 0) + 1); }
+    const latest = [...bm.keys()].sort().pop(), months = []; if (latest){ let [y, m] = latest.split('-').map(Number);
+      for (let i = 0; i < 12; i++){ const k = `${y}-${String(m).padStart(2, '0')}`; months.unshift({ month: k, rounds: bm.get(k) || 0 }); if (--m === 0){ m = 12; y--; } } }
+    const { dates, seen, best, last, ...c } = T; return { ...c, days: T.dates.size, best_gross: best?.gross ?? null, best_gross_date: best?.date ?? null, best_gross_course: best?.course ?? null, months, last_card: last }; }
+
+  /* timeline (ms) */
+  const K = +(q.get('speed') || 1);
+  const CLUBS = [{ club: 'Jockey Club Argentino', club_code: '118', club_logo: '/clubs/118@2x.png', cards: JKY, list: JKY.length + OTHERS.length, others: OTHERS, read: 10000 },
+                 { club: 'Mar del Plata Golf Club', club_code: '209', club_logo: '/clubs/209@2x.png', cards: MDP, list: MDP.length + 2, others: [], read: 3600 }];
+  if (q.get('mono')) Object.assign(CLUBS[1], { club: 'San Andrés Golf Club', club_code: '999', club_logo: null });
+  const PH = [{ t: 1500, p: { stage: 'connect', club: 'tus clubes' } }]; let t = 1500;
+  CLUBS.forEach((c, i) => { const tag = { club: c.club, club_code: c.club_code, club_logo: c.club_logo, club_index: i + 1, club_count: CLUBS.length };
+    PH.push({ t: t += 1100, p: { ...tag, stage: 'connect' } }, { t: t += 800, p: { ...tag, stage: 'list' } });
+    const t0 = t; PH.push({ t: t += c.read, p: { ...tag, stage: 'cards' }, cards: { c, t0 } });
+    PH.push({ t: t += 700, p: { ...tag, stage: 'handicap', list_total: c.list } }, { t: t += 800, p: { ...tag, stage: 'save', total: c.list, list_total: c.list } }); });
+  const FIN = t; let fed = new Map();
+  function at(ms){ // progress the server would report at time ms (stats fed incrementally, idempotent)
+    const ph = PH.find(x => ms < x.t) || PH[PH.length - 1];
+    let p = { ...ph.p };
+    for (const x of PH){ if (!x.cards) continue; const { c, t0 } = x.cards; if (ms < t0) continue;
+      const n = Math.min(c.cards.length, Math.floor((ms - t0) / c.read * c.cards.length)), k = fed.get(c.club) || 0;
+      if (!fed.has(c.club)) c.others.forEach(o => add(o, c.club));
+      for (let i = k; i < n; i++) add(c.cards[i], c.club); fed.set(c.club, n);
+      if (ph === x) Object.assign(p, { done: n, total: c.cards.length, list_total: c.list }); }
+    if (p.stage === 'save') p.done = Math.min(p.total, Math.floor((1 - (ph.t - ms) / 800) * p.total));
+    return { ...p, stats: T.rounds ? snap() : null }; }
+  window.__labDemo = { FIN, PH };
+  const T0 = performance.now(); let lastPoll = -1, finished = false;
+  const tick = () => { const ms = (performance.now() - T0) * K;
+    if (!finished && ms >= FIN){ finished = true; const p = at(FIN - 1); anim.setProgress({ ...p, stage: 'save', done: p.total });
+      anim.finish({ total: T.rounds, list_total: p.list_total, title: `Listo · ${T.rounds} tarjetas` }).then(() => q.get('stay') ? null : anim.leave ? anim.leave(sheet) : null).then(() => {
+        if (q.get('stay')) return; anim.destroy(); document.getElementById('sheet-root').innerHTML = ''; document.body.classList.remove('sheet-open'); window.__labDone = true;
+        const el = document.getElementById('lab-n'); el.classList.add('pop'); const t1 = performance.now(), N = T.rounds;
+        const f = () => { const k = Math.min(1, (performance.now() - t1) / 900); el.textContent = Math.round(N * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(f); }; f(); });
+      return; }
+    const slot = Math.floor(ms / 700); if (slot !== lastPoll){ lastPoll = slot; anim.setProgress(at(ms)); }
+    requestAnimationFrame(tick); };
+  const jump = +(q.get('at') || 0); // screenshot helper: start the timeline at a given ms
+  if (jump){ const p = at(jump); anim.setProgress(p); if (q.get('freeze')) return; }
+  if (q.get('demo') !== '0') requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

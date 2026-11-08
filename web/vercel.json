@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/sync",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/gps",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/scorecard",
+      "schedule": "*/15 * * * *"
+    }
+  ],
+  "regions": [
+    "gru1"
+  ]
+}
