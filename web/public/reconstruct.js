@@ -24,12 +24,83 @@
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
   };
 
+  function roundQuery() {
+    const hash = location.hash || "";
+    const q = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+    const params = new URLSearchParams(q);
+    const hole = Number(params.get("hole"));
+    return { roundId: params.get("ronda") || "", hole: hole >= 1 && hole <= 18 ? String(hole) : "" };
+  }
+
+  function normName(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  }
+
+  function matchCourse(official, courses) {
+    const name = normName(official?.course);
+    if (!name) return null;
+    const club = normName(official.club_name);
+    const named = (courses || []).filter(c => normName(c.course || c.course_label || c.label) === name);
+    if (club) {
+      const both = named.find(c => normName(c.club_name || c.club) === club);
+      if (both) return both;
+    }
+    return named.length === 1 ? named[0] : null;
+  }
+
   function open(root) {
     if (!root) return;
     const id = root.dataset.id || "";
+    const query = roundQuery();
+    if (!id && query.roundId) {
+      mountRound(root, query.roundId, query.hole);
+      return;
+    }
     root.innerHTML = id ? editor(id) : picker();
-    if (id) mountEditor(root, id);
+    if (id) mountEditor(root, id, query.hole);
     else mountPicker(root);
+  }
+
+  async function mountRound(root, roundId, hole) {
+    root.innerHTML = `<div class="card"><p class="s">Leyendo esta vuelta…</p></div>`;
+    let setup;
+    try { setup = await api("/api/reconstructions"); }
+    catch (e) {
+      root.innerHTML = `<div class="card"><p class="s">${esc(e?.message || "No pudimos abrir esta vuelta.")}</p></div>`;
+      return;
+    }
+    if (!root.isConnected) return;
+    const found = (setup.reconstructions || []).find(r => r.round_id === roundId);
+    if (found) {
+      const next = `#/reconstruir/${found.id}?hole=${encodeURIComponent(hole || "1")}`;
+      if ((location.hash || "") !== next) location.hash = next;
+      else { root.innerHTML = editor(found.id); mountEditor(root, found.id, hole); }
+      return;
+    }
+    const official = (setup.rounds || []).find(r => r.id === roundId);
+    if (!official) {
+      root.innerHTML = picker();
+      mountPicker(root, { roundId });
+      return;
+    }
+    let courses = [];
+    try {
+      const pack = await api("/api/gps/courses");
+      courses = pack.courses || [];
+    } catch (_) { courses = []; }
+    if (!root.isConnected) return;
+    const course = matchCourse(official, courses);
+    if (!course?.course_id) {
+      root.innerHTML = picker();
+      await mountPicker(root, { roundId, date: official.date });
+      const err = root.querySelector("#rc-err");
+      if (err && !err.textContent) err.textContent = "Esta es la tarjeta de la vuelta. Elegí la cancha para ver el mapa. Abrir esta pantalla no guarda golpes.";
+      return;
+    }
+    root.innerHTML = editor("");
+    const title = root.querySelector("#rc-title");
+    if (title) title.textContent = "Registrar mis tiros";
+    await mountEditor(root, "", hole, { roundId, date: official.date, courseId: course.course_id });
   }
 
   function picker() {
@@ -43,10 +114,10 @@
       <div id="rc-list"></div></div>`;
   }
 
-  async function mountPicker(root) {
+  async function mountPicker(root, prefill) {
     const date = root.querySelector("#rc-date");
     const art = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
-    date.value = art;
+    date.value = prefill?.date || art;
     date.max = art;
     const err = root.querySelector("#rc-err");
     let courses = [];
@@ -69,6 +140,7 @@
         o.textContent = `${r.date} · ${r.club_name || ""} · ${r.course || "Cancha"}`;
         round.appendChild(o);
       }
+      if (prefill?.roundId && [...round.options].some(o => o.value === prefill.roundId)) round.value = prefill.roundId;
       const list = root.querySelector("#rc-list");
       list.innerHTML = (mine.reconstructions || []).map(r => `<a class="card" href="#/reconstruir/${esc(r.id)}"><div class="t">${esc(r.date)} · ${esc(r.course || "Cancha")}</div><div class="s">Seguir cargando golpes</div></a>`).join("");
     } catch (e) {
@@ -89,7 +161,7 @@
   }
 
   function editor(id) {
-    return `<div class="card"><div class="t">Golpes de la vuelta</div>
+    return `<div class="card"><div class="t" id="rc-title">Golpes de la vuelta</div>
       <p class="s">La mira queda fija. Arrastrá el mapa y marcá la salida y la caída. Si no hay mapa del hoyo, guardá el palo y el resultado sin un punto.</p>
       <div id="rc-map" style="position:relative;height:280px;background:#0d1b2a;border-radius:12px;overflow:hidden;touch-action:none"></div>
       <p id="rc-mapnote" class="s"></p>
@@ -109,7 +181,7 @@
       <div id="rc-shots"></div></div>`;
   }
 
-  async function mountEditor(root, id) {
+  async function mountEditor(root, id, holeHint, pending) {
     const note = root.querySelector("#rc-mapnote");
     const place = root.querySelector("#rc-place");
     const err = root.querySelector("#rc-err");
@@ -146,11 +218,18 @@
       show();
     };
     root.querySelector("#rc-hole").onchange = () => { start = null; end = null; loadHole(); };
+    let liveId = id || "";
+    if (holeHint) root.querySelector("#rc-hole").value = String(holeHint);
     try {
-      const setup = await api("/api/reconstructions");
-      const row = (setup.reconstructions || []).find(r => r.id === id);
-      if (row?.club_code && row?.vm_course) {
-        const courseId = `${row.club_code}-${String(row.vm_course).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+      let courseId = pending?.courseId || "";
+      if (!courseId && liveId) {
+        const setup = await api("/api/reconstructions");
+        const row = (setup.reconstructions || []).find(r => r.id === liveId);
+        if (row?.club_code && row?.vm_course) {
+          courseId = `${row.club_code}-${String(row.vm_course).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+        }
+      }
+      if (courseId) {
         try {
           const geo = await api("/api/gps/courses/" + encodeURIComponent(courseId));
           holes = geo.course?.holes || [];
@@ -159,11 +238,16 @@
         }
       }
     } catch (e) { note.textContent = e?.message || "No pudimos abrir la vuelta."; }
+    if (!root.isConnected) return;
     loadHole();
     const draw = async () => {
       const box = root.querySelector("#rc-shots");
+      if (!liveId) {
+        box.innerHTML = `<p class="s">Todavía no hay golpes. Guardar crea la carga de esta tarjeta; abrirla no la guarda.</p>`;
+        return;
+      }
       try {
-        const pack = await api(`/api/reconstructions/${id}/shots`);
+        const pack = await api(`/api/reconstructions/${liveId}/shots`);
         box.innerHTML = (pack.shots || []).map(s => `<div class="card"><div class="t">Hoyo ${s.hole} · ${esc(s.club || "sin palo")}</div>
           <div class="s">${esc(s.position_label)}. ${esc(s.distance_label)}${s.distance_m != null ? ` · ${Math.round(s.distance_m)} m` : ""}${s.penalty_strokes ? ` · ${s.penalty_strokes} pena${s.penalty_strokes === 1 ? "" : "s"}` : ""}</div>
           <button class="btn ghost sm" type="button" data-edit="${esc(s.id)}">Corregir</button>
@@ -186,7 +270,7 @@
         });
         box.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
           err.textContent = "";
-          try { await api(`/api/reconstructions/${id}/shots?shot=${encodeURIComponent(b.dataset.del)}`, { method: "DELETE" }); await draw(); }
+          try { await api(`/api/reconstructions/${liveId}/shots?shot=${encodeURIComponent(b.dataset.del)}`, { method: "DELETE" }); await draw(); }
           catch (e) { err.textContent = e?.message || "No pudimos borrar el golpe."; }
         });
       } catch (e) { box.innerHTML = `<p class="s">${esc(e?.message || "No pudimos leer los golpes.")}</p>`; }
@@ -204,15 +288,23 @@
       const typed = root.querySelector("#rc-dist").value;
       if (typed) body.distance_m = Number(typed);
       try {
+        const wasNew = !liveId;
+        if (!liveId) {
+          if (!pending?.courseId || !pending?.date || !pending?.roundId) throw new Error("Elegí la cancha.");
+          const created = await api("/api/reconstructions", { method: "POST", body: JSON.stringify({ date: pending.date, course_id: pending.courseId, round_id: pending.roundId }) });
+          liveId = created?.live_round?.id || "";
+          if (!liveId) throw new Error("No pudimos abrir la vuelta.");
+        }
         if (editing) {
           body.shot_id = editing;
-          await api(`/api/reconstructions/${id}/shots`, { method: "PATCH", body: JSON.stringify(body) });
-        } else await api(`/api/reconstructions/${id}/shots`, { method: "POST", body: JSON.stringify(body) });
+          await api(`/api/reconstructions/${liveId}/shots`, { method: "PATCH", body: JSON.stringify(body) });
+        } else await api(`/api/reconstructions/${liveId}/shots`, { method: "POST", body: JSON.stringify(body) });
         editing = null;
         root.querySelector("#rc-save").textContent = "Guardar golpe";
         start = null; end = null; root.querySelector("#rc-dist").value = "";
         show();
         await draw();
+        if (wasNew) location.hash = `#/reconstruir/${liveId}?hole=${encodeURIComponent(root.querySelector("#rc-hole").value || "1")}`;
       } catch (e) { err.textContent = e?.message || "No pudimos guardar el golpe."; }
     };
     draw();

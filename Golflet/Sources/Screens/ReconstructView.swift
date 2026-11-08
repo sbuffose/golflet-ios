@@ -2,6 +2,7 @@ import MapKit
 import SwiftUI
 
 struct ReconstructView: View {
+    var context: RoundTrackContext? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
@@ -25,6 +26,7 @@ struct ReconstructView: View {
     @State private var aimPoint: ReconstructionPoint?
     @State private var note = ""
     @State private var busy = false
+    @State private var staged = false
 
     private let clubs = ["Dr", "3W", "5W", "Hy", "4i", "5i", "6i", "7i", "8i", "9i", "PW", "GW", "SW", "LW", "Pt"]
     private let results = ["fairway", "green", "rough", "bunker", "water", "ob", "penalty", "holed", "other"]
@@ -34,6 +36,8 @@ struct ReconstructView: View {
             VStack(alignment: .leading, spacing: 12) {
                 if let live {
                     editor(live)
+                } else if staged {
+                    editor(nil)
                 } else {
                     picker
                 }
@@ -42,13 +46,19 @@ struct ReconstructView: View {
                 }
             }
             .padding(16)
+            .padding(.bottom, 28)
         }
         .background(p.bg)
-        .navigationTitle("Vuelta ya jugada")
+        .safeAreaPadding(.bottom, 8)
+        .navigationTitle(context == nil ? "Vuelta ya jugada" : "Registrar mis tiros")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cerrar") { model.showsReconstruct = false; dismiss() }
+                Button(context == nil ? "Cerrar" : "Volver") {
+                    model.showsReconstruct = false
+                    dismiss()
+                }
+                .accessibilityIdentifier("reconstruct-back")
             }
         }
         .task { await loadSetup() }
@@ -92,9 +102,9 @@ struct ReconstructView: View {
         }
     }
 
-    private func editor(_ live: ReconstructionRound) -> some View {
+    private func editor(_ live: ReconstructionRound?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("\(live.date) · \(live.course)")
+            Text(live.map { "\($0.date) · \($0.course)" } ?? stagedTitle)
                 .font(GType.headline)
                 .foregroundStyle(p.ink)
             Text("La mira queda fija. Mové el mapa y marcá la salida y la caída. Si el hoyo no tiene mapa, guardá el palo y el resultado sin un punto.")
@@ -140,7 +150,7 @@ struct ReconstructView: View {
             Stepper("Penas: \(penalties)", value: $penalties, in: 0...4)
             TextField("Distancia estimada en metros, si no marcaste los dos puntos", text: $typedDistance)
                 .keyboardType(.numberPad)
-            Button(editing == nil ? "Guardar golpe" : "Guardar corrección") { Task { await save(live) } }
+            Button(editing == nil ? "Guardar golpe" : "Guardar corrección") { Task { await commit(live) } }
                 .buttonStyle(.borderedProminent)
                 .tint(p.accent)
                 .disabled(busy)
@@ -154,7 +164,7 @@ struct ReconstructView: View {
                         .foregroundStyle(p.ink2)
                     HStack {
                         Button("Corregir") { load(shot) }
-                        Button("Borrar") { Task { await remove(live, shot) } }
+                        Button("Borrar") { Task { if let live { await remove(live, shot) } } }
                     }
                     .font(GType.label)
                 }
@@ -189,9 +199,34 @@ struct ReconstructView: View {
         return f.string(from: date)
     }
 
+    private var stagedTitle: String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let course = context?.courseName ?? ""
+        return "\(formatter.string(from: date)) · \(course)"
+    }
+
     private func loadSetup() async {
         do { setup = try await model.api.reconstructionSetup() }
-        catch { note = error.localizedDescription }
+        catch { note = error.localizedDescription; return }
+        guard let context else { return }
+        date = context.date
+        roundId = context.roundId
+        hole = min(18, max(1, context.hole))
+        if let saved = setup.saved.first(where: { $0.roundId == context.roundId }) {
+            await open(saved)
+            return
+        }
+        guard let course = RoundTrackCourse.match(courses: model.courses, clubCode: context.clubCode, name: context.courseName) else { return }
+        courseKey = course.id
+        staged = true
+        let id = ReconstructionCourseId.make(clubCode: course.clubCode, course: course.name)
+        if !course.clubCode.isEmpty {
+            centers = (try? await model.api.courseCenters(courseId: id)) ?? [:]
+            aim()
+        }
     }
 
     private func create() async {
@@ -219,6 +254,28 @@ struct ReconstructView: View {
     private func draft() -> ReconstructionDraft {
         let meters = Double(typedDistance.replacingOccurrences(of: ",", with: "."))
         return ReconstructionDraft(hole: hole, club: club, result: result.isEmpty ? nil : result, penaltyStrokes: penalties, lat: start?.lat, lng: start?.lng, endLat: end?.lat, endLng: end?.lng, distanceM: meters)
+    }
+
+    private func commit(_ round: ReconstructionRound?) async {
+        if let round {
+            await save(round)
+            return
+        }
+        guard let course = model.courses.first(where: { $0.id == courseKey }) else { note = "Elegí la cancha."; return }
+        busy = true
+        defer { busy = false }
+        do {
+            let id = ReconstructionCourseId.make(clubCode: course.clubCode, course: course.name)
+            let created = try await model.api.createReconstruction(date: artDate(), courseId: id, roundId: roundId.isEmpty ? nil : roundId)
+            live = created
+            staged = false
+            shots = [try await model.api.saveReconstructionShot(liveRoundId: created.id, shot: draft())]
+            editing = nil
+            start = nil
+            end = nil
+            typedDistance = ""
+            note = ""
+        } catch { note = error.localizedDescription }
     }
 
     private func save(_ round: ReconstructionRound) async {
