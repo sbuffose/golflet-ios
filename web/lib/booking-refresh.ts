@@ -54,12 +54,23 @@ export function companionMode(action: "visit" | "players"): { light: boolean } {
   return { light: action !== "players" };
 }
 
-/** What "Traer última tarjeta" may say. A failed or empty read never counts as a new card. */
-export function latestCardOutcome(results: { ok: boolean; newRounds: number; message?: string | null }[]): { phase: "fresh" | "none" | "error"; note: string } {
+export type CardRead = { club?: string | null; ok: boolean; newRounds: number; message?: string | null };
+
+/** One club that answered with zero new cards does not hide another club that failed. */
+export function latestCardOutcome(results: CardRead[]): { phase: "fresh" | "none" | "partial" | "error"; note: string } {
   if (!results.length) return { phase: "error", note: "No hay una clave guardada para leer el club." };
   const ok = results.filter(r => r.ok);
+  const bad = results.filter(r => !r.ok);
   const added = ok.reduce((s, r) => s + (r.newRounds || 0), 0);
-  if (!ok.length) return { phase: "error", note: results.find(r => r.message)?.message || "No pudimos leer el club. La tarjeta en pantalla no cambió." };
+  const fail = bad.map(r => {
+    const msg = r.message || "No pudimos leer el club.";
+    return r.club ? `${r.club}: ${msg}` : msg;
+  }).join(" ");
+  if (!ok.length) return { phase: "error", note: fail || "No pudimos leer el club. La tarjeta en pantalla no cambió." };
+  if (bad.length) {
+    const head = added > 0 ? (added === 1 ? "Llegó una tarjeta nueva." : `Llegaron ${added} tarjetas nuevas.`) : "No hay una tarjeta nueva en los clubes que respondieron.";
+    return { phase: "partial", note: `${head} ${fail}`.trim() };
+  }
   if (added <= 0) return { phase: "none", note: "No hay una tarjeta nueva. La última sigue siendo la que ya ves." };
   return { phase: "fresh", note: added === 1 ? "Llegó una tarjeta nueva." : `Llegaron ${added} tarjetas nuevas.` };
 }

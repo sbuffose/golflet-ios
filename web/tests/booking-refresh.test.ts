@@ -72,4 +72,17 @@ test("the explicit reservation button re-reads players and a card with zero new 
   assert.equal(latestCardOutcome([{ ok: true, newRounds: 0 }]).note, "No hay una tarjeta nueva. La última sigue siendo la que ya ves.");
   assert.equal(latestCardOutcome([{ ok: false, newRounds: 0, message: "El club no respondió." }]).note, "El club no respondió.");
   assert.equal(latestCardOutcome([{ ok: true, newRounds: 1 }]).note, "Llegó una tarjeta nueva.");
+  const partial = latestCardOutcome([
+    { club: "Norte", ok: true, newRounds: 0 },
+    { club: "Sur", ok: false, newRounds: 0, message: "El club no respondió." },
+  ]);
+  assert.equal(partial.phase, "partial");
+  assert.match(partial.note, /Sur/);
+  assert.equal(partial.note.includes("La última sigue siendo la que ya ves."), false);
+  const imported = latestCardOutcome([
+    { club: "Norte", ok: true, newRounds: 1 },
+    { club: "Sur", ok: false, newRounds: 0, message: "timeout" },
+  ]);
+  assert.match(imported.note, /Llegó una tarjeta nueva/);
+  assert.match(imported.note, /Sur/);
 });

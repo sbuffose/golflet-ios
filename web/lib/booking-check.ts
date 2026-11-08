@@ -36,9 +36,10 @@ const empty = (p: Partial<CheckResult>): CheckResult => ({
 });
 
 async function lastChecked(userId: string): Promise<string | null> {
+  // Failures update status only. checked_at stays the last successful read, including after it becomes error or missing.
   const [r] = await q(`select max(s.checked_at) at from club_page_status s
     join club_account a on a.id=s.club_account_id
-    where a.user_id=$1 and s.page='bookings' and s.status in ('ok','empty')`, [userId]);
+    where a.user_id=$1 and s.page='bookings'`, [userId]);
   return r?.at ? new Date(r.at).toISOString() : null;
 }
 
@@ -54,18 +55,18 @@ async function snap(userId: string): Promise<BookingSnap[]> {
 
 const coursesOf = async (clubId: number) => (await q(`select name from course where club_id=$1`, [clubId])).map((c: any) => c.name as string);
 
-async function readAccount(userId: string, a: any, light: boolean): Promise<"ok" | "empty" | "error" | "busy"> {
+async function readAccount(userId: string, a: any, light: boolean): Promise<{ status: "ok" | "empty" | "error" | "busy"; playersRead: boolean }> {
   const key = a.source === "app" ? `app:${userId}:${a.matricula}` : `site:${a.id}`;
   const token = newLeaseToken();
   const lease = await claimLoginLease(q, key, token, userId, null);
-  if (lease === "held") return "busy";
+  if (lease === "held") return { status: "busy", playersRead: false };
   const release = lease === "acquired" ? () => releaseLoginLease(q, key, token) : async () => {};
   try {
     const courses = await coursesOf(a.club_id);
     if (a.source === "app") {
       const A = await new GolfisticsApp(a.matricula, decryptSecret(a.password_enc)).login();
       await A.listClubs();
-      if (!a.club_code || !A.clubs.some((c: { cc: string }) => c.cc === a.club_code)) return "error";
+      if (!a.club_code || !A.clubs.some((c: { cc: string }) => c.cc === a.club_code)) return { status: "error", playersRead: false };
       const g = await A.openClub(a.club_code, { gender: a.gender });
       return await syncBookings(userId, a, g, courses, { light });
     }
@@ -73,7 +74,7 @@ async function readAccount(userId: string, a: any, light: boolean): Promise<"ok"
     return await syncBookings(userId, a, g, courses, { light });
   } catch (e) {
     if (!(e instanceof GolfisticsError)) console.error("booking check", e instanceof Error ? e.name : "unknown");
-    return "error";
+    return { status: "error", playersRead: false };
   } finally {
     await release();
   }
@@ -92,7 +93,7 @@ async function run(userId: string, o: CheckOpts): Promise<CheckResult> {
   if (!accs.length) return empty({ status: "no_account", last_checked_at: previous, message: "No hay una matrícula vinculada para leer reservas." });
   const light = companionMode(o.players ? "players" : "visit").light;
   const before = await snap(userId);
-  let ok = 0, failed = 0, busy = 0;
+  let ok = 0, failed = 0, busy = 0, unreadPlayers = 0;
   const seen = new Set<string>();
   for (const a of accs) {
     const group = a.source === "app" ? `app:${a.matricula}` : `site:${a.id}`;
@@ -111,7 +112,8 @@ async function run(userId: string, o: CheckOpts): Promise<CheckResult> {
           try {
             const g = await A.openClub(mate.club_code, { gender: mate.gender });
             const st = await syncBookings(userId, mate, g, await coursesOf(mate.club_id), { light });
-            if (st === "error") failed++; else ok++;
+            if (st.status === "error") failed++;
+            else { ok++; if (!light && !st.playersRead) unreadPlayers++; }
           } catch { failed++; }
         }
       } catch (e) {
@@ -123,9 +125,9 @@ async function run(userId: string, o: CheckOpts): Promise<CheckResult> {
       continue;
     }
     const st = await readAccount(userId, a, light);
-    if (st === "busy") busy++;
-    else if (st === "error") failed++;
-    else ok++;
+    if (st.status === "busy") busy++;
+    else if (st.status === "error") failed++;
+    else { ok++; if (!light && !st.playersRead) unreadPlayers++; }
   }
   if (!ok) {
     return empty({
@@ -141,8 +143,9 @@ async function run(userId: string, o: CheckOpts): Promise<CheckResult> {
   try { await enrollScorecardFetches(); } catch (e) { console.error("booking reconcile", e instanceof Error ? e.name : "unknown"); }
   const checked = await lastChecked(userId);
   return {
-    status: "checked", fresh: true, players_read: !light, checked_at: checked, last_checked_at: previous,
-    ...delta, failed, message: null,
+    status: "checked", fresh: true, players_read: !light && unreadPlayers === 0 && failed === 0,
+    checked_at: checked, last_checked_at: previous,
+    ...delta, failed, message: !light && (unreadPlayers > 0 || failed > 0) ? "La reserva se leyó. No pudimos leer los jugadores de la línea." : null,
   };
 }
 
