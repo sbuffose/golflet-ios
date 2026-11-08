@@ -61,6 +61,8 @@ final class AppModel {
     var showsGroups = false
     var inviteShare: InviteSharePayload?
     var teeTimes: [TeeTime] = []
+    var scorecardFetches: [ScorecardFetchJob] = []
+    var scorecardFetchNote: String?
     var playSettings = PlaySettingsStore.load()
     var needsClub: NeedsClubPayload?
     var pendingClubID: Int?
@@ -89,7 +91,6 @@ final class AppModel {
     let api: any GolfletAPI
     let notes: NotesStore
     private var reopenClubsAfterFailure = false
-    private var scorecardFetchTask: Task<Void, Never>?
 
     init(api: any GolfletAPI, notes: NotesStore) {
         self.api = api
@@ -294,8 +295,6 @@ final class AppModel {
     }
 
     func signOut() async {
-        scorecardFetchTask?.cancel()
-        scorecardFetchTask = nil
         await run {
             try await api.signOut()
             isSignedIn = false
@@ -319,6 +318,9 @@ final class AppModel {
             presentedInvite = nil
             presentedGroupID = nil
             inviteShare = nil
+            teeTimes = []
+            scorecardFetches = []
+            scorecardFetchNote = nil
             needsClub = nil
             pendingClubID = nil
             hasPlayerSnapshot = false
@@ -443,18 +445,6 @@ final class AppModel {
     }
 
     func endPlay(recapLiveRoundId: String?) {
-        if let round = activeLiveRound {
-            let when = round.startedAt ?? Date()
-            var anchors = ScorecardFetchStore.load()
-            anchors = ScorecardFetch.mergePlayed(
-                at: when,
-                clubCode: round.clubCode ?? "",
-                course: round.course ?? "",
-                into: anchors
-            )
-            ScorecardFetchStore.save(anchors)
-            armScorecardFetches()
-        }
         showsPlay = false
         activeLiveRound = nil
         activeCourse = nil
@@ -669,16 +659,14 @@ final class AppModel {
     func refreshTeeTimes() async {
         guard isSignedIn else {
             teeTimes = []
+            scorecardFetches = []
+            scorecardFetchNote = nil
             return
         }
         if let remote = try? await api.teeTimes() {
             teeTimes = remote
         }
-        var anchors = ScorecardFetchStore.load()
-        anchors = ScorecardFetch.mergeTeeTimes(teeTimes, into: anchors)
-        anchors = ScorecardFetch.settle(anchors, rounds: rounds)
-        ScorecardFetchStore.save(anchors)
-        armScorecardFetches()
+        await refreshScorecardFetches()
         if let next = nextTeeTime {
             publishWidgetSnapshot(next: NextRoundHint(
                 course: next.course.isEmpty ? next.clubName : next.course,
@@ -688,57 +676,31 @@ final class AppModel {
         }
     }
 
-    /// Golfistics sync for a scorecard that should already be posted.
-    /// The cadence lives in `ScorecardFetch`: 6h after the tee time or the
-    /// played mark, then hourly until the next calendar day, then once a day.
-    /// This path does not open the sync screen. A sync the person started
-    /// themselves keeps the turn.
-    private func armScorecardFetches() {
-        scorecardFetchTask?.cancel()
-        guard isSignedIn, !RuntimeFlags.isUITesting else { return }
-        scorecardFetchTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.runDueScorecardFetches()
-                let wait = self?.secondsUntilScorecardFetch() ?? 3600
-                try? await Task.sleep(for: .seconds(min(max(wait, 30), 3600)))
-            }
-        }
-    }
-
-    private func secondsUntilScorecardFetch() -> TimeInterval {
-        let anchors = ScorecardFetch.settle(ScorecardFetchStore.load(), rounds: rounds)
-        guard let next = anchors.map({ ScorecardFetch.nextAttempt(playedAt: $0.at, lastAttempt: $0.lastAttempt) }).min() else {
-            return 3600
-        }
-        return max(0, next.timeIntervalSinceNow)
-    }
-
-    private func runDueScorecardFetches() async {
-        guard isSignedIn, syncSession == nil, !isBusy else { return }
-        var anchors = ScorecardFetch.settle(ScorecardFetchStore.load(), rounds: rounds)
-        let due = ScorecardFetch.due(anchors, now: Date())
-        guard !due.isEmpty else {
-            ScorecardFetchStore.save(anchors)
+    /// Reads the server's scorecard jobs. The cron does the Golfistics read.
+    func refreshScorecardFetches() async {
+        guard isSignedIn else {
+            scorecardFetches = []
+            scorecardFetchNote = nil
             return
         }
-        let targets = ScorecardFetch.clubsToSync(due: due, clubs: clubs)
-        var synced = false
-        for club in targets {
-            let progressID = UUID().uuidString
-            if let result = try? await api.syncAccount(
-                id: club.accountId,
-                password: nil,
-                savePassword: false,
-                progressID: progressID
-            ), result.ok {
-                synced = true
+        do {
+            let jobs = try await api.scorecardFetches()
+            scorecardFetches = jobs
+            let known = Set(rounds.map(\.roundId))
+            let arrived = jobs.contains { job in
+                job.status == "complete" && job.roundId.map { !known.contains($0) } == true
             }
+            if arrived {
+                do { apply(try await api.bootstrap()) }
+                catch {
+                    scorecardFetchNote = "La tarjeta figura lista, pero no pudimos actualizar la lista."
+                    return
+                }
+            }
+            scorecardFetchNote = nil
+        } catch {
+            scorecardFetchNote = error.localizedDescription
         }
-        anchors = ScorecardFetch.markAttempted(anchors, ids: Set(due.map(\.id)), at: Date())
-        ScorecardFetchStore.save(anchors)
-        guard synced, let snap = try? await api.bootstrap() else { return }
-        apply(snap)
-        ScorecardFetchStore.save(ScorecardFetch.settle(ScorecardFetchStore.load(), rounds: rounds))
     }
 
     func refreshProfesores() async {

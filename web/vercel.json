@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/gps",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/scorecard",
+      "schedule": "*/15 * * * *"
     }
   ],
   "regions": [

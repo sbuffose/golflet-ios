@@ -16,7 +16,7 @@ export const PLATFORM_SQL = (col: string) => `case when ${col} ilike 'Golflet/%'
 const ACT = `act as (
   select "userId" as uid, "updatedAt" as t, 'sesion' as k from session
   union all select "userId", "createdAt", 'ingreso' from session
-  union all select user_id, created_at, 'sincronizacion' from sync_log where trigger <> 'cron'
+  union all select user_id, created_at, 'sincronizacion' from sync_log where trigger not in ('cron', 'scorecard')
   union all select user_id, updated_at, 'sincronizacion' from sync_progress
   union all select user_id, started_at, 'ronda_gps' from live_round
   union all select user_id, created_at, 'golpe' from shot

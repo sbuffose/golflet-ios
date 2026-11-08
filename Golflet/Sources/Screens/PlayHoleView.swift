@@ -1224,7 +1224,11 @@ struct PlayHoleView: View {
 
     private func endRound() async {
         await savePuttsIfNeeded()
-        _ = try? await model.api.patchLiveRound(id: liveRound.id, body: ["ended": true])
+        do {
+            _ = try await model.api.patchLiveRound(id: liveRound.id, body: ["ended": true])
+        } catch {
+            model.scorecardFetchNote = "No pudimos avisar que terminaste la vuelta. Si había una reserva, la tarjeta se busca igual cinco horas después de la salida."
+        }
         await model.endPlay(recapLiveRoundId: liveRound.id)
     }
 

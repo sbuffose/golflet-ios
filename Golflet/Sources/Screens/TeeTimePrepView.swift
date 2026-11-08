@@ -191,6 +191,9 @@ struct TeeTimePrepView: View {
                                 .foregroundStyle(p.ink2)
                         }
                     }
+                    if let job = model.scorecardFetches.first(where: { $0.teeTimeId == booking.id }) {
+                        block("Tarjeta del club", job.label, "tee-prep-scorecard")
+                    }
                     block("Cancha", place.canchaTitle, "tee-prep-cancha")
                     block(
                         "Pronóstico",
