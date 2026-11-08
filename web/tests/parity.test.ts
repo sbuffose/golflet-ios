@@ -29,12 +29,20 @@ test("una tarjeta no abre la cancha de otro club aunque el nombre coincida", () 
   assert.equal(matchRoundCourse({ course: "Principal", club_name: "Club A" }, [clubB]), null);
   assert.equal(matchRoundCourse({ course: "Principal", club_code: "118", course_id: "118-principal" }, [{ ...clubB, club_name: "Club A" }]), null);
   assert.equal(matchRoundCourse({ course: "Principal", club_code: "118" }, [{ ...clubA, course_id: "200-principal" }]), null);
-  assert.equal(matchRoundCourse({ course: "La Principal", club_name: "Club A", club_code: "118" }, [clubA, clubB])?.course_id, "118-principal");
-  assert.equal(matchRoundCourse({ course: "Principal", club_name: "C.A." }, [{ ...clubA, club_aliases: ["C.A.", "Club A"] }])?.course_id, "118-principal");
-  assert.equal(matchRoundCourse({ course: "Principal" }, [clubB])?.course_id, "200-principal");
+  const byAlias = matchRoundCourse({ course: "La Principal", club_name: "Club A", club_code: "118" }, [clubA, clubB]);
+  assert.ok(byAlias);
+  assert.equal(byAlias.course_id, "118-principal");
+  const byClubAlias = matchRoundCourse({ course: "Principal", club_name: "C.A." }, [{ ...clubA, club_aliases: ["C.A.", "Club A"] }]);
+  assert.ok(byClubAlias);
+  assert.equal(byClubAlias.course_id, "118-principal");
+  const uniqueName = matchRoundCourse({ course: "Principal" }, [clubB]);
+  assert.ok(uniqueName);
+  assert.equal(uniqueName.course_id, "200-principal");
   assert.equal(matchRoundCourse({ course: "Principal" }, [clubA, clubB]), null);
   assert.equal(js.matchRoundCourse({ course: "Principal", club_name: "Club A", club_code: "118" }, [clubB]), null);
-  assert.equal(js.matchRoundCourse({ course: "Principal" }, [clubB]).course_id, "200-principal");
+  const bundled = js.matchRoundCourse({ course: "Principal" }, [clubB]);
+  assert.ok(bundled);
+  assert.equal(bundled.course_id, "200-principal");
 });
 
 test("el índice oficial es el punto fechado más nuevo", () => {
