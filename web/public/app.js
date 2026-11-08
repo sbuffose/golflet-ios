@@ -135,7 +135,7 @@ function vInicio(){
   const top = `<div class="top"><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${esc(initials())}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
   if (!valid.length) return top + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas válidas. Tocá Actualizar para traerlas.</div>` : emptyData('Empecemos por tu club')) +
-    `<div id="tees"></div><div id="scorecards"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
+    `<div id="tees"></div><div id="scorecards"></div><a class="card" href="#/reconstruir"><div class="t">Cargar una vuelta ya jugada</div><div class="s">Marcá cada golpe en el mapa. El punto es manual y la distancia, estimada. No cambia la tarjeta del club.</div></a><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
   const hi = G.hi_history, d = hi.length>1 ? hi[hi.length-1].hi - hi[0].hi : null;
   const last = rounds[0], best = valid.slice().sort((a,b)=>a.gross-b.gross)[0];
   const pr = valid.filter(inR), prAll = rounds.filter(inR), bestR = pr.slice().sort((a,b)=>a.gross-b.gross)[0];
@@ -155,7 +155,7 @@ function vInicio(){
     <a class="card mini stat vx-tap" href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}"><div class="k">Mejor</div><div class="v num">${minOr(pr.map(r=>r.gross))}</div></a>
     <a class="card mini stat vx-tap" href="${rlink('birdies',{scope:'all',course:'all',sort:'date',order:'desc'})}"><div class="k">Birdies</div><div class="v num">${prAll.reduce((s,r)=>s+(r.holes?.length?r.holes.filter(h=>h[1]!=null&&h[2]!=null&&h[2]-h[1]===-1).length:(r.summary_counts?.birdies||0)),0)}</div></a>
   </div>${perRoundCard(prAll)}</div></div>
-  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
+  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3"><a class="card" href="#/reconstruir"><div class="t">Cargar una vuelta ya jugada</div><div class="s">Marcá cada golpe en el mapa. El punto es manual y la distancia, estimada. No cambia la tarjeta del club.</div></a></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
   <div class="o3"><div class="section"><h2>Amigos</h2>${G.user?.group_invitations?`<span class="badge gold">${G.user.group_invitations} invitación${G.user.group_invitations===1?'':'es'}</span>`:''}</div><a class="card gg-home" href="#/amigos"><span class="gg-home-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="3.2"/><circle cx="16.5" cy="10" r="2.6"/><path d="M3.5 19c.9-3 3-4.6 5.5-4.6s4.6 1.6 5.5 4.6M14.5 15c2.6-.3 4.8 1 5.8 3.8"/></svg></span><div><b>${G.user?.group_invitations?'Te invitaron a un grupo':'Comparar con amigos'}</b><p>Tabla, evolución y hoyo por hoyo con tus amigos. Solo si cada uno acepta.</p></div>${ICON.chev}</a></div>
   <div class="o5"><div class="section"><h2>Mis clubes</h2></div>${clubsCard()}</div></div></div>${CT_LINKS}`;
 }
@@ -593,7 +593,7 @@ async function loadTees(){
       <div class="section"><h2>Próximos</h2><span class="badge">${u.tee_times.length}</span></div>${u.tee_times.length?`${yrList(mark(u.tee_times), t => t.date, teeRow)}`:`<div class="msg">No tenés reservas próximas en tu club.</div>`}
       ${p.tee_times.length?`<div class="section"><h2>Pasados</h2></div>${yrList(mark(p.tee_times), t => t.date, teeRow, 'list tt-past')}`:''}
       <div class="section"><h2>De dónde salen</h2></div>${sourcesNote(u.clubs)}
-      <p class="foot">Golflet lee tus reservas en el sitio de cada club con tu sesión, solo para mostrarlas: no reserva ni cancela nada. La tarjeta se busca sola cinco horas después de la salida, aunque la app esté cerrada.</p>`;
+      <p class="foot">Golflet lee tus reservas en el sitio de cada club con tu sesión, solo para mostrarlas: no reserva ni cancela nada. La tarjeta se busca sola a partir de cinco horas después de la salida. El servidor revisa cada quince minutos, así que la primera lectura puede llegar hasta un cuarto de hora más tarde, aunque la app esté cerrada.</p>`;
   } catch(e){ el.innerHTML = errBox(e); }
 }
 function sTee(id){ return `<div class="bar"><span class="overline">Tee time</span></div><div id="tee" data-id="${esc(id)}"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
@@ -2610,7 +2610,7 @@ const GG = window.GolfletGroups;
 const GM = window.GolfletMatch;   // t260u Armar partido (public/match.js)
 const GP = window.GolfletPlan;   // t176u Estrategia de juego (public/plan.js)
 const kind = h => (h || '').replace(/^#\/?/, '').split(/[/?]/)[0] || 'inicio';
-const PARENT = { jugar:'#/metricas', metricas:'#/resumen', notificaciones:'#/inicio', notificacion:'#/notificaciones', clima:'#/resumen', privado:'#/resumen', pelota:'#/cuenta', sorteos:'#/cuenta', sorteo:'#/sorteos', profe:'#/cuenta', profesor:'#/cuenta', profesores:'#/cuenta', 'hi-cambio':'#/inicio', cambios:'#/inicio', outliers:'#/resumen', 'club-faltante':'#/cuenta', impacto:'#/inicio', equipo:'#/bolsa', tee:'#/inicio', tees:'#/inicio', trabajar:'#/inicio', putting:'#/resumen', nivel:'#/cancha', ronda:'#/rondas', hoyo:'#/cancha', vincular:'#/cuenta', club:'#/cuenta', cuenta:'#/inicio', metrica:'#/resumen', gps:'#/bolsa', palo:'#/bolsa', estrategia:'#/cancha' };
+const PARENT = { reconstruir:'#/rondas', jugar:'#/metricas', metricas:'#/resumen', notificaciones:'#/inicio', notificacion:'#/notificaciones', clima:'#/resumen', privado:'#/resumen', pelota:'#/cuenta', sorteos:'#/cuenta', sorteo:'#/sorteos', profe:'#/cuenta', profesor:'#/cuenta', profesores:'#/cuenta', 'hi-cambio':'#/inicio', cambios:'#/inicio', outliers:'#/resumen', 'club-faltante':'#/cuenta', impacto:'#/inicio', equipo:'#/bolsa', tee:'#/inicio', tees:'#/inicio', trabajar:'#/inicio', putting:'#/resumen', nivel:'#/cancha', ronda:'#/rondas', hoyo:'#/cancha', vincular:'#/cuenta', club:'#/cuenta', cuenta:'#/inicio', metrica:'#/resumen', gps:'#/bolsa', palo:'#/bolsa', estrategia:'#/cancha' };
 function labelFor(h){
   const p = (h || '#/inicio').replace(/^#\/?/, '').split('/'), k = p[0].split('?')[0] || 'inicio';
   if (GROUPISH(k) && GG) return GG.label(h);
@@ -2704,6 +2704,7 @@ function render(keepScroll){
   else if (p[0]==='privado'){ detail = sPrivado(); base = 'resumen'; }
   else if (p[0]==='pelota'){ detail = sPelota(); base = 'cuenta'; }
   else if (p[0]==='sorteos'){ detail = sSorteos(); base = 'cuenta'; }
+  else if (p[0]==='reconstruir'){ detail = `<div id="recon" data-id="${esc(p[1] || '')}"></div>`; base = 'rondas'; }
   else if (p[0]==='jugar'){ detail = sJugar(p[1]); base = 'resumen'; }
   else if (p[0].split('?')[0]==='metricas'){ detail = sMetricas(p[1], p[2]); base = 'resumen'; }
   else if (p[0]==='notificaciones'){ detail = sNotifs(); base = 'inicio'; }
@@ -2793,6 +2794,7 @@ function bind(p, isDetail){
   if (p[0]==='sorteos') loadSorteos();
   if (p[0]==='notificaciones') loadNotifs();
   if (p[0]==='jugar') loadJugar(p[1]);
+  if (p[0]==='reconstruir') window.GolfletRecon?.open(document.getElementById('recon'));
   if (p[0].split('?')[0]==='metricas') { loadMetricas(p[1], p[2]); view.querySelectorAll('[data-mrange]').forEach(b=>b.onclick=()=>{ setRange(b.dataset.mrange); render(true); }); }
   if (p[0]==='notificacion') loadNotif(p[1]);
   loadNbadge();

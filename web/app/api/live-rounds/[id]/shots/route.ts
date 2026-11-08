@@ -3,6 +3,7 @@ import { q } from "@/lib/db";
 import { body } from "@/lib/accounts";
 import { ownLive, shotsWithDistances } from "@/lib/live";
 import { parseShot } from "@/lib/shot-input";
+import { ReconstructSchemaError, liveOrigin, saveManualShot } from "@/lib/reconstruct";
 
 /**
  * Log one shot { hole, lat, lng, accuracy_m?, taken_at?, club?, lie?, result?, direction?, length?, intent?, mishit?, shot_number?, client_id? } or a batch { shots:[...] } (offline queue).
@@ -10,7 +11,20 @@ import { parseShot } from "@/lib/shot-input";
  */
 export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const user = await requireUser(req); const { id } = await ctx.params; const l = await ownLive(user.id, id);
-  const b = await body<any>(req); const list = Array.isArray(b.shots) ? b.shots : [b];
+  const b = await body<any>(req);
+  if (await liveOrigin(user.id, id) === "manual") {
+    const list = Array.isArray(b.shots) ? b.shots : [b];
+    if (!list.length || list.length > 40) throw new HttpError(400, "Entre 1 y 40 golpes");
+    try {
+      const shots = [];
+      for (const shot of list) shots.push(await saveManualShot(user.id, id, shot));
+      return json({ shots }, 201);
+    } catch (e) {
+      if (e instanceof ReconstructSchemaError) return json({ error: e.message }, 503);
+      throw e;
+    }
+  }
+  const list = Array.isArray(b.shots) ? b.shots : [b];
   if (!list.length || list.length > 200) throw new HttpError(400, "Entre 1 y 200 golpes");
   const parsed = list.map(parseShot);
   const created: string[] = [];

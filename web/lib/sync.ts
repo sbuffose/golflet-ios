@@ -1,4 +1,5 @@
 import { q } from "./db";
+import { claimLoginLease, isUndefinedColumn, newLeaseToken, releaseLoginLease, SYNC_BUSY_MESSAGE } from "./scorecard-lease";
 import { syncClubExtras } from "./club-extras";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { Golfistics, GolfisticsError, teeFor, strokesReceived, type CardDetail, type CardRow, type Tee } from "./golfistics";
@@ -61,7 +62,7 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>) {
   return out;
 }
 
-export type SyncResult = { ok: boolean; new_rounds: number; updated: number; pending: number; message: string; clubs?: ClubSyncResult[] };
+export type SyncResult = { ok: boolean; new_rounds: number; updated: number; pending: number; message: string; clubs?: ClubSyncResult[]; busy?: boolean };
 export type ClubSyncResult = { account_id: string; club_name: string; ok: boolean; new_rounds: number; updated: number; pending: number; list_total: number; message: string };
 
 export type Progress = {
@@ -179,6 +180,17 @@ async function syncWithClient(acc: any, g: Golfistics, t0: number, budgetMs: num
   return { account_id: accountId, club_name: clubName, ok: true, new_rounds: added, updated, pending, list_total: list.length, message: msg };
 }
 
+async function markRunning(accountId: string) {
+  try {
+    await q(`update club_account set last_sync_status='running', last_sync_started_at=now() where id=$1`, [accountId]);
+  } catch (e) {
+    if (!isUndefinedColumn(e, "last_sync_started_at")) throw e;
+    await q(`update club_account set last_sync_status='running' where id=$1`, [accountId]);
+  }
+}
+
+const busyResult = (): SyncResult => ({ ok: false, busy: true, new_rounds: 0, updated: 0, pending: 0, message: SYNC_BUSY_MESSAGE });
+
 async function markError(accountId: string, e: unknown) {
   const msg = e instanceof GolfisticsError ? e.message : "No pudimos leer tus tarjetas. Probá de nuevo en unos minutos";
   await q(`update club_account set last_sync_at=now(), last_sync_status='error', last_sync_message=$2 where id=$1`, [accountId, msg]);
@@ -192,10 +204,10 @@ const loadAccount = async (id: string) =>
  * Sync one account. App-source accounts sync their whole Golfistics App link (every club of that matrícula).
  * `password` is used in memory only; if absent, the stored encrypted one is used.
  */
-export async function syncAccount(accountId: string, password?: string, budgetMs = 240_000, onProgress: OnProgress = () => {}): Promise<SyncResult> {
+export async function syncAccount(accountId: string, password?: string, budgetMs = 240_000, onProgress: OnProgress = () => {}, heldLease?: { token: string }): Promise<SyncResult> {
   const acc = await loadAccount(accountId);
   if (!acc) throw new Error("account not found");
-  if (acc.source === "app") return syncAppLink(acc.user_id, acc.matricula, { password, budgetMs, onProgress });
+  if (acc.source === "app") return syncAppLink(acc.user_id, acc.matricula, { password, budgetMs, onProgress, leaseToken: heldLease?.token });
   const t0 = Date.now();
   const pass = password ?? (acc.password_enc ? decryptSecret(acc.password_enc) : null);
   if (!pass) return { ok: false, new_rounds: 0, updated: 0, pending: 0, message: "Sin contraseña guardada: ingresala para actualizar" };
@@ -210,26 +222,34 @@ export async function syncAccount(accountId: string, password?: string, budgetMs
   } catch (e) {
     if (!(e instanceof GolfisticsError)) throw e; // App unreachable or rejected: fall back to the club site below
   }
-  return syncSite(acc, pass, t0, budgetMs, onProgress);
+  return syncSite(acc, pass, t0, budgetMs, onProgress, undefined, heldLease?.token);
 }
 
 
 /** Club-site route (the club's own login.php + the same read-only pages as the App SSO). `g` = an already logged-in client. */
-async function syncSite(acc: any, pass: string, t0: number, budgetMs: number, onProgress: OnProgress, g0?: Golfistics): Promise<SyncResult> {
+async function syncSite(acc: any, pass: string, t0: number, budgetMs: number, onProgress: OnProgress, g0?: Golfistics, heldToken?: string): Promise<SyncResult> {
   const accountId = acc.id as string;
-  await q(`update club_account set last_sync_status='running' where id=$1`, [accountId]);
+  const key = `site:${accountId}`;
+  const token = heldToken ?? newLeaseToken();
+  const lease = heldToken ? "acquired" as const : await claimLoginLease(q, key, token, String(acc.user_id), null);
+  if (lease === "held") return busyResult();
   try {
-    const tracker = new StatsTracker();
-    const on: OnProgress = p => onProgress({ ...p, club: acc.club_display, club_index: 1, club_count: 1, club_code: acc.club_code ?? null, stats: tracker.snapshot() });
-    on({ stage: "connect" });
-    const g = g0 ?? await new Golfistics(acc.base_url, acc.matricula, pass).login();
-    const r = await syncWithClient(acc, g, t0, budgetMs, on, true, tracker);
-    await syncClubExtras(acc.user_id, accountId, g, { deadline: Math.min(t0 + 280_000, Date.now() + 30_000) });
-    return { ok: true, new_rounds: r.new_rounds, updated: r.updated, pending: r.pending, message: r.message, clubs: [r] };
-  } catch (e) {
-    const msg = await markError(accountId, e);
-    if (e instanceof GolfisticsError) return { ok: false, new_rounds: 0, updated: 0, pending: 0, message: msg };
-    throw e;
+    await markRunning(accountId);
+    try {
+      const tracker = new StatsTracker();
+      const on: OnProgress = p => onProgress({ ...p, club: acc.club_display, club_index: 1, club_count: 1, club_code: acc.club_code ?? null, stats: tracker.snapshot() });
+      on({ stage: "connect" });
+      const g = g0 ?? await new Golfistics(acc.base_url, acc.matricula, pass).login();
+      const r = await syncWithClient(acc, g, t0, budgetMs, on, true, tracker);
+      await syncClubExtras(acc.user_id, accountId, g, { deadline: Math.min(t0 + 280_000, Date.now() + 30_000) });
+      return { ok: true, new_rounds: r.new_rounds, updated: r.updated, pending: r.pending, message: r.message, clubs: [r] };
+    } catch (e) {
+      const msg = await markError(accountId, e);
+      if (e instanceof GolfisticsError) return { ok: false, new_rounds: 0, updated: 0, pending: 0, message: msg };
+      throw e;
+    }
+  } finally {
+    if (!heldToken && lease === "acquired") await releaseLoginLease(q, key, token);
   }
 }
 
@@ -283,13 +303,18 @@ export async function ensureAppAccount(userId: string, clubId: number, matricula
  * what is stored (and copies it onto newly found clubs).
  */
 export async function syncAppLink(userId: string, matricula: string,
-  o: { password?: string; savePassword?: boolean; budgetMs?: number; onProgress?: OnProgress; app?: GolfisticsApp } = {}): Promise<SyncResult & { account_ids: string[] }> {
+  o: { password?: string; savePassword?: boolean; budgetMs?: number; onProgress?: OnProgress; app?: GolfisticsApp; leaseToken?: string } = {}): Promise<SyncResult & { account_ids: string[] }> {
   const t0 = Date.now(), budgetMs = o.budgetMs ?? 240_000, onProgress = o.onProgress ?? (() => {});
   const linked = await q(`select id, password_enc, gender from club_account where user_id=$1 and matricula=$2 and source='app' order by created_at`, [userId, matricula]);
   const storedEnc = linked.find(a => a.password_enc)?.password_enc ?? null;
   const pass = o.password ?? (storedEnc ? decryptSecret(storedEnc) : null);
   const fail = (message: string) => ({ ok: false, new_rounds: 0, updated: 0, pending: 0, message, account_ids: linked.map(a => a.id) });
   if (!pass) return fail("Sin contraseña guardada: ingresala para actualizar");
+  const leaseKey = `app:${userId}:${matricula}`;
+  const leaseToken = o.leaseToken ?? newLeaseToken();
+  const lease = o.leaseToken ? "acquired" as const : await claimLoginLease(q, leaseKey, leaseToken, userId, null);
+  if (lease === "held") return { ...fail(SYNC_BUSY_MESSAGE), busy: true };
+  try {
   const enc = o.savePassword === true ? encryptSecret(pass) : o.savePassword === false ? null : undefined;
   const gender = linked.find(a => a.gender)?.gender ?? null;
   onProgress({ stage: "connect", club: "tus clubes" });
@@ -314,7 +339,7 @@ export async function syncAppLink(userId: string, matricula: string,
       const club = await ensureClub(c.cc, c.name, g.base);
       accId = await ensureAppAccount(userId, club.id, matricula, enc !== undefined ? enc : storedEnc);
       ids.push(accId);
-      await q(`update club_account set last_sync_status='running' where id=$1`, [accId]);
+      await markRunning(accId);
       const acc = await loadAccount(accId);
       results.push(await syncWithClient(acc, g, t0, budgetMs, on, i === n - 1, tracker));
       await syncClubExtras(userId, accId, g, { deadline: Math.min(t0 + 280_000, Date.now() + 30_000) });   // bookings, official HI + playing handicap
@@ -328,4 +353,7 @@ export async function syncAppLink(userId: string, matricula: string,
   const added = results.reduce((s, r) => s + r.new_rounds, 0), pending = results.reduce((s, r) => s + r.pending, 0);
   const message = results.map(r => `${r.club_name}: ${r.message}`).join(" · ");
   return { ok: okN > 0, new_rounds: added, updated: results.reduce((s, r) => s + r.updated, 0), pending, message, clubs: results, account_ids: ids };
+  } finally {
+    if (!o.leaseToken && lease === "acquired") await releaseLoginLease(q, leaseKey, leaseToken);
+  }
 }

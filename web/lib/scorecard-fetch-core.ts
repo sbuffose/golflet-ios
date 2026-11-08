@@ -1,7 +1,9 @@
 /** When to read a club scorecard after a tee time. No database and no Golfistics.
  *  Play is stored as an Argentina local date and HH:MM (UTC−3, no DST), the same clock as tee times.
- *  The first read is 5 hours after that tee. Until the next local midnight after that first
- *  instant, a miss is retried every hour. After that midnight, once a day.
+ *  A job becomes due 5 hours after that tee. The cron runs every 15 minutes, so the first
+ *  read happens in the quarter hour after that instant, not on the exact minute.
+ *  Until the next local midnight after that first instant, a miss is retried every hour.
+ *  After that midnight, once a day.
  *  The phone does not run this. The cron in /api/cron/scorecard does, even if the app is closed.
  *  The daily account refresh (20 hours, 06:00 ART) is a different job and does not gate this one. */
 
@@ -15,6 +17,9 @@ export const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 export const FRESH_SYNC_MS = 90 * 1000;
 export const MAX_SYNCS_PER_RUN = 4;
 export const LOOKBACK_DAYS = 21;
+/** A login left in 'running', or a lease with no heartbeat, is stale after this and may be taken. */
+export const RUNNING_STALE_MS = 20 * 60 * 1000;
+export const SYNC_BUSY_MESSAGE = "Hay una actualización en curso. Reintentamos en el próximo ciclo.";
 
 export const FETCH_STATUSES = ["scheduled", "awaiting_card", "complete", "cancelled", "needs_credentials", "error", "stopped"] as const;
 export type FetchStatus = (typeof FETCH_STATUSES)[number];
@@ -31,6 +36,12 @@ export type FetchJob = {
   matricula: string | null;
   hasPassword: boolean;
   syncRunning: boolean;
+  /** When the account entered 'running'. Absent or older than RUNNING_STALE_MS is a crashed run, not a live one. */
+  syncStartedAt: string | null;
+  /** Another worker holds the login lease. */
+  leaseHeld: boolean;
+  /** Compare-and-swap counter read with the row. Enrollment writes only if it still matches. */
+  version: number;
   lastSyncAt: string | null;
   lastSyncStatus: string | null;
   playedAt: string;
@@ -48,7 +59,9 @@ export type FetchJob = {
   gone: boolean;
 };
 
-export type RoundHit = { id: string; date: string; course: string | null; clubCode: string | null; accountId: string | null };
+export type RoundHit = { id: string; userId: string; date: string; course: string | null; clubCode: string | null; accountId: string | null };
+
+export type RoundClass = { roundId: string | null; ambiguous: boolean; reason: "match" | "none" | "ambiguous" | "other_course" };
 
 export type TeeSnap = { date: string; time: string; gone: boolean; courseLabel: string | null; roundId: string | null; clubName: string | null; clubCode: string | null; accountId: string | null };
 
@@ -89,19 +102,31 @@ export function normName(value: string | null | undefined): string {
   return (value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-/** One card for that club and day. Two cards and a course that does not separate them stay unmatched. */
-export function classifyRounds(job: { date: string; courseLabel: string | null; clubCode: string | null; accountId: string | null }, rounds: RoundHit[]): { roundId: string | null; ambiguous: boolean } {
-  let found = rounds.filter(r => r.date === job.date && (job.accountId ? r.accountId === job.accountId : !!job.clubCode && r.clubCode === job.clubCode));
-  if (found.length > 1 && job.courseLabel) {
-    const want = normName(job.courseLabel);
+/** One card for that player, club, and day. A card from another user is invisible.
+ *  A course label that does not match is not a fallback: the job stays open. */
+export function classifyRounds(job: { userId: string; date: string; courseLabel: string | null; clubCode: string | null; accountId: string | null }, rounds: RoundHit[]): RoundClass {
+  let found = rounds.filter(r => r.userId === job.userId && r.date === job.date && (job.accountId ? r.accountId === job.accountId : !!job.clubCode && r.clubCode === job.clubCode));
+  const want = normName(job.courseLabel);
+  if (want) {
     const narrowed = found.filter(r => {
       const got = normName(r.course);
-      return !!want && !!got && (got.includes(want) || want.includes(got));
+      return !!got && (got.includes(want) || want.includes(got));
     });
+    if (found.length > 0 && narrowed.length === 0) return { roundId: null, ambiguous: true, reason: "other_course" };
+    if (narrowed.length > 1) return { roundId: null, ambiguous: true, reason: "ambiguous" };
     found = narrowed;
   }
-  if (found.length === 1) return { roundId: found[0].id, ambiguous: false };
-  return { roundId: null, ambiguous: found.length > 1 };
+  if (found.length === 1) return { roundId: found[0].id, ambiguous: false, reason: "match" };
+  if (found.length > 1) return { roundId: null, ambiguous: true, reason: "ambiguous" };
+  return { roundId: null, ambiguous: false, reason: "none" };
+}
+
+/** True only while a run still has a start clock inside the lease window, or another worker holds the login lease. */
+export function runningIsLive(job: Pick<FetchJob, "syncRunning" | "syncStartedAt" | "leaseHeld">, now: Date): boolean {
+  if (job.leaseHeld) return true;
+  if (!job.syncRunning || !job.syncStartedAt) return false;
+  const age = now.getTime() - new Date(job.syncStartedAt).getTime();
+  return age >= 0 && age < RUNNING_STALE_MS;
 }
 
 export function syncKey(job: Pick<FetchJob, "userId" | "accountId" | "source" | "matricula">): string | null {
@@ -133,7 +158,7 @@ export function blankJob(partial: Pick<FetchJob, "id" | "userId" | "playedAt" | 
   const played = new Date(partial.playedAt);
   return {
     teeTimeId: null, liveRoundId: null, accountId: null, source: null, matricula: null, hasPassword: false,
-    syncRunning: false, lastSyncAt: null, lastSyncStatus: null, time: null, clubCode: null, courseLabel: null, clubName: null,
+    syncRunning: false, syncStartedAt: null, leaseHeld: false, version: 0, lastSyncAt: null, lastSyncStatus: null, time: null, clubCode: null, courseLabel: null, clubName: null,
     status: "scheduled", nextAttemptAt: nextAttempt(played, null).toISOString(), lastAttemptAt: null, attemptCount: 0,
     lastError: null, roundId: null, gone: false, ...partial,
   };
@@ -202,7 +227,7 @@ export function syncDisposition(job: FetchJob, now: Date): SyncDisposition {
   if (new Date(job.nextAttemptAt).getTime() > now.getTime()) return "skip";
   if (shouldStop(new Date(job.playedAt), job.attemptCount, now)) return "stop";
   if (!job.hasPassword || !syncKey(job)) return "credentials";
-  if (job.syncRunning) return "defer";
+  if (runningIsLive(job, now)) return "defer";
   if (job.lastSyncAt) {
     const age = now.getTime() - new Date(job.lastSyncAt).getTime();
     if (age >= 0 && age < FRESH_SYNC_MS) {
@@ -253,7 +278,7 @@ export function planDue(jobs: FetchJob[], now: Date, maxSyncs = MAX_SYNCS_PER_RU
     else held.push(...action.jobIds);
   }
   for (const action of reuses.values()) actions.push(action);
-  if (deferred.length) actions.push({ kind: "defer", jobIds: deferred, reason: "Hay una actualización en curso. Reintentamos en el próximo ciclo." });
+  if (deferred.length) actions.push({ kind: "defer", jobIds: deferred, reason: SYNC_BUSY_MESSAGE });
   if (missingPassword.length) actions.push({ kind: "credentials", jobIds: missingPassword, reason: "Sin contraseña guardada: no podemos buscar la tarjeta." });
   if (missingAccount.length) actions.push({ kind: "credentials", jobIds: missingAccount, reason: "No hay una cuenta vinculada de ese club para buscar la tarjeta." });
   if (stopped.length) actions.push({ kind: "stop", jobIds: stopped, reason: "Dejamos de buscar esta tarjeta automáticamente. Podés actualizar desde la app." });
@@ -273,6 +298,7 @@ export function outcomeAfterRead(job: FetchJob, rounds: RoundHit[], sync: { ok: 
   const hit = classifyRounds(job, rounds);
   if (hit.roundId) return { type: "complete", roundId: hit.roundId };
   if (!sync.ok) return { type: "error", message: (sync.message || "No pudimos leer las tarjetas.").slice(0, 200) };
+  if (hit.reason === "other_course") return { type: "waiting", message: "La tarjeta de ese día es de otra cancha. No la asociamos a esta salida." };
   if (hit.ambiguous) return { type: "waiting", message: "Hay más de una tarjeta ese día y no pudimos saber cuál es la de esta salida." };
   return { type: "waiting" };
 }

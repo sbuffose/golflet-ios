@@ -207,6 +207,22 @@ struct HomeView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("play-start")
             .padding(.top, 6)
+            Button { model.showsReconstruct = true } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cargar una vuelta ya jugada")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text("Marcá cada golpe. El punto es manual y la distancia, estimada.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink.opacity(0.65))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("reconstruct-start")
         }
     }
 

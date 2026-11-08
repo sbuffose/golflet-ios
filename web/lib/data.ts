@@ -51,7 +51,7 @@ export async function buildData(userId: string) {
   const rows = ids.length ? await q(`select r.id, r.club_account_id, r.date::text as date, r.course, r.data, r.holes, a.club_id,
         n.putts, n.gir, n.fir, n.notes, n.updated_at as notes_at,
         (select rr.id from round_recap rr where rr.round_id=r.id) as recap_id,
-        (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id) as gps_shots,
+        (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and s.lat is not null and coalesce(s.source,'gps')='gps') as gps_shots,
         (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and (s.club ~* '^(pt|putter)$' or s.lie='green')) as gps_putts
       from round r join club_account a on a.id=r.club_account_id left join round_note n on n.round_id=r.id
       where r.club_account_id = any($1) order by r.date desc`, [ids]) : [];

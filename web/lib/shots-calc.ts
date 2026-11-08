@@ -15,27 +15,36 @@ export const RESULTS = ["fairway", "green", "rough", "bunker", "water", "ob", "p
 export const DIRECTIONS = ["left", "center", "right"] as const;
 export const LENGTHS = ["short", "on", "long"] as const;
 export const INTENTS = ["green", "layup"] as const;
-export type ShotIn = { id: string; hole: number; shot_number: number; lat: number; lng: number; accuracy_m: number | null; club: string | null; lie: string | null; result: string | null; taken_at: string | Date;
-  direction?: string | null; length?: string | null; mishit?: boolean | null; intent?: string | null; source?: string | null };
+export type ShotIn = { id: string; hole: number; shot_number: number; lat: number | null; lng: number | null; accuracy_m: number | null; club: string | null; lie: string | null; result: string | null; taken_at: string | Date;
+  direction?: string | null; length?: string | null; mishit?: boolean | null; intent?: string | null; source?: string | null; distance_kind?: string | null };
 export type Greens = Record<number, { center: LatLng; front?: LatLng; back?: LatLng }>;
 export type ShotOut = ShotIn & { distance_m: number | null; distance_yd: number | null; distance_source: "next_shot" | "green_center" | null; to_green_m: number | null; to_green_yd: number | null };
 
+const pointOf = (x: { lat: number | null; lng: number | null }): LatLng | null =>
+  x.lat != null && x.lng != null && Number.isFinite(x.lat) && Number.isFinite(x.lng) ? { lat: x.lat, lng: x.lng } : null;
+
 export function computeDistances(shots: ShotIn[], greens: Greens): ShotOut[] {
   const s = shots.slice().sort((a, b) => a.hole - b.hole || a.shot_number - b.shot_number || +new Date(a.taken_at) - +new Date(b.taken_at));
+  const blank = (x: ShotIn): ShotOut => ({ ...x, distance_m: null, distance_yd: null, distance_source: null, to_green_m: null, to_green_yd: null });
   return s.map((x, i) => {
+    const here = pointOf(x);
+    if (!here || (x.source && x.source !== "gps")) return blank(x);
     const g = greens[x.hole]?.center;
-    const to = g ? haversine(x, g) : null;
-    const next = s[i + 1] && s[i + 1].hole === x.hole ? s[i + 1] : null;
+    const to = g ? haversine(here, g) : null;
+    const next = s[i + 1] && s[i + 1].hole === x.hole ? pointOf(s[i + 1]) : null;
+    const nextGps = next && (!s[i + 1].source || s[i + 1].source === "gps") ? next : null;
     let d: number | null = null, src: ShotOut["distance_source"] = null;
-    if (next) { d = haversine(x, next); src = "next_shot"; }
+    if (nextGps) { d = haversine(here, nextGps); src = "next_shot"; }
     else if (g && !isPutter(x.club) && (x.result === "green" || x.result === "holed")) { d = to; src = "green_center"; }
     const r = (v: number | null) => (v == null ? null : Math.round(v));
     return { ...x, distance_m: r(d), distance_yd: d == null ? null : Math.round(toYards(d)), distance_source: src, to_green_m: r(to), to_green_yd: to == null ? null : Math.round(toYards(to)) };
   });
 }
 
-/** Shots that measure the club honestly: not putts, decent GPS fix, no penalty/OB/water, not a recovery, moved at least 10 m. */
+/** Shots that measure the club honestly: a GPS fix, not a hand-placed or estimated point, not putts, no penalty/OB/water, not a recovery, moved at least 10 m. */
 export function countsForClub(x: ShotOut): boolean {
+  if (x.source && x.source !== "gps") return false;
+  if (x.distance_kind && x.distance_kind !== "measured") return false;
   return !!x.club && !isPutter(x.club) && x.distance_m != null && x.distance_m >= 10 && x.distance_m <= 400 &&
     (x.accuracy_m == null || x.accuracy_m <= 20) && !["ob", "penalty", "water"].includes(x.result || "") && x.lie !== "recovery" && !x.mishit;
 }

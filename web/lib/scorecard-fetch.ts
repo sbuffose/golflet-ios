@@ -4,9 +4,10 @@
 import { q } from "./db";
 import { logSync } from "./sync-log";
 import { syncAccount, syncAppLink, type SyncResult } from "./sync";
+import { claimLoginLease, isUndefinedColumn, isUndefinedTable, newLeaseToken, releaseLoginLease, type Sql } from "./scorecard-lease";
 import {
-  LOOKBACK_DAYS, MAX_SYNCS_PER_RUN, applyAttempt, artParts, artTeeInstant, blankJob, nextAttempt, outcomeAfterRead,
-  planDue, reconcileJob, sameSchedule, scorecardLabel, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
+  LOOKBACK_DAYS, MAX_SYNCS_PER_RUN, SYNC_BUSY_MESSAGE, applyAttempt, artParts, artTeeInstant, blankJob, nextAttempt, outcomeAfterRead,
+  planDue, reconcileJob, sameSchedule, scorecardLabel, syncKey, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
 } from "./scorecard-fetch-core";
 
 export class ScorecardSchemaError extends Error {
@@ -16,11 +17,16 @@ export class ScorecardSchemaError extends Error {
   }
 }
 
-const MISSING = (e: unknown) => (e as { code?: string })?.code === "42P01" || /scorecard_fetch/.test(String((e as { message?: string })?.message || "")) && /does not exist|no existe/i.test(String((e as { message?: string })?.message || ""));
-
-async function qry<T = any>(text: string, params: unknown[] = []): Promise<T[]> {
-  try { return await q<T>(text, params); }
-  catch (e) { if (MISSING(e)) throw new ScorecardSchemaError(); throw e; }
+function wrapSql(sql?: Sql): Sql {
+  const run = sql ?? ((text, params) => q(text, params ?? []));
+  return async (text, params = []) => {
+    try { return await run(text, params); }
+    catch (e) {
+      if (isUndefinedTable(e, "scorecard_fetch") || isUndefinedTable(e, "scorecard_sync_lease")) throw new ScorecardSchemaError();
+      if (isUndefinedColumn(e, "lock_token") || isUndefinedColumn(e, "version")) throw new ScorecardSchemaError();
+      throw e;
+    }
+  };
 }
 
 const iso = (v: unknown) => {
@@ -34,7 +40,7 @@ const day = (v: unknown) => {
   return iso(v)!.slice(0, 10);
 };
 
-type AccountLink = { hasPassword: boolean; syncRunning: boolean; lastSyncAt: string | null; lastSyncStatus: string | null; source: "app" | "site" | null; matricula: string | null };
+type AccountLink = { hasPassword: boolean; syncRunning: boolean; syncStartedAt: string | null; lastSyncAt: string | null; lastSyncStatus: string | null; source: "app" | "site" | null; matricula: string | null };
 
 function asJob(row: any, link?: AccountLink): FetchJob {
   const source = (link?.source ?? row.source ?? null) as "app" | "site" | null;
@@ -48,6 +54,9 @@ function asJob(row: any, link?: AccountLink): FetchJob {
     liveRoundId: row.live_round_id ? String(row.live_round_id) : null,
     accountId: row.club_account_id ? String(row.club_account_id) : null,
     source, matricula, hasPassword, syncRunning: !!running,
+    syncStartedAt: link?.syncStartedAt ?? iso(row.last_sync_started_at),
+    leaseHeld: false,
+    version: Number(row.version) || 0,
     lastSyncAt: link?.lastSyncAt ?? iso(row.last_sync_at),
     lastSyncStatus: link?.lastSyncStatus ?? (row.last_sync_status ? String(row.last_sync_status) : null),
     playedAt: iso(row.played_at)!,
@@ -66,25 +75,55 @@ function asJob(row: any, link?: AccountLink): FetchJob {
   };
 }
 
-async function saveJob(job: FetchJob) {
-  await qry(`update scorecard_fetch set club_account_id=$2, played_at=$3, date=$4, time=$5, club_code=$6, course_label=$7,
-      status=$8, next_attempt_at=$9, last_attempt_at=$10, attempt_count=$11, last_error=$12, round_id=$13, locked_at=null, updated_at=now()
-    where id=$1`, [
+const JOB_SET = `club_account_id=$2, played_at=$3, date=$4, time=$5, club_code=$6, course_label=$7,
+      status=$8, next_attempt_at=$9, last_attempt_at=$10, attempt_count=$11, last_error=$12, round_id=$13,
+      lock_token=null, locked_at=null, version=version+1, updated_at=now()`;
+
+function jobParams(job: FetchJob): unknown[] {
+  return [
     job.id, job.accountId, job.playedAt, job.date, job.time, job.clubCode, job.courseLabel, job.status, job.nextAttemptAt,
     job.lastAttemptAt, job.attemptCount, job.lastError, job.roundId,
-  ]);
-  if (job.status === "complete" && job.roundId && job.teeTimeId)
-    await qry(`update tee_time set round_id=$2 where id=$1 and user_id=$3 and round_id is null`, [job.teeTimeId, job.roundId, job.userId]);
-  if (job.status === "complete" && job.roundId && job.liveRoundId)
-    await qry(`update live_round set round_id=$2 where id=$1 and user_id=$3 and round_id is null`, [job.liveRoundId, job.roundId, job.userId]);
+  ];
 }
 
-async function roundsFor(userIds: string[], dates: string[]): Promise<RoundHit[]> {
+/** Writes a job the worker still owns. A replaced token matches nothing: the stale worker is fenced. */
+async function saveOwned(sql: Sql, job: FetchJob, token: string): Promise<boolean> {
+  const rows = await sql(`update scorecard_fetch set ${JOB_SET} where id=$1 and lock_token=$14 returning id`, [...jobParams(job), token]);
+  if (!rows.length) return false;
+  await linkRound(sql, job);
+  return true;
+}
+
+/** Enrollment and deferral. A live lock, or a row whose version moved, is left untouched. */
+async function saveIfIdle(sql: Sql, job: FetchJob): Promise<boolean> {
+  const rows = await sql(`update scorecard_fetch set ${JOB_SET}
+      where id=$1 and version=$14 and (lock_token is null or locked_at < now() - interval '20 minutes')
+      returning id`, [...jobParams(job), job.version]);
+  if (!rows.length) return false;
+  await linkRound(sql, job);
+  return true;
+}
+
+async function linkRound(sql: Sql, job: FetchJob) {
+  if (job.status !== "complete" || !job.roundId) return;
+  if (job.teeTimeId) await sql(`update tee_time set round_id=$2 where id=$1 and user_id=$3 and round_id is null`, [job.teeTimeId, job.roundId, job.userId]);
+  if (job.liveRoundId) await sql(`update live_round set round_id=$2 where id=$1 and user_id=$3 and round_id is null`, [job.liveRoundId, job.roundId, job.userId]);
+}
+
+async function releaseJobs(sql: Sql, ids: string[], token: string) {
+  if (!ids.length) return;
+  await sql(`update scorecard_fetch set lock_token=null, locked_at=null where id = any($1::uuid[]) and lock_token=$2`, [ids, token]);
+}
+
+async function roundsFor(sql: Sql, userIds: string[], dates: string[]): Promise<RoundHit[]> {
   if (!userIds.length || !dates.length) return [];
-  const rows = await qry(`select r.id, r.date::text date, r.course, r.club_account_id, c.code club_code
+  const rows = await sql(`select r.id, a.user_id, r.date::text date, r.course, r.club_account_id, c.code club_code
     from round r join club_account a on a.id=r.club_account_id left join club c on c.id=a.club_id
     where a.user_id = any($1::text[]) and r.date = any($2::date[])`, [userIds, dates]);
-  return rows.map((r: any) => ({ id: String(r.id), date: day(r.date), course: r.course ? String(r.course) : null, clubCode: r.club_code ? String(r.club_code) : null, accountId: r.club_account_id ? String(r.club_account_id) : null }));
+  return rows.map((r: any) => ({
+    id: String(r.id), userId: String(r.user_id), date: day(r.date), course: r.course ? String(r.course) : null,
+    clubCode: r.club_code ? String(r.club_code) : null, accountId: r.club_account_id ? String(r.club_account_id) : null,
+  }));
 }
 
 function teeSnap(row: any): TeeSnap {
@@ -96,10 +135,11 @@ function teeSnap(row: any): TeeSnap {
   };
 }
 
-/** Insert or refresh jobs from bookings and finished GPS rounds. Bookings that already left the "upcoming" list stay. */
-export async function enrollScorecardFetches(now = new Date()): Promise<{ enrolled: number; reconciled: number }> {
+/** Insert or refresh jobs from bookings and finished GPS rounds. Bookings that already left the "upcoming" list stay.
+ *  An insert that conflicts does nothing. A refresh writes only when the row is still the version we read and nobody holds a live lock. */
+export async function enrollScorecardFetches(now = new Date(), sql: Sql = wrapSql()): Promise<{ enrolled: number; reconciled: number }> {
   let enrolled = 0, reconciled = 0;
-  const tees = await qry(`select t.id, t.user_id, t.club_account_id, t.date::text date, t.time, t.course_label, t.club_name,
+  const tees = await sql(`select t.id, t.user_id, t.club_account_id, t.date::text date, t.time, t.course_label, t.club_name,
       (t.gone_at is not null) gone, t.round_id, c.code club_code, f.id fetch_id
     from tee_time t
     left join club_account a on a.id=t.club_account_id
@@ -119,7 +159,7 @@ export async function enrollScorecardFetches(now = new Date()): Promise<{ enroll
     limit 500`, [LOOKBACK_DAYS]);
   const teeDates = [...new Set(tees.map((t: any) => day(t.date)))];
   const teeUsers = [...new Set(tees.map((t: any) => String(t.user_id)))];
-  const teeRounds = await roundsFor(teeUsers, teeDates);
+  const teeRounds = await roundsFor(sql, teeUsers, teeDates);
   for (const row of tees) {
     const snap = teeSnap(row);
     const played = artTeeInstant(snap.date, snap.time);
@@ -129,18 +169,20 @@ export async function enrollScorecardFetches(now = new Date()): Promise<{ enroll
         teeTimeId: String(row.id), accountId: snap.accountId, clubCode: snap.clubCode, courseLabel: snap.courseLabel,
         clubName: snap.clubName, gone: snap.gone, nextAttemptAt: nextAttempt(played, null).toISOString(),
       }), snap, teeRounds, now);
-      await qry(`insert into scorecard_fetch (user_id, tee_time_id, club_account_id, played_at, date, time, club_code, course_label, status, next_attempt_at, last_attempt_at, attempt_count, last_error, round_id)
+      const inserted = await sql(`insert into scorecard_fetch (user_id, tee_time_id, club_account_id, played_at, date, time, club_code, course_label, status, next_attempt_at, last_attempt_at, attempt_count, last_error, round_id)
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-        on conflict (tee_time_id) where tee_time_id is not null do nothing`, [
+        on conflict (tee_time_id) where tee_time_id is not null do nothing
+        returning id`, [
         job.userId, job.teeTimeId, job.accountId, job.playedAt, job.date, job.time, job.clubCode, job.courseLabel, job.status,
         job.nextAttemptAt, job.lastAttemptAt, job.attemptCount, job.lastError, job.roundId,
       ]);
+      if (!inserted.length) continue;
       enrolled++;
       if (job.status === "complete" && job.roundId)
-        await qry(`update tee_time set round_id=$2 where id=$1 and user_id=$3 and round_id is null`, [job.teeTimeId, job.roundId, job.userId]);
+        await sql(`update tee_time set round_id=$2 where id=$1 and user_id=$3 and round_id is null`, [job.teeTimeId, job.roundId, job.userId]);
       continue;
     }
-    const [current] = await qry(`select f.*, (t.gone_at is not null) gone, t.club_name, c.code club_code, a.source, a.matricula, a.last_sync_at, a.last_sync_status,
+    const [current] = await sql(`select f.*, (t.gone_at is not null) gone, t.club_name, c.code club_code, a.source, a.matricula, a.last_sync_at, a.last_sync_status,
         (a.password_enc is not null) password_here
       from scorecard_fetch f
       left join tee_time t on t.id=f.tee_time_id
@@ -151,15 +193,15 @@ export async function enrollScorecardFetches(now = new Date()): Promise<{ enroll
     const before = asJob(current);
     const after = reconcileJob(before, snap, teeRounds, now);
     if (sameSchedule(before, after)) continue;
-    await saveJob(after);
-    reconciled++;
+    if (await saveIfIdle(sql, after)) reconciled++;
   }
 
-  const lives = await qry(`select l.id, l.user_id, l.started_at, l.date::text date, l.club_code, l.course, l.round_id,
+  const liveSql = (origin: boolean) => `select l.id, l.user_id, l.started_at, l.date::text date, l.club_code, l.course, l.round_id,
       (select a.id from club_account a join club c on c.id=a.club_id where a.user_id=l.user_id and c.code=l.club_code
         order by a.last_sync_at desc nulls last limit 1) club_account_id
     from live_round l
     where l.ended_at is not null
+      ${origin ? "and coalesce(l.origin, 'live') = 'live'" : ""}
       and l.date >= ((now() at time zone 'America/Argentina/Buenos_Aires')::date - $1::int)
       and not exists (select 1 from scorecard_fetch f where f.live_round_id=l.id)
       and not exists (
@@ -168,25 +210,33 @@ export async function enrollScorecardFetches(now = new Date()): Promise<{ enroll
         join club c on c.id=a.club_id
         where t.user_id=l.user_id and t.source='club' and t.gone_at is null and t.date=l.date
           and (l.club_code is null or c.code=l.club_code))
-    limit 200`, [LOOKBACK_DAYS]);
+    limit 200`;
+  let lives: any[];
+  try { lives = await sql(liveSql(true), [LOOKBACK_DAYS]); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "origin")) throw e;
+    lives = await sql(liveSql(false), [LOOKBACK_DAYS]);
+  }
   for (const row of lives) {
     const playedAt = iso(row.started_at);
     if (!playedAt) continue;
     const parts = artParts(new Date(playedAt));
-    await qry(`insert into scorecard_fetch (user_id, live_round_id, club_account_id, played_at, date, time, club_code, course_label, status, next_attempt_at, round_id)
+    const inserted = await sql(`insert into scorecard_fetch (user_id, live_round_id, club_account_id, played_at, date, time, club_code, course_label, status, next_attempt_at, round_id)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-      on conflict (live_round_id) where live_round_id is not null do nothing`, [
+      on conflict (live_round_id) where live_round_id is not null do nothing
+      returning id`, [
       row.user_id, row.id, row.club_account_id, playedAt, day(row.date), parts.time, row.club_code, row.course,
       row.round_id ? "complete" : "scheduled", nextAttempt(new Date(playedAt), null).toISOString(), row.round_id,
     ]);
-    enrolled++;
+    if (inserted.length) enrolled++;
   }
   return { enrolled, reconciled };
 }
 
-async function loadDue(now: Date): Promise<FetchJob[]> {
-  const rows = await qry(`select f.*, (t.gone_at is not null) gone, t.club_name, coalesce(c.code, f.club_code) club_code,
-      a.source, a.matricula, a.last_sync_at, a.last_sync_status, (a.password_enc is not null) password_here
+async function loadDue(sql: Sql, now: Date): Promise<FetchJob[]> {
+  const dueSql = (started: boolean) => `select f.*, (t.gone_at is not null) gone, t.club_name, coalesce(c.code, f.club_code) club_code,
+      a.source, a.matricula, a.last_sync_at, a.last_sync_status, ${started ? "a.last_sync_started_at" : "null::timestamptz last_sync_started_at"},
+      (a.password_enc is not null) password_here
     from scorecard_fetch f
     left join tee_time t on t.id=f.tee_time_id
     left join club_account a on a.id=f.club_account_id
@@ -195,30 +245,48 @@ async function loadDue(now: Date): Promise<FetchJob[]> {
       and f.next_attempt_at <= $1
       and (f.locked_at is null or f.locked_at < $1::timestamptz - interval '20 minutes')
     order by f.next_attempt_at
-    limit 80`, [now.toISOString()]);
-  const jobs = rows.map((row: any) => asJob(row));
+    limit 80`;
+  let rows: any[];
+  try { rows = await sql(dueSql(true), [now.toISOString()]); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "last_sync_started_at")) throw e;
+    rows = await sql(dueSql(false), [now.toISOString()]);
+  }
+  let jobs = rows.map((row: any) => asJob(row));
   const app = jobs.filter(j => j.source === "app" && j.matricula);
-  if (!app.length) return jobs;
-  const links = await qry(`select user_id, matricula, bool_or(password_enc is not null) has_password,
-      bool_or(last_sync_status='running') sync_running, max(last_sync_at) last_sync_at,
-      (array_agg(last_sync_status order by last_sync_at desc nulls last))[1] last_status
-    from club_account where source='app' and user_id = any($1::text[]) and matricula = any($2::text[])
-    group by user_id, matricula`, [[...new Set(app.map(j => j.userId))], [...new Set(app.map(j => j.matricula!))]]);
-  const by = new Map<string, any>(links.map((r: any) => [`${r.user_id}:${r.matricula}`, r]));
-  return jobs.map(job => {
-    if (job.source !== "app" || !job.matricula) return job;
-    const link = by.get(`${job.userId}:${job.matricula}`);
-    if (!link) return job;
-    const last = iso(link.last_sync_at);
-    const running = link.sync_running === true || link.sync_running === "t";
-    return {
-      ...job,
-      hasPassword: link.has_password === true || link.has_password === "t" || job.hasPassword,
-      syncRunning: running || job.syncRunning,
-      lastSyncAt: last && (!job.lastSyncAt || last > job.lastSyncAt) ? last : job.lastSyncAt,
-      lastSyncStatus: running ? "running" : (link.last_status ? String(link.last_status) : job.lastSyncStatus),
-    };
-  });
+  if (app.length) {
+    const linkSql = (started: boolean) => `select user_id, matricula, bool_or(password_enc is not null) has_password,
+        bool_or(last_sync_status='running') sync_running, max(last_sync_at) last_sync_at,
+        ${started ? "max(last_sync_started_at) sync_started" : "null::timestamptz sync_started"},
+        (array_agg(last_sync_status order by last_sync_at desc nulls last))[1] last_status
+      from club_account where source='app' and user_id = any($1::text[]) and matricula = any($2::text[])
+      group by user_id, matricula`;
+    let links: any[];
+    try { links = await sql(linkSql(true), [[...new Set(app.map(j => j.userId))], [...new Set(app.map(j => j.matricula!))]]); }
+    catch (e) {
+      if (!isUndefinedColumn(e, "last_sync_started_at")) throw e;
+      links = await sql(linkSql(false), [[...new Set(app.map(j => j.userId))], [...new Set(app.map(j => j.matricula!))]]);
+    }
+    const by = new Map<string, any>(links.map((r: any) => [`${r.user_id}:${r.matricula}`, r]));
+    jobs = jobs.map(job => {
+      if (job.source !== "app" || !job.matricula) return job;
+      const link = by.get(`${job.userId}:${job.matricula}`);
+      if (!link) return job;
+      const last = iso(link.last_sync_at);
+      const running = link.sync_running === true || link.sync_running === "t";
+      return {
+        ...job,
+        hasPassword: link.has_password === true || link.has_password === "t" || job.hasPassword,
+        syncRunning: running || job.syncRunning,
+        syncStartedAt: iso(link.sync_started) ?? (running ? job.syncStartedAt : null),
+        lastSyncAt: last && (!job.lastSyncAt || last > job.lastSyncAt) ? last : job.lastSyncAt,
+        lastSyncStatus: running ? "running" : (link.last_status ? String(link.last_status) : job.lastSyncStatus),
+      };
+    });
+  }
+  const held = await sql(`select sync_key from scorecard_sync_lease where expires_at > now()`);
+  const keys = new Set(held.map((r: any) => String(r.sync_key)));
+  return jobs.map(job => ({ ...job, leaseHeld: keys.has(syncKey(job) || "") }));
 }
 
 export type ScorecardRunReport = {
@@ -236,34 +304,37 @@ export type ScorecardRunReport = {
   stopped: number;
   cancelled: number;
   held: number;
+  /** A write lost the compare-and-swap. The row was left with whoever still owns it. */
+  fenced: number;
   messages: string[];
 };
 
-type SyncFn = (userId: string, matricula: string | null, accountId: string | null, source: "app" | "site", budgetMs: number) => Promise<SyncResult>;
+type SyncFn = (userId: string, matricula: string | null, accountId: string | null, source: "app" | "site", budgetMs: number, leaseToken: string) => Promise<SyncResult>;
 
 /** Reads due bookings. One Golfistics login per player per run. Does not use the 20-hour daily throttle. */
-export async function runScorecardFetches(opts: { now?: Date; budgetMs?: number; maxSyncs?: number; sync?: SyncFn } = {}): Promise<ScorecardRunReport> {
+export async function runScorecardFetches(opts: { now?: Date; budgetMs?: number; maxSyncs?: number; sync?: SyncFn; sql?: Sql } = {}): Promise<ScorecardRunReport> {
   const now = opts.now ?? new Date();
   const budgetMs = opts.budgetMs ?? 240_000;
+  const sql = wrapSql(opts.sql);
   const started = Date.now();
   const report: ScorecardRunReport = {
     ok: true, enrolled: 0, reconciled: 0, due: 0, synced: 0, reused: 0, completed: 0, waiting: 0,
-    needs_credentials: 0, errors: 0, deferred: 0, stopped: 0, cancelled: 0, held: 0, messages: [],
+    needs_credentials: 0, errors: 0, deferred: 0, stopped: 0, cancelled: 0, held: 0, fenced: 0, messages: [],
   };
-  const enrolled = await enrollScorecardFetches(now);
+  const enrolled = await enrollScorecardFetches(now, sql);
   report.enrolled = enrolled.enrolled;
   report.reconciled = enrolled.reconciled;
-  const jobs = await loadDue(now);
+  const jobs = await loadDue(sql, now);
   const byId = new Map(jobs.map(j => [j.id, j]));
   const plan = planDue(jobs, now, opts.maxSyncs ?? MAX_SYNCS_PER_RUN);
   report.due = jobs.length;
   report.held = plan.held.length;
-  const sync: SyncFn = opts.sync ?? (async (userId, matricula, accountId, source, budget) => {
+  const sync: SyncFn = opts.sync ?? (async (userId, matricula, accountId, source, budget, leaseToken) => {
     const t0 = Date.now();
     try {
       const result = source === "app" && matricula
-        ? await syncAppLink(userId, matricula, { budgetMs: budget })
-        : await syncAccount(accountId!, undefined, budget);
+        ? await syncAppLink(userId, matricula, { budgetMs: budget, leaseToken })
+        : await syncAccount(accountId!, undefined, budget, undefined, leaseToken ? { token: leaseToken } : undefined);
       await logSync(userId, "scorecard", result, t0);
       return result;
     } catch (e) {
@@ -283,40 +354,54 @@ export async function runScorecardFetches(opts: { now?: Date; budgetMs?: number;
           : action.kind === "credentials" ? { type: "credentials", message: action.reason }
           : { type: "stopped", message: action.reason };
         const updated = applyAttempt(job, now, attempt);
-        await saveJob(updated);
+        const wrote = await saveIfIdle(sql, updated);
+        if (!wrote) { report.fenced++; continue; }
         if (action.kind === "defer") report.deferred++;
         else if (action.kind === "credentials") report.needs_credentials++;
         else report.stopped++;
       }
       continue;
     }
-    if (Date.now() - started > budgetMs) { report.held += action.jobIds.length; report.messages.push("Se cortó por tiempo. El próximo ciclo sigue."); continue; }
-    const group = action.jobIds.map(id => byId.get(id)).filter((j): j is FetchJob => !!j);
-    let read: { ok: boolean; message: string } = { ok: true, message: "" };
-    if (action.kind === "sync") {
-      const locked = await qry(`update scorecard_fetch set locked_at=now() where id = any($1::uuid[])
-        and (locked_at is null or locked_at < now() - interval '20 minutes') returning id`, [action.jobIds]);
+    if (action.kind !== "sync" && action.kind !== "reuse") continue;
+    const work = action;
+    if (Date.now() - started > budgetMs) { report.held += work.jobIds.length; report.messages.push("Se cortó por tiempo. El próximo ciclo sigue."); continue; }
+    const group = work.jobIds.map(id => byId.get(id)).filter((j): j is FetchJob => !!j);
+    let read: SyncResult = { ok: true, new_rounds: 0, updated: 0, pending: 0, message: "" };
+    const leaseToken = newLeaseToken();
+    const lease = await claimLoginLease(sql, work.key, leaseToken, work.userId, work.jobIds[0] ?? null);
+    if (lease === "unavailable") throw new ScorecardSchemaError();
+    if (lease === "held") { report.deferred += work.jobIds.length; continue; }
+    const jobToken = newLeaseToken();
+    try {
+      const locked = await sql(`update scorecard_fetch set lock_token=$2, locked_at=now(), version=version+1, updated_at=now()
+        where id = any($1::uuid[]) and (lock_token is null or locked_at < now() - interval '20 minutes') returning id`, [work.jobIds, jobToken]);
       const owned = new Set(locked.map((r: any) => String(r.id)));
-      if (!owned.size) { report.deferred += action.jobIds.length; continue; }
-      const remaining = Math.max(15_000, budgetMs - (Date.now() - started));
-      read = await sync(action.userId, action.matricula, action.accountId, action.source, Math.min(70_000, remaining));
-      report.synced++;
-      for (const id of action.jobIds) if (!owned.has(id)) report.deferred++;
+      if (!owned.size) { report.deferred += work.jobIds.length; continue; }
+      if (work.kind === "sync") {
+        const remaining = Math.max(15_000, budgetMs - (Date.now() - started));
+        read = await sync(work.userId, work.matricula, work.accountId, work.source, Math.min(70_000, remaining), leaseToken);
+        if (read.busy) {
+          await releaseJobs(sql, [...owned], jobToken);
+          report.deferred += owned.size;
+          continue;
+        }
+        report.synced++;
+      } else report.reused++;
+      for (const id of work.jobIds) if (!owned.has(id)) report.deferred++;
       const mine = group.filter(j => owned.has(j.id));
-      const rounds = await roundsFor([...new Set(mine.map(j => j.userId))], [...new Set(mine.map(j => j.date))]);
-      for (const job of mine) await finishJob(job, rounds, read, now, report);
-      continue;
+      const rounds = await roundsFor(sql, [...new Set(mine.map(j => j.userId))], [...new Set(mine.map(j => j.date))]);
+      for (const job of mine) await finishJob(sql, job, rounds, read, now, report, jobToken);
+    } finally {
+      await releaseLoginLease(sql, work.key, leaseToken);
     }
-    report.reused++;
-    const rounds = await roundsFor([...new Set(group.map(j => j.userId))], [...new Set(group.map(j => j.date))]);
-    for (const job of group) await finishJob(job, rounds, read, now, report);
   }
   return report;
 }
 
-async function finishJob(job: FetchJob, rounds: RoundHit[], read: { ok: boolean; message: string }, now: Date, report: ScorecardRunReport) {
+async function finishJob(sql: Sql, job: FetchJob, rounds: RoundHit[], read: { ok: boolean; message: string }, now: Date, report: ScorecardRunReport, token: string) {
   const updated = applyAttempt(job, now, outcomeAfterRead(job, rounds, read));
-  await saveJob(updated);
+  const wrote = await saveOwned(sql, updated, token);
+  if (!wrote) { report.fenced++; return; }
   if (updated.status === "complete") report.completed++;
   else if (updated.status === "awaiting_card") report.waiting++;
   else if (updated.status === "error") report.errors++;
@@ -325,8 +410,8 @@ async function finishJob(job: FetchJob, rounds: RoundHit[], read: { ok: boolean;
   if (updated.lastError && updated.status === "error") report.messages.push(`${job.clubName || job.clubCode || "club"}: ${updated.lastError}`.slice(0, 240));
 }
 
-export async function listScorecardFetches(userId: string, now = new Date()) {
-  const rows = await qry(`select f.id, f.tee_time_id, f.live_round_id, f.date::text date, f.time, f.club_code, f.course_label,
+export async function listScorecardFetches(userId: string, now = new Date(), sql: Sql = wrapSql()) {
+  const rows = await sql(`select f.id, f.tee_time_id, f.live_round_id, f.date::text date, f.time, f.club_code, f.course_label,
       f.status, f.next_attempt_at, f.last_attempt_at, f.attempt_count, f.last_error, f.round_id, f.played_at,
       coalesce(t.club_name, cl.name, '') club_name
     from scorecard_fetch f
