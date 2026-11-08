@@ -14,6 +14,11 @@ const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javasc
 const ART = join(tmpdir(), "golflet-round-track");
 const hole = (n: number, par: number, strokes: number) => [n, par, strokes];
 
+/** Reservation refresh on focus is not a reconstruction, round, or stat write. */
+function cardWrites(calls: { method: string; path: string }[]) {
+  return calls.filter(c => c.method !== "GET" && c.method !== "HEAD" && !(c.method === "POST" && c.path === "/api/tee-times/check"));
+}
+
 const data = {
   user: { name: "TEST-ONLY", first_name: "TEST-ONLY", pending_first_sync: false },
   player: { name: "TEST-ONLY", handicap_index: 8 },
@@ -95,14 +100,13 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(legend.outside, 0);
     await page.$eval("#scoreline", el => el.scrollIntoView({ block: "center" }));
     await page.screenshot({ path: join(ART, "legend.png") });
-    const before = calls.filter(c => c.method === "POST").length;
     await page.click("#round-track");
     await page.waitForSelector("#rc-map");
     await page.waitForFunction(() => (document.querySelector("#rc-title")?.textContent || "").includes("Registrar mis tiros"));
     await page.waitForFunction(() => (document.querySelector("#rc-mapnote")?.textContent || "").includes("Mapa del hoyo"));
     assert.equal(await page.$eval("#rc-hole", el => (el as HTMLSelectElement).value), "1");
     assert.match(await page.evaluate(() => location.hash), /ronda=r-nov/);
-    assert.equal(calls.filter(c => c.method === "POST").length, before);
+    assert.deepEqual(cardWrites(calls), []);
     assert.equal(calls.some(c => c.method === "GET" && c.path === "/api/gps/courses/course-fixture"), true);
     const clear = await page.evaluate(() => {
       const save = document.querySelector("#rc-save");
@@ -123,7 +127,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await page.click("#round-track");
     await page.waitForFunction(() => location.hash === "#/reconstruir/live-saved?hole=1");
     await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("7i"));
-    assert.equal(calls.filter(c => c.method === "POST").length, before);
+    assert.deepEqual(cardWrites(calls), []);
     assert.equal(await page.$("#qstat"), null);
   } finally {
     await browser.close();
@@ -180,7 +184,9 @@ test("a round does not open another club's course when only the course name matc
     await page.waitForFunction(() => (document.querySelector("#rc-err")?.textContent || "").includes("Elegí la cancha"));
     assert.equal(await page.$("#rc-map"), null);
     assert.equal(calls.some(c => c.path === "/api/gps/courses/200-principal"), false);
-    assert.equal(calls.some(c => c.method === "POST"), false);
+    assert.deepEqual(cardWrites(calls), []);
+    assert.equal(calls.some(c => c.method === "POST" && c.path === "/api/reconstructions"), false);
+    assert.equal(calls.some(c => c.method !== "GET" && c.path.startsWith("/api/rounds")), false);
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));
