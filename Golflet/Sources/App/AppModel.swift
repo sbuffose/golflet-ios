@@ -435,6 +435,20 @@ final class AppModel {
         }
     }
 
+    /// Writes only the stats that are present. A missing key leaves that total alone.
+    func applyStatFields(roundId: String, fields: [String: Int]) {
+        guard !fields.isEmpty else { return }
+        if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
+            if let value = fields["putts"] { rounds[index].putts = value }
+            if let value = fields["gir"] { rounds[index].gir = value }
+            if let value = fields["fir"] { rounds[index].fir = value }
+        }
+        guard presentedRound?.roundId == roundId else { return }
+        if let value = fields["putts"] { presentedRound?.putts = value }
+        if let value = fields["gir"] { presentedRound?.gir = value }
+        if let value = fields["fir"] { presentedRound?.fir = value }
+    }
+
     func updateBagClub(name: String, carry: Int?, total: Int?) {
         bag = bag.map { item in
             guard item.name == name else { return item }

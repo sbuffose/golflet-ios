@@ -482,12 +482,9 @@ async function loadHoleGeo(){
   const ck = el.dataset.ck, n = +el.dataset.hole, gen = VIEW_GEN;
   const miss = () => { const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return; box.innerHTML = '<p class="msg">No hay un trazado verificado para este hoyo.</p>'; };
   try {
-    const list = await api('/api/gps/courses', { timeoutMs: READ_MS });
+    const geo = await gpsForCourse(ck);
     if (gen !== VIEW_GEN || !$('#holegeo') || +$('#holegeo').dataset.hole !== n) return;
-    const hit = pickGpsCourse(list.courses, ck);
-    if (!hit) return miss();
-    const geo = await api(`/api/gps/courses/${encodeURIComponent(hit.course_id)}`, { timeoutMs: READ_MS });
-    if (gen !== VIEW_GEN || !$('#holegeo') || +$('#holegeo').dataset.hole !== n) return;
+    if (!geo) return miss();
     const hole = ((geo.course || geo).holes || []).find(h => h.hole === n);
     const svg = holeTraceSVG(hole);
     const box = $('#holegeo'); if (!box || gen !== VIEW_GEN) return;
@@ -797,12 +794,24 @@ function wxCardHTML(title, pin, now, fc, holes){
     ${bagLine}
     <p class="foot">Pronóstico Open-Meteo. El viento se clasifica solo con el rumbo verificado del tee al green.</p></div>`;
 }
-async function holeBearings(courseKey, courseName){
+const GPS_COURSE = new Map();
+function gpsForCourse(courseKey){
+  if (!courseKey) return Promise.resolve(null);
+  if (GPS_COURSE.has(courseKey)) return GPS_COURSE.get(courseKey);
+  const job = (async () => {
+    const list = await api('/api/gps/courses?course_key=' + encodeURIComponent(courseKey), { timeoutMs: READ_MS });
+    const hit = pickGpsCourse(list && list.courses, courseKey);
+    if (!hit || !hit.course_id) return null;
+    return api(`/api/gps/courses/${encodeURIComponent(hit.course_id)}`, { timeoutMs: READ_MS });
+  })();
+  GPS_COURSE.set(courseKey, job);
+  job.then(geo => { if (!geo) GPS_COURSE.delete(courseKey); }, () => GPS_COURSE.delete(courseKey));
+  return job;
+}
+async function holeBearings(courseKey){
   try {
-    const list = await api('/api/gps/courses');
-    const hit = pickGpsCourse(list.courses, courseKey);
-    if (!hit) return [];
-    const geo = await api(`/api/gps/courses/${encodeURIComponent(hit.course_id)}`);
+    const geo = await gpsForCourse(courseKey);
+    if (!geo) return [];
     const hs = (geo.course || geo).holes || [];
     return hs.map(h => ({ hole: h.hole, bearing: window.GolfletRules && finiteLL(h.tee) && finiteLL(h.green && h.green.center) ? window.GolfletRules.bearingDeg(h.tee, h.green.center) : null }));
   } catch (e) { return []; }
@@ -828,26 +837,31 @@ async function fillTeePrep(t, id){
     <div id="teewx"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
     <div id="teest"></div>`;
   const wx = $('#teewx'), st = $('#teest');
-  if (pin) {
+  const weatherJob = (async () => {
+    if (!pin) { if (wx) wx.innerHTML = `<p class="foot">No tenemos la ubicación de esta cancha para mostrar el viento.</p>`; return; }
     try {
-      const [now, fc] = await Promise.all([
+      const holesP = holeBearings(r.course.key);
+      const [now, fc, holes] = await Promise.all([
         api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
         api(`/api/weather/forecast?lat=${pin.lat}&lng=${pin.lng}&at=${encodeURIComponent(at)}`, { timeoutMs: READ_MS }),
+        holesP,
       ]);
-      const holes = await holeBearings(r.course.key, r.course.name);
       if (wx && gen === VIEW_GEN && $('#teewx') === wx) wx.innerHTML = wxCardHTML(pin.title, pin, now, fc, holes);
     } catch (e) { if (wx && gen === VIEW_GEN && $('#teewx') === wx) wx.innerHTML = errBox(e, 'el viento'); }
-  } else if (wx) wx.innerHTML = `<p class="foot">No tenemos la ubicación de esta cancha para mostrar el viento.</p>`;
-  try {
-    const S = await stratFor(r.course.key);
-    if (st && gen === VIEW_GEN && $('#teest') === st) {
-      if (!S.holes.length && !S.overview) st.innerHTML = `<div class="msg">Todavía no hay un plan publicado para ${esc(r.course.name)}.</div>`;
-      else st.innerHTML = `<a class="card vx-stratc" href="#/estrategia/${encodeURIComponent(r.course.key)}"><div class="overline">Cómo jugarla</div>
-        ${S.overview ? `<p>${esc(S.overview)}</p>` : ''}
-        <div class="tw-holes">${S.holes.slice(0, 6).map(h => `<div><b class="num">${h.hole}</b><span>${esc(h.plan_title || 'Plan')}</span></div>`).join('')}${S.holes.length > 6 ? `<div><span>+${S.holes.length - 6} hoyos</span></div>` : ''}</div>
-        <div class="vx-stratc-f"><b class="num">${S.holes.length}</b> de 18 hoyos con plan ${ICON.chev}</div></a>`;
-    }
-  } catch (e) { if (st && gen === VIEW_GEN && $('#teest') === st) st.innerHTML = errBox(e, 'la estrategia'); }
+  })();
+  const stratJob = (async () => {
+    try {
+      const S = await stratFor(r.course.key);
+      if (st && gen === VIEW_GEN && $('#teest') === st) {
+        if (!S.holes.length && !S.overview) st.innerHTML = `<div class="msg">Todavía no hay un plan publicado para ${esc(r.course.name)}.</div>`;
+        else st.innerHTML = `<a class="card vx-stratc" href="#/estrategia/${encodeURIComponent(r.course.key)}"><div class="overline">Cómo jugarla</div>
+          ${S.overview ? `<p>${esc(S.overview)}</p>` : ''}
+          <div class="tw-holes">${S.holes.slice(0, 6).map(h => `<div><b class="num">${h.hole}</b><span>${esc(h.plan_title || 'Plan')}</span></div>`).join('')}${S.holes.length > 6 ? `<div><span>+${S.holes.length - 6} hoyos</span></div>` : ''}</div>
+          <div class="vx-stratc-f"><b class="num">${S.holes.length}</b> de 18 hoyos con plan ${ICON.chev}</div></a>`;
+      }
+    } catch (e) { if (st && gen === VIEW_GEN && $('#teest') === st) st.innerHTML = errBox(e, 'la estrategia'); }
+  })();
+  await Promise.all([weatherJob, stratJob]);
 }
 function pickGpsCourse(rows, ck){
   const list = Array.isArray(rows) ? rows : [];
@@ -871,12 +885,13 @@ async function loadCanchaWx(){
   if (!pin) { el.innerHTML = '<p class="foot">No tenemos la ubicación de esta cancha para mostrar el viento.</p>'; return; }
   el.innerHTML = '<div class="card"><div style="padding:18px 0;text-align:center"><span class="spin"></span></div></div>';
   try {
-    const [now, fc] = await Promise.all([
+    const holesP = el.dataset.ck ? holeBearings(el.dataset.ck) : Promise.resolve([]);
+    const [now, fc, holes] = await Promise.all([
       api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
       api(`/api/weather/forecast?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
+      holesP,
     ]);
     const box = $('#cancwx'); if (!box || gen !== VIEW_GEN || box.dataset.ck !== el.dataset.ck) return;
-    const holes = el.dataset.ck ? await holeBearings(el.dataset.ck, '') : [];
     if (!$('#cancwx') || gen !== VIEW_GEN) return;
     box.innerHTML = wxCardHTML(pin.title, pin, now, fc, holes);
   } catch (e) {
@@ -1414,10 +1429,16 @@ async function loadStratCard(){
 }
 function sEstrategia(ck){ return `<div class="bar"><span class="overline">Cómo jugar la cancha</span><button class="close" data-close>${ICON.x}</button></div><div id="stratbody" data-ck="${esc(ck)}"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
 async function loadEstrategia(ck){
-  const el = $('#stratbody'); if (!el) return; const c = course(ck);
-  let st; try { st = await stratFor(ck); } catch(e){ el.innerHTML = `${errBox(e)}`; return; }
+  const el = $('#stratbody'); if (!el) return;
+  const gen = VIEW_GEN;
+  let st; try { st = await stratFor(ck); } catch(e){
+    const stale = $('#stratbody'); if (!stale || gen !== VIEW_GEN || stale.dataset.ck !== ck) return;
+    stale.innerHTML = `${errBox(e)}`; return;
+  }
+  const box = $('#stratbody'); if (!box || gen !== VIEW_GEN || box.dataset.ck !== ck) return;
+  const c = course(ck);
   const by = n => st.holes.find(x => x.hole === n);
-  el.innerHTML = `<div class="stitle">${esc(c?.course||'Cancha')}</div><div style="font-size:calc(13px*var(--ts,1));color:var(--color-ink3);margin-top:2px">${esc(c?.club_name||'')}${c?.par?` · Par ${c.par}`:''}</div>
+  box.innerHTML = `<div class="stitle">${esc(c?.course||'Cancha')}</div><div style="font-size:calc(13px*var(--ts,1));color:var(--color-ink3);margin-top:2px">${esc(c?.club_name||'')}${c?.par?` · Par ${c.par}`:''}</div>
     ${st.overview?`<div class="card" style="margin-top:14px"><p class="vx-how-p" style="margin:0">${esc(st.overview)}</p></div>`:''}
     <div class="section"><h2>Hoyo por hoyo</h2><span class="badge">${st.holes.length}/18</span></div>
     <div class="list">${((c?.holes && c.holes.length) ? c.holes : st.holes).map(h => { const hs = by(h.hole);
@@ -2642,36 +2663,61 @@ function bindQuick(id){
   const box = $('#qstat'); if (!box) return;
   const r = rounds.find(x => x.round_id === id); if (!r || !(r.holes || []).length) { box.hidden = true; return; }
   const key = 'gl_q_' + id;
+  const Q = window.GolfletQuick;
   let rows = []; try { rows = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { rows = []; }
   if (!Array.isArray(rows)) rows = [];
   const holes = r.holes.filter(h => h[0] != null);
-  let idx = 0;
-  const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0] };
+  const holeRefs = holes.map(h => ({ hole: h[0], par: h[1] == null ? null : h[1] }));
+  let idx = 0, latest = 0, unsaved = false, fromAccount = false, chain = Promise.resolve();
+  const touched = new Set();
+  const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0], putts: null, gir: null, drive: null };
+  const remember = () => { try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {} };
+  const applyTotals = (note, fields) => {
+    const write = (target) => { if (!target || !note) return; Object.keys(fields).forEach(k => { if (k in note) target[k] = note[k]; }); if (note.updated_at) target.notes_at = note.updated_at; };
+    write(rounds.find(x => x.round_id === id));
+    write(G.rounds.find(x => x.round_id === id));
+  };
+  const fail = (mine) => {
+    unsaved = true; fromAccount = false;
+    if (mine !== latest) return;
+    const m = $('#qmsg'); if (m) m.textContent = 'No se pudo guardar. Lo que marcaste sigue acá.';
+  };
+  const send = (mine) => {
+    chain = chain.then(async () => {
+      if (mine !== latest) return;
+      if (!Q) { fail(mine); return; }
+      try {
+        for (const hole of touched) {
+          if (mine !== latest) return;
+          const mark = rows.find(x => x.hole === hole) || { hole, putts: null, gir: null, drive: null };
+          const saved = await api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`, { method: 'PUT', body: JSON.stringify({ hole: mark.hole, putts: mark.putts ?? null, gir: mark.gir ?? null, drive: mark.drive ?? null, rev: mine }) });
+          const responseRev = saved && saved.mark ? Number(saved.mark.rev) : 0;
+          if (!Q.shouldCommit(mine, latest, responseRev)) return;
+        }
+        const fields = Q.noteFields(rows, holeRefs);
+        if (Object.keys(fields).length) {
+          const { note } = await api(`/api/rounds/${encodeURIComponent(id)}/notes`, { method: 'PUT', body: JSON.stringify(fields) });
+          if (!Q.shouldCommit(mine, latest, mine)) return;
+          applyTotals(note, fields);
+        }
+        if (mine !== latest) return;
+        unsaved = false; fromAccount = true;
+        const m = $('#qmsg'); if (m) m.textContent = rows.length ? 'Guardado en tu cuenta' : 'Sin cargar';
+        const b = $('#gamebadge'); if (b) b.textContent = rows.length ? 'Cargado' : 'Sin cargar';
+      } catch (e) { fail(mine); }
+    }).catch(() => {});
+  };
   const put = (patch) => {
-    const cur = row(); const next = Object.assign({ hole: holes[idx][0] }, cur, patch);
+    const cur = row(); const next = Object.assign({ hole: holes[idx][0], putts: null, gir: null, drive: null }, cur, patch);
+    touched.add(next.hole);
     if (next.putts == null && next.gir == null && !next.drive) rows = rows.filter(x => x.hole !== next.hole);
     else { const i = rows.findIndex(x => x.hole === next.hole); if (i < 0) rows.push(next); else rows[i] = next; }
-    try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {}
-    paint();
-    const puttH = rows.filter(x => x.putts != null), girH = rows.filter(x => x.gir === true || x.gir === false);
-    const fwH = rows.filter(x => x.drive && (r.holes.find(h => h[0] === x.hole) || [])[1] !== 3);
-    const set = (k, v) => { const el = view.querySelector(`[data-k="${k}"]`); if (el) el.value = v == null ? '' : String(v); };
-    set('putts', puttH.length ? puttH.reduce((s, x) => s + x.putts, 0) : null);
-    set('gir', girH.length ? girH.filter(x => x.gir).length : null);
-    set('fir', fwH.length ? fwH.filter(x => x.drive === 'fairway').length : null);
+    const mine = ++latest;
+    unsaved = false; fromAccount = false;
+    remember();
     const msg = $('#qmsg'); if (msg) msg.textContent = 'Guardando…';
-    const body = {
-      putts: puttH.length ? String(puttH.reduce((s, x) => s + x.putts, 0)) : '',
-      gir: girH.length ? String(girH.filter(x => x.gir).length) : '',
-      fir: fwH.length ? String(fwH.filter(x => x.drive === 'fairway').length) : '',
-    };
-    api(`/api/rounds/${id}/notes`, { method: 'PUT', body: JSON.stringify(body) }).then(({ note }) => {
-      const r0 = rounds.find(x => x.round_id === id); if (r0) Object.assign(r0, note, { notes_at: note.updated_at });
-      const gr = G.rounds.find(x => x.round_id === id); if (gr) Object.assign(gr, note, { notes_at: note.updated_at });
-      const m = $('#qmsg'); if (m) m.textContent = rows.length ? 'Guardado en tu cuenta' : 'Sin cargar';
-      const b = $('#gamebadge'); if (b) b.textContent = rows.length ? 'Cargado' : 'Sin cargar';
-      const el = $('#saved span'); if (el) el.textContent = 'Guardado en tu cuenta';
-    }).catch(() => { const m = $('#qmsg'); if (m) m.textContent = 'No se pudo guardar. Lo que marcaste sigue acá.'; });
+    paint();
+    send(mine);
   };
   const btn = (label, on, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.className = on ? 'on' : ''; b.onclick = fn; return b; };
   const paint = () => {
@@ -2694,13 +2740,23 @@ function bindQuick(id){
     if (puttH.length) bits.push(`${puttH.reduce((s, x) => s + x.putts, 0)} putts en ${puttH.length} hoyos`);
     if (girH.length) bits.push(`${girH.filter(x => x.gir).length} greens de ${girH.length}`);
     if (fwH.length) bits.push(`${fwH.filter(x => x.drive === 'fairway').length} fairways de ${fwH.length} salidas`);
-    $('#qtot').textContent = bits.join(' · ');
+    $('#qtot').textContent = bits.length ? `${bits.join(' · ')}. En los hoyos marcados. El total de la tarjeta queda igual hasta completar cada hoyo.` : '';
     const any = rows.some(x => x.putts != null || x.gir === true || x.gir === false || x.drive);
-    const msg = $('#qmsg'); if (msg && msg.textContent !== 'Guardando…' && !msg.textContent.startsWith('No se pudo')) msg.textContent = any ? 'Guardado en este dispositivo' : 'Sin cargar';
+    const msg = $('#qmsg');
+    if (msg && msg.textContent !== 'Guardando…') {
+      if (unsaved) msg.textContent = 'No se pudo guardar. Lo que marcaste sigue acá.';
+      else if (any && fromAccount) msg.textContent = 'Guardado en tu cuenta';
+      else msg.textContent = any ? 'Guardado en este dispositivo' : 'Sin cargar';
+    }
     const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
   };
   box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
   paint();
+  api(`/api/rounds/${encodeURIComponent(id)}/hole-marks`).then(d => {
+    if (latest !== 0 || !d || !Array.isArray(d.marks)) return;
+    rows = d.marks.map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
+    fromAccount = true; unsaved = false; remember(); paint();
+  }).catch(() => { if (latest !== 0) return; if (rows.length) { unsaved = true; paint(); } });
 }
 const saveNote = debounce(async (id) => {
   const r = rounds.find(x=>x.round_id===id), el = $('#saved span'); if(!r) return;

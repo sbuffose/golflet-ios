@@ -15,6 +15,7 @@ struct MockAPIClient: GolfletAPI {
     private static var mockPasswordSaved = true
     private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
+    private static var holeMarksByRound: [String: [Int: HoleMark]] = [:]
     static var pendingNeedsClub = false
 
     init(autoSession: Bool = true) {
@@ -200,6 +201,33 @@ struct MockAPIClient: GolfletAPI {
         _ = gir
         _ = fir
         _ = notes
+    }
+
+    func saveNoteFields(roundId: String, fields: [String: Int]) async throws {
+        _ = roundId
+        _ = fields
+    }
+
+    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMark {
+        Self.sessionLock.lock()
+        defer { Self.sessionLock.unlock() }
+        var rows = Self.holeMarksByRound[roundId] ?? [:]
+        let result = QuickStats.apply(stored: rows[mark.hole], incoming: mark)
+        if result.applied {
+            if result.mark.putts == nil, result.mark.gir == nil, result.mark.drive == nil {
+                rows[mark.hole] = nil
+            } else {
+                rows[mark.hole] = result.mark
+            }
+            Self.holeMarksByRound[roundId] = rows
+        }
+        return result.mark
+    }
+
+    func holeMarks(roundId: String) async throws -> [HoleMark] {
+        Self.sessionLock.lock()
+        defer { Self.sessionLock.unlock() }
+        return (Self.holeMarksByRound[roundId] ?? [:]).values.sorted { $0.hole < $1.hole }
     }
 
     func saveBag(_ items: [BagClub]) async throws -> [BagClub] { items }

@@ -16,10 +16,7 @@ export async function userClubCodes(userId: string): Promise<{ code: string; clu
   return q(`select distinct c.code, c.id as club_id, c.name as club_name from club_account a join club c on c.id=a.club_id where a.user_id=$1 and c.code is not null order by c.id`, [userId]);
 }
 
-/** ViewMaster courses of the user's clubs (+ an optional extra club code), mapped to our course names. */
-export async function listCourses(userId: string, extraClub?: string | null) {
-  const clubs = await userClubCodes(userId);
-  const codes = [...new Set([...clubs.map(c => c.code), ...(extraClub ? [extraClub] : [])])];
+async function rowsForCodes(clubs: { code: string; club_id: number; club_name: string }[], codes: string[]) {
   const ours = await ourCoursesByCode(codes);
   const names = await clubNames(codes);
   const out = [];
@@ -39,6 +36,23 @@ export async function listCourses(userId: string, extraClub?: string | null) {
     }
   }
   return out;
+}
+
+/** ViewMaster courses of the user's clubs (+ an optional extra club code), mapped to our course names. */
+export async function listCourses(userId: string, extraClub?: string | null) {
+  const clubs = await userClubCodes(userId);
+  const codes = [...new Set([...clubs.map(c => c.code), ...(extraClub ? [extraClub] : [])])];
+  return rowsForCodes(clubs, codes);
+}
+
+/** One club, one course. Does not walk the rest of the catalog. */
+export async function courseByKey(userId: string, clubId: string, courseName: string) {
+  const clubs = await userClubCodes(userId);
+  const club = clubs.find(c => String(c.club_id) === clubId);
+  if (!club?.code) return [];
+  const rows = await rowsForCodes(clubs, [club.code]);
+  const key = `${clubId}:${courseName}`;
+  return rows.filter(row => row.course_key === key);
 }
 
 /** Nearby ViewMaster courses (any club) sorted by distance from lat/lng. */
