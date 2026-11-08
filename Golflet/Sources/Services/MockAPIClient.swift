@@ -19,7 +19,22 @@ struct MockAPIClient: GolfletAPI {
     private static var noteClock = 0
     /// Tests queue the note a late response should return. Empty in the app.
     static var scriptedRoundNotes: [QuickTotals] = []
+    /// Tests queue a bootstrap snapshot. Empty in the app.
+    static var scriptedSnapshots: [AppSnapshot] = []
+    /// Tests queue one scorecard-fetch response. Empty in the app.
+    static var scriptedScorecardFetches: [[ScorecardFetchJob]] = []
+    /// Tests make the next card sync report new rounds. Nil in the app.
+    static var scriptedNewRounds: Int? = nil
+    /// Tests run this once, inside bootstrap, before the snapshot returns.
+    static var onBootstrap: (@MainActor () async -> Void)?
     static var pendingNeedsClub = false
+
+    static func dequeueScorecardFetches() -> [ScorecardFetchJob]? {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        guard !scriptedScorecardFetches.isEmpty else { return nil }
+        return scriptedScorecardFetches.removeFirst()
+    }
 
     init(autoSession: Bool = true) {
         self.autoSession = autoSession
@@ -114,6 +129,21 @@ struct MockAPIClient: GolfletAPI {
 
     func bootstrap() async throws -> AppSnapshot {
         guard isAuthenticated else { throw GolfletError.notAuthenticated }
+        let hook: (@MainActor () async -> Void)? = {
+            Self.sessionLock.lock()
+            let hook = Self.onBootstrap
+            Self.onBootstrap = nil
+            Self.sessionLock.unlock()
+            return hook
+        }()
+        if let hook { await hook() }
+        let queued: AppSnapshot? = {
+            Self.sessionLock.lock()
+            defer { Self.sessionLock.unlock() }
+            guard !Self.scriptedSnapshots.isEmpty else { return nil }
+            return Self.scriptedSnapshots.removeFirst()
+        }()
+        if let queued { return queued }
         let linked = isLinked
         let rounds = linked ? try await loadRounds() : []
         let courses = linked ? try await loadCourses() : []
@@ -166,6 +196,13 @@ struct MockAPIClient: GolfletAPI {
     func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult {
         _ = id
         _ = password
+        Self.sessionLock.lock()
+        let scripted = Self.scriptedNewRounds
+        if scripted != nil { Self.scriptedNewRounds = nil }
+        Self.sessionLock.unlock()
+        if let scripted {
+            return demoSyncResult(message: "Datos de demostración al día", newCards: scripted)
+        }
         if savePassword {
             Self.sessionLock.lock()
             Self.mockPasswordSaved = true

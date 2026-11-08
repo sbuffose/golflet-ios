@@ -100,6 +100,8 @@ final class AppModel {
     let api: any GolfletAPI
     let notes: NotesStore
     private var reopenClubsAfterFailure = false
+    /// Bumped on sign-in and sign-out so a snapshot already in flight cannot land on the next account.
+    private var snapshotEpoch = 0
 
     init(api: any GolfletAPI, notes: NotesStore) {
         self.api = api
@@ -171,8 +173,13 @@ final class AppModel {
             isLoaded = true
             return
         }
+        let epoch = snapshotEpoch
         do {
             let snap = try await api.bootstrap()
+            guard epoch == snapshotEpoch, isAuthenticated else {
+                isLoaded = true
+                return
+            }
             apply(snap)
             if api.persistsLocally {
                 bag = notes.bag()
@@ -191,6 +198,7 @@ final class AppModel {
             await refreshProfesores()
             await refreshTeeTimes()
             await refreshPlaySettings()
+            guard epoch == snapshotEpoch, isAuthenticated else { return }
             hasPlayerSnapshot = true
             isLoaded = true
             await consumeIntent()
@@ -280,6 +288,7 @@ final class AppModel {
     }
 
     func signInGolfistics(matricula: String, clave: String, savePassword: Bool) async {
+        snapshotEpoch += 1
         if !isSignedIn { hasPlayerSnapshot = false }
         lastLinkMatricula = matricula.trimmingCharacters(in: .whitespacesAndNewlines)
         lastLinkClave = clave
@@ -306,10 +315,12 @@ final class AppModel {
     func signOut() async {
         await run {
             try await api.signOut()
+            snapshotEpoch += 1
             isSignedIn = false
             user = nil
             clubs = []
             rounds = []
+            presentedRound = nil
             courses = []
             tees = []
             holeStats = []
@@ -756,6 +767,7 @@ final class AppModel {
         cardBusy = true
         cardNote = "Revisando"
         defer { cardBusy = false }
+        let epoch = snapshotEpoch
         let saved = clubs.filter { $0.passwordSaved && !$0.isDemo }
         if saved.isEmpty {
             cardNote = "No hay una clave guardada para leer el club."
@@ -782,7 +794,9 @@ final class AppModel {
         }
         cardNote = CardPullNote.text(reads)
         let added = reads.filter(\.ok).reduce(0) { $0 + $1.newRounds }
-        if added > 0, let snap = try? await api.bootstrap() { apply(snap) }
+        if added > 0, let snap = try? await api.bootstrap(), epoch == snapshotEpoch, isAuthenticated {
+            apply(snap)
+        }
     }
 
     func refreshReservation(id: String) async {
@@ -822,16 +836,21 @@ final class AppModel {
             scorecardFetchNote = nil
             return
         }
+        let epoch = snapshotEpoch
         do {
             let jobs = try await api.scorecardFetches()
+            guard epoch == snapshotEpoch, isAuthenticated else { return }
             scorecardFetches = jobs
             let known = Set(rounds.map(\.roundId))
             let arrived = jobs.contains { job in
                 job.status == "complete" && job.roundId.map { !known.contains($0) } == true
             }
             if arrived {
-                do { apply(try await api.bootstrap()) }
-                catch {
+                do {
+                    let snap = try await api.bootstrap()
+                    guard epoch == snapshotEpoch, isAuthenticated else { return }
+                    apply(snap)
+                } catch {
                     scorecardFetchNote = "La tarjeta figura lista, pero no pudimos actualizar la lista."
                     return
                 }
@@ -1268,12 +1287,61 @@ final class AppModel {
         }
     }
 
+    /// The stored round whose note stamp is newest, from the list or the open copy.
+    private func freshestStoredRound(_ roundId: String) -> Round? {
+        let listed = rounds.first { $0.roundId == roundId }
+        let shown = presentedRound?.roundId == roundId ? presentedRound : nil
+        switch (listed?.notesAt, shown?.notesAt) {
+        case let (listedAt?, shownAt?):
+            return listedAt >= shownAt ? listed : shown
+        case (_?, nil):
+            return listed
+        case (nil, _?):
+            return shown
+        default:
+            return listed ?? shown
+        }
+    }
+
+    /// Card fields come from the snapshot. Putts, greens, fairways, text and the stamp
+    /// stay when the snapshot is older or omits them. Zero is a present total.
+    private func reconcileRound(_ incoming: Round) -> Round {
+        guard let stored = freshestStoredRound(incoming.roundId), let storedAt = stored.notesAt else {
+            return incoming
+        }
+        if QuickStats.noteIsNewer(previous: storedAt, next: incoming.notesAt) {
+            var next = incoming
+            if next.putts == nil { next.putts = stored.putts }
+            if next.gir == nil { next.gir = stored.gir }
+            if next.fir == nil { next.fir = stored.fir }
+            if next.notes == nil { next.notes = stored.notes }
+            return next
+        }
+        var kept = incoming
+        kept.putts = stored.putts
+        kept.gir = stored.gir
+        kept.fir = stored.fir
+        kept.notes = stored.notes
+        kept.notesAt = storedAt
+        return kept
+    }
+
+    /// The list is the snapshot. Note fields stay when this account already has a newer stamp.
+    /// A round the snapshot no longer has is not put back. Another account replaces the list.
     private func apply(_ snap: AppSnapshot) {
+        let sameAccount = user?.id == nil || user?.id == snap.user?.id
+        let incoming = sameAccount ? snap.rounds.map(reconcileRound) : snap.rounds
+        let shownID = presentedRound?.roundId
         user = snap.user
         profile = snap.profile
         officialHistory = snap.hiHistory
         clubs = snap.clubs
-        rounds = snap.rounds
+        rounds = incoming
+        if let shownID, sameAccount, let fresh = incoming.first(where: { $0.roundId == shownID }) {
+            presentedRound = fresh
+        } else {
+            presentedRound = nil
+        }
         courses = snap.courses
         tees = snap.tees
         holeStats = snap.holeStats

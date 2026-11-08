@@ -62,7 +62,7 @@ enum ScorecardFetchParser {
 extension MockAPIClient {
     func scorecardFetches() async throws -> [ScorecardFetchJob] {
         guard isAuthenticated else { throw GolfletError.notAuthenticated }
-        return []
+        return Self.dequeueScorecardFetches() ?? []
     }
 
     func teeTimes() async throws -> [TeeTime] {
