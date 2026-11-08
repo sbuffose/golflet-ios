@@ -287,23 +287,36 @@ struct PlayHoleView: View {
                     .background(Circle().fill(Color.white.opacity(0.96)))
             }
             .accessibilityIdentifier("play-close")
-            Spacer()
+            Spacer(minLength: 8)
             Text(course.course)
                 .font(GType.headline)
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .shadow(radius: 2)
-            Spacer()
+            Spacer(minLength: 8)
+            trackBadge
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Visible TRACK chip. A plain `Text` in this bar is merged with the course
+    /// name, so XCUITest never sees `play-track`. A button stays its own element.
+    /// Tapping it does not leave track mode.
+    private var trackBadge: some View {
+        Button(action: {}) {
             Text("TRACK")
                 .font(GType.label)
                 .foregroundStyle(p.ink)
                 .frame(width: 64, height: 44)
                 .background(Capsule().fill(Color.white.opacity(0.96)))
-                .accessibilityIdentifier("play-track")
-                .accessibilityLabel("TRACK")
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .buttonStyle(.plain)
+        .layoutPriority(1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("TRACK")
+        .accessibilityIdentifier("play-track")
     }
 
     private var windChip: some View {
