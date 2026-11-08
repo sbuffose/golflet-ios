@@ -30,13 +30,27 @@ const NAMED = {azul:'#2D5BA8',colorada:'#B83A2E',roja:'#B83A2E',verde:'#4F8A4B',
 
 /* ---------- API ---------- */
 async function api(path, opt = {}){
-  const r = await fetch(path, { credentials:'same-origin', ...opt, headers:{'Content-Type':'application/json', ...(opt.headers||{})} });
-  if (r.status === 401) { location.replace('/login'); throw new Error('auth'); }
-  const j = await r.json().catch(()=>({}));
-  if (!r.ok) throw Object.assign(new Error(j.error || 'No se pudo completar'), { status:r.status, data:j });
-  return j;
+  const timeoutMs = opt.timeoutMs;
+  const rest = { ...opt };
+  delete rest.timeoutMs;
+  const method = String(rest.method || 'GET').toUpperCase();
+  const ctrl = timeoutMs ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : 0;
+  try {
+    const r = await fetch(path, { credentials:'same-origin', ...rest, signal: rest.signal || (ctrl && ctrl.signal), headers:{'Content-Type':'application/json', ...(rest.headers||{})} });
+    if (r.status === 401) {
+      if (method !== 'GET' || path === '/api/data' || path.startsWith('/api/data?')) { location.replace('/login'); throw new Error('auth'); }
+      throw Object.assign(new Error('No pudimos leer esto. La sesión sigue abierta.'), { status: 401 });
+    }
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) throw Object.assign(new Error(j.error || 'No se pudo completar'), { status:r.status, data:j });
+    return j;
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw Object.assign(new Error('La lectura tardó demasiado.'), { timeout: true });
+    throw e;
+  } finally { if (timer) clearTimeout(timer); }
 }
-const errText = (e, what) => (e && e.status && e.status < 500 && e.message) ? e.message : `No pudimos cargar ${what || 'esta sección'}. Probá de nuevo en un rato.`;
+const errText = (e, what) => (e && e.timeout) ? e.message : (e && e.status && e.status < 500 && e.message) ? e.message : `No pudimos cargar ${what || 'esta sección'}. Probá de nuevo en un rato.`;
 const errBox = (e, what) => `<div class="msg err">${esc(errText(e, what))} <button type="button" class="btn ghost sm" data-retry>Reintentar</button></div>`;
 document.addEventListener('click', ev => { if (ev.target.closest && ev.target.closest('[data-retry]')) { ev.preventDefault(); if (!G) { location.reload(); return; } render(true); } });
 function toast(t, kind){ let el = $('#toast'); if(!el){ el=document.createElement('div'); el.id='toast'; document.body.appendChild(el); }
@@ -44,7 +58,7 @@ function toast(t, kind){ let el = $('#toast'); if(!el){ el=document.createElemen
 const ago = d => { if(!d) return 'nunca'; const s=(Date.now()-new Date(d))/1000; if(s<90) return 'recién'; if(s<3600) return `hace ${Math.round(s/60)} min`; if(s<86400) return `hace ${Math.round(s/3600)} h`; const n=Math.round(s/86400); return n===1?'ayer':`hace ${n} días`; };
 
 /* ---------- state ---------- */
-let G = null, rounds = [], valid = [], asc = [], idxSeries = [], IDX_ALL = [], CCOL = {};
+let G = null, rounds = [], valid = [], asc = [], idxSeries = [], IDX_ALL = [], CCOL = {}, VIEW_GEN = 0;
 const course = k => G.courses.find(c => c.key === k);
 /* period selector (Inicio / Resumen / Cancha / métricas): ?range=1m|3m|6m|12m|all, same rules as lib/metrics.ts rangeSince */
 const RANGES = [['1m','Este mes'],['3m','3 meses'],['6m','6 meses'],['12m','Año'],['all','Histórico']], RKEYS = RANGES.map(x=>x[0]);
@@ -339,37 +353,6 @@ function vCancha(){
   <p class="foot">En verde oscuro, tus tres hoyos más difíciles. ${c.holes.some(h=>h.data_warning)?'<span class="warnmark">*</span>Datos del sitio a revisar.':''}</p>`;
 }
 /* ---------- HOYO (sheet) ---------- */
-function holeSVG(h){
-  const W=360,H=470, gx=180, gy=78, ty=420;
-  const yds = Object.entries(h.yards||{}).filter(([,y])=>y).sort((a,b)=>b[1]-a[1]); if(!yds.length) return ''; const maxY=yds[0][1], k=(ty-gy)/maxY, Y=d=>gy+d*k;
-  const rw = h.par===3?86:118, fw = h.par===3?0:66;
-  let s = `<defs>
-    <linearGradient id="fw" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#A9CC8E"/><stop offset="1" stop-color="#BCD8A6"/></linearGradient>
-    <radialGradient id="gn" cx=".42" cy=".38" r=".7"><stop offset="0" stop-color="#9FD083"/><stop offset="1" stop-color="#78B05E"/></radialGradient>
-    <pattern id="stripe" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)"><rect width="24" height="12" fill="#fff" fill-opacity=".09"/></pattern>
-    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#2b4a22" flood-opacity=".14"/></filter></defs>`;
-  // distance rings centred on the green (real yardage scale)
-  [100,150,200,250,300].filter(d=>d<maxY-15).forEach(d=>{ const r=d*k;
-    s += `<circle cx="${gx}" cy="${gy}" r="${r}" fill="none" stroke="#9DB98A" stroke-opacity=".55" stroke-width="1.3" stroke-dasharray="2 6" stroke-linecap="round"/>`; });
-  // rough corridor
-  s += `<rect x="${gx-rw/2}" y="${gy-52}" width="${rw}" height="${ty-gy+82}" rx="${rw/2}" fill="#D3E3C4" filter="url(#soft)"/>`;
-  if (fw){ const y1=Y(Math.max(40,maxY-180)), y0=Y(18);
-    s += `<rect x="${gx-fw/2}" y="${y0}" width="${fw}" height="${y1-y0}" rx="${fw/2}" fill="url(#fw)"/><rect x="${gx-fw/2}" y="${y0}" width="${fw}" height="${y1-y0}" rx="${fw/2}" fill="url(#stripe)"/>`; }
-  s += `<circle cx="${gx}" cy="${gy}" r="38" fill="#C3DDAE"/><circle cx="${gx}" cy="${gy}" r="29" fill="url(#gn)" filter="url(#soft)"/>
-    <line x1="${gx+4}" y1="${gy+3}" x2="${gx+4}" y2="${gy-30}" stroke="#1d2a20" stroke-width="1.6" stroke-linecap="round"/><path d="M${gx+4.5},${gy-30} l15,5.5 -15,5.5 z" fill="#C8A86A"/>`;
-  // ring labels
-  [100,150,200,250,300].filter(d=>d<maxY-15).forEach(d=>{ const y=Y(d);
-    s += `<g transform="translate(${gx+rw/2+12},${y-11})"><rect width="44" height="22" rx="11" fill="#fff" fill-opacity=".92"/><text x="22" y="15" text-anchor="middle" font-family="Geist" font-size="11.5" font-weight="600" fill="#121614">${d}</text></g>`; });
-  // tees (real yards) with collision-free labels
-  const asc_ = yds.slice().sort((a,b)=>a[1]-b[1]); let ly=[];
-  const dsc = yds.slice(); // longest first = lowest on screen; stack labels upward
-  dsc.forEach(([t,y])=>{ let l=Y(y); if(ly.length && ly.at(-1)-l<26) l=ly.at(-1)-26; ly.push(l); });
-  dsc.forEach(([t,y],i)=>{ const yy=Y(y), l=ly[i];
-    s += `<rect x="${gx-14}" y="${yy-5}" width="28" height="10" rx="5" fill="#B7D3A0"/><circle cx="${gx}" cy="${yy}" r="4" fill="${TEE[t]||'#ccc'}" stroke="rgba(0,0,0,.25)" stroke-width=".8"/>
-      <path d="M${gx-rw/2-2},${yy} H${gx-16}" stroke="#fff" stroke-opacity=".9" stroke-width="1"/>
-      <g transform="translate(${gx-rw/2-70},${l-11})"><rect width="62" height="22" rx="11" fill="#fff" fill-opacity=".92"/><circle cx="13" cy="11" r="4.5" fill="${TEE[t]||'#ccc'}" stroke="rgba(0,0,0,.2)" stroke-width=".8"/><text x="24" y="15" font-family="Geist" font-size="11.5" font-weight="600" fill="#121614">${y}</text></g>`; });
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Esquema del hoyo ${h.hole}">${s}</svg>`;
-}
 function sHoyo(ck, n){
   const c = course(ck), h = c && c.holes.find(x=>x.hole===+n); if(!h) return '<p>Hoyo no encontrado.</p>';
   const st=h.stats, d=st.dist, cp=h.compare||{}, gp=k=>cp[k]?.group_pct, N = st.n || 1;
@@ -383,11 +366,10 @@ function sHoyo(ck, n){
   const alt = String(h.par_raw??'').includes('/') ? String(h.par_raw).split('/')[1] : null;
   const bag = (G.bag||[]).filter(b=>b.carry);
   const nh = c.holes.length, prev = h.hole>1?h.hole-1:nh, next = h.hole<nh?h.hole+1:1, K = encodeURIComponent(c.key);
-  const svg = holeSVG(h);
   return `<div class="bar"><span class="overline">Cancha ${esc(c.course)} · ${rank===1?'tu hoyo más difícil':'dificultad '+rank+'/'+nh}</span><button class="close" data-close>${ICON.x}</button></div>
   <div style="display:flex;justify-content:space-between;align-items:flex-end"><div class="ltitle" style="margin:2px 0 8px">Hoyo ${h.hole}</div>
     <div style="display:flex;gap:6px;margin-bottom:10px"><a class="close" href="#/hoyo/${K}/${prev}" aria-label="Anterior"><svg viewBox="0 0 12 12"><path d="M8 1L3 6l5 5" fill="none"/></svg></a><a class="close" href="#/hoyo/${K}/${next}" aria-label="Siguiente"><svg viewBox="0 0 12 12"><path d="M4 1l5 5-5 5" fill="none"/></svg></a></div></div>
-  ${svg?`<div class="holecard">${svg}<span class="tag">Esquema · trazado real próximamente</span></div>`:''}
+  <div id="holegeo" data-ck="${esc(c.key)}" data-hole="${h.hole}"><div style="padding:18px 0;text-align:center"><span class="spin"></span></div></div>
   <div class="pills">
     <div class="pill dark"><b class="num">${h.hole}</b><span>Hoyo</span></div>
     <div class="pill"><b class="num">${h.par??'—'}</b><span>Par${alt?` · damas ${alt}`:''}</span></div>
@@ -413,13 +395,19 @@ function sHoyo(ck, n){
 
 /* ---------- CÓMO JUGAR LA CANCHA (estrategia publicada por el club / admin) ---------- */
 const STRAT = {};
-const stratFor = ck => STRAT[ck] ||= api('/api/strategy?' + new URLSearchParams({ course_key: ck })).catch(e => { delete STRAT[ck]; throw e; });
+const READ_MS = 4000;
+function stratFor(ck){
+  const key = ck + '\n' + VIEW_GEN;
+  if (STRAT[key]) return STRAT[key];
+  for (const old of Object.keys(STRAT)) if (old.startsWith(ck + '\n') && old !== key) delete STRAT[old];
+  return STRAT[key] = api('/api/strategy?' + new URLSearchParams({ course_key: ck }), { timeoutMs: READ_MS }).catch(e => { delete STRAT[key]; throw e; });
+}
 const CLUBCODE = { 'driver':'Dr','madera 3':'3W','madera 5':'5W','híbrido':'Hy','hibrido':'Hy','hierro 4':'4i','hierro 5':'5i','hierro 6':'6i','hierro 7':'7i','hierro 8':'8i','hierro 9':'9i','pitching wedge':'PW','pitching':'PW','gap wedge':'GW','sand wedge':'SW','lob wedge':'LW' };
 const clubLink = label => { const c = CLUBCODE[String(label||'').toLowerCase().trim()]; return c ? `<a class="vx-chip on" href="#/palo/${c}">${esc(label)}</a>` : `<span class="vx-chip on">${esc(label)}</span>`; };
 const MISSL = { izquierda:'Si errás, que sea a la izquierda', derecha:'Si errás, que sea a la derecha', corto:'Si errás, que sea corto', largo:'Si errás, que sea largo' };
 const LVL = [['bajo','Hándicap bajo'],['medio','Hándicap medio']];
 const myLevel = () => { const hi = G.player?.handicap_index; return hi == null ? null : hi <= 5 ? 'bajo' : hi <= 18 ? 'medio' : 'alto'; };
-let HOWLVL = null;
+let HOWLVL = 'bajo';
 function howtoHTML(hs){
   const sel = HOWLVL || '';
   const choice = window.GolfletRules ? window.GolfletRules.strategyChoice(hs.variants, sel, { plan: hs.plan_text, tee_club: hs.tee_club }) : { missing: false, plan: sel ? '' : (hs.plan_text || ''), club: sel ? '' : (hs.tee_club || '') };
@@ -440,15 +428,53 @@ function howtoHTML(hs){
     ${hs.green_slope?`<div class="vx-lm"><span>Pendiente</span><b>${esc(hs.green_slope)}</b></div>`:''}${hs.green_leave?`<div class="vx-lm"><span>Dónde dejarla</span><b>${esc(hs.green_leave)}</b></div>`:''}${hs.green_notes?`<p class="vx-how-p" style="margin:8px 0 0">${esc(hs.green_notes)}</p>`:''}</div>`:''}`;
 }
 async function loadHowto(){
-  const el = $('#howto'); if (!el) return; const ck = el.dataset.ck, n = +el.dataset.hole;
-  let st; try { st = await stratFor(ck); } catch(e){ el.innerHTML = `${errBox(e)}`; return; }
-  if (!$('#howto') || $('#howto').dataset.hole !== String(n)) return;
+  const el = $('#howto'); if (!el) return; const ck = el.dataset.ck, n = +el.dataset.hole, gen = VIEW_GEN;
+  let st; try { st = await stratFor(ck); } catch(e){ const box = $('#howto'); if (!box || gen !== VIEW_GEN || box.dataset.hole !== String(n)) return; box.innerHTML = `${errBox(e, 'la estrategia')}`; return; }
+  const box = $('#howto'); if (!box || gen !== VIEW_GEN || box.dataset.hole !== String(n)) return;
   const hs = st.holes.find(x => x.hole === n);
-  if (HOWLVL === null) HOWLVL = myLevel() || '';
-  if (!hs) { el.innerHTML = `<div class="empty-card" style="text-align:left">${ICON.target}<b>Todavía sin estrategia para este hoyo</b>${st.holes.length?`Hay ${st.holes.length} hoyos cargados en esta cancha. <a class="link" href="#/estrategia/${encodeURIComponent(ck)}">Ver todos</a>`:'Cuando el club cargue cómo jugarlo, aparece acá: plan, peligros y por qué.'}</div>`; const b=$('#howbadge'); if (b) b.hidden = true; return; }
-  const draw = () => { el.innerHTML = howtoHTML(hs) + `<a class="vx-how-all" href="#/estrategia/${encodeURIComponent(ck)}">Cómo jugar toda la cancha ${ICON.chev}</a>`;
-    el.querySelectorAll('[data-lvl]').forEach(b => b.onclick = () => { HOWLVL = b.dataset.lvl; draw(); }); };
+  if (!hs) { box.innerHTML = `<div class="empty-card" style="text-align:left">${ICON.target}<b>Todavía sin estrategia para este hoyo</b>${st.holes.length?`Hay ${st.holes.length} hoyos cargados en esta cancha. <a class="link" href="#/estrategia/${encodeURIComponent(ck)}">Ver todos</a>`:'Cuando el club cargue cómo jugarlo, aparece acá: plan, peligros y por qué.'}</div>`; const b=$('#howbadge'); if (b) b.hidden = true; return; }
+  const draw = () => { const cur = $('#howto'); if (!cur || cur.dataset.hole !== String(n)) return; cur.innerHTML = howtoHTML(hs) + `<a class="vx-how-all" href="#/estrategia/${encodeURIComponent(ck)}">Cómo jugar toda la cancha ${ICON.chev}</a>`;
+    cur.querySelectorAll('[data-lvl]').forEach(b => b.onclick = () => { HOWLVL = b.dataset.lvl; draw(); }); };
   draw();
+}
+function finiteLL(p){
+  if (!p || typeof p !== 'object' || p.lat == null || p.lng == null) return null;
+  const lat = Number(p.lat), lng = Number(p.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+function holeTraceSVG(hole){
+  const tee = finiteLL(hole && hole.tee), center = finiteLL(hole && hole.green && hole.green.center);
+  if (!tee || !center) return '';
+  const pts = [tee, ...(Array.isArray(hole.line) ? hole.line.map(finiteLL).filter(Boolean) : []), center];
+  const lats = pts.map(p => p.lat), lngs = pts.map(p => p.lng);
+  const minLa = Math.min(...lats), maxLa = Math.max(...lats), minLn = Math.min(...lngs), maxLn = Math.max(...lngs);
+  const dLa = Math.max(1e-6, maxLa - minLa), dLn = Math.max(1e-6, maxLn - minLn);
+  const W = 360, H = 470, pad = 36;
+  const xy = p => [pad + ((p.lng - minLn) / dLn) * (W - pad * 2), pad + ((maxLa - p.lat) / dLa) * (H - pad * 2)];
+  const d = pts.map((p, i) => { const [x, y] = xy(p); return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`; }).join(' ');
+  const [tx, ty] = xy(tee), [gx, gy] = xy(center);
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Trazado verificado del hoyo ${hole.hole}"><path d="${d}" fill="none" stroke="#0F3D2E" stroke-width="3"/><circle cx="${tx}" cy="${ty}" r="6" fill="#C8A86A"/><circle cx="${gx}" cy="${gy}" r="8" fill="#0F3D2E"/></svg>`;
+}
+async function loadHoleGeo(){
+  const el = $('#holegeo'); if (!el) return;
+  const ck = el.dataset.ck, n = +el.dataset.hole, gen = VIEW_GEN;
+  const miss = () => { const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return; box.innerHTML = '<p class="msg">No hay un trazado verificado para este hoyo.</p>'; };
+  try {
+    const list = await api('/api/gps/courses', { timeoutMs: READ_MS });
+    if (gen !== VIEW_GEN || !$('#holegeo') || +$('#holegeo').dataset.hole !== n) return;
+    const name = course(ck)?.course || '';
+    const hit = (list.courses || []).find(c => c.course_key === ck || foldN(c.course || '') === foldN(name) || foldN(c.course_label || '') === foldN(name));
+    if (!hit) return miss();
+    const geo = await api(`/api/gps/courses/${encodeURIComponent(hit.course_id)}`, { timeoutMs: READ_MS });
+    if (gen !== VIEW_GEN || !$('#holegeo') || +$('#holegeo').dataset.hole !== n) return;
+    const hole = ((geo.course || geo).holes || []).find(h => h.hole === n);
+    const svg = holeTraceSVG(hole);
+    const box = $('#holegeo'); if (!box || gen !== VIEW_GEN) return;
+    box.innerHTML = svg ? `<div class="holecard">${svg}</div>` : '<p class="msg">No hay un trazado verificado para este hoyo.</p>';
+  } catch (e) {
+    const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return;
+    box.innerHTML = errBox(e, 'el trazado');
+  }
 }
 
 /* ---------- POR RONDA: media y mediana (nunca media geométrica: hay rondas con cero) ---------- */
@@ -694,9 +720,9 @@ const WDIR = ['norte','noreste','este','sudeste','sur','sudoeste','oeste','noroe
 const windFrom = deg => deg == null || deg === '' ? '' : WDIR[Math.floor((((Number(deg) % 360) + 360) % 360 + 22.5) / 45) % 8];
 const foldN = s => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const CLUB_PINS = [
-  { test: (n, k) => foldN(n).includes('mar del plata') || /209/.test(String(k || '')), title: 'Mar del Plata Golf Club', lat: -38.02999, lng: -57.53624,
+  { test: (n, k) => foldN(n).includes('mar del plata') || /209/.test(String(k || '')), title: 'Mar del Plata Golf Club', lat: -38.02999, lng: -57.53624, sat: true,
     courses: [{ name: 'Cancha Vieja', key: '7:Cancha Vieja' }, { name: 'Cancha Nueva', key: '7:Cancha Nueva' }] },
-  { test: (n, k) => foldN(n).includes('jockey') || /118/.test(String(k || '')), title: 'Jockey Club', lat: -34.4866, lng: -58.5296,
+  { test: (n, k) => foldN(n).includes('jockey') || /118/.test(String(k || '')), title: 'Jockey Club', lat: -34.4866, lng: -58.5296, sat: true,
     courses: [{ name: 'Azul', key: '1:Azul' }, { name: 'Colorada', key: '1:Colorada' }] },
 ];
 const pinFor = (club, key) => CLUB_PINS.find(p => p.test(club, key)) || null;
@@ -723,7 +749,7 @@ function resolveTeeCourse(t){
 }
 function wxCardHTML(title, pin, now, fc, holes){
   const hours = (fc?.hours || []).slice(0, 6);
-  const map = pin ? `<img class="tw-map" alt="Mapa de ${esc(pin.title)}" src="${satUrl(pin.lat, pin.lng)}">` : '';
+  const map = pin && pin.sat ? `<img class="tw-map" alt="Mapa de ${esc(pin.title)}" src="${satUrl(pin.lat, pin.lng)}">` : '';
   const h0 = hours[0];
   const from = now && now.from_deg != null ? now.from_deg : (h0 && h0.wind_from_deg != null ? h0.wind_from_deg : null);
   const kmh = now && now.kmh != null ? now.kmh : (h0 && h0.wind_kmh != null ? h0.wind_kmh : null);
@@ -747,7 +773,7 @@ async function holeBearings(courseKey, courseName){
     if (!hit) return [];
     const geo = await api(`/api/gps/courses/${encodeURIComponent(hit.course_id)}`);
     const hs = (geo.course || geo).holes || [];
-    return hs.map(h => ({ hole: h.hole, bearing: window.GolfletRules && h.tee && h.green && h.green.center ? window.GolfletRules.bearingDeg(h.tee, h.green.center) : null }));
+    return hs.map(h => ({ hole: h.hole, bearing: window.GolfletRules && finiteLL(h.tee) && finiteLL(h.green && h.green.center) ? window.GolfletRules.bearingDeg(h.tee, h.green.center) : null }));
   } catch (e) { return []; }
 }
 async function fillTeePrep(t, id){
@@ -764,8 +790,9 @@ async function fillTeePrep(t, id){
     box.innerHTML = `<div class="section"><h2>Clima y estrategia</h2></div><div class="msg">La reserva no especifica la cancha.</div>`;
     return;
   }
-  const pin = pinFor(t.club_name, r.course.key) || pinFor(t.club_name, t.club_key);
+  const pin = pinFor(t.club_name, r.course.key) || pinFor(t.club_name, t.club_key) || coursePin(r.course.key);
   const at = t.starts_at || `${t.date}T${t.time}:00-03:00`;
+  const gen = VIEW_GEN;
   box.innerHTML = `<div class="section"><h2>${esc(r.course.name)}</h2>${r.why === 'última ronda' ? '<span class="badge">la última que jugaste acá</span>' : r.why === 'elegida' ? '<span class="badge">elegida</span>' : ''}</div>
     <div id="teewx"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
     <div id="teest"></div>`;
@@ -773,36 +800,48 @@ async function fillTeePrep(t, id){
   if (pin) {
     try {
       const [now, fc] = await Promise.all([
-        api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`).catch(() => null),
-        api(`/api/weather/forecast?lat=${pin.lat}&lng=${pin.lng}&at=${encodeURIComponent(at)}`).catch(() => null),
+        api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
+        api(`/api/weather/forecast?lat=${pin.lat}&lng=${pin.lng}&at=${encodeURIComponent(at)}`, { timeoutMs: READ_MS }),
       ]);
       const holes = await holeBearings(r.course.key, r.course.name);
-      if (wx) wx.innerHTML = wxCardHTML(pin.title, pin, now, fc, holes);
-    } catch (e) { if (wx) wx.innerHTML = `<div class="msg">No pude leer el clima de la cancha.</div>`; }
+      if (wx && gen === VIEW_GEN && $('#teewx') === wx) wx.innerHTML = wxCardHTML(pin.title, pin, now, fc, holes);
+    } catch (e) { if (wx && gen === VIEW_GEN && $('#teewx') === wx) wx.innerHTML = errBox(e, 'el viento'); }
   } else if (wx) wx.innerHTML = `<p class="foot">No tenemos la ubicación de esta cancha para mostrar el viento.</p>`;
   try {
     const S = await stratFor(r.course.key);
-    if (st) {
+    if (st && gen === VIEW_GEN && $('#teest') === st) {
       if (!S.holes.length && !S.overview) st.innerHTML = `<div class="msg">Todavía no hay un plan publicado para ${esc(r.course.name)}.</div>`;
       else st.innerHTML = `<a class="card vx-stratc" href="#/estrategia/${encodeURIComponent(r.course.key)}"><div class="overline">Cómo jugarla</div>
         ${S.overview ? `<p>${esc(S.overview)}</p>` : ''}
         <div class="tw-holes">${S.holes.slice(0, 6).map(h => `<div><b class="num">${h.hole}</b><span>${esc(h.plan_title || 'Plan')}</span></div>`).join('')}${S.holes.length > 6 ? `<div><span>+${S.holes.length - 6} hoyos</span></div>` : ''}</div>
         <div class="vx-stratc-f"><b class="num">${S.holes.length}</b> de 18 hoyos con plan ${ICON.chev}</div></a>`;
     }
-  } catch (e) { if (st) st.innerHTML = `<div class="msg">No pude cargar la estrategia.</div>`; }
+  } catch (e) { if (st && gen === VIEW_GEN && $('#teest') === st) st.innerHTML = errBox(e, 'la estrategia'); }
+}
+function coursePin(ck){
+  const c = course(ck); const lat = Number(c && c.lat), lng = Number(c && c.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { title: c.club_name || c.course || 'Cancha', lat, lng, sat: false };
 }
 async function loadCanchaWx(){
   const el = $('#cancwx'); if (!el) return;
-  const pin = pinFor(el.dataset.club, el.dataset.ck);
-  if (!pin) { el.innerHTML = ''; return; }
+  const pin = pinFor(el.dataset.club, el.dataset.ck) || coursePin(el.dataset.ck);
+  const gen = VIEW_GEN;
+  if (!pin) { el.innerHTML = '<p class="foot">No tenemos la ubicación de esta cancha para mostrar el viento.</p>'; return; }
+  el.innerHTML = '<div class="card"><div style="padding:18px 0;text-align:center"><span class="spin"></span></div></div>';
   try {
     const [now, fc] = await Promise.all([
-      api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`).catch(() => null),
-      api(`/api/weather/forecast?lat=${pin.lat}&lng=${pin.lng}`).catch(() => null),
+      api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
+      api(`/api/weather/forecast?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
     ]);
+    const box = $('#cancwx'); if (!box || gen !== VIEW_GEN || box.dataset.ck !== el.dataset.ck) return;
     const holes = el.dataset.ck ? await holeBearings(el.dataset.ck, '') : [];
-    el.innerHTML = wxCardHTML(pin.title, pin, now, fc, holes);
-  } catch (e) { el.innerHTML = ''; }
+    if (!$('#cancwx') || gen !== VIEW_GEN) return;
+    box.innerHTML = wxCardHTML(pin.title, pin, now, fc, holes);
+  } catch (e) {
+    const box = $('#cancwx'); if (!box || gen !== VIEW_GEN) return;
+    box.innerHTML = errBox(e, 'el viento');
+  }
 }
 async function loadTee(id, opts){
   const el = $('#tee'); if (!el) return;
@@ -1324,10 +1363,12 @@ async function loadNivel(ck){
   el.innerHTML = `<div class="stitle">${title}</div>${sub}${tabs}${html}<p class="foot">Anónimo: ${b.sample.players} jugadores y ${b.sample.rounds} tarjetas con hándicap entre ${f1(b.band[0])} y ${f1(b.band[1])} al momento de cada ronda. ${b.sample.excluded_no_handicap?`${b.sample.excluded_no_handicap} sin hándicap no cuentan.`:''}</p>`;
 }
 async function loadStratCard(){
-  const el = $('#stratcard'); if (!el) return; const ck = el.dataset.ck;
-  let st; try { st = await stratFor(ck); } catch { return; }
-  if (!$('#stratcard') || $('#stratcard').dataset.ck !== ck || (!st.holes.length && !st.overview)) return;
-  el.innerHTML = `<a class="card vx-stratc" href="#/estrategia/${encodeURIComponent(ck)}"><div class="overline">Cómo jugar la cancha</div>
+  const el = $('#stratcard'); if (!el) return; const ck = el.dataset.ck, gen = VIEW_GEN;
+  el.innerHTML = '<div class="card"><div style="padding:18px 0;text-align:center"><span class="spin"></span></div></div>';
+  let st; try { st = await stratFor(ck); } catch (e) { const box = $('#stratcard'); if (!box || gen !== VIEW_GEN || box.dataset.ck !== ck) return; box.innerHTML = errBox(e, 'la estrategia'); return; }
+  const box = $('#stratcard'); if (!box || gen !== VIEW_GEN || box.dataset.ck !== ck) return;
+  if (!st.holes.length && !st.overview) { box.innerHTML = '<div class="msg">Todavía no hay un plan publicado para esta cancha.</div>'; return; }
+  box.innerHTML = `<a class="card vx-stratc" href="#/estrategia/${encodeURIComponent(ck)}"><div class="overline">Cómo jugar la cancha</div>
     ${st.overview?`<p>${esc(st.overview.length>150?st.overview.slice(0,150).replace(/\s+\S*$/,'')+'…':st.overview)}</p>`:''}<div class="vx-stratc-f"><b class="num">${st.holes.length}</b> de 18 hoyos con plan ${ICON.chev}</div></a>`;
 }
 function sEstrategia(ck){ return `<div class="bar"><span class="overline">Cómo jugar la cancha</span><button class="close" data-close>${ICON.x}</button></div><div id="stratbody" data-ck="${esc(ck)}"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
@@ -2732,6 +2773,7 @@ function asideAccount(active){
 }
 function render(keepScroll){
   if (!G) return;
+  VIEW_GEN++;
   if (REC && !location.hash.includes(REC.id.replace('live:',''))) micAbort();
   const p = (location.hash.replace(/^#\/?/,'') || 'inicio').split('/').map((x,i,a) => a[0]==='metrica' && i===1 ? x : decodeURIComponent(x));
   if (p.length === 1 && p[0].includes('?')) {            // #/resumen?range=3m — period lives in the URL
@@ -2839,7 +2881,6 @@ function bind(p, isDetail){
   view.querySelectorAll('[data-segl]').forEach(b=>b.onclick=()=>{ segL=b.dataset.segl; render(true); });
   view.querySelectorAll('[data-sortl]').forEach(b=>b.onclick=()=>{ sortL=b.dataset.sortl; render(true); });
   view.querySelectorAll('[data-segc]').forEach(b=>b.onclick=()=>{ segC=b.dataset.segc; render(true); });
-  view.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{ setRange(b.dataset.range); history.replaceState(null, '', `#/${base}?range=${RANGE}`); render(true); });
   document.querySelectorAll('[data-sync]').forEach(b=>b.onclick=e=>{ e.preventDefault(); doSync(b.dataset.sync, null, false); });
   if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; saveNote(p[1]); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); }
   if (p[0]==='metrica') { const m = (p[1]||'').split('?')[0]; loadMetric(m); view.querySelectorAll('[data-mswitch]').forEach(b=>b.onclick=()=>{ const st = MQ[m]||{}; location.hash = mlink(b.dataset.mswitch, { scope: st.scope||'year', year: st.year||'', course: st.course||'all', sort: st.sort==='count'?'count':'date', order:'desc', range: st.range||'' }); }); }
@@ -2859,7 +2900,7 @@ function bind(p, isDetail){
   if ($('.met-entry')) loadGpsLive();
   if (p[0]==='sorteo') loadSorteo(p[1], p[2]==='bases');
   if (p[0]==='cuenta') loadGear();
-  if (p[0]==='hoyo') loadHowto();
+  if (p[0]==='hoyo') { loadHoleGeo(); loadHowto(); }
   if (p[0]==='estrategia') loadEstrategia(decodeURIComponent(p[1]||''));
   if (p[0]==='nivel') loadNivel((p[1]||'').split('?')[0]);
   if (p[0]==='tees') loadTees();
@@ -2920,6 +2961,18 @@ function bind(p, isDetail){
   if (p[0]==='cuenta'){ const lo = view.querySelector('[data-logout]'); if (lo) lo.onclick = async () => { await fetch('/api/auth/sign-out', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}' }); location.replace('/login'); }; }
 }
 addEventListener('hashchange', () => render());
+document.addEventListener('click', ev => {
+  const b = ev.target && ev.target.closest && ev.target.closest('#view [data-range]');
+  if (!b) return;
+  const k = b.getAttribute('data-range');
+  if (!RKEYS.includes(k) || k === RANGE) return;
+  ev.preventDefault();
+  setRange(k);
+  const page = (location.hash.replace(/^#\/?/, '').split('/')[0] || base || 'inicio').split('?')[0];
+  const next = `#/${page}?range=${k}`;
+  if ((location.hash || '#/inicio') === next) render(true);
+  else location.hash = next;
+}, true);
 document.addEventListener('click', ev => {
   const a = ev.target.closest && ev.target.closest('a[href="#/reconstruir"], a[href^="#/reconstruir/"]');
   if (!a) return;
