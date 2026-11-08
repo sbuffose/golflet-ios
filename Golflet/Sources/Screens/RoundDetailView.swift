@@ -23,8 +23,7 @@ struct RoundDetailView: View {
     @State private var accountReady = false
     @State private var accountMarks: [Int: HoleMark] = [:]
     @State private var loadGen = 0
-    @State private var loadChain: Task<Void, Never>?
-    @State private var saveChain: Task<Void, Never>?
+    @State private var queue = QuickWorkQueue()
     @State private var visit = RoundVisit()
     @State private var noteSaver = QuickNoteSaver()
     @State private var noteAt = ""
@@ -80,8 +79,9 @@ struct RoundDetailView: View {
             accountReady = false
             accountMarks = [:]
             loadGen += 1
-            loadChain = nil
-            await ensureLoaded().value
+            queue.dropLoad()
+            let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+            await enqueueLoad(identity: identity, replace: true, force: false).value
         }
         .onDisappear {
             leftRound = true
@@ -303,7 +303,10 @@ struct RoundDetailView: View {
                     .foregroundStyle(p.ink)
                     .accessibilityIdentifier("quick-save-error")
                 if quickConflict || needsRetry {
-                    Button("Reintentar") { Task { await retryLoad() } }
+                    Button("Reintentar") {
+                        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+                        Task { await retryLoad(scheduled: identity) }
+                    }
                         .font(GType.headline)
                         .foregroundStyle(p.ink2)
                         .accessibilityIdentifier("quick-save-retry")
@@ -516,13 +519,14 @@ struct RoundDetailView: View {
         )
         extras[hole] = extra
         markRev += 1
-        let previous = saveChain
-        let task = Task { @MainActor in
-            await previous?.value
-            await ensureLoaded().value
-            await commit(hole: hole)
-        }
-        saveChain = task
+        let identity = QuickWorkIdentity(session: model.sessionEpoch, generation: visit.generation, load: loadGen)
+        queue.enqueueMark(
+            identity: identity,
+            model: model,
+            visit: visit,
+            waitForAccount: { await self.ensureLoaded(identity: identity).value },
+            commit: { await self.commit(hole: hole, identity: identity) }
+        )
     }
 
     private func pendingEdits() -> [QuickStats.HoleEdit] {
@@ -571,14 +575,12 @@ struct RoundDetailView: View {
         model.writeHoleCache(roundId: round.roundId, session: session, present: present, clear: clear)
     }
 
-    private func commit(hole: Int) async {
+    private func commit(hole: Int, identity: QuickWorkIdentity) async {
         guard !quickConflict else { return }
         guard let edit = pending[hole] else { return }
         let sent = edit
-        let session = model.sessionEpoch
-        let generation = visit.generation
-        guard model.sessionStill(session), visit.allows(generation) else { return }
-        guard QuickStats.sendDecision(accountReady: accountReady, stillHere: visit.allows(generation)) == "send" else {
+        guard QuickDispatch.visitStill(identity, model: model, visit: visit) else { return }
+        guard QuickStats.sendDecision(accountReady: accountReady, stillHere: visit.allows(identity.generation)) == "send" else {
             if !accountReady {
                 needsRetry = true
                 quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
@@ -598,110 +600,130 @@ struct RoundDetailView: View {
         let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: merged.putts, gir: merged.gir, fairway: par == 3 ? nil : QuickStats.localFairway(drive))
         extras[hole] = extra
         let mark = HoleMark(hole: hole, putts: merged.putts, gir: merged.gir, drive: drive, rev: merged.rev)
-        let attempt = await model.sendHoleMark(roundId: round.roundId, session: session, mark: mark)
-        switch attempt {
-        case .notSent, .ignored:
-            return
-        case .failed(let error):
-            guard model.sessionStill(session), visit.allows(generation) else { return }
-            if let golf = error as? GolfletError, case .http(let status, _) = golf, status == 409 {
-                quickConflict = true
-                needsRetry = true
-                quickError = QuickStats.saveMessage("conflict")
-                return
+        await QuickDispatch.runMark(
+            identity: identity,
+            model: model,
+            visit: visit,
+            send: { await self.model.sendHoleMark(roundId: self.round.roundId, session: identity.session, mark: mark) },
+            onModel: { savedWrite in
+                self.keepMarkTotal(savedWrite, roundId: self.round.roundId, identity: identity)
+            },
+            onScreen: { savedWrite in
+                self.showSavedMark(savedWrite, hole: hole, sent: sent, mergedRev: merged.rev, identity: identity)
+            },
+            onFailure: { error in
+                self.showMarkFailure(error)
             }
-            needsRetry = true
-            quickError = QuickStats.saveMessage("error")
-        case .value(let savedWrite):
-            guard model.sessionStill(session) else { return }
-            let saved = savedWrite.mark
-            guard QuickStats.phaseAfter(sent: merged.rev, responseRev: saved.rev, conflict: nil) == "saved" else {
-                guard visit.allows(generation) else { return }
-                quickConflict = true
-                needsRetry = true
-                quickError = QuickStats.saveMessage("conflict")
-                return
-            }
-            let stamp = savedWrite.note.updatedAt
-            var fields: [String: Int] = [:]
-            if let value = savedWrite.note.putts { fields["putts"] = value }
-            if let value = savedWrite.note.gir { fields["gir"] = value }
-            if let value = savedWrite.note.fir { fields["fir"] = value }
-            let accepted = model.applyStatFields(roundId: round.roundId, fields: fields, notesAt: QuickStats.noteDate(stamp), session: session)
-            guard visit.allows(generation) else { return }
-            accountMarks = Dictionary(uniqueKeysWithValues: QuickStats.acceptSaved(account: Array(accountMarks.values), saved: saved).map { ($0.hole, $0) })
-            revByHole = Dictionary(uniqueKeysWithValues: accountMarks.map { ($0.key, $0.value.rev) })
-            if let current = pending[hole], current.touched == sent.touched, current.putts == sent.putts, current.gir == sent.gir, current.fairway == sent.fairway {
-                pending[hole] = nil
-            }
-            showAccount(session: session)
-            if accepted {
-                if let stamp { noteAt = stamp }
-                if !leftRound {
-                    if let value = fields["putts"] {
-                        puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
-                    }
-                    if let value = fields["gir"] {
-                        girText = QuickStats.visibleTotal(current: girText, authoritative: String(value), focused: statFocus == .gir)
-                    }
-                    if let value = fields["fir"] {
-                        firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
-                    }
-                }
-            }
-            quickError = ""
-            quickConflict = false
-            needsRetry = false
-        }
+        )
     }
 
-    private func retryLoad() async {
+    private func keepMarkTotal(_ savedWrite: HoleMarkSave, roundId: String, identity: QuickWorkIdentity) {
+        var fields: [String: Int] = [:]
+        if let value = savedWrite.note.putts { fields["putts"] = value }
+        if let value = savedWrite.note.gir { fields["gir"] = value }
+        if let value = savedWrite.note.fir { fields["fir"] = value }
+        _ = model.applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(savedWrite.note.updatedAt), session: identity.session)
+    }
+
+    private func showSavedMark(_ savedWrite: HoleMarkSave, hole: Int, sent: PendingHole, mergedRev: Int, identity: QuickWorkIdentity) {
+        let saved = savedWrite.mark
+        guard QuickStats.phaseAfter(sent: mergedRev, responseRev: saved.rev, conflict: nil) == "saved" else {
+            quickConflict = true
+            needsRetry = true
+            quickError = QuickStats.saveMessage("conflict")
+            return
+        }
+        var fields: [String: Int] = [:]
+        if let value = savedWrite.note.putts { fields["putts"] = value }
+        if let value = savedWrite.note.gir { fields["gir"] = value }
+        if let value = savedWrite.note.fir { fields["fir"] = value }
+        let accepted = model.applyStatFields(roundId: round.roundId, fields: fields, notesAt: QuickStats.noteDate(savedWrite.note.updatedAt), session: identity.session)
+        accountMarks = Dictionary(uniqueKeysWithValues: QuickStats.acceptSaved(account: Array(accountMarks.values), saved: saved).map { ($0.hole, $0) })
+        revByHole = Dictionary(uniqueKeysWithValues: accountMarks.map { ($0.key, $0.value.rev) })
+        if let current = pending[hole], current.touched == sent.touched, current.putts == sent.putts, current.gir == sent.gir, current.fairway == sent.fairway {
+            pending[hole] = nil
+        }
+        showAccount(session: identity.session)
+        if accepted {
+            if let stamp = savedWrite.note.updatedAt { noteAt = stamp }
+            if !leftRound {
+                if let value = fields["putts"] {
+                    puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
+                }
+                if let value = fields["gir"] {
+                    girText = QuickStats.visibleTotal(current: girText, authoritative: String(value), focused: statFocus == .gir)
+                }
+                if let value = fields["fir"] {
+                    firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
+                }
+            }
+        }
+        quickError = ""
+        quickConflict = false
+        needsRetry = false
+    }
+
+    private func showMarkFailure(_ error: Error) {
+        if let golf = error as? GolfletError, case .http(let status, _) = golf, status == 409 {
+            quickConflict = true
+            needsRetry = true
+            quickError = QuickStats.saveMessage("conflict")
+            return
+        }
+        needsRetry = true
+        quickError = QuickStats.saveMessage("error")
+    }
+
+    private func retryLoad(scheduled: QuickWorkIdentity) async {
+        guard QuickDispatch.visitStill(scheduled, model: model, visit: visit) else { return }
         if quickConflict {
             pending.removeAll()
             needsRetry = false
-            await reloadAccount()
+            await reloadAccount(session: scheduled.session, generation: scheduled.generation)
             return
         }
         needsRetry = false
         leftRound = false
-        await reloadAccount()
-        guard accountReady, !leftRound else {
-            needsRetry = !accountReady
+        await reloadAccount(session: scheduled.session, generation: scheduled.generation)
+        let continued = QuickWorkIdentity(session: scheduled.session, generation: scheduled.generation, load: loadGen)
+        guard accountReady, QuickDispatch.visitStill(continued, model: model, visit: visit) else {
+            needsRetry = !accountReady && QuickDispatch.visitStill(continued, model: model, visit: visit)
             return
         }
         for hole in pending.keys.sorted() {
-            await commit(hole: hole)
+            guard QuickDispatch.visitStill(continued, model: model, visit: visit) else { return }
+            await commit(hole: hole, identity: continued)
         }
     }
 
-    private func ensureLoaded() -> Task<Void, Never> {
-        if let loadChain { return loadChain }
-        let gen = loadGen
-        let job = Task { @MainActor in
-            await loadAccountMarks(force: false, gen: gen)
-        }
-        loadChain = job
-        return job
+    private func ensureLoaded(identity: QuickWorkIdentity) -> Task<Void, Never> {
+        enqueueLoad(identity: identity, replace: false, force: false)
     }
 
-    private func reloadAccount() async {
+    private func enqueueLoad(identity: QuickWorkIdentity, replace: Bool, force: Bool) -> Task<Void, Never> {
+        queue.enqueueLoad(
+            identity: identity,
+            replace: replace,
+            model: model,
+            visit: visit,
+            load: { self.loadGen },
+            read: { await self.model.readHoleMarks(roundId: self.round.roundId, session: identity.session) },
+            apply: { self.absorb($0, force: force, identity: identity) }
+        )
+    }
+
+    private func reloadAccount(session: Int, generation: Int) async {
+        let opener = QuickWorkIdentity(session: session, generation: generation, load: loadGen)
+        guard QuickDispatch.visitStill(opener, model: model, visit: visit) else { return }
         markRev += 1
         loadGen += 1
-        let gen = loadGen
         quickConflict = false
         accountReady = false
-        let job = Task { @MainActor in
-            await loadAccountMarks(force: true, gen: gen)
-        }
-        loadChain = job
-        await job.value
+        let identity = QuickWorkIdentity(session: session, generation: generation, load: loadGen)
+        await enqueueLoad(identity: identity, replace: true, force: true).value
     }
 
-    private func loadAccountMarks(force: Bool, gen: Int) async {
-        let session = model.sessionEpoch
-        let generation = visit.generation
-        let read = await model.readHoleMarks(roundId: round.roundId, session: session)
-        guard gen == loadGen, model.sessionStill(session), visit.allows(generation) else { return }
+    private func absorb(_ read: QuickRoundResult<[HoleMark]>, force: Bool, identity: QuickWorkIdentity) {
         switch read {
         case .notSent, .ignored:
             return
@@ -718,7 +740,7 @@ struct RoundDetailView: View {
             }
             accountMarks = loaded
             revByHole = Dictionary(uniqueKeysWithValues: loaded.map { ($0.key, $0.value.rev) })
-            showAccount(session: session)
+            showAccount(session: identity.session)
             accountReady = true
             quickError = ""
             quickConflict = false
