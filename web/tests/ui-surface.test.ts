@@ -4,14 +4,15 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { mkdirSync, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { extname } from "node:path";
+import { extname, join } from "node:path";
+import { tmpdir } from "node:os";
 import test from "node:test";
-import { gpsShotSql } from "../lib/gps-shot.ts";
+import { gpsShotSql } from "../lib/gps-shot";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
 const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".png": "image/png" };
-const ART = "/opt/cursor/artifacts";
+const ART = join(tmpdir(), "golflet-ui-surface");
 
 test("manual shots stay out of the GPS distance predicate", () => {
   const sql = gpsShotSql("s");
@@ -111,10 +112,14 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
       window.addEventListener("error", (e) => console.log("STACK", e.message, e.error && e.error.stack));
     })();`);
     page.on("request", req => { const u = new URL(req.url()); if ((u.protocol === "http:" || u.protocol === "https:") && u.hostname !== "127.0.0.1") leaked.push(u.hostname); });
-    page.on("pageerror", err => console.log("PAGE", err.stack || err.message));
+    page.on("pageerror", (err: unknown) => {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.log("PAGE", error.stack || error.message);
+    });
     page.on("console", msg => { if (msg.type() === "error") console.log("CONSOLE", msg.text()); });
     const mark = () => page.evaluate(() => { if (!document.getElementById("testonly")) { const n = document.createElement("p"); n.id = "testonly"; n.textContent = "TEST-ONLY"; n.style.cssText = "margin:0 0 8px;color:#0B2545;font-weight:700"; document.querySelector("#view")?.prepend(n); } });
-    const contrast = (sel: string) => page.evaluate(`(() => {
+    type Contrast = { ratio: number; color: string; bg: string; size: number };
+    const contrast = (sel: string): Promise<Contrast> => page.evaluate(`(() => {
       const el = document.querySelector(${JSON.stringify(sel)});
       const cs = getComputedStyle(el);
       const nums = (c) => (c.match(/[\\d.]+/g) || ["0","0","0"]).map(Number);
@@ -124,7 +129,7 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
       while (node) { const b = getComputedStyle(node).backgroundColor; if (b && b.indexOf(", 0)") < 0) { bg = b; break; } node = node.parentElement; }
       const L1 = lum(nums(cs.color)), L2 = lum(nums(bg));
       return { ratio: (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05), color: cs.color, bg: bg, size: parseFloat(cs.fontSize) };
-    })()`);
+    })()`) as Promise<Contrast>;
     const fits = () => page.evaluate(() => {
       const view = document.querySelector("#view") as HTMLElement;
       const bar = document.querySelector("#tabbar")?.getBoundingClientRect();

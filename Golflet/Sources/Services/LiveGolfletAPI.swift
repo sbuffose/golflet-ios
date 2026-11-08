@@ -96,6 +96,53 @@ struct LiveGolfletAPI: GolfletAPI {
         _ = try await request("PUT", "/api/rounds/\(roundId)/notes", body: body)
     }
 
+    func saveNoteFields(roundId: String, fields: [String: Int]) async throws {
+        var body: [String: Any] = [:]
+        for key in ["putts", "gir", "fir"] {
+            if let value = fields[key] { body[key] = value }
+        }
+        if body.isEmpty { return }
+        _ = try await request("PUT", "/api/rounds/\(roundId)/notes", body: body)
+    }
+
+    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMark {
+        let body: [String: Any] = [
+            "hole": mark.hole,
+            "rev": mark.rev,
+            "putts": mark.putts ?? NSNull(),
+            "gir": mark.gir ?? NSNull(),
+            "drive": mark.drive ?? NSNull()
+        ]
+        let json = try await request("PUT", "/api/rounds/\(roundId)/hole-marks", body: body)
+        return Self.holeMark(json["mark"] as? [String: Any]) ?? mark
+    }
+
+    func holeMarks(roundId: String) async throws -> [HoleMark] {
+        let json = try await request("GET", "/api/rounds/\(roundId)/hole-marks")
+        let rows = json["marks"] as? [[String: Any]] ?? []
+        return rows.compactMap(Self.holeMark)
+    }
+
+    private static func holeMark(_ json: [String: Any]?) -> HoleMark? {
+        guard let json else { return nil }
+        let hole = (json["hole"] as? NSNumber).map { $0.intValue } ?? json["hole"] as? Int
+        let rev = (json["rev"] as? NSNumber).map { $0.intValue } ?? json["rev"] as? Int
+        guard let hole, let rev else { return nil }
+        return HoleMark(hole: hole, putts: intOrNil(json["putts"]), gir: boolOrNil(json["gir"]), drive: json["drive"] as? String, rev: rev)
+    }
+
+    private static func intOrNil(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber else { return nil }
+        if CFGetTypeID(number) == CFBooleanGetTypeID() { return nil }
+        return number.intValue
+    }
+
+    private static func boolOrNil(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber else { return nil }
+        if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue }
+        return nil
+    }
+
     func saveBag(_ items: [BagClub]) async throws -> [BagClub] {
         let payload = items.map { ["club": $0.name, "carry": $0.carry as Any, "total": $0.total as Any] }
         let json = try await request("PUT", "/api/bag", body: ["bag": payload])

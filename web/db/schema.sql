@@ -59,6 +59,19 @@ create table if not exists round_note (
   updated_at timestamptz not null default now()
 );
 
+-- per-hole quick stats. A missing table is 503; it must not be filled in by rewriting round_note.
+create table if not exists round_hole_mark (
+  round_id uuid not null references round(id) on delete cascade,
+  user_id text not null references "user"(id) on delete cascade,
+  hole int not null check (hole between 1 and 18),
+  putts int check (putts is null or (putts >= 0 and putts <= 6)),
+  gir boolean,
+  drive text check (drive is null or drive in ('left', 'fairway', 'right', 'other')),
+  rev int not null check (rev >= 1),
+  updated_at timestamptz not null default now(),
+  primary key (round_id, hole)
+);
+
 create table if not exists bag (
   user_id text primary key references "user"(id) on delete cascade,
   clubs jsonb not null,
