@@ -3094,6 +3094,7 @@ function render(keepScroll){
     const [k, qs] = p[0].split('?'); p[0] = k; const r = new URLSearchParams(qs).get('range'); if (RKEYS.includes(r)) setRange(r);
   } else if (p.length === 1 && ['inicio','resumen','cancha'].includes(p[0]) && RANGE !== 'all') history.replaceState(null, '', `#/${p[0]}?range=${RANGE}`);
   const playLive = p[0] === 'jugar' && !!p[1];
+  document.documentElement.classList.remove('rc-map');
   window.GolfletTrack?.destroy?.();
   document.documentElement.classList.toggle('gp-fix', playLive || !!(GP && GP.fixed && GP.fixed(location.hash)));
   document.documentElement.classList.toggle('gp-live', playLive || !!(GP && GP.practiceLive && GP.practiceLive(location.hash))); setTabH();
