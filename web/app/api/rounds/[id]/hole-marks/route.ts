@@ -3,7 +3,8 @@ import { q } from "@/lib/db";
 import { body } from "@/lib/accounts";
 import { ownRound } from "@/lib/rounds";
 import { isUndefinedTable } from "@/lib/scorecard-lease";
-import { applyMark, cardHoles, HOLE_MARK_UPSERT, settleWrite, type MarkConflict, type StoredMark } from "@/lib/quick-stats";
+import { cardHoles, writeHoleMark, type MarkConflict, type StoredMark } from "@/lib/quick-stats";
+import { withTransaction } from "@/lib/db";
 
 function unavailable(e: unknown): never {
   if (isUndefinedTable(e, "round_hole_mark")) throw new HttpError(503, "Falta aplicar la migración de marcas por hoyo");
@@ -41,7 +42,7 @@ export const GET = handle(async (req: Request, ctx: { params: Promise<{ id: stri
   } catch (e) { unavailable(e); }
 });
 
-/** One hole of this round. The rev is the one the client read, plus one. Totals are not written here. */
+/** One hole, then the round total from the marks this transaction can see. The client's board is not the total. */
 export const PUT = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const user = await requireUser(req);
   const { id } = await ctx.params;
@@ -54,19 +55,8 @@ export const PUT = handle(async (req: Request, ctx: { params: Promise<{ id: stri
     throw new HttpError(404, "Ese hoyo no está en la tarjeta");
   }
   try {
-    const [cur] = await q(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and hole=$2`, [id, hole]);
-    const decision = applyMark(cur ? rowMark(cur) : null, incoming, card);
+    const decision = await withTransaction(run => writeHoleMark(run, { roundId: id, userId: user.id, incoming, card }));
     if (decision.conflict) return conflict(decision.mark, decision.conflict);
-    if (decision.idempotent) return json({ mark: decision.mark, applied: true, conflict: null, idempotent: true });
-    const mark = decision.mark;
-    const written = await q(HOLE_MARK_UPSERT, [id, user.id, mark.hole, mark.putts, mark.gir, mark.drive, mark.rev]);
-    const row = written[0];
-    if (!row) {
-      const [kept] = await q(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and hole=$2`, [id, mark.hole]);
-      const settled = settleWrite(kept ? rowMark(kept) : null, mark);
-      if (settled.conflict) return conflict(settled.mark, settled.conflict);
-      return json({ mark: settled.mark, applied: true, conflict: null, idempotent: settled.idempotent });
-    }
-    return json({ mark: rowMark(row), applied: true, conflict: null, idempotent: false });
+    return json({ mark: decision.mark, applied: true, conflict: null, idempotent: decision.idempotent, note: decision.note });
   } catch (e) { unavailable(e); }
 });

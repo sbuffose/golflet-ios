@@ -208,7 +208,7 @@ struct MockAPIClient: GolfletAPI {
         _ = fields
     }
 
-    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMark {
+    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave {
         Self.sessionLock.lock()
         defer { Self.sessionLock.unlock() }
         var rows = Self.holeMarksByRound[roundId] ?? [:]
@@ -218,7 +218,9 @@ struct MockAPIClient: GolfletAPI {
         }
         rows[mark.hole] = result.mark
         Self.holeMarksByRound[roundId] = rows
-        return result.mark
+        let holes = rows.keys.sorted().map { QuickHole(hole: $0, par: 4) }
+        let fields = QuickStats.noteFields(marks: Array(rows.values), holes: holes)
+        return HoleMarkSave(mark: result.mark, note: QuickTotals(putts: fields["putts"], gir: fields["gir"], fir: fields["fir"]))
     }
 
     func holeMarks(roundId: String) async throws -> [HoleMark] {

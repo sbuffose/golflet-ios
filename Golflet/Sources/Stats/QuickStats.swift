@@ -11,6 +11,11 @@ struct QuickTotals: Equatable, Sendable {
     var fir: Int?
 }
 
+struct HoleMarkSave: Equatable, Sendable {
+    var mark: HoleMark
+    var note: QuickTotals
+}
+
 struct MarkWrite: Equatable, Sendable {
     var mark: HoleMark
     var applied: Bool

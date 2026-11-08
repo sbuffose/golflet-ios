@@ -561,10 +561,10 @@ struct RoundDetailView: View {
         }
         let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: merged.putts, gir: merged.gir, fairway: par == 3 ? nil : QuickStats.localFairway(drive))
         extras[hole] = extra
-        let fields = QuickStats.noteFields(marks: QuickStats.projectBoard(account: Array(accountMarks.values), edits: pendingEdits()), holes: holes)
         let mark = HoleMark(hole: hole, putts: merged.putts, gir: merged.gir, drive: drive, rev: merged.rev)
         do {
-            let saved = try await model.api.saveHoleMark(roundId: round.roundId, mark: mark)
+            let savedWrite = try await model.api.saveHoleMark(roundId: round.roundId, mark: mark)
+            let saved = savedWrite.mark
             guard QuickStats.phaseAfter(sent: merged.rev, responseRev: saved.rev, conflict: nil) == "saved" else {
                 quickConflict = true
                 needsRetry = true
@@ -577,13 +577,14 @@ struct RoundDetailView: View {
                 pending[hole] = nil
             }
             showAccount()
-            if !fields.isEmpty {
-                try await model.api.saveNoteFields(roundId: round.roundId, fields: fields)
-                if let value = fields["putts"] { puttsText = String(value) }
-                if let value = fields["gir"] { girText = String(value) }
-                if let value = fields["fir"] { firText = String(value) }
-                model.applyStatFields(roundId: round.roundId, fields: fields)
-            }
+            var fields: [String: Int] = [:]
+            if let value = savedWrite.note.putts { fields["putts"] = value }
+            if let value = savedWrite.note.gir { fields["gir"] = value }
+            if let value = savedWrite.note.fir { fields["fir"] = value }
+            if let value = fields["putts"] { puttsText = String(value) }
+            if let value = fields["gir"] { girText = String(value) }
+            if let value = fields["fir"] { firText = String(value) }
+            if !fields.isEmpty { model.applyStatFields(roundId: round.roundId, fields: fields) }
             quickError = ""
             quickConflict = false
             needsRetry = false

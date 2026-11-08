@@ -105,7 +105,7 @@ struct LiveGolfletAPI: GolfletAPI {
         _ = try await request("PUT", "/api/rounds/\(roundId)/notes", body: body)
     }
 
-    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMark {
+    func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave {
         let body: [String: Any] = [
             "hole": mark.hole,
             "rev": mark.rev,
@@ -114,13 +114,19 @@ struct LiveGolfletAPI: GolfletAPI {
             "drive": mark.drive ?? NSNull()
         ]
         let json = try await request("PUT", "/api/rounds/\(roundId)/hole-marks", body: body)
-        return Self.holeMark(json["mark"] as? [String: Any]) ?? mark
+        let saved = Self.holeMark(json["mark"] as? [String: Any]) ?? mark
+        return HoleMarkSave(mark: saved, note: Self.quickNote(json["note"] as? [String: Any]))
     }
 
     func holeMarks(roundId: String) async throws -> [HoleMark] {
         let json = try await request("GET", "/api/rounds/\(roundId)/hole-marks")
         let rows = json["marks"] as? [[String: Any]] ?? []
         return rows.compactMap(Self.holeMark)
+    }
+
+    private static func quickNote(_ json: [String: Any]?) -> QuickTotals {
+        guard let json else { return QuickTotals(putts: nil, gir: nil, fir: nil) }
+        return QuickTotals(putts: intOrNil(json["putts"]), gir: intOrNil(json["gir"]), fir: intOrNil(json["fir"]))
     }
 
     private static func holeMark(_ json: [String: Any]?) -> HoleMark? {

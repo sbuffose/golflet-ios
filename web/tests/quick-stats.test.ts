@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { HttpError } from "../lib/http-error";
 import {
   accountView, applyMark, applyPresentColumns, boundedCourseKey, cardHoles, HOLE_MARK_UPSERT, mergeNote,
-  absorbAccountMarks, acceptSaved, mergeAccountHole, noteFields, notePatch, NOTE_UPSERT, phaseAfter, planHoleSend, projectBoard, saveMessage, seedHoleRevs, sendDecision, settleWrite, shouldCommit,
+  absorbAccountMarks, acceptSaved, mergeAccountHole, noteAuthority, noteFields, noteIsNewer, notePatch, NOTE_UPSERT, phaseAfter, planHoleSend, projectBoard, saveMessage, seedHoleRevs, sendDecision, settleWrite, shouldCommit,
 } from "../lib/quick-stats";
 
 const PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
@@ -31,6 +31,7 @@ type QuickJS = {
   sendDecision: typeof sendDecision;
   projectBoard: typeof projectBoard;
   acceptSaved: typeof acceptSaved;
+  noteIsNewer: (previous: string | null | undefined, next: string | null | undefined) => boolean;
 };
 const sandbox = { window: {} as { GolfletQuick: QuickJS } };
 vm.runInNewContext(readFileSync(new URL("../public/quick-stats.js", import.meta.url), "utf8"), sandbox);
@@ -118,7 +119,9 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   assert.match(quick, /await seedPromise/);
   assert.match(quick, /projectBoard/);
   assert.match(quick, /acceptSaved/);
-  assert.match(quick, /noteFields\(Q\.projectBoard\(accountBoard/);
+  assert.match(quick, /noteIsNewer/);
+  assert.equal(quick.includes("noteFields(Q.projectBoard"), false);
+  assert.equal(quick.includes("/notes"), false);
   assert.equal(quick.includes("if (!rows.some"), false);
   assert.match(readFileSync(new URL("../public/quick-stats.js", import.meta.url), "utf8"), /function absorbAccountMarks/);
   assert.match(quick, /sendDecision\(seeded, box\.isConnected\)/);
@@ -135,9 +138,11 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   const notesRoute = readFileSync(new URL("../app/api/rounds/[id]/notes/route.ts", import.meta.url), "utf8");
   assert.equal(marksRoute.includes("delete from"), false);
   assert.match(marksRoute, /cardHoles\(round\.holes\)/);
-  assert.match(marksRoute, /HOLE_MARK_UPSERT/);
+  assert.match(marksRoute, /withTransaction/);
   assert.equal(notesRoute.includes("select putts"), false);
-  assert.match(notesRoute, /NOTE_UPSERT/);
+  assert.match(notesRoute, /writeAuthoritativeNote/);
+  assert.match(marksRoute, /writeHoleMark/);
+  assert.match(readFileSync(new URL("../lib/quick-stats.ts", import.meta.url), "utf8"), /pg_advisory_xact_lock/);
   assert.match(HOLE_MARK_UPSERT, /round_hole_mark\.rev < excluded\.rev/);
   assert.equal(HOLE_MARK_UPSERT.includes("<="), false);
   assert.match(NOTE_UPSERT, /case when \$8 then excluded\.gir else round_note\.gir end/);
@@ -173,6 +178,39 @@ test("a tap before the account read keeps untouched GIR and drive, and a failed 
   assert.equal(js.sendDecision(false, true), "hold");
   assert.equal(js.sendDecision(true, false), "hold");
   assert.equal(js.sendDecision(true, true), "send");
+});
+
+test("a stale board does not choose the total, zero is a total, and a missing hole is not zero", () => {
+  const card = [{ hole: 1, par: 4 }, { hole: 2, par: 4 }];
+  const marks = [
+    { hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6 },
+    { hole: 2, putts: 4, gir: false, drive: "left", rev: 5 },
+  ];
+  const stale = notePatch({ putts: "6", gir: "1", fir: "1" });
+  const decided = noteAuthority(marks, card, stale);
+  assert.equal(decided.putts, 7);
+  assert.equal(decided.gir, 1);
+  assert.equal(decided.fir, 1);
+  assert.equal(decided.puttsPresent, true);
+  const partial = noteAuthority([marks[0]], card, stale);
+  assert.equal(partial.puttsPresent, false);
+  assert.equal(partial.girPresent, false);
+  assert.equal(partial.firPresent, false);
+  const zeros = noteAuthority([
+    { hole: 1, putts: 0, gir: false, drive: "left", rev: 2 },
+    { hole: 2, putts: 0, gir: false, drive: "right", rev: 2 },
+  ], card, notePatch({}));
+  assert.equal(zeros.putts, 0);
+  assert.equal(zeros.gir, 0);
+  assert.equal(zeros.fir, 0);
+  const manual = noteAuthority([], card, notePatch({ putts: "32", gir: "", fir: "8" }));
+  assert.equal(manual.putts, 32);
+  assert.equal(manual.gir, null);
+  assert.equal(manual.girPresent, true);
+  assert.equal(manual.fir, 8);
+  assert.equal(noteIsNewer("2026-11-08T03:00:01.000Z", "2026-11-08T03:00:00.000Z"), false);
+  assert.equal(noteIsNewer("2026-11-08T03:00:00.000Z", "2026-11-08T03:00:01.000Z"), true);
+  assert.equal(js.noteIsNewer("2026-11-08T03:00:01.000Z", "2026-11-08T03:00:00.000Z"), false);
 });
 
 test("a stale cached hole does not enter the total, and the next edit uses the saved rev", () => {
