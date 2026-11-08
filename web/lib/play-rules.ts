@@ -229,3 +229,58 @@ export function hiAttribution(D: { rounds?: any[] }, prevDate: string | null, da
     enteredWindow: curPool.filter(c => !prevWindowIDs.has(c.id) && !curBestIDs.has(c.id)),
   };
 }
+
+export type RoundCourseRef = {
+  course?: string | null;
+  club_name?: string | null;
+  club_code?: string | null;
+  course_id?: string | null;
+};
+export type GpsCourseRef = {
+  course_id?: string | null;
+  club_code?: string | null;
+  club_name?: string | null;
+  club?: string | null;
+  club_aliases?: Array<string | null> | null;
+  course?: string | null;
+  course_label?: string | null;
+  label?: string | null;
+  vm_course?: string | null;
+  course_aliases?: Array<string | null> | null;
+  aliases?: Array<string | null> | null;
+};
+
+const foldCourse = (value: unknown) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const courseWords = (course: GpsCourseRef) => [course.course, course.course_label, course.label, course.vm_course, ...(course.course_aliases || []), ...(course.aliases || [])].map(foldCourse).filter(Boolean);
+const clubWords = (course: GpsCourseRef) => [course.club_name, course.club, ...(course.club_aliases || [])].map(foldCourse).filter(Boolean);
+const clubCodesOf = (course: GpsCourseRef) => {
+  const codes = [String(course.club_code || "").trim()];
+  const id = String(course.course_id || "").trim();
+  const prefix = /^(\d{1,5})-/.exec(id);
+  if (prefix) codes.push(prefix[1]);
+  return [...new Set(codes.filter(Boolean))];
+};
+
+/** A round with a club only opens that club's geometry. A unique course name is enough only when the round names no club. */
+export function matchRoundCourse(official: RoundCourseRef | null | undefined, courses: GpsCourseRef[] | null | undefined): GpsCourseRef | null {
+  const wanted = foldCourse(official?.course);
+  if (!wanted) return null;
+  const named = (courses || []).filter(course => courseWords(course).includes(wanted));
+  const roundCode = String(official?.club_code || "").trim();
+  const roundClub = foldCourse(official?.club_name);
+  const roundId = String(official?.course_id || "").trim();
+  if (!roundCode && !roundClub && !roundId) return named.length === 1 ? named[0] : null;
+  const agreed = named.filter(course => {
+    if (roundId && course.course_id && roundId !== String(course.course_id)) return false;
+    const codes = clubCodesOf(course);
+    if (roundCode && codes.length && codes.some(code => code !== roundCode)) return false;
+    const names = clubWords(course);
+    if (roundClub && names.length && !names.includes(roundClub)) {
+      return !!(roundCode && codes.length && codes.every(code => code === roundCode));
+    }
+    if (roundCode && codes.length && codes.every(code => code === roundCode)) return true;
+    if (roundClub && names.includes(roundClub)) return true;
+    return false;
+  });
+  return agreed.length === 1 ? agreed[0] : null;
+}
