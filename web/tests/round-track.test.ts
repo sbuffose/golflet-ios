@@ -42,14 +42,15 @@ const data = {
 };
 
 test("Tu juego opens this round on the map and the legend count sits inside the symbol", { timeout: 60_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
-  const calls: { method: string; path: string }[] = [];
+  const calls: { method: string; path: string; body?: string }[] = [];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", "http://127.0.0.1");
     if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
     const json = (body: unknown, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
     if (url.pathname.startsWith("/api/")) {
-      for await (const chunk of req) void chunk;
-      calls.push({ method: req.method || "GET", path: url.pathname });
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      calls.push({ method: req.method || "GET", path: url.pathname, body: raw });
       if (url.pathname === "/api/data") return json(data);
       if (url.pathname === "/api/gps/courses") return json({ courses: [{ course_id: "course-fixture", club_name: "Club Fixture", course: "Cancha Fixture", label: "Cancha Fixture" }] });
       if (url.pathname === "/api/gps/courses/course-fixture" || url.pathname === "/api/gps/courses/fx-cancha-fixture") {
@@ -65,6 +66,8 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
         });
       }
       if (url.pathname === "/api/reconstructions/live-saved/shots" && req.method === "GET") return json({ shots: [{ id: "s1", hole: 1, club: "7i", position_label: "Marcado a mano", distance_label: "Distancia estimada", distance_m: 140, penalty_strokes: 0 }] });
+      if (url.pathname === "/api/reconstructions" && req.method === "POST") return json({ live_round: { id: "live-new" } }, 201);
+      if (url.pathname === "/api/reconstructions/live-new/shots" && req.method === "POST") return json({ shots: [{ id: "s-new", hole: 1, club: null, position_label: "Marcado a mano", distance_label: "Distancia estimada", distance_m: 12, penalty_strokes: 0 }] });
       if (req.method === "POST") return json({ live_round: { id: "should-not-create" } }, 201);
       return json({});
     }
@@ -81,6 +84,13 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
   try {
     const page = await browser.newPage();
+    await page.evaluateOnNewDocument(() => {
+      const mark = () => { (window as unknown as { __gps: number }).__gps = ((window as unknown as { __gps?: number }).__gps || 0) + 1; };
+      const geo = navigator.geolocation;
+      if (!geo) return;
+      geo.watchPosition = () => { mark(); return 1; };
+      geo.getCurrentPosition = () => { mark(); };
+    });
     await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true });
     await page.setRequestInterception(true);
     page.on("request", req => {
@@ -100,35 +110,99 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(legend.outside, 0);
     await page.$eval("#scoreline", el => el.scrollIntoView({ block: "center" }));
     await page.screenshot({ path: join(ART, "legend.png") });
+    await page.evaluate(() => { (window as unknown as { __gps: number }).__gps = 0; });
     await page.click("#round-track");
-    await page.waitForSelector("#rc-map");
-    await page.waitForFunction(() => (document.querySelector("#rc-title")?.textContent || "").includes("Registrar mis tiros"));
-    await page.waitForFunction(() => (document.querySelector("#rc-mapnote")?.textContent || "").includes("Mapa del hoyo"));
-    assert.equal(await page.$eval("#rc-hole", el => (el as HTMLSelectElement).value), "1");
+    await page.waitForSelector("#play-set");
+    await page.waitForSelector("#play-reticle");
+    const layout = await page.evaluate(() => {
+      const map = document.querySelector("#tkmap");
+      const set = document.querySelector("#play-set");
+      const ret = document.querySelector("#play-reticle");
+      const bar = document.querySelector("#tabbar");
+      const mr = map?.getBoundingClientRect();
+      const rr = ret?.getBoundingClientRect();
+      const sr = set?.getBoundingClientRect();
+      const text = document.body.innerText || "";
+      return {
+        mapW: mr?.width || 0, mapH: mr?.height || 0, vw: innerWidth, vh: innerHeight,
+        retX: rr ? rr.left + rr.width / 2 : -1, retY: rr ? rr.top + rr.height / 2 : -1,
+        setBottom: sr?.bottom || 0,
+        barDisplay: bar ? getComputedStyle(bar).display : "",
+        prompt: document.querySelector("#tkro")?.textContent || "",
+        salida: text.includes("Salida en la mira"),
+        caida: text.includes("Caída en la mira"),
+        borrar: text.includes("Borrar puntos"),
+        essay: text.includes("La mira queda fija"),
+        hole: document.querySelector(".tk-hn b")?.textContent || "",
+        rcMap: document.documentElement.classList.contains("rc-map"),
+      };
+    });
+    assert.equal(layout.rcMap, true);
+    assert.equal(layout.barDisplay, "none");
+    assert.ok(layout.mapW >= layout.vw - 2, `map width ${layout.mapW}`);
+    assert.ok(layout.mapH >= layout.vh - 2, `map height ${layout.mapH}`);
+    assert.ok(Math.abs(layout.retX - layout.vw / 2) < 16, `reticle x ${layout.retX}`);
+    assert.ok(Math.abs(layout.retY - layout.vh * 0.42) < 20, `reticle y ${layout.retY}`);
+    assert.ok(layout.setBottom <= layout.vh - 8, `set bottom ${layout.setBottom}`);
+    assert.equal(layout.salida, false);
+    assert.equal(layout.caida, false);
+    assert.equal(layout.borrar, false);
+    assert.equal(layout.essay, false);
+    assert.equal(layout.hole, "Hoyo 1");
+    assert.match(layout.prompt, /confirmar el tee/);
     assert.match(await page.evaluate(() => location.hash), /ronda=r-nov/);
     assert.deepEqual(cardWrites(calls), []);
     assert.equal(calls.some(c => c.method === "GET" && c.path === "/api/gps/courses/course-fixture"), true);
-    const clear = await page.evaluate(() => {
-      const save = document.querySelector("#rc-save");
-      const bar = document.querySelector("#tabbar");
-      if (!save || !bar) return false;
-      save.scrollIntoView({ block: "center" });
-      return save.getBoundingClientRect().bottom <= bar.getBoundingClientRect().top + 1;
-    });
-    assert.equal(clear, true);
+    assert.equal(calls.some(c => c.path === "/api/weather/now"), false);
+    assert.equal(calls.some(c => c.path.startsWith("/api/live-rounds")), false);
+    assert.equal(await page.evaluate(() => (window as unknown as { __gps?: number }).__gps || 0), 0);
+    const beforePan = await page.$eval("#tkmap", el => el.getAttribute("data-cx"));
+    const beforeZoom = await page.$eval("#tkmap", el => Number(el.getAttribute("data-z")));
+    await page.mouse.move(200, 520);
+    await page.mouse.down();
+    await page.mouse.move(80, 520);
+    await page.mouse.up();
+    const afterPan = await page.$eval("#tkmap", el => el.getAttribute("data-cx"));
+    assert.notEqual(afterPan, beforePan);
+    await page.click("#play-zoom-in");
+    const afterZoom = await page.$eval("#tkmap", el => Number(el.getAttribute("data-z")));
+    assert.ok(afterZoom > beforeZoom);
+    assert.deepEqual(cardWrites(calls), []);
     await page.screenshot({ path: join(ART, "track-map.png") });
-    const back = await page.$eval(".crumb-back", el => el.getAttribute("href"));
-    assert.equal(back, "#/ronda/r-nov");
-    await page.click(".crumb-back");
+    await page.click("#play-set");
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("marcar la bandera"));
+    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /yd/);
+    assert.deepEqual(cardWrites(calls), []);
+    await page.click("#play-set");
+    await page.waitForSelector("#play-hit");
+    assert.deepEqual(cardWrites(calls), []);
+    await page.click("#play-hit");
+    await page.waitForFunction(() => location.hash.startsWith("#/reconstruir/live-new?hole=1"));
+    const writes = cardWrites(calls).map(c => `${c.method} ${c.path}`);
+    assert.deepEqual(writes, ["POST /api/reconstructions", "POST /api/reconstructions/live-new/shots"]);
+    const shot = JSON.parse(calls.find(c => c.path === "/api/reconstructions/live-new/shots")?.body || "{}");
+    assert.equal(typeof shot.lat, "number");
+    assert.equal(typeof shot.end_lat, "number");
+    assert.equal("accuracy_m" in shot, false);
+    assert.equal(shot.penalty_strokes, 0);
+    await page.click("#rc-close");
     await page.waitForSelector("#round-track");
     assert.equal(await page.evaluate(() => location.hash), "#/ronda/r-nov");
+    assert.notEqual(await page.$eval("#tabbar", el => getComputedStyle(el).display), "none");
+    assert.equal(await page.evaluate(() => document.documentElement.classList.contains("rc-map")), false);
+    const savedAt = calls.length;
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-saved`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#round-track");
     await page.click("#round-track");
-    await page.waitForFunction(() => location.hash === "#/reconstruir/live-saved?hole=1");
+    await page.waitForFunction(() => location.hash === "#/reconstruir/live-saved?hole=1&ronda=r-saved");
+    await page.waitForSelector("#play-more");
+    await page.click("#play-more");
+    await page.waitForSelector("#play-history");
+    await page.click("#play-history");
     await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("7i"));
-    assert.deepEqual(cardWrites(calls), []);
     assert.equal(await page.$("#qstat"), null);
+    assert.equal(await page.$("#play-club"), null);
+    assert.deepEqual(cardWrites(calls.slice(savedAt)), []);
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));
@@ -183,6 +257,8 @@ test("a round does not open another club's course when only the course name matc
     await page.waitForSelector("#rc-course");
     await page.waitForFunction(() => (document.querySelector("#rc-err")?.textContent || "").includes("Elegí la cancha"));
     assert.equal(await page.$("#rc-map"), null);
+    assert.equal(await page.$("#play-track"), null);
+    assert.equal(await page.$("#tkmap"), null);
     assert.equal(calls.some(c => c.path === "/api/gps/courses/200-principal"), false);
     assert.deepEqual(cardWrites(calls), []);
     assert.equal(calls.some(c => c.method === "POST" && c.path === "/api/reconstructions"), false);

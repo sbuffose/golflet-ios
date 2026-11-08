@@ -2429,7 +2429,7 @@ html.gp-fix #view .tk-host,html.gp-fix #jugbody.tk-host{flex:1 1 auto;min-height
 .tk-cn{flex:1;text-align:center;font-size:14px;font-weight:650;text-shadow:0 1px 8px rgba(0,0,0,.55);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tk-chips{position:absolute;top:calc(60px + env(safe-area-inset-top));left:12px;right:12px;z-index:4;display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .tk-chip{background:rgba(15,61,46,.86);color:#F6F7F9;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:650}
-.tk-ro{position:absolute;left:50%;top:calc(42% + 22px);transform:translateX(-50%);z-index:4;background:#fff;color:#0B2545;border-radius:14px;padding:8px 14px;text-align:center;min-width:132px;box-shadow:0 4px 16px rgba(0,0,0,.28)}
+.tk-ro{position:absolute;left:50%;top:calc(42% + 22px);transform:translateX(-50%);z-index:4;background:#fff;color:#0B2545;border-radius:14px;padding:8px 14px;text-align:center;min-width:132px;box-shadow:0 4px 16px rgba(0,0,0,.28);pointer-events:none}
 .tk-ro b{display:block;font-size:22px;line-height:1.15}
 .tk-ro small{display:block;font-size:12.5px;color:#3E4C62;font-weight:600}
 .tk-ro em{display:block;font-style:normal;font-size:11px;color:#6B7686;margin-top:3px}
@@ -2557,3 +2557,17 @@ html[data-ts] .bagtable .baghdr,html[data-ts] .bagtable .bagrow{grid-template-co
 .tk-club{display:flex;flex-direction:column;font-size:11px;color:#0B2545}
 .tk-club select{font:650 14px/1 Geist,system-ui,sans-serif;border-radius:10px;border:1px solid #d5d8de;padding:8px;background:#fff;color:#0B2545}
 .tk-acts{align-items:flex-end}
+html.rc-map,html.rc-map body{overflow:hidden;height:100%}
+html.rc-map #tabbar{display:none!important}
+html.rc-map #view{position:fixed!important;inset:0!important;margin:0!important;max-width:none!important;width:auto!important;height:auto!important;padding:0!important;overflow:hidden!important;bottom:0!important}
+html.rc-map #view::after{content:none!important;display:none!important;height:0!important}
+html.rc-map #view>.pg{position:absolute;inset:0;max-width:none!important;margin:0!important;height:auto!important;min-height:0;display:block}
+html.rc-map #view .crumbs{display:none!important}
+html.rc-map #view .md,html.rc-map #view .md-detail{position:absolute;inset:0;max-width:none!important;height:auto!important;min-height:0}
+html.rc-map #recon,html.rc-map .tk-host,html.rc-map .tk{position:absolute;inset:0}
+html.rc-map .tk{background:#152016}
+.tk-zoom{position:absolute;right:max(10px,env(safe-area-inset-right));top:62%;z-index:4;display:flex;flex-direction:column;gap:8px}
+.tk-zoom button{width:44px;height:44px;border-radius:50%;border:0;background:rgba(11,37,69,.92);color:#F6F7F9;font:650 22px/1 Geist,system-ui,sans-serif;cursor:pointer}
+.tk-more{display:flex;flex-direction:column;gap:8px;margin:0 0 8px}
+.tk-empty{position:absolute;left:24px;right:24px;top:46%;margin:0;color:#F6F7F9;font-size:16px;line-height:1.45;text-align:center}
+.tk-shots button{border:0;border-radius:10px;padding:4px 8px;background:#F6F7F9;color:#0B2545;font:650 12px/1 Geist,system-ui,sans-serif;cursor:pointer}
