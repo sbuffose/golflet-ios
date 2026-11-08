@@ -427,7 +427,7 @@ final class AppModel {
             if let value = note.putts { fields["putts"] = value }
             if let value = note.gir { fields["gir"] = value }
             if let value = note.fir { fields["fir"] = value }
-            applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(note.updatedAt))
+            guard applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(note.updatedAt)) else { return nil }
             return note
         } catch {
             errorMessage = error.localizedDescription
@@ -435,20 +435,35 @@ final class AppModel {
         }
     }
 
-    /// Writes only the stats that are present. A missing key leaves that total alone.
-    func applyStatFields(roundId: String, fields: [String: Int], notesAt: Date? = nil) {
-        guard !fields.isEmpty || notesAt != nil else { return }
+    /// The newest stamp already stored for this round, from the list or the open copy.
+    func storedNoteDate(roundId: String) -> Date? {
+        let listed = rounds.first { $0.roundId == roundId }?.notesAt
+        let shown = presentedRound?.roundId == roundId ? presentedRound?.notesAt : nil
+        switch (listed, shown) {
+        case let (a?, b?): return a > b ? a : b
+        case let (a?, nil): return a
+        case let (nil, b?): return b
+        default: return nil
+        }
+    }
+
+    /// Writes the present stats only when this stamp is the round's newest.
+    /// A missing key leaves that total alone. An older stamp writes nothing.
+    @discardableResult
+    func applyStatFields(roundId: String, fields: [String: Int], notesAt: Date? = nil) -> Bool {
+        guard QuickStats.noteIsNewer(previous: storedNoteDate(roundId: roundId), next: notesAt) else { return false }
         if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
             if let value = fields["putts"] { rounds[index].putts = value }
             if let value = fields["gir"] { rounds[index].gir = value }
             if let value = fields["fir"] { rounds[index].fir = value }
-            if let notesAt { rounds[index].notesAt = notesAt }
+            rounds[index].notesAt = notesAt
         }
-        guard presentedRound?.roundId == roundId else { return }
+        guard presentedRound?.roundId == roundId else { return true }
         if let value = fields["putts"] { presentedRound?.putts = value }
         if let value = fields["gir"] { presentedRound?.gir = value }
         if let value = fields["fir"] { presentedRound?.fir = value }
-        if let notesAt { presentedRound?.notesAt = notesAt }
+        presentedRound?.notesAt = notesAt
+        return true
     }
 
     func updateBagClub(name: String, carry: Int?, total: Int?) {

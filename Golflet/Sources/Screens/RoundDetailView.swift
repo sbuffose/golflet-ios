@@ -459,9 +459,7 @@ struct RoundDetailView: View {
                 fir: Int(firText),
                 text: noteText
             ) else { return }
-            let stamp = note.updatedAt
-            guard QuickStats.noteIsNewer(previous: noteAt, next: stamp) else { return }
-            if let stamp { noteAt = stamp }
+            if let stamp = note.updatedAt { noteAt = stamp }
             guard !leftRound else { return }
             if let value = note.putts {
                 puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
@@ -601,12 +599,12 @@ struct RoundDetailView: View {
             }
             showAccount()
             let stamp = savedWrite.note.updatedAt
-            if QuickStats.noteIsNewer(previous: noteAt, next: stamp) {
+            var fields: [String: Int] = [:]
+            if let value = savedWrite.note.putts { fields["putts"] = value }
+            if let value = savedWrite.note.gir { fields["gir"] = value }
+            if let value = savedWrite.note.fir { fields["fir"] = value }
+            if model.applyStatFields(roundId: round.roundId, fields: fields, notesAt: QuickStats.noteDate(stamp)) {
                 if let stamp { noteAt = stamp }
-                var fields: [String: Int] = [:]
-                if let value = savedWrite.note.putts { fields["putts"] = value }
-                if let value = savedWrite.note.gir { fields["gir"] = value }
-                if let value = savedWrite.note.fir { fields["fir"] = value }
                 if !leftRound {
                     if let value = fields["putts"] {
                         puttsText = QuickStats.visibleTotal(current: puttsText, authoritative: String(value), focused: statFocus == .putts)
@@ -618,7 +616,6 @@ struct RoundDetailView: View {
                         firText = QuickStats.visibleTotal(current: firText, authoritative: String(value), focused: statFocus == .fir)
                     }
                 }
-                model.applyStatFields(roundId: round.roundId, fields: fields, notesAt: QuickStats.noteDate(stamp))
             }
             quickError = ""
             quickConflict = false
