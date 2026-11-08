@@ -2416,9 +2416,11 @@ html.gp-fix #view .tk-host,html.gp-fix #jugbody.tk-host{flex:1 1 auto;min-height
 .tk-w{fill:rgba(63,110,140,.35);stroke:rgba(117,170,219,.8);stroke-width:1}
 .tk-g{fill:rgba(15,61,46,.28);stroke:#C8102E;stroke-width:1.6}
 .tk-ln{fill:none;stroke:rgba(247,245,240,.55);stroke-width:1.4;stroke-dasharray:5 6}
-.tk-sh{fill:none;stroke:#fff;stroke-width:2.2}
+.tk-sh{fill:none;stroke:#C8102E;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .tk-pl{fill:#0B2545;stroke:#fff;stroke-width:2.4}
 .tk-pin{fill:#C8102E;stroke:#fff;stroke-width:2}
+.tk-dot{fill:#C8102E;stroke:#fff;stroke-width:2}
+.tk-shot-n{fill:#fff;font:700 12px/1 Geist,system-ui,sans-serif;text-anchor:middle;dominant-baseline:central}
 .tk-aim{fill:#fff;stroke:#C8102E;stroke-width:3}
 .tk-ret{position:absolute;left:50%;top:42%;width:0;height:0;pointer-events:none;opacity:0;z-index:3}
 .tk-ret.on{opacity:1}
