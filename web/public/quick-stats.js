@@ -121,6 +121,8 @@
   function noteIsNewer(previous, next) {
     if (!next) return false;
     if (!previous) return true;
+    var earlier = Date.parse(previous), later = Date.parse(next);
+    if (isFinite(earlier) && isFinite(later)) return later >= earlier;
     return String(next) >= String(previous);
   }
   function sendDecision(accountReady, stillHere) {

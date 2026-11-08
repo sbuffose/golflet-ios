@@ -88,12 +88,13 @@ struct LiveGolfletAPI: GolfletAPI {
         _ = try await request("DELETE", "/api/accounts/\(accountId)")
     }
 
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws {
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws -> QuickTotals {
         var body: [String: Any] = ["notes": notes]
         if let putts { body["putts"] = putts } else { body["putts"] = "" }
         if let gir { body["gir"] = gir } else { body["gir"] = "" }
         if let fir { body["fir"] = fir } else { body["fir"] = "" }
-        _ = try await request("PUT", "/api/rounds/\(roundId)/notes", body: body)
+        let json = try await request("PUT", "/api/rounds/\(roundId)/notes", body: body)
+        return Self.quickNote(json["note"] as? [String: Any])
     }
 
     func saveNoteFields(roundId: String, fields: [String: Int]) async throws {

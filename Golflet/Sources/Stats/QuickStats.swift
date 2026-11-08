@@ -160,8 +160,13 @@ enum QuickStats {
     static func noteIsNewer(previous: String?, next: String?) -> Bool {
         guard let next, !next.isEmpty else { return false }
         guard let previous, !previous.isEmpty else { return true }
-        if let earlier = stamp(previous), let later = stamp(next) { return later >= earlier }
+        if let earlier = noteDate(previous), let later = noteDate(next) { return later >= earlier }
         return next >= previous
+    }
+
+    static func noteDate(_ value: String?) -> Date? {
+        guard let value, !value.isEmpty else { return nil }
+        return stamp(value)
     }
 
     /// The field that has focus keeps what the player is typing. The others take the accepted total.

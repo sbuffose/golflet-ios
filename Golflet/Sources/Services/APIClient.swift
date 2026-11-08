@@ -14,7 +14,7 @@ protocol GolfletAPI: Sendable {
     func syncAccount(id: String, password: String?, savePassword: Bool, progressID: String) async throws -> SyncResult
     func forgetPassword(accountId: String) async throws
     func unlink(accountId: String) async throws
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws -> QuickTotals
     func saveNoteFields(roundId: String, fields: [String: Int]) async throws
     func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave
     func holeMarks(roundId: String) async throws -> [HoleMark]

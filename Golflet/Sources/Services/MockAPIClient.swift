@@ -196,12 +196,15 @@ struct MockAPIClient: GolfletAPI {
         KeychainStore.delete(clubCode: mdpCode)
     }
 
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws {
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, notes: String) async throws -> QuickTotals {
         _ = roundId
-        _ = putts
-        _ = gir
-        _ = fir
         _ = notes
+        Self.sessionLock.lock()
+        Self.noteClock += 1
+        let clock = Self.noteClock
+        Self.sessionLock.unlock()
+        let stamp = String(format: "2026-11-08T04:%02d:%02d.000Z", clock / 60, clock % 60)
+        return QuickTotals(putts: putts, gir: gir, fir: fir, updatedAt: stamp)
     }
 
     func saveNoteFields(roundId: String, fields: [String: Int]) async throws {
