@@ -15,9 +15,13 @@ struct RoundDetailView: View {
     @State private var showsRecap = false
     @State private var quickError = ""
     @State private var quickConflict = false
+    @State private var needsRetry = false
+    @State private var leftRound = false
+    @State private var pending: [Int: PendingHole] = [:]
     @State private var markRev = 0
     @State private var revByHole: [Int: Int] = [:]
     @State private var accountReady = false
+    @State private var accountMarks: [Int: HoleMark] = [:]
     @State private var loadGen = 0
     @State private var loadChain: Task<Void, Never>?
     @State private var saveChain: Task<Void, Never>?
@@ -60,11 +64,14 @@ struct RoundDetailView: View {
             firText = round.fir.map(String.init) ?? ""
         }
         .task(id: round.roundId) {
+            leftRound = false
             accountReady = false
+            accountMarks = [:]
             loadGen += 1
             loadChain = nil
             await ensureLoaded().value
         }
+        .onDisappear { leftRound = true }
         .safeAreaInset(edge: .top) {
             HStack {
                 Spacer()
@@ -279,8 +286,8 @@ struct RoundDetailView: View {
                     .font(GType.label)
                     .foregroundStyle(p.ink)
                     .accessibilityIdentifier("quick-save-error")
-                if quickConflict {
-                    Button("Reintentar") { Task { await reloadAccount() } }
+                if quickConflict || needsRetry {
+                    Button("Reintentar") { Task { await retryLoad() } }
                         .font(GType.headline)
                         .foregroundStyle(p.ink2)
                         .accessibilityIdentifier("quick-save-retry")
@@ -320,28 +327,28 @@ struct RoundDetailView: View {
             HStack(spacing: 6) {
                 ForEach(0...4, id: \.self) { n in
                     statChip("\(n)", on: extra?.putts == n) {
-                        update(hole: hole.number, putts: extra?.putts == n ? nil : n, gir: extra?.gir, fairway: extra?.fairway)
+                        update(hole: hole.number, putts: extra?.putts == n ? nil : n, touch: .putts)
                     }
                 }
             }
             HStack(spacing: 6) {
                 statChip("GIR sí", on: extra?.gir == true) {
-                    update(hole: hole.number, putts: extra?.putts, gir: extra?.gir == true ? nil : true, fairway: extra?.fairway)
+                    update(hole: hole.number, gir: extra?.gir == true ? nil : true, touch: .gir)
                 }
                 statChip("GIR no", on: extra?.gir == false) {
-                    update(hole: hole.number, putts: extra?.putts, gir: extra?.gir == false ? nil : false, fairway: extra?.fairway)
+                    update(hole: hole.number, gir: extra?.gir == false ? nil : false, touch: .gir)
                 }
             }
             if hole.par != 3 {
                 HStack(spacing: 6) {
                     statChip("Izquierda", on: extra?.fairway == "left") {
-                        update(hole: hole.number, putts: extra?.putts, gir: extra?.gir, fairway: extra?.fairway == "left" ? nil : "left")
+                        update(hole: hole.number, fairway: extra?.fairway == "left" ? nil : "left", touch: .fairway)
                     }
                     statChip("Fairway", on: extra?.fairway == "hit") {
-                        update(hole: hole.number, putts: extra?.putts, gir: extra?.gir, fairway: extra?.fairway == "hit" ? nil : "hit")
+                        update(hole: hole.number, fairway: extra?.fairway == "hit" ? nil : "hit", touch: .fairway)
                     }
                     statChip("Derecha", on: extra?.fairway == "right") {
-                        update(hole: hole.number, putts: extra?.putts, gir: extra?.gir, fairway: extra?.fairway == "right" ? nil : "right")
+                        update(hole: hole.number, fairway: extra?.fairway == "right" ? nil : "right", touch: .fairway)
                     }
                 }
             }
@@ -445,8 +452,40 @@ struct RoundDetailView: View {
         }
     }
 
-    private func update(hole: Int, putts: Int?, gir: Bool?, fairway: String?) {
-        if quickConflict { return }
+    private struct PendingHole {
+        var putts: Int?
+        var gir: Bool?
+        var fairway: String?
+        var touched: QuickStats.FieldTouch
+    }
+
+    private enum HoleTouch { case putts, gir, fairway }
+
+    private func update(hole: Int, putts: Int? = nil, gir: Bool? = nil, fairway: String? = nil, touch: HoleTouch) {
+        if quickConflict || needsRetry { return }
+        var edit = pending[hole] ?? PendingHole(putts: nil, gir: nil, fairway: nil, touched: .init(putts: false, gir: false, drive: false))
+        switch touch {
+        case .putts:
+            edit.putts = putts
+            edit.touched.putts = true
+        case .gir:
+            edit.gir = gir
+            edit.touched.gir = true
+        case .fairway:
+            edit.fairway = fairway
+            edit.touched.drive = true
+        }
+        pending[hole] = edit
+        let current = extras[hole]
+        let par = round.holes.first { $0.number == hole }?.par ?? 0
+        let extra = HoleExtra(
+            roundId: round.roundId,
+            hole: hole,
+            putts: edit.touched.putts ? edit.putts : current?.putts,
+            gir: edit.touched.gir ? edit.gir : current?.gir,
+            fairway: par == 3 ? nil : (edit.touched.drive ? edit.fairway : current?.fairway)
+        )
+        extras[hole] = extra
         markRev += 1
         let generation = markRev
         let previous = saveChain
@@ -454,62 +493,95 @@ struct RoundDetailView: View {
             await previous?.value
             await ensureLoaded().value
             guard generation == markRev else { return }
-            guard accountReady, !quickConflict else {
-                if !accountReady {
-                    quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
-                }
-                return
-            }
-            let holes = round.holes.map { QuickHole(hole: $0.number, par: $0.par) }
-            let par = round.holes.first { $0.number == hole }?.par ?? 0
-            let drive = QuickStats.driveForAccount(par: par, fairway: fairway)
-            guard QuickStats.accepts(hole: hole, drive: drive, holes: holes) else {
-                quickError = "Ese hoyo no está en la tarjeta."
-                return
-            }
-            let sent = QuickStats.nextRev(stored: revByHole[hole])
-            revByHole[hole] = sent
-            let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: putts, gir: gir, fairway: par == 3 ? nil : fairway)
-            extras[hole] = extra
-            model.notes.upsertExtra(extra)
-            let marks = extras.values.map {
-                HoleMark(hole: $0.hole, putts: $0.putts, gir: $0.gir, drive: QuickStats.accountDrive($0.fairway), rev: revByHole[$0.hole] ?? sent)
-            }
-            let fields = QuickStats.noteFields(marks: marks, holes: holes)
-            do {
-                let mark = HoleMark(hole: hole, putts: putts, gir: gir, drive: drive, rev: sent)
-                let saved = try await model.api.saveHoleMark(roundId: round.roundId, mark: mark)
-                guard generation == markRev else { return }
-                guard QuickStats.phaseAfter(sent: sent, responseRev: saved.rev, conflict: nil) == "saved" else {
-                    quickConflict = true
-                    quickError = QuickStats.saveMessage("conflict")
-                    return
-                }
-                revByHole[hole] = saved.rev
-                if !fields.isEmpty {
-                    try await model.api.saveNoteFields(roundId: round.roundId, fields: fields)
-                    guard generation == markRev else { return }
-                    if let value = fields["putts"] { puttsText = String(value) }
-                    if let value = fields["gir"] { girText = String(value) }
-                    if let value = fields["fir"] { firText = String(value) }
-                    model.applyStatFields(roundId: round.roundId, fields: fields)
-                }
-                quickError = ""
-                quickConflict = false
-            } catch let error as GolfletError {
-                guard generation == markRev else { return }
-                if case .http(let status, _) = error, status == 409 {
-                    quickConflict = true
-                    quickError = QuickStats.saveMessage("conflict")
-                    return
-                }
-                quickError = QuickStats.saveMessage("error")
-            } catch {
-                guard generation == markRev else { return }
-                quickError = QuickStats.saveMessage("error")
-            }
+            await commit(hole: hole, generation: generation)
         }
         saveChain = task
+    }
+
+    private func commit(hole: Int, generation: Int) async {
+        guard let edit = pending[hole] else { return }
+        guard QuickStats.sendDecision(accountReady: accountReady, stillHere: !leftRound) == "send" else {
+            if !accountReady {
+                needsRetry = true
+                quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
+            }
+            return
+        }
+        let holes = round.holes.map { QuickHole(hole: $0.number, par: $0.par) }
+        let par = round.holes.first { $0.number == hole }?.par ?? 0
+        let account = accountMarks[hole]
+        let local = HoleMark(hole: hole, putts: edit.putts, gir: edit.gir, drive: QuickStats.driveForAccount(par: par, fairway: edit.fairway), rev: 0)
+        let merged = QuickStats.mergeAccount(account: account, local: local, touched: edit.touched)
+        let drive = par == 3 ? nil : merged.drive
+        guard QuickStats.accepts(hole: hole, drive: drive, holes: holes) else {
+            quickError = "Ese hoyo no está en la tarjeta."
+            return
+        }
+        let extra = HoleExtra(roundId: round.roundId, hole: hole, putts: merged.putts, gir: merged.gir, fairway: par == 3 ? nil : QuickStats.localFairway(drive))
+        extras[hole] = extra
+        model.notes.upsertExtra(extra)
+        revByHole[hole] = merged.rev
+        let marks = extras.values.map {
+            HoleMark(hole: $0.hole, putts: $0.putts, gir: $0.gir, drive: QuickStats.accountDrive($0.fairway), rev: revByHole[$0.hole] ?? merged.rev)
+        }
+        let fields = QuickStats.noteFields(marks: marks, holes: holes)
+        let mark = HoleMark(hole: hole, putts: merged.putts, gir: merged.gir, drive: drive, rev: merged.rev)
+        do {
+            let saved = try await model.api.saveHoleMark(roundId: round.roundId, mark: mark)
+            guard generation == markRev else { return }
+            guard QuickStats.phaseAfter(sent: merged.rev, responseRev: saved.rev, conflict: nil) == "saved" else {
+                quickConflict = true
+                needsRetry = true
+                quickError = QuickStats.saveMessage("conflict")
+                return
+            }
+            revByHole[hole] = saved.rev
+            pending[hole] = nil
+            if !fields.isEmpty {
+                try await model.api.saveNoteFields(roundId: round.roundId, fields: fields)
+                guard generation == markRev else { return }
+                if let value = fields["putts"] { puttsText = String(value) }
+                if let value = fields["gir"] { girText = String(value) }
+                if let value = fields["fir"] { firText = String(value) }
+                model.applyStatFields(roundId: round.roundId, fields: fields)
+            }
+            quickError = ""
+            quickConflict = false
+            needsRetry = false
+        } catch let error as GolfletError {
+            guard generation == markRev else { return }
+            if case .http(let status, _) = error, status == 409 {
+                quickConflict = true
+                needsRetry = true
+                quickError = QuickStats.saveMessage("conflict")
+                return
+            }
+            needsRetry = true
+            quickError = QuickStats.saveMessage("error")
+        } catch {
+            guard generation == markRev else { return }
+            needsRetry = true
+            quickError = QuickStats.saveMessage("error")
+        }
+    }
+
+    private func retryLoad() async {
+        if quickConflict {
+            pending.removeAll()
+            needsRetry = false
+            await reloadAccount()
+            return
+        }
+        needsRetry = false
+        leftRound = false
+        await reloadAccount()
+        guard accountReady, !leftRound else {
+            needsRetry = !accountReady
+            return
+        }
+        for hole in pending.keys.sorted() {
+            await commit(hole: hole, generation: markRev)
+        }
     }
 
     private func ensureLoaded() -> Task<Void, Never> {
@@ -542,7 +614,9 @@ struct RoundDetailView: View {
             if !force, accountReady { return }
             var next: [Int: HoleExtra] = [:]
             var revs: [Int: Int] = [:]
+            var loaded: [Int: HoleMark] = [:]
             for mark in marks {
+                loaded[mark.hole] = mark
                 revs[mark.hole] = mark.rev
                 let visible = mark.putts != nil || mark.gir != nil || mark.drive?.isEmpty == false
                 if visible {
@@ -564,6 +638,7 @@ struct RoundDetailView: View {
             }
             extras = next
             revByHole = revs
+            accountMarks = loaded
             accountReady = true
             quickError = ""
             quickConflict = false
@@ -571,6 +646,7 @@ struct RoundDetailView: View {
             guard gen == loadGen else { return }
             if accountReady, !force { return }
             accountReady = false
+            needsRetry = true
             quickError = "No se pudo leer la cuenta. Los totales de la tarjeta siguen igual."
         }
     }

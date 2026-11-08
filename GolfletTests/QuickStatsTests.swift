@@ -160,4 +160,38 @@ final class QuickStatsTests: XCTestCase {
         XCTAssertEqual(marks[0].rev, 7)
         XCTAssertEqual(QuickStats.nextRev(stored: marks[0].rev), 8)
     }
+
+    func testTapBeforeTheAccountReadKeepsUntouchedGirAndDrive() {
+        let account = HoleMark(hole: 1, putts: 2, gir: true, drive: "fairway", rev: 5)
+        let early = HoleMark(hole: 1, putts: 3, gir: nil, drive: nil, rev: 0)
+        let touch = QuickStats.FieldTouch(putts: true, gir: false, drive: false)
+        let merged = QuickStats.mergeAccount(account: account, local: early, touched: touch)
+        XCTAssertEqual(merged.putts, 3)
+        XCTAssertEqual(merged.gir, true)
+        XCTAssertEqual(merged.drive, "fairway")
+        XCTAssertEqual(merged.rev, 6)
+        XCTAssertNotEqual(merged, HoleMark(hole: 1, putts: 3, gir: nil, drive: nil, rev: 6))
+        let wiped = QuickStats.apply(stored: account, incoming: HoleMark(hole: 1, putts: 3, gir: nil, drive: nil, rev: 6))
+        XCTAssertTrue(wiped.applied)
+        XCTAssertNil(wiped.mark.gir)
+        XCTAssertNil(wiped.mark.drive)
+        let kept = QuickStats.apply(stored: account, incoming: merged)
+        XCTAssertTrue(kept.applied)
+        XCTAssertEqual(kept.mark.putts, 3)
+        XCTAssertEqual(kept.mark.gir, true)
+        XCTAssertEqual(kept.mark.drive, "fairway")
+        XCTAssertEqual(kept.mark.rev, 6)
+        XCTAssertTrue(QuickStats.noteFields(marks: [kept.mark], holes: holes).isEmpty)
+        let clearGir = QuickStats.mergeAccount(
+            account: account,
+            local: HoleMark(hole: 1, putts: 2, gir: nil, drive: "fairway", rev: 0),
+            touched: QuickStats.FieldTouch(putts: false, gir: true, drive: false)
+        )
+        XCTAssertEqual(clearGir.putts, 2)
+        XCTAssertNil(clearGir.gir)
+        XCTAssertEqual(clearGir.drive, "fairway")
+        XCTAssertEqual(QuickStats.sendDecision(accountReady: false, stillHere: true), "hold")
+        XCTAssertEqual(QuickStats.sendDecision(accountReady: true, stillHere: false), "hold")
+        XCTAssertEqual(QuickStats.sendDecision(accountReady: true, stillHere: true), "send")
+    }
 }

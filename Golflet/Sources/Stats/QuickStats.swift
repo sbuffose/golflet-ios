@@ -69,6 +69,29 @@ enum QuickStats {
         return MarkWrite(mark: mark, applied: true, conflict: nil, idempotent: false)
     }
 
+    struct FieldTouch: Equatable, Sendable {
+        var putts: Bool
+        var gir: Bool
+        var drive: Bool
+    }
+
+    /// Fields the tap did not change stay on the account row, including a tap that started before the read.
+    static func mergeAccount(account: HoleMark?, local: HoleMark, touched: FieldTouch) -> HoleMark {
+        HoleMark(
+            hole: local.hole,
+            putts: touched.putts ? local.putts : account?.putts,
+            gir: touched.gir ? local.gir : account?.gir,
+            drive: touched.drive ? local.drive : account?.drive,
+            rev: nextRev(stored: account?.rev)
+        )
+    }
+
+    /// A write waits for the account read. Leaving the screen does not send a partial hole.
+    static func sendDecision(accountReady: Bool, stillHere: Bool) -> String {
+        if !accountReady || !stillHere { return "hold" }
+        return "send"
+    }
+
     static func nextRev(stored: Int?) -> Int {
         guard let stored, stored >= 1 else { return 1 }
         return stored + 1
