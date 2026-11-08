@@ -156,15 +156,18 @@ struct RoundDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             holeTable(Array(round.holes.prefix(9)), totalLabel: "IDA", total: round.outScore)
             holeTable(Array(round.holes.suffix(from: min(9, round.holes.count))), totalLabel: "VTA", total: round.inScore)
-            HStack(spacing: 14) {
-                legend(.eagleOrBetter, "Águila")
-                legend(.birdie, "Birdie")
-                legend(.bogey, "Bogey")
-                legend(.doubleOrWorse, "Doble+")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], alignment: .leading, spacing: 8) {
+                legend(.eagleOrBetter, "Águila", categoryCount(.eagleOrBetter))
+                legend(.birdie, "Birdie", categoryCount(.birdie))
+                legend(.par, "Par", categoryCount(.par))
+                legend(.bogey, "Bogey", categoryCount(.bogey))
+                legend(.doubleOrWorse, "Doble+", categoryCount(.doubleOrWorse))
             }
-            Text(caption)
-                .font(GType.label)
-                .foregroundStyle(p.ink3)
+            if !caption.isEmpty {
+                Text(caption)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+            }
         }
     }
 
@@ -213,13 +216,31 @@ struct RoundDetailView: View {
         }
     }
 
-    private func legend(_ result: HoleResult, _ label: String) -> some View {
+    private func categoryCount(_ result: HoleResult) -> Int {
+        let known = round.holes.filter { $0.strokes != nil && $0.result != .unknown }
+        if !known.isEmpty {
+            return known.filter { $0.result == result }.count
+        }
+        switch result {
+        case .eagleOrBetter:
+            return ScoreCounts.resolvedEagles(reported: round.counts.eagles, holes: round.holes)
+        case .birdie: return round.counts.birdies
+        case .par: return round.counts.pars
+        case .bogey: return round.counts.bogeys
+        case .doubleOrWorse: return round.counts.doubles + round.counts.triples + round.counts.worse
+        case .unknown: return 0
+        }
+    }
+
+    private func legend(_ result: HoleResult, _ label: String, _ count: Int) -> some View {
         HStack(spacing: 4) {
-            ScoreMark(strokes: result == .eagleOrBetter ? 2 : result == .birdie ? 3 : result == .bogey ? 5 : 6, result: result, diameter: 16)
+            ScoreMark(strokes: count, result: result, diameter: 22)
             Text(label)
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
+                .lineLimit(1)
         }
+        .accessibilityLabel("\(count) \(label)")
     }
 
     private var gameStats: some View {
@@ -266,38 +287,54 @@ struct RoundDetailView: View {
 
     private func holeEditor(_ hole: HoleScore) -> some View {
         let extra = extras[hole.number]
-        return HStack {
-            Text("\(hole.number)")
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Hoyo \(hole.number)")
                 .font(GFont.ui(14, weight: .semibold))
-                .tabular()
-                .frame(width: 24)
-            Stepper(value: Binding(
-                get: { extra?.putts ?? 0 },
-                set: { update(hole: hole.number, putts: $0, gir: extra?.gir, fairway: extra?.fairway) }
-            ), in: 0...6) {
-                Text("Putts \(extra?.putts.map(String.init) ?? "—")")
-                    .font(GType.label)
-            }
-            Toggle("GIR", isOn: Binding(
-                get: { extra?.gir ?? false },
-                set: { update(hole: hole.number, putts: extra?.putts, gir: $0, fairway: extra?.fairway) }
-            ))
-            .labelsHidden()
-            .tint(p.primary)
-            if hole.par != 3 {
-                Picker("FW", selection: Binding(
-                    get: { extra?.fairway ?? "na" },
-                    set: { update(hole: hole.number, putts: extra?.putts, gir: extra?.gir, fairway: $0) }
-                )) {
-                    Text("—").tag("na")
-                    Text("Hit").tag("hit")
-                    Text("Izq").tag("left")
-                    Text("Der").tag("right")
+                .foregroundStyle(p.ink)
+            HStack(spacing: 6) {
+                ForEach(0...4, id: \.self) { n in
+                    statChip("\(n)", on: extra?.putts == n) {
+                        update(hole: hole.number, putts: extra?.putts == n ? nil : n, gir: extra?.gir, fairway: extra?.fairway)
+                    }
                 }
-                .pickerStyle(.menu)
+            }
+            HStack(spacing: 6) {
+                statChip("GIR sí", on: extra?.gir == true) {
+                    update(hole: hole.number, putts: extra?.putts, gir: extra?.gir == true ? nil : true, fairway: extra?.fairway)
+                }
+                statChip("GIR no", on: extra?.gir == false) {
+                    update(hole: hole.number, putts: extra?.putts, gir: extra?.gir == false ? nil : false, fairway: extra?.fairway)
+                }
+            }
+            if hole.par != 3 {
+                HStack(spacing: 6) {
+                    statChip("Izquierda", on: extra?.fairway == "left") {
+                        update(hole: hole.number, putts: extra?.putts, gir: extra?.gir, fairway: extra?.fairway == "left" ? nil : "left")
+                    }
+                    statChip("Fairway", on: extra?.fairway == "hit") {
+                        update(hole: hole.number, putts: extra?.putts, gir: extra?.gir, fairway: extra?.fairway == "hit" ? nil : "hit")
+                    }
+                    statChip("Derecha", on: extra?.fairway == "right") {
+                        update(hole: hole.number, putts: extra?.putts, gir: extra?.gir, fairway: extra?.fairway == "right" ? nil : "right")
+                    }
+                }
             }
         }
-        .font(GType.label)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+    }
+
+    private func statChip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(GType.label)
+                .foregroundStyle(on ? p.onPrimary : p.ink)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(on ? p.primary : p.surface)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var recapButton: some View {
@@ -364,17 +401,7 @@ struct RoundDetailView: View {
     }
 
     private var caption: String {
-        let b = round.counts
-        let eagles = ScoreCounts.resolvedEagles(reported: b.eagles, holes: round.holes)
-        let dif = differential.map { "Diferencial estimado por Golflet: \(FormatAR.one($0))." } ?? ""
-        return ScorecardSummary.line(
-            eagles: eagles,
-            birdies: b.birdies,
-            pars: b.pars,
-            bogeys: b.bogeys,
-            doubles: b.doubles,
-            differentialNote: dif
-        )
+        differential.map { "Diferencial estimado por Golflet: \(FormatAR.one($0))." } ?? ""
     }
 
     private func persistNotes() {

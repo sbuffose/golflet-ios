@@ -122,7 +122,7 @@ enum HoleWind {
         var lines: [String] = []
         if let speedKmh {
             if let windFromDeg {
-                lines.append("Viento \(speedKmh) km/h desde \(TeeForecast.cardinal(windFromDeg)).")
+                lines.append("Viento \(speedKmh) km/h desde \(TeeForecast.cardinal(Int(windFromDeg.rounded()))).")
             } else {
                 lines.append("Viento \(speedKmh) km/h. El horario no trae de dónde viene.")
             }

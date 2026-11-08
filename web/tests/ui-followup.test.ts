@@ -57,7 +57,10 @@ test("period, strategy and the hole map follow the fixture", { timeout: 90_000, 
       }
       if (url.pathname === "/api/weather/now") return json({ kmh: 18, from_deg: 0, temp_c: 21 });
       if (url.pathname === "/api/weather/forecast") return json({ hours: [{ at: "2026-11-08T15:00:00", wind_kmh: 18, wind_from: "norte", temp_c: 21, rain_mm: 0 }] });
-      if (url.pathname === "/api/gps/courses") return json({ courses: [{ course_id: "course-fixture", course_key: "c1", course: "Cancha Fixture", course_label: "Cancha Fixture" }] });
+      if (url.pathname === "/api/gps/courses") return json({ courses: [
+        { course_id: "azul-otro", course_key: "9:Azul", club_name: "Otro Club", course: "Azul", course_label: "Azul" },
+        { course_id: "course-fixture", course_key: "c1", club_name: "Club Fixture", course: "Cancha Fixture", course_label: "Cancha Fixture" },
+      ] });
       if (url.pathname === "/api/gps/courses/course-fixture") return json({ course: { holes: [
         { hole: 1, tee: { lat: -34.48, lng: -58.53 }, green: { center: { lat: -34.481, lng: -58.529 } }, line: [{ lat: -34.4805, lng: -58.5295 }] },
         { hole: 2, tee: null, green: { center: { lat: -34.48, lng: -58.53 } } },
@@ -81,6 +84,16 @@ test("period, strategy and the hole map follow the fixture", { timeout: 90_000, 
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 390, height: 844 });
+    await page.emulateTimezone("America/Argentina/Buenos_Aires");
+    await page.evaluateOnNewDocument(`(() => {
+      const fixed = Date.parse("2026-11-08T15:00:00-03:00");
+      const Native = Date;
+      class Frozen extends Native {
+        constructor(...args) { super(...(args.length ? args : [fixed])); }
+        static now() { return fixed; }
+      }
+      window.Date = Frozen;
+    })();`);
     const leaked: string[] = [];
     const urls: string[] = [];
     page.on("request", req => { const u = new URL(req.url()); if ((u.protocol === "http:" || u.protocol === "https:") && u.hostname !== "127.0.0.1") leaked.push(u.hostname); });
@@ -110,7 +123,7 @@ test("period, strategy and the hole map follow the fixture", { timeout: 90_000, 
     await page.click('button[data-range="3m"]');
     await page.waitForFunction(() => (document.querySelector(".big")?.textContent || "") === "80,0");
     await page.click('a[href="#/hoyo/c1/1"]');
-    await page.waitForSelector('#holegeo svg[aria-label="Trazado verificado del hoyo 1"]');
+    await page.waitForSelector('#holegeo svg[aria-label="Trazado con los puntos provistos del hoyo 1"]');
     await page.waitForFunction(() => (document.querySelector("#howto")?.textContent || "").includes("Salida al centro verificada"));
     const hole1 = await page.evaluate(() => document.body.innerText);
     assert.equal(hole1.includes("próximamente"), false);

@@ -289,11 +289,49 @@
       try { await H.api(`/api/groups/${id}/leave`, { method: 'POST' }); location.hash = '#/amigos'; } catch (e) { H.toast(e.message); } };
   }
 
+  function looksLikeImage(file) {
+    const type = String(file && file.type || '').toLowerCase();
+    const name = String(file && file.name || '').toLowerCase();
+    return type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif|bmp|tiff?)$/.test(name);
+  }
+  async function decodePhoto(file) {
+    if (typeof createImageBitmap === 'function') {
+      try { return await createImageBitmap(file); } catch (_) {}
+    }
+    return await new Promise((resolve, reject) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  async function photoJpeg(file) {
+    if (!file) throw new Error('Elegí una foto.');
+    if (!looksLikeImage(file)) throw new Error('Solo imágenes. Elegí un JPG, PNG o HEIC.');
+    if (file.size > 12 * 1024 * 1024) throw new Error('La foto pesa más de 12 MB. Elegí una más chica. La anterior sigue igual.');
+    let bmp;
+    try { bmp = await decodePhoto(file); } catch (_) { throw new Error('No pudimos leer esta foto en el navegador. Probá con un JPG o PNG. La anterior sigue igual.'); }
+    const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight;
+    if (!w || !h) throw new Error('No pudimos leer esta foto. La anterior sigue igual.');
+    const scale = Math.min(1, 512 / Math.max(w, h));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(w * scale)); canvas.height = Math.max(1, Math.round(h * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('No pudimos preparar la foto. La anterior sigue igual.');
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    if (bmp.close) bmp.close();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+    if (!blob || !blob.size) throw new Error('No pudimos preparar la foto. La anterior sigue igual.');
+    return blob;
+  }
   async function uploadPhoto(id, file) {
-    if (!file.type.startsWith('image/')) throw new Error('Solo imágenes.');
-    if (file.size > 6 * 1024 * 1024) throw new Error('La foto tiene que pesar menos de 6 MB.');
-    const r = await fetch(`/api/groups/${id}/photo`, { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': file.type }, body: file });
-    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo subir la foto'); return j;
+    const jpeg = await photoJpeg(file);
+    let r;
+    try { r = await fetch(`/api/groups/${id}/photo`, { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'image/jpeg' }, body: jpeg }); }
+    catch (_) { throw new Error('No se pudo enviar la foto. La anterior sigue igual.'); }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || (r.status === 413 ? 'La foto es demasiado pesada para enviarla. La anterior sigue igual.' : r.status === 401 ? 'La sesión no está confirmada. La foto no se cambió.' : 'No se pudo subir la foto. La anterior sigue igual.'));
+    return j;
   }
 
   /* admins: name, photo, invite link */
