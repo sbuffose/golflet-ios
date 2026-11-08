@@ -156,11 +156,18 @@ enum QuickStats {
         sent == latest && response == sent
     }
 
-    /// A note that left the server earlier does not replace the one already on screen.
+    /// A note that left the server earlier does not replace the one already stored.
+    /// Equal stamps are the same write. A stamp one millisecond later is a newer write.
     static func noteIsNewer(previous: String?, next: String?) -> Bool {
         guard let next, !next.isEmpty else { return false }
         guard let previous, !previous.isEmpty else { return true }
         if let earlier = noteDate(previous), let later = noteDate(next) { return later >= earlier }
+        return next >= previous
+    }
+
+    static func noteIsNewer(previous: Date?, next: Date?) -> Bool {
+        guard let next else { return false }
+        guard let previous else { return true }
         return next >= previous
     }
 

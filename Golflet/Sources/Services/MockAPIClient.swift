@@ -17,6 +17,8 @@ struct MockAPIClient: GolfletAPI {
     private static var progressByID: [String: SyncAPIProgress] = [:]
     private static var holeMarksByRound: [String: [Int: HoleMark]] = [:]
     private static var noteClock = 0
+    /// Tests queue the note a late response should return. Empty in the app.
+    static var scriptedRoundNotes: [QuickTotals] = []
     static var pendingNeedsClub = false
 
     init(autoSession: Bool = true) {
@@ -200,6 +202,11 @@ struct MockAPIClient: GolfletAPI {
         _ = roundId
         _ = notes
         Self.sessionLock.lock()
+        if !Self.scriptedRoundNotes.isEmpty {
+            let note = Self.scriptedRoundNotes.removeFirst()
+            Self.sessionLock.unlock()
+            return note
+        }
         Self.noteClock += 1
         let clock = Self.noteClock
         Self.sessionLock.unlock()
