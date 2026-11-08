@@ -42,7 +42,9 @@
     if (!root.isConnected) return;
     const found = (setup.reconstructions || []).find(r => r.round_id === roundId);
     if (found) {
-      const next = `#/reconstruir/${found.id}?hole=${encodeURIComponent(hole || "1")}&ronda=${encodeURIComponent(roundId)}`;
+      const saved = Number(found.current_hole);
+      const picked = hole || (saved >= 1 && saved <= 18 ? String(saved) : "1");
+      const next = `#/reconstruir/${found.id}?hole=${encodeURIComponent(picked)}&ronda=${encodeURIComponent(roundId)}`;
       if ((location.hash || "") !== next) location.hash = next;
       else mountEditor(root, found.id, hole, { roundId, back: `#/ronda/${roundId}` });
       return;
@@ -76,8 +78,7 @@
   }
 
   function picker() {
-    return `<div class="card"><div class="t">Cargar una vuelta ya jugada</div>
-      <p class="s">Elegí la fecha, la cancha y, si ya está, la tarjeta del club. Los golpes se guardan aparte: no reescriben esa tarjeta.</p>
+    return `<div class="card rc-pick"><div class="t">Cargar una vuelta ya jugada</div>
       <label class="s">Fecha<input id="rc-date" type="date" required></label>
       <label class="s">Cancha<select id="rc-course"><option value="">Cargando canchas…</option></select></label>
       <label class="s">Tarjeta del club, si ya está<select id="rc-round"><option value="">Sin asociar</option></select></label>
@@ -114,7 +115,7 @@
       }
       if (prefill?.roundId && [...round.options].some(o => o.value === prefill.roundId)) round.value = prefill.roundId;
       const list = root.querySelector("#rc-list");
-      list.innerHTML = (mine.reconstructions || []).map(r => `<a class="card" href="#/reconstruir/${esc(r.id)}"><div class="t">${esc(r.date)} · ${esc(r.course || "Cancha")}</div><div class="s">Seguir cargando golpes</div></a>`).join("");
+      list.innerHTML = (mine.reconstructions || []).map(r => `<a class="recon-entry" href="#/reconstruir/${esc(r.id)}"><span class="rt-mark">TRACK</span><b>${esc(r.date)} · ${esc(r.course || "Cancha")}</b><span class="recon-go" aria-hidden="true">›</span></a>`).join("");
     } catch (e) {
       if (!err.textContent) err.textContent = e?.message || "No pudimos leer tus vueltas.";
     }
@@ -148,6 +149,7 @@
     const host = root.querySelector("#rc-host");
     let liveId = id || "";
     let courseId = pending?.courseId || "";
+    let savedHole = 0;
     let courseName = pending?.courseName || "";
     let roundId = pending?.roundId || "";
     const back = pending?.back || (roundId ? `#/ronda/${roundId}` : "#/rondas");
@@ -167,6 +169,8 @@
         if (row) {
           courseName = courseName || row.course || "";
           roundId = roundId || row.round_id || "";
+          const kept = Number(row.current_hole);
+          if (kept >= 1 && kept <= 18) savedHole = kept;
           if (!courseId && row.club_code && row.vm_course) {
             courseId = `${row.club_code}-${String(row.vm_course).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
           }
@@ -194,7 +198,8 @@
     }
     if (!mine()) return;
     if (!window.GolfletTrack) { fail("No se cargó el mapa."); return; }
-    const hole = Number(holeHint) >= 1 && Number(holeHint) <= 18 ? Number(holeHint) : 1;
+    const explicit = Number(holeHint) >= 1 && Number(holeHint) <= 18 ? Number(holeHint) : 0;
+    const hole = explicit || savedHole || 1;
     window.GolfletTrack.mount(host, {
       retro: true,
       id: liveId,

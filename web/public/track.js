@@ -61,7 +61,7 @@
       id: H.id, live: H.live, shots: H.shots || [], holes: H.holes || [], hole: H.live?.current_hole || 1,
       pos: null, acc: null, course: H.course || null, cmap: null, wind: null, strat: null, bag: H.bag || [],
       busy: false, watch: null, panned: false, club: '', penaltyShotId: null, msg: '',
-      track: R().trackNew(), cam: { z: 17, cx: 0.5, cy: 0.5, hdg: 0 },
+      track: R().trackNew(), cam: { z: 17, cx: 0.5, cy: 0.5, hdg: 0 }, frame: 'overview', axis: null, mapDown: false,
       more: false, history: false, saved: H.shots || [],
       alive: true, done: false, suggestedTee: null, suggestedPin: null,
     };
@@ -77,8 +77,15 @@
       const rec = holeRec(), g = rec.green || gpsHole()?.green || {};
       return asLL(rec.day_pin) || asLL(g.center) || asLL(g.front) || asLL(g);
     };
-    const hasGeo = () => !!(asLL(gpsHole()?.tee) || asLL(holeRec().tee) || pinCoord());
-    const teeCoord = () => S.track.tee || asLL(gpsHole()?.tee) || asLL(holeRec().tee) || pinCoord();
+    const verifiedTee = () => asLL(gpsHole()?.tee) || asLL(holeRec().tee);
+    const verifiedFlag = () => pinCoord();
+    const axis = () => R().holeSpan(verifiedTee(), verifiedFlag());
+    const mapOk = () => {
+      const tee = verifiedTee(), flag = verifiedFlag();
+      if (tee && flag) return !!axis();
+      return !!(tee || flag);
+    };
+    const teeCoord = () => S.track.tee || verifiedTee() || null;
     const cupLL = () => S.track.flag || pinCoord();
     const cmapHole = () => (S.cmap?.holes || []).find(h => h.hole === S.hole) || null;
     const lieAt = pt => {
@@ -92,13 +99,14 @@
     };
 
     const fitCam = () => {
-      const tee = teeCoord(), pin = pinCoord() || tee;
-      if (!tee || !pin) return;
-      const mid = { lat: (tee.lat + pin.lat) / 2, lng: (tee.lng + pin.lng) / 2 };
-      const [cx, cy] = proj(mid.lat, mid.lng);
-      const m = hav(tee, pin) || 180;
-      const z = Math.max(16, Math.min(19.2, Math.log2(400 / Math.max(m, 80)) + 17.2));
-      S.cam = { z, cx, cy, hdg: bearing(tee, pin) };
+      const map = mapBox();
+      const W = map?.clientWidth || innerWidth, Hh = map?.clientHeight || innerHeight;
+      const ball = S.track.ball && R().knownPoint(S.track.ball.lat, S.track.ball.lng);
+      const frame = R().frameHole(verifiedTee(), verifiedFlag(), S.frame || 'overview', { width: W, height: Hh }, ball);
+      S.axis = frame;
+      if (!frame) return false;
+      S.cam = { z: frame.z, cx: frame.cx, cy: frame.cy, hdg: frame.bearing || 0 };
+      return true;
     };
 
     const mapBox = () => el.querySelector('#tkmap');
@@ -118,7 +126,7 @@
       return [W / 2 + px * c - py * s, H * 0.42 + px * s + py * c];
     };
     const tilesHTML = () => {
-      const z = Math.round(S.cam.z);
+      const z = Math.max(0, Math.min(R().IMAGERY_ZOOM_MAX, Math.floor(S.cam.z)));
       const n = 2 ** z;
       const cx = S.cam.cx * n, cy = S.cam.cy * n;
       const pad = 4;
@@ -206,11 +214,15 @@
       if (S.track.phase === 'confirmTee') {
         const tee = S.suggestedTee;
         S.track = { ...S.track, tee: tee ? { ...tee } : null, ball: tee ? { ...tee } : null, phase: 'confirmFlag' };
+        S.frame = 'flag';
       } else if (S.track.phase === 'confirmFlag') {
         const pin = S.suggestedPin;
         const ball = S.track.ball || S.track.tee || S.suggestedTee;
         S.track = { ...S.track, flag: pin ? { ...pin } : S.track.flag, ball: ball ? { ...ball } : null, phase: 'tracking' };
+        S.frame = 'play';
       }
+      S.panned = false;
+      fitCam();
       render();
     };
     const cursorRead = here => {
@@ -221,11 +233,11 @@
       const cupOn = meters != null && R().onCup(meters);
       const ball = S.track.ball || S.track.tee;
       const flown = here && ball ? yd(hav(ball, here)) : null;
-      if (retro && phase === 'confirmTee') return `<b>Arrastrá para confirmar la salida</b>`;
+      if (retro && phase === 'confirmTee') return S.frame === 'tee' ? `<b>Confirmá la salida</b>` : '';
       if (retro && phase === 'confirmFlag') {
         const fromT = S.track.tee || S.suggestedTee;
         const fromTee = here && fromT ? yd(hav(fromT, here)) : null;
-        return `<b>Arrastrá para marcar el hoyo</b>${fromTee != null ? `<small class="num">${fromTee} yd desde la salida</small>` : ''}`;
+        return `<b>Marcá el hoyo${fromTee != null ? ` · ${fromTee} yd` : ''}</b>`;
       }
       if (retro && phase === 'tracking') {
         if (S.done || cupOn) return `<b>En el hoyo</b><small>${S.done ? 'Siguiente hoyo' : 'ENTER confirma el hoyo'}</small>`;
@@ -259,10 +271,11 @@
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
-      if (retro && !hasGeo()) {
+      if (retro && !mapOk()) {
+        const both = verifiedTee() && verifiedFlag();
         el.innerHTML = `<div class="tk" id="play-track">
           <div class="tk-top"><button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button><b class="tk-cn">${name}</b></div>
-          <p class="tk-empty" id="rc-nogeo">Este hoyo no tiene geometría verificada. No marco un punto inventado.</p>
+          <p class="tk-empty" id="rc-nogeo">${both ? 'La salida y la bandera de este hoyo no cierran. No invento el rumbo.' : 'Este hoyo no tiene geometría verificada. No marco un punto inventado.'}</p>
           <div class="tk-dock"><div class="tk-nav">
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>
             <div class="tk-hn"><b>Hoyo ${S.hole}</b><span>Sin mapa verificado</span></div>
@@ -301,8 +314,13 @@
       const rail = retro && railSource.length ? `<div class="tk-shots-rail" id="rc-shots" aria-label="Golpes">${railSource.map((s, i) => `<button type="button" class="tk-shot" id="play-shot-${i}">${s.n}. ${esc(s.club || '—')}${s.yards ? ` · ${esc(s.yards)}` : s.unknown ? ' · Sin ubicación' : ''}</button>`).join('')}</div>` : (!retro ? `<div class="tk-shots-rail" aria-label="Golpes">${marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? 'Drop' : m.penalty ? 'P' : m.holed ? 'Hoyo' : (m.club ? esc(clubLabel(m.club)) : (i + 1))}</span>`).join('')}</div>` : '');
       const setup = retro && (phase === 'confirmTee' || phase === 'confirmFlag');
       const marking = retro && phase === 'tracking' && !S.done && phase !== 'relief';
+      const cardYd = rec.yards || (gpsHole()?.yards && Object.values(gpsHole().yards).filter(n => +n > 0).sort((a, b) => b - a)[0]);
+      const holeBits = [par ? `Par ${par}` : '', cardYd ? `${cardYd} yd` : '', verifiedFlag() && !verifiedTee() ? 'Sin salida verificada' : ''].filter(Boolean);
+      const holeChip = retro ? `<div class="tk-hole" id="tk-hole"><b>Hoyo ${S.hole}</b>${holeBits.length ? `<span>${esc(holeBits.join(' · '))}</span>` : ''}</div>` : '';
+      const read = cursorRead(here);
       el.innerHTML = `<div class="tk" id="play-track">
         <div class="tk-map" id="tkmap"></div>
+        <div class="tk-maperr" id="tk-maperr" hidden><b>El mapa no cargó.</b><button type="button" id="tk-retry">Reintentar</button></div>
         <div class="tk-ret on ${pen ? 'pen' : ''}" id="play-reticle" aria-hidden="true"><i></i></div>
         ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>` : ''}
         ${rail}
@@ -310,8 +328,9 @@
           ${retro ? `<button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button>` : `<a class="tk-ib" href="#/inicio" aria-label="Inicio">⌂</a>`}
           <b class="tk-cn">${name}</b>
         </div>
+        ${setup ? holeChip : ''}
         <div class="tk-chips">${retro ? '' : windChip()}</div>
-        <div class="tk-ro" id="tkro">${cursorRead(here)}</div>
+        ${read ? `<div class="tk-ro${setup ? ' tk-setup' : ''}" id="tkro">${read}</div>` : ''}
         ${hs ? `<a class="tk-strat" id="strategy-compact" href="#/estrategia/${encodeURIComponent(S.strat.course_key || S.course?.course_key || '')}">${esc(hs.plan_title || 'Plan del hoyo')}</a>` : ''}
         <div class="tk-dock">
           ${setup ? '' : `<div class="tk-nav">
@@ -341,13 +360,34 @@
     const paintMap = () => {
       const map = mapBox(); if (!map) return;
       const W = map.clientWidth || innerWidth, Hh = map.clientHeight || innerHeight;
-      const scale = 2 ** (S.cam.z - Math.round(S.cam.z));
+      const tileZ = Math.max(0, Math.min(R().IMAGERY_ZOOM_MAX, Math.floor(S.cam.z)));
+      const scale = 2 ** (S.cam.z - tileZ);
       map.innerHTML = `<div class="tk-tiles" style="transform:translate(${W / 2}px,${Hh * 0.42}px) scale(${scale}) rotate(${-S.cam.hdg}deg);transform-origin:0 0">${tilesHTML()}</div><svg class="tk-svg" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">${overlaySVG(W, Hh)}</svg>`;
       map.dataset.cx = String(S.cam.cx);
       map.dataset.cy = String(S.cam.cy);
       map.dataset.z = String(S.cam.z);
+      map.dataset.tileZ = String(tileZ);
+      map.dataset.frame = S.axis?.mode || '';
+      map.dataset.bearing = S.axis?.bearing == null ? '' : String(S.axis.bearing);
+      map.dataset.aimLat = S.axis ? String(S.axis.aimLat) : '';
+      map.dataset.aimLng = S.axis ? String(S.axis.aimLng) : '';
+      map.dataset.hole = String(S.hole);
       map.dataset.ballLat = S.track.ball && Number.isFinite(S.track.ball.lat) ? String(S.track.ball.lat) : '';
       map.dataset.ballLng = S.track.ball && Number.isFinite(S.track.ball.lng) ? String(S.track.ball.lng) : '';
+      const imgs = [...map.querySelectorAll('.tk-tile')];
+      let left = imgs.length, failed = 0;
+      const finish = ok => {
+        left -= 1; if (!ok) failed += 1;
+        if (left > 0) return;
+        S.mapDown = failed === imgs.length && imgs.length > 0;
+        const ban = el.querySelector('#tk-maperr');
+        if (ban) ban.hidden = !S.mapDown;
+        for (const id of ['play-set', 'play-hit']) { const b = el.querySelector('#' + id); if (b) b.disabled = !!S.mapDown; }
+      };
+      imgs.forEach(img => {
+        if (img.complete) finish(img.naturalWidth > 0);
+        else { img.onload = () => finish(true); img.onerror = () => finish(false); }
+      });
     };
     const paintRead = () => {
       const ro = el.querySelector('#tkro'); if (ro) ro.innerHTML = cursorRead(fromCenter());
@@ -384,8 +424,20 @@
       const here = fromCenter();
       if (!here || !Number.isFinite(here.lat)) { S.msg = 'No hay un punto para marcar.'; render(); return; }
       const phase = S.track.phase;
+      if (retro && S.frame !== 'tee' && phase === 'confirmTee') {
+        S.frame = 'tee';
+        S.panned = false;
+        S.msg = '';
+        fitCam();
+        render();
+        return;
+      }
       if (phase === 'confirmTee' || phase === 'confirmFlag' || phase === 'drop') {
+        if (phase === 'confirmTee') S.frame = 'flag';
+        if (phase === 'confirmFlag') S.frame = 'play';
+        S.panned = false;
         S.track = R().trackSet(S.track, here);
+        fitCam();
         S.msg = '';
         render();
         return;
@@ -422,7 +474,16 @@
       if (retro) {
         if (!S.alive) return;
         S.hole = n; S.panned = false; S.msg = ''; S.penaltyShotId = null; S.history = false; S.done = false;
-        armRetro(); fitCam(); render(); return;
+        armRetro();
+        S.frame = S.track.phase === 'tracking' ? 'play' : 'tee';
+        fitCam();
+        const hash = location.hash || '';
+        const cut = hash.indexOf('?');
+        const params = new URLSearchParams(cut >= 0 ? hash.slice(cut + 1) : '');
+        params.set('hole', String(n));
+        const next = `${cut >= 0 ? hash.slice(0, cut) : hash}?${params.toString()}`;
+        if (next !== hash) history.replaceState(null, '', next);
+        render(); return;
       }
       S.busy = true;
       try {
@@ -493,9 +554,10 @@
       const undo = el.querySelector('#play-undo'); if (undo) undo.onclick = () => undoLast();
       const nextHole = el.querySelector('#play-next'); if (nextHole) nextHole.onclick = () => goHole(Math.min(18, S.hole + 1));
       const close = el.querySelector('#rc-close'); if (close) close.onclick = () => { if (H.back) location.hash = H.back; };
+      const retry = el.querySelector('#tk-retry'); if (retry) retry.onclick = () => { S.mapDown = false; paintMap(); };
       const more = el.querySelector('#play-more'); if (more) more.onclick = () => { S.more = !S.more; render(); };
       const hist = el.querySelector('#play-history'); if (hist) hist.onclick = () => { S.history = !S.history; render(); };
-      const zoomBy = d => { S.cam.z = Math.max(15, Math.min(20, S.cam.z + d)); paintMap(); paintRead(); };
+      const zoomBy = d => { S.cam.z = Math.max(15, Math.min(R().IMAGERY_ZOOM_MAX + 0.8, S.cam.z + d)); paintMap(); paintRead(); };
       const zin = el.querySelector('#play-zoom-in'); if (zin) zin.onclick = () => zoomBy(0.4);
       const zout = el.querySelector('#play-zoom-out'); if (zout) zout.onclick = () => zoomBy(-0.4);
       el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
@@ -572,7 +634,7 @@
       render();
     };
 
-    if (retro) { armRetro(); document.documentElement.classList.add('rc-map'); }
+    if (retro) { armRetro(); S.frame = S.track.phase === 'tracking' ? 'play' : 'overview'; document.documentElement.classList.add('rc-map'); }
     fitCam(); render();
     if (!retro) { watch(); loadExtras(); }
     const onResize = () => paintMap();
