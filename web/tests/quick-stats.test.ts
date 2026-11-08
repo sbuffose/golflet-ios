@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { HttpError } from "../lib/http-error";
 import {
   accountView, applyMark, applyPresentColumns, boundedCourseKey, cardHoles, HOLE_MARK_UPSERT, mergeNote,
-  absorbAccountMarks, mergeAccountHole, noteFields, notePatch, NOTE_UPSERT, phaseAfter, planHoleSend, saveMessage, seedHoleRevs, sendDecision, settleWrite, shouldCommit,
+  absorbAccountMarks, acceptSaved, mergeAccountHole, noteFields, notePatch, NOTE_UPSERT, phaseAfter, planHoleSend, projectBoard, saveMessage, seedHoleRevs, sendDecision, settleWrite, shouldCommit,
 } from "../lib/quick-stats";
 
 const PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
@@ -29,6 +29,8 @@ type QuickJS = {
   absorbAccountMarks: typeof absorbAccountMarks;
   mergeAccountHole: typeof mergeAccountHole;
   sendDecision: typeof sendDecision;
+  projectBoard: typeof projectBoard;
+  acceptSaved: typeof acceptSaved;
 };
 const sandbox = { window: {} as { GolfletQuick: QuickJS } };
 vm.runInNewContext(readFileSync(new URL("../public/quick-stats.js", import.meta.url), "utf8"), sandbox);
@@ -114,7 +116,11 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   assert.match(src, /\/hole-marks/);
   const quick = src.slice(src.indexOf("function bindQuick"), src.indexOf("const saveNote"));
   assert.match(quick, /await seedPromise/);
-  assert.match(quick, /absorbAccountMarks/);
+  assert.match(quick, /projectBoard/);
+  assert.match(quick, /acceptSaved/);
+  assert.match(quick, /noteFields\(Q\.projectBoard\(accountBoard/);
+  assert.equal(quick.includes("if (!rows.some"), false);
+  assert.match(readFileSync(new URL("../public/quick-stats.js", import.meta.url), "utf8"), /function absorbAccountMarks/);
   assert.match(quick, /sendDecision\(seeded, box\.isConnected\)/);
   assert.match(quick, /if \(!box\.isConnected\) return/);
   assert.match(quick, /planHoleSend/);
@@ -167,6 +173,31 @@ test("a tap before the account read keeps untouched GIR and drive, and a failed 
   assert.equal(js.sendDecision(false, true), "hold");
   assert.equal(js.sendDecision(true, false), "hold");
   assert.equal(js.sendDecision(true, true), "send");
+});
+
+test("a stale cached hole does not enter the total, and the next edit uses the saved rev", () => {
+  const account = [
+    { hole: 1, putts: 2, gir: true, drive: "fairway", rev: 5 },
+    { hole: 2, putts: 1, gir: false, drive: "left", rev: 4 },
+  ];
+  const cache = [{ hole: 2, putts: 4, gir: true, drive: "fairway" }];
+  const early = { hole: 1, putts: 3, gir: null, drive: null, touched: { putts: true, gir: false, drive: false } };
+  const card = [{ hole: 1, par: 4 }, { hole: 2, par: 4 }];
+  const board = projectBoard(account, [early]);
+  assert.deepEqual(board.rows.find(row => row.hole === 1), { hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6 });
+  assert.deepEqual(board.rows.find(row => row.hole === 2), { hole: 2, putts: 1, gir: false, drive: "left", rev: 4 });
+  assert.equal(board.rows.some(row => row.putts === cache[0].putts && row.gir === true && row.hole === 2), false);
+  const fields = noteFields(board.rows, card);
+  assert.deepEqual(fields, { putts: "4", gir: "1", fir: "1" });
+  assert.notDeepEqual(fields, { putts: "7", gir: "2", fir: "2" });
+  const saved = acceptSaved(account, { hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6 });
+  const second = { hole: 1, putts: null, gir: false, drive: null, touched: { putts: false, gir: true, drive: false } };
+  const next = projectBoard(saved, [second]);
+  assert.deepEqual(next.rows.find(row => row.hole === 1), { hole: 1, putts: 3, gir: false, drive: "fairway", rev: 7 });
+  assert.deepEqual(noteFields(next.rows, card), { putts: "4", gir: "0", fir: "1" });
+  assert.equal(JSON.stringify(js.projectBoard(account, [early])), JSON.stringify(board));
+  assert.equal(JSON.stringify(js.acceptSaved(account, saved[0])), JSON.stringify(saved));
+  assert.equal(JSON.stringify(js.noteFields(board.rows, card)), JSON.stringify(fields));
 });
 
 test("reloading rev 5 sends rev 6, and a rejected rev 1 is a conflict rather than Guardando", () => {

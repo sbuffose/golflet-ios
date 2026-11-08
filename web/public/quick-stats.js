@@ -122,6 +122,37 @@
     if (!accountReady || !stillHere) return "hold";
     return "send";
   }
+  function projectBoard(marks, locals) {
+    var absorbed = absorbAccountMarks(marks, locals);
+    var overlay = {};
+    absorbed.holes.forEach(function (row) { overlay[row.hole] = row; });
+    var seen = {};
+    var rows = [];
+    (marks || []).forEach(function (mark) {
+      var hole = Number(mark && mark.hole);
+      if (!Number.isInteger(hole) || seen[hole]) return;
+      seen[hole] = 1;
+      var merged = overlay[hole];
+      rows.push(merged
+        ? { hole: hole, putts: merged.putts, gir: merged.gir, drive: merged.drive, rev: merged.rev }
+        : { hole: hole, putts: mark.putts ?? null, gir: mark.gir ?? null, drive: mark.drive ?? null, rev: Number(mark.rev) || 0 });
+    });
+    absorbed.holes.forEach(function (merged) {
+      if (seen[merged.hole]) return;
+      rows.push({ hole: merged.hole, putts: merged.putts, gir: merged.gir, drive: merged.drive, rev: merged.rev });
+    });
+    rows.sort(function (a, b) { return a.hole - b.hole; });
+    return { rows: rows, revs: absorbed.revs };
+  }
+  function acceptSaved(marks, saved) {
+    return (marks || []).filter(function (mark) { return mark.hole !== saved.hole; }).concat([{
+      hole: saved.hole,
+      putts: saved.putts ?? null,
+      gir: saved.gir ?? null,
+      drive: saved.drive ?? null,
+      rev: saved.rev
+    }]).sort(function (a, b) { return a.hole - b.hole; });
+  }
   function interpretSave(sentRev, response) {
     if (!response || response.conflict === "revision" || response.conflict === "stale") return "conflict";
     if (response.applied === true && Number(response.mark && response.mark.rev) === sentRev) return "saved";
@@ -145,6 +176,7 @@
     noteFields: noteFields, mergeNote: mergeNote, applyMark: applyMark, shouldCommit: shouldCommit, accountView: accountView,
     nextHoleRev: nextHoleRev, seedHoleRevs: seedHoleRevs, planHoleSend: planHoleSend,
     mergeAccountHole: mergeAccountHole, absorbAccountMarks: absorbAccountMarks, sendDecision: sendDecision,
+    projectBoard: projectBoard, acceptSaved: acceptSaved,
     interpretSave: interpretSave, phaseAfter: phaseAfter, saveMessage: saveMessage
   };
 })(typeof window !== "undefined" ? window : globalThis);

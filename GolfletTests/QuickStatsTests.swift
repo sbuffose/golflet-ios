@@ -194,4 +194,53 @@ final class QuickStatsTests: XCTestCase {
         XCTAssertEqual(QuickStats.sendDecision(accountReady: true, stillHere: false), "hold")
         XCTAssertEqual(QuickStats.sendDecision(accountReady: true, stillHere: true), "send")
     }
+
+    func testStaleHoleDoesNotEnterTheTotalAndTheNextEditUsesTheSavedRev() async throws {
+        let account = [
+            HoleMark(hole: 1, putts: 2, gir: true, drive: "fairway", rev: 5),
+            HoleMark(hole: 2, putts: 1, gir: false, drive: "left", rev: 4)
+        ]
+        let early = QuickStats.HoleEdit(
+            hole: 1,
+            local: HoleMark(hole: 1, putts: 3, gir: nil, drive: nil, rev: 0),
+            touched: QuickStats.FieldTouch(putts: true, gir: false, drive: false)
+        )
+        let card = [QuickHole(hole: 1, par: 4), QuickHole(hole: 2, par: 4)]
+        let board = QuickStats.projectBoard(account: account, edits: [early])
+        XCTAssertEqual(board.first { $0.hole == 1 }, HoleMark(hole: 1, putts: 3, gir: true, drive: "fairway", rev: 6))
+        XCTAssertEqual(board.first { $0.hole == 2 }, HoleMark(hole: 2, putts: 1, gir: false, drive: "left", rev: 4))
+        let fields = QuickStats.noteFields(marks: board, holes: card)
+        XCTAssertEqual(fields["putts"], 4)
+        XCTAssertEqual(fields["gir"], 1)
+        XCTAssertEqual(fields["fir"], 1)
+        XCTAssertNotEqual(fields["putts"], 7)
+        let api = MockAPIClient()
+        let round = UUID().uuidString
+        _ = try await api.saveHoleMark(roundId: round, mark: account[0])
+        let first = try await api.saveHoleMark(roundId: round, mark: board[0])
+        XCTAssertEqual(first.rev, 6)
+        let saved = QuickStats.acceptSaved(account: account, saved: first)
+        let secondEdit = QuickStats.mergeAccount(
+            account: saved.first { $0.hole == 1 },
+            local: HoleMark(hole: 1, putts: nil, gir: false, drive: nil, rev: 0),
+            touched: QuickStats.FieldTouch(putts: false, gir: true, drive: false)
+        )
+        XCTAssertEqual(secondEdit.rev, 7)
+        XCTAssertEqual(secondEdit.putts, 3)
+        XCTAssertEqual(secondEdit.gir, false)
+        XCTAssertEqual(secondEdit.drive, "fairway")
+        let second = try await api.saveHoleMark(roundId: round, mark: secondEdit)
+        XCTAssertEqual(second.rev, 7)
+        XCTAssertEqual(second.gir, false)
+        do {
+            _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: 3, gir: false, drive: "fairway", rev: 6))
+            XCTFail("La segunda edición no puede repetir la revisión 6")
+        } catch let error as GolfletError {
+            guard case .http(let status, _) = error else {
+                XCTFail("\(error)")
+                return
+            }
+            XCTAssertEqual(status, 409)
+        }
+    }
 }
