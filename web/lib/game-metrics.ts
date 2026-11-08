@@ -2,6 +2,7 @@ import { q } from "./db";
 import { rangeSince, type Range } from "./metrics";
 import { gameMetrics, type GmHole, type GmRound, type GmShot, type LL } from "./game-metrics-core";
 import { effectiveGreens, flagsForLive, pinStateFor } from "./pins";
+import { gpsShotSql } from "./gps-shot";
 
 /** Per-hole info of one live round: par (our course card), green front/center/back (club GPS map + corrections), putts counter, own pin,
  *  and (t162u) the collaborative pin of the day + what the player's pin button does. */
@@ -29,7 +30,7 @@ export async function loadGameMetrics(userId: string, range: Range | null, win?:
     pars: Object.fromEntries((l.pars || []).map((h: any) => [Number(h.hole), Number(h.par)])),
     greens: Object.fromEntries((l.greens || []).filter((h: any) => h.center).map((h: any) => [Number(h.hole), h.center as LL])) }));
   const ids = rounds.map(r => r.id);
-  const shots: GmShot[] = ids.length ? (await q(`select id, live_round_id, hole, shot_number, lat, lng, club, lie, result, direction from shot where live_round_id = any($1::uuid[]) and lat is not null and lng is not null and coalesce(source,'gps')='gps'`, [ids]))
+  const shots: GmShot[] = ids.length ? (await q(`select id, live_round_id, hole, shot_number, lat, lng, club, lie, result, direction from shot s where s.live_round_id = any($1::uuid[]) and ${gpsShotSql("s")}`, [ids]))
     .map((s: any) => ({ ...s, lat: Number(s.lat), lng: Number(s.lng) })) : [];
   const lhRows = ids.length ? await q(`select live_round_id, hole, putts, pin_lat, pin_lng from live_hole where live_round_id = any($1::uuid[])`, [ids]) : [];
   const own = new Map<string, Record<number, LL>>(); for (const h of lhRows) if (h.pin_lat != null) own.set(h.live_round_id, { ...(own.get(h.live_round_id) || {}), [h.hole]: { lat: Number(h.pin_lat), lng: Number(h.pin_lng) } });

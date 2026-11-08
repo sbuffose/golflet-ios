@@ -171,9 +171,9 @@ function roundRow(r, single, withYr){
 }
 /* TV-style chips per round (from /api/data: eagles, birdies, pars, bogeys, double_plus, putts_total) */
 function rchips(r){
-  if (r.birdies == null && r.putts_total == null) return '';
+  if (r.birdies == null && r.putts_total == null && !r.manual_putts) return '';
   const c = (cls, n, l) => `<span class="rc ${cls}"><b class="num">${n}</b>${l}</span>`;
-  return `<div class="rchips">${r.eagles?c('rc-e', r.eagles, r.eagles===1?' águila':' águilas'):''}${r.birdies!=null?c('rc-b', r.birdies, r.birdies===1?' birdie':' birdies')+c('rc-p', r.pars, ' pares')+c('rc-g', r.bogeys, r.bogeys===1?' bogey':' bogeys'):''}${r.putts_total!=null?c('rc-u', r.putts_total, ' putts'):''}</div>`;
+  return `<div class="rchips">${r.eagles?c('rc-e', r.eagles, r.eagles===1?' águila':' águilas'):''}${r.birdies!=null?c('rc-b', r.birdies, r.birdies===1?' birdie':' birdies')+c('rc-p', r.pars, ' pares')+c('rc-g', r.bogeys, r.bogeys===1?' bogey':' bogeys'):''}${r.putts_total!=null?c('rc-u', r.putts_total, r.putts_source==='gps'?' putts GPS':' putts'):''}${r.manual_putts?c('rc-u', r.manual_putts, ' putts a mano'):''}</div>`;
 }
 let sortL = 'date';
 /* t224u: chips show the course name only (the club in the tooltip/aria) unless two clubs share a course name */

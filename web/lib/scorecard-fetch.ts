@@ -7,7 +7,7 @@ import { syncAccount, syncAppLink, type SyncResult } from "./sync";
 import { claimLoginLease, isUndefinedColumn, isUndefinedTable, newLeaseToken, releaseLoginLease, type Sql } from "./scorecard-lease";
 import {
   LOOKBACK_DAYS, MAX_SYNCS_PER_RUN, SYNC_BUSY_MESSAGE, applyAttempt, artParts, artTeeInstant, blankJob, nextAttempt, outcomeAfterRead,
-  planDue, reconcileJob, sameSchedule, scorecardLabel, syncKey, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
+  planDue, reconcileJob, sameSchedule, scorecardLabel, shouldStop, syncDisposition, syncKey, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
 } from "./scorecard-fetch-core";
 
 export class ScorecardSchemaError extends Error {
@@ -113,6 +113,111 @@ async function linkRound(sql: Sql, job: FetchJob) {
 async function releaseJobs(sql: Sql, ids: string[], token: string) {
   if (!ids.length) return;
   await sql(`update scorecard_fetch set lock_token=null, locked_at=null where id = any($1::uuid[]) and lock_token=$2`, [ids, token]);
+}
+
+const EXECUTABLE = ["scheduled", "awaiting_card", "needs_credentials", "error"];
+
+/** Claims only the rows that are still the version we loaded, still executable, still due, and still inside 14 days.
+ *  The returned rows are the database rows after the claim, not the group snapshot from load. */
+async function claimJobs(sql: Sql, jobs: FetchJob[], token: string, now: Date): Promise<FetchJob[]> {
+  if (!jobs.length) return [];
+  const rows = await sql(`update scorecard_fetch f set lock_token=$3, locked_at=now(), version=f.version+1, updated_at=now()
+    from unnest($1::uuid[], $2::int[]) as obs(id, version)
+    where f.id = obs.id
+      and f.version = obs.version
+      and f.status = any($4::text[])
+      and f.next_attempt_at <= $5::timestamptz
+      and f.played_at > $5::timestamptz - interval '14 days'
+      and (f.lock_token is null or f.locked_at < now() - interval '20 minutes')
+    returning f.*`, [jobs.map(j => j.id), jobs.map(j => j.version), token, EXECUTABLE, now.toISOString()]);
+  return rows.map((row: any) => asJob(row));
+}
+
+async function accountRows(sql: Sql, ids: string[]): Promise<any[]> {
+  if (!ids.length) return [];
+  const text = (started: boolean) => `select id, source, matricula, last_sync_at, last_sync_status,
+      ${started ? "last_sync_started_at" : "null::timestamptz last_sync_started_at"},
+      (password_enc is not null) password_here
+    from club_account where id = any($1::uuid[])`;
+  try { return await sql(text(true), [ids]); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "last_sync_started_at")) throw e;
+    return sql(text(false), [ids]);
+  }
+}
+
+/** Account password, matricula, and running clock as they are now. The load snapshot is not reused. */
+async function reloadAccounts(sql: Sql, jobs: FetchJob[]): Promise<FetchJob[]> {
+  const rows = await accountRows(sql, [...new Set(jobs.map(j => j.accountId).filter((id): id is string => !!id))]);
+  const by = new Map(rows.map(row => [String(row.id), row]));
+  const linked = jobs.map(job => {
+    const row = job.accountId ? by.get(job.accountId) : undefined;
+    if (!row) return { ...job, hasPassword: false, leaseHeld: false };
+    const source = row.source === "app" || row.source === "site" ? row.source : null;
+    return {
+      ...job, leaseHeld: false, source, matricula: row.matricula ? String(row.matricula) : null,
+      hasPassword: row.password_here === true || row.password_here === "t",
+      syncRunning: row.last_sync_status === "running",
+      syncStartedAt: iso(row.last_sync_started_at),
+      lastSyncAt: iso(row.last_sync_at),
+      lastSyncStatus: row.last_sync_status ? String(row.last_sync_status) : null,
+    };
+  });
+  const app = linked.filter(j => j.source === "app" && j.matricula);
+  if (!app.length) return linked.map(j => ({ ...j, leaseHeld: false }));
+  const linkSql = (started: boolean) => `select user_id, matricula, bool_or(password_enc is not null) has_password,
+      bool_or(last_sync_status='running') sync_running, max(last_sync_at) last_sync_at,
+      ${started ? "max(last_sync_started_at) sync_started" : "null::timestamptz sync_started"},
+      (array_agg(last_sync_status order by last_sync_at desc nulls last))[1] last_status
+    from club_account where source='app' and user_id = any($1::text[]) and matricula = any($2::text[])
+    group by user_id, matricula`;
+  let links: any[];
+  try { links = await sql(linkSql(true), [[...new Set(app.map(j => j.userId))], [...new Set(app.map(j => j.matricula!))]]); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "last_sync_started_at")) throw e;
+    links = await sql(linkSql(false), [[...new Set(app.map(j => j.userId))], [...new Set(app.map(j => j.matricula!))]]);
+  }
+  const agg = new Map<string, any>(links.map(row => [`${row.user_id}:${row.matricula}`, row]));
+  return linked.map(job => {
+    if (job.source !== "app" || !job.matricula) return { ...job, leaseHeld: false };
+    const link = agg.get(`${job.userId}:${job.matricula}`);
+    if (!link) return { ...job, leaseHeld: false };
+    const running = link.sync_running === true || link.sync_running === "t";
+    const last = iso(link.last_sync_at);
+    return {
+      ...job, leaseHeld: false,
+      hasPassword: link.has_password === true || link.has_password === "t" || job.hasPassword,
+      syncRunning: running || job.syncRunning,
+      syncStartedAt: iso(link.sync_started) ?? (running ? job.syncStartedAt : null),
+      lastSyncAt: last && (!job.lastSyncAt || last > job.lastSyncAt) ? last : job.lastSyncAt,
+      lastSyncStatus: running ? "running" : (link.last_status ? String(link.last_status) : job.lastSyncStatus),
+    };
+  });
+}
+
+/** The booking or the finished round moved, was cancelled, or already has a card. The loaded job is then obsolete. */
+async function targetAgrees(sql: Sql, job: FetchJob, now: Date): Promise<boolean> {
+  if (!EXECUTABLE.includes(job.status) || job.gone) return false;
+  if (new Date(job.nextAttemptAt).getTime() > now.getTime()) return false;
+  if (shouldStop(new Date(job.playedAt), job.attemptCount, now)) return false;
+  if (job.teeTimeId) {
+    const [tee] = await sql(`select date::text date, time, course_label, club_account_id, (gone_at is not null) gone, round_id
+      from tee_time where id=$1 and user_id=$2`, [job.teeTimeId, job.userId]);
+    if (!tee) return false;
+    const gone = tee.gone === true || tee.gone === "t";
+    if (gone || tee.round_id) return false;
+    if (day(tee.date) !== job.date || String(tee.time).slice(0, 5) !== job.time) return false;
+    if ((tee.course_label ? String(tee.course_label) : null) !== job.courseLabel) return false;
+    if ((tee.club_account_id ? String(tee.club_account_id) : null) !== job.accountId) return false;
+  }
+  if (job.liveRoundId) {
+    const [live] = await sql(`select date::text date, club_code, course from live_round where id=$1 and user_id=$2`, [job.liveRoundId, job.userId]);
+    if (!live) return false;
+    if (day(live.date) !== job.date) return false;
+    if ((live.club_code ? String(live.club_code) : null) !== job.clubCode) return false;
+    if ((live.course ? String(live.course) : null) !== job.courseLabel) return false;
+  }
+  return true;
 }
 
 async function roundsFor(sql: Sql, userIds: string[], dates: string[]): Promise<RoundHit[]> {
@@ -373,24 +478,50 @@ export async function runScorecardFetches(opts: { now?: Date; budgetMs?: number;
     if (lease === "held") { report.deferred += work.jobIds.length; continue; }
     const jobToken = newLeaseToken();
     try {
-      const locked = await sql(`update scorecard_fetch set lock_token=$2, locked_at=now(), version=version+1, updated_at=now()
-        where id = any($1::uuid[]) and (lock_token is null or locked_at < now() - interval '20 minutes') returning id`, [work.jobIds, jobToken]);
-      const owned = new Set(locked.map((r: any) => String(r.id)));
-      if (!owned.size) { report.deferred += work.jobIds.length; continue; }
-      if (work.kind === "sync") {
+      const observed = group.filter(job => job.version > 0);
+      report.fenced += group.length - observed.length;
+      const claimed = await claimJobs(sql, observed, jobToken, now);
+      report.fenced += observed.length - claimed.length;
+      if (!claimed.length) continue;
+      const current = await reloadAccounts(sql, claimed);
+      const fresh: FetchJob[] = [];
+      for (const job of current) {
+        if (syncKey(job) !== work.key || !(await targetAgrees(sql, job, now))) {
+          await releaseJobs(sql, [job.id], jobToken);
+          report.fenced++;
+          continue;
+        }
+        const how = syncDisposition(job, now);
+        if (how !== "sync" && how !== "reuse") {
+          const attempt: Attempt = how === "defer" ? { type: "defer", message: SYNC_BUSY_MESSAGE }
+            : how === "credentials" ? { type: "credentials", message: job.hasPassword ? "No hay una cuenta vinculada de ese club para buscar la tarjeta." : "Sin contraseña guardada: no podemos buscar la tarjeta." }
+            : how === "stop" ? { type: "stopped", message: "Dejamos de buscar esta tarjeta automáticamente. Podés actualizar desde la app." }
+            : { type: "defer", message: SYNC_BUSY_MESSAGE };
+          if (how === "skip") { await releaseJobs(sql, [job.id], jobToken); report.fenced++; continue; }
+          const wrote = await saveOwned(sql, applyAttempt(job, now, attempt), jobToken);
+          if (!wrote) report.fenced++;
+          else if (how === "defer") report.deferred++;
+          else if (how === "credentials") report.needs_credentials++;
+          else report.stopped++;
+          continue;
+        }
+        fresh.push(job);
+      }
+      if (!fresh.length) continue;
+      const syncing = fresh.some(job => syncDisposition(job, now) === "sync");
+      if (syncing) {
+        const lead = fresh.find(job => syncDisposition(job, now) === "sync")!;
         const remaining = Math.max(15_000, budgetMs - (Date.now() - started));
-        read = await sync(work.userId, work.matricula, work.accountId, work.source, Math.min(70_000, remaining), leaseToken);
+        read = await sync(lead.userId, lead.matricula, lead.accountId, lead.source === "app" ? "app" : "site", Math.min(70_000, remaining), leaseToken);
         if (read.busy) {
-          await releaseJobs(sql, [...owned], jobToken);
-          report.deferred += owned.size;
+          await releaseJobs(sql, fresh.map(job => job.id), jobToken);
+          report.deferred += fresh.length;
           continue;
         }
         report.synced++;
       } else report.reused++;
-      for (const id of work.jobIds) if (!owned.has(id)) report.deferred++;
-      const mine = group.filter(j => owned.has(j.id));
-      const rounds = await roundsFor(sql, [...new Set(mine.map(j => j.userId))], [...new Set(mine.map(j => j.date))]);
-      for (const job of mine) await finishJob(sql, job, rounds, read, now, report, jobToken);
+      const rounds = await roundsFor(sql, [...new Set(fresh.map(j => j.userId))], [...new Set(fresh.map(j => j.date))]);
+      for (const job of fresh) await finishJob(sql, job, rounds, read, now, report, jobToken);
     } finally {
       await releaseLoginLease(sql, work.key, leaseToken);
     }

@@ -3,6 +3,7 @@ import { q } from "./db";
 import { HttpError } from "./http";
 import { ownRound } from "./rounds";
 import { cleanSample, greenOffset, mergeDistances, yd, flagFor, toFlag, leftAt } from "./shot-samples-core";
+import { gpsShotSql } from "./gps-shot";
 import { courseGeometry, resolveCourseId } from "./course-geo";
 import { allUserShots, userClubs } from "./live";
 import { countsForClub, isPutter } from "./shots-calc";
@@ -132,7 +133,7 @@ export async function sampleDistances(userId: string, code: string, f: { from?: 
 export async function holeMap(userId: string, roundId: string, hole: number | null) {
   const ref = await resolveRoundRef(userId, roundId);
   const samples = (await listSamples(userId, roundId)).filter((r: any) => !r.discarded && r.kind !== "putt_start" && (hole == null || r.hole === hole));
-  const legacy = ref.live_round_id ? await q(`select hole, shot_number, lat, lng, club, lie, result, accuracy_m from shot where live_round_id=$1 and user_id=$2 ${hole == null ? "" : "and hole=$3"} order by hole, shot_number`,
+  const legacy = ref.live_round_id ? await q(`select hole, shot_number, lat, lng, club, lie, result, accuracy_m from shot s where s.live_round_id=$1 and s.user_id=$2 and ${gpsShotSql("s")} ${hole == null ? "" : "and s.hole=$3"} order by s.hole, s.shot_number`,
     hole == null ? [ref.live_round_id, userId] : [ref.live_round_id, userId, hole]) : [];
   const geo = await geoFor(samples.find((r: any) => r.course_id)?.course_id ?? null, ref.course_hint);
   const holes = [...new Set<number>([...samples.map((r: any) => r.hole), ...legacy.map((r: any) => r.hole)])].sort((a, b) => a - b);

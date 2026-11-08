@@ -1,7 +1,7 @@
 import { handle, json, requireUser, HttpError } from "@/lib/http";
 import { q } from "@/lib/db";
 import { body } from "@/lib/accounts";
-import { linkLiveRounds, LIVE_COLS } from "@/lib/live";
+import { linkLiveRounds, listLiveRounds, LIVE_COLS } from "@/lib/live";
 import { resolveCourseId } from "@/lib/course-geo";
 import { matchOurCourse } from "@/lib/viewmaster";
 import { cleanMod, cleanPlayers, paceModality } from "@/lib/pace-core";
@@ -9,10 +9,7 @@ import { cleanMod, cleanPlayers, paceModality } from "@/lib/pace-core";
 export const GET = handle(async (req: Request) => {
   const user = await requireUser(req);
   await linkLiveRounds(user.id).catch(() => 0);
-  const rows = await q(`select ${LIVE_COLS}, (select count(*)::int from shot s where s.live_round_id=l.id) as shots,
-      (select id from round_recap rr where rr.live_round_id=l.id) as recap_id
-    from live_round l where l.user_id=$1 order by l.date desc, l.started_at desc limit 100`, [user.id]);
-  return json({ live_rounds: rows });
+  return json({ live_rounds: await listLiveRounds(user.id) });
 });
 
 /** Start a Golflet round: { course_id? ("118-jockey-azul"), date? (YYYY-MM-DD, default today AR), tee?, current_hole?, players? (1-4), modality? (medal|stableford|match|fourball or club text) }. course_id is optional (recap-only round). */

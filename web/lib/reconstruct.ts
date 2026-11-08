@@ -113,20 +113,20 @@ export async function saveManualShot(userId: string, liveId: string, body: any, 
   return present(row.id, shot);
 }
 
-export async function updateManualShot(userId: string, shotId: string, body: any, sql?: Sql) {
+export async function updateManualShot(userId: string, liveId: string, shotId: string, body: any, sql?: Sql) {
   const db = wrap(sql);
-  if (!/^[0-9a-f-]{36}$/i.test(shotId)) throw new HttpError(404, "No encontrado");
-  const [existing] = await db(`select s.id, s.live_round_id from shot s where s.id=$1 and s.user_id=$2`, [shotId, userId]);
+  if (!/^[0-9a-f-]{36}$/i.test(shotId) || await liveOrigin(userId, liveId, db) !== "manual") throw new HttpError(404, "No encontrado");
+  const [existing] = await db(`select s.id from shot s where s.id=$1 and s.user_id=$2 and s.live_round_id=$3`, [shotId, userId, liveId]);
   if (!existing) throw new HttpError(404, "No encontrado");
-  if (await liveOrigin(userId, String(existing.live_round_id), db) !== "manual") throw new HttpError(404, "No encontrado");
   const shot = shotFields({ ...body, hole: body.hole ?? 1 });
   const hole = body.hole == null ? null : shot.hole;
-  await db(`update shot set lat=$2, lng=$3, source=$4, end_lat=$5, end_lng=$6, end_source=$7, penalty_strokes=$8, distance_m=$9, distance_kind=$10,
+  const rows = await db(`update shot set lat=$2, lng=$3, source=$4, end_lat=$5, end_lng=$6, end_source=$7, penalty_strokes=$8, distance_m=$9, distance_kind=$10,
       club=coalesce($11, club), lie=$12, result=$13, hole=coalesce($14, hole), accuracy_m=null, updated_at=now()
-    where id=$1 and user_id=$15`, [
+    where id=$1 and user_id=$15 and live_round_id=$16 returning id`, [
     shotId, shot.placed.lat, shot.placed.lng, shot.placed.source, shot.placed.end_lat, shot.placed.end_lng, shot.placed.end_source,
-    shot.placed.penalty_strokes, shot.placed.distance_m, shot.placed.distance_kind, shot.club, shot.lie, shot.result, hole, userId,
+    shot.placed.penalty_strokes, shot.placed.distance_m, shot.placed.distance_kind, shot.club, shot.lie, shot.result, hole, userId, liveId,
   ]);
+  if (!rows.length) throw new HttpError(404, "No encontrado");
   return present(shotId, shot);
 }
 

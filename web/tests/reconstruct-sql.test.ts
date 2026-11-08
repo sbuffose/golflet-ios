@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { createManualRound, deleteManualShot, listManualShots, saveManualShot, updateManualShot } from "../lib/reconstruct";
+import { gpsPuttSql, manualPuttSql } from "../lib/gps-shot";
 import { HttpError } from "../lib/http-error";
 
 const TEST_DATABASE_URL = process.env.GOLFLET_RECON_DATABASE_URL || "postgres://golflet_test:golflet_test@127.0.0.1:5432/golflet_reconstruct_test";
@@ -80,7 +81,7 @@ test("a reconstruction saves without coordinates, stays off the official card, a
   const row = (await sql(`select lat, lng, source, accuracy_m from shot where id=$1`, [bare.id]))[0];
   assert.equal(row.lat, null);
   assert.equal(row.accuracy_m, null);
-  const moved = await updateManualShot("owner", bare.id, { hole: 1, club: "7i", result: "rough", lat: -34.55, lng: -58.48, end_lat: -34.551, end_lng: -58.48 }, sql);
+  const moved = await updateManualShot("owner", live.id, bare.id, { hole: 1, club: "7i", result: "rough", lat: -34.55, lng: -58.48, end_lat: -34.551, end_lng: -58.48 }, sql);
   assert.equal(moved.source, "manual");
   assert.equal(moved.distance_kind, "estimated");
   assert.equal(moved.position_label, "Marcado a mano");
@@ -93,4 +94,36 @@ test("a reconstruction saves without coordinates, stays off the official card, a
   const still = await listManualShots("owner", live.id, sql);
   assert.equal(still.length, 1);
   assert.equal(still[0].distance_label, "Distancia estimada");
+});
+
+test("an owned shot cannot be changed through another round, and a manual putt is not a GPS putt", async (t) => {
+  if (!local) return t.skip("la URL de prueba no es local");
+  let sql: Awaited<ReturnType<typeof setup>>;
+  try { sql = await setup(); } catch (e) { return t.skip(`sin postgres aislado: ${e instanceof Error ? e.message : "error"}`); }
+  const home = await createManualRound({
+    userId: "owner", date: "2026-11-07", clubCode: "118", vmCourse: "Azul", course: "Azul", clubId: 7, roundId: null,
+  }, sql);
+  const elsewhere = await createManualRound({
+    userId: "owner", date: "2026-11-06", clubCode: "118", vmCourse: "Colorada", course: "Colorada", clubId: 7, roundId: null,
+  }, sql);
+  const shot = await saveManualShot("owner", home.id, { hole: 1, club: "Pt", lie: "green", result: "holed", penalty_strokes: 0 }, sql);
+  await assert.rejects(() => updateManualShot("owner", elsewhere.id, shot.id, { hole: 1, club: "Dr", result: "fairway" }, sql), (e: unknown) => e instanceof HttpError && e.status === 404);
+  await assert.rejects(() => deleteManualShot("owner", elsewhere.id, shot.id, sql), (e: unknown) => e instanceof HttpError && e.status === 404);
+  await assert.rejects(() => saveManualShot("other", home.id, { hole: 2, club: "7i" }, sql), (e: unknown) => e instanceof HttpError && e.status === 404);
+  await assert.rejects(() => listManualShots("owner", "20000000-0000-4000-8000-0000000000e9", sql), (e: unknown) => e instanceof HttpError && e.status === 404);
+  const kept = (await sql(`select club, live_round_id::text from shot where id=$1`, [shot.id]))[0];
+  assert.equal(kept.club, "Pt");
+  assert.equal(kept.live_round_id, home.id);
+  await sql(`insert into shot (live_round_id, user_id, hole, shot_number, lat, lng, club, lie, result, source)
+    values ($1, 'owner', 1, 8, -34.55, -58.48, 'Pt', 'green', 'holed', 'gps')`, [home.id]);
+  await sql(`insert into shot (live_round_id, user_id, hole, shot_number, lat, lng, club, lie, result, source)
+    values ($1, 'owner', 1, 9, null, null, 'Pt', 'green', 'holed', 'gps')`, [home.id]);
+  const gps = (await sql(`select count(*)::int n from shot s where s.live_round_id=$1 and ${gpsPuttSql("s")}`, [home.id]))[0];
+  const manual = (await sql(`select count(*)::int n from shot s where s.live_round_id=$1 and ${manualPuttSql("s")}`, [home.id]))[0];
+  assert.equal(Number(gps.n), 1);
+  assert.equal(Number(manual.n), 1);
+  const corrected = await updateManualShot("owner", home.id, shot.id, { hole: 1, club: "Pt", lie: "green", result: "holed" }, sql);
+  assert.equal(corrected.club, "Pt");
+  assert.deepEqual(await deleteManualShot("owner", home.id, shot.id, sql), { ok: true });
+  assert.equal((await sql(`select id from shot where id=$1`, [shot.id])).length, 0);
 });

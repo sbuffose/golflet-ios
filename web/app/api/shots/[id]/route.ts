@@ -17,7 +17,7 @@ export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   const user = await requireUser(req); const { id } = await ctx.params; const s = await own(user.id, id);
   const b = await body<any>(req);
   if (await liveOrigin(user.id, s.live_round_id) === "manual" && ("lat" in b || "lng" in b || "end_lat" in b || "end_lng" in b || "distance_m" in b || "penalty_strokes" in b)) {
-    try { return json({ shot: await updateManualShot(user.id, id, b) }); }
+    try { return json({ shot: await updateManualShot(user.id, String(s.live_round_id), id, b) }); }
     catch (e) { if (e instanceof ReconstructSchemaError) return json({ error: e.message }, 503); throw e; }
   }
   const sets: string[] = []; const vals: unknown[] = [id];
