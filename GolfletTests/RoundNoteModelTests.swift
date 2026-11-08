@@ -20,6 +20,7 @@ final class RoundNoteModelTests: XCTestCase {
         MockAPIClient.noteEntries = 0
         MockAPIClient.holeMarkEntries = 0
         MockAPIClient.holeReadEntries = 0
+        MockAPIClient.failNextRoundNote = false
         super.tearDown()
     }
 
@@ -342,6 +343,123 @@ final class RoundNoteModelTests: XCTestCase {
         XCTAssertEqual(model.rounds[0].putts, 7)
     }
 
+    func testAParkedNoteDoesNotRepaintTheDraftThatReplacedIt() async throws {
+        let model = try makeModel()
+        model.rounds = [sample("r1", putts: 32, gir: 10, fir: 8, notes: "vieja", notesAt: olderStamp)]
+        let visit = RoundVisit()
+        visit.enter()
+        let park = Park()
+        MockAPIClient.onSaveRoundNotes = { await park.park() }
+        MockAPIClient.scriptedRoundNotes = [
+            QuickTotals(putts: 7, gir: 1, fir: 1, updatedAt: newerStamp),
+            QuickTotals(putts: 8, gir: 1, fir: 1, updatedAt: laterStamp)
+        ]
+        let screen = NoteScreen(model: model, visit: visit, roundId: "r1")
+        screen.fields = QuickNoteFields(text: "alfa", putts: "7", gir: "1", fir: "1", noteAt: "", focus: nil)
+        screen.push(delay: 0)
+        await until("la nota A no llegó a salir") { park.parked == 1 }
+        screen.fields.text = "beta"
+        screen.fields.putts = "8"
+        screen.push(delay: 400_000_000)
+        park.release()
+        await until("el total de A no se guardó") { model.rounds[0].putts == 7 }
+        XCTAssertEqual(MockAPIClient.noteEntries, 1)
+        XCTAssertEqual(screen.paints, 0)
+        XCTAssertEqual(screen.retriggers, 0)
+        XCTAssertEqual(screen.fields.text, "beta")
+        XCTAssertEqual(screen.fields.putts, "8")
+        XCTAssertEqual(model.notes.note(for: "r1")?.text, "beta")
+        XCTAssertEqual(model.rounds[0].notes, "beta")
+        await until("la nota B no se aceptó") { screen.paints == 1 }
+        XCTAssertEqual(MockAPIClient.noteEntries, 2)
+        XCTAssertEqual(screen.retriggers, 0)
+        XCTAssertEqual(screen.fields.text, "beta")
+        XCTAssertEqual(screen.fields.putts, "8")
+        XCTAssertEqual(model.rounds[0].putts, 8)
+        XCTAssertEqual(model.rounds[0].notes, "beta")
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testAnOlderNoteDoesNotRepaintWhileTheNextNoteIsInFlight() async throws {
+        let model = try makeModel()
+        model.rounds = [sample("r1", putts: 32, gir: 10, fir: 8, notes: "vieja", notesAt: olderStamp)]
+        let visit = RoundVisit()
+        visit.enter()
+        let first = Park()
+        let second = Park()
+        MockAPIClient.onSaveRoundNotes = {
+            MockAPIClient.onSaveRoundNotes = { await second.park() }
+            await first.park()
+        }
+        MockAPIClient.scriptedRoundNotes = [
+            QuickTotals(putts: 7, gir: 1, fir: 1, updatedAt: newerStamp),
+            QuickTotals(putts: 8, gir: 1, fir: 1, updatedAt: laterStamp)
+        ]
+        let screen = NoteScreen(model: model, visit: visit, roundId: "r1")
+        screen.fields = QuickNoteFields(text: "alfa", putts: "7", gir: "1", fir: "1", noteAt: "", focus: nil)
+        screen.push(delay: 0)
+        await until("la nota A no llegó a salir") { first.parked == 1 }
+        screen.fields.text = "beta"
+        screen.fields.putts = "8"
+        screen.push(delay: 0)
+        await until("la nota B no llegó a salir") { second.parked == 1 }
+        XCTAssertEqual(MockAPIClient.noteEntries, 2)
+        first.release()
+        await until("el total de A no se guardó") { model.rounds[0].putts == 7 }
+        XCTAssertEqual(screen.paints, 0)
+        XCTAssertEqual(screen.retriggers, 0)
+        XCTAssertEqual(screen.fields.text, "beta")
+        XCTAssertEqual(screen.fields.putts, "8")
+        XCTAssertEqual(model.notes.note(for: "r1")?.text, "beta")
+        XCTAssertEqual(model.rounds[0].notes, "beta")
+        second.release()
+        await until("la nota B no se aceptó") { screen.paints == 1 }
+        XCTAssertEqual(MockAPIClient.noteEntries, 2)
+        XCTAssertEqual(screen.retriggers, 0)
+        XCTAssertEqual(screen.fields.text, "beta")
+        XCTAssertEqual(screen.fields.putts, "8")
+        XCTAssertEqual(model.rounds[0].putts, 8)
+        XCTAssertEqual(model.rounds[0].notes, "beta")
+    }
+
+    func testAFailedNoteDoesNotClearTheNewerDraft() async throws {
+        let model = try makeModel()
+        model.rounds = [sample("r1", putts: 32, gir: 10, fir: 8, notes: "vieja", notesAt: olderStamp)]
+        let visit = RoundVisit()
+        visit.enter()
+        let park = Park()
+        MockAPIClient.onSaveRoundNotes = { await park.park() }
+        MockAPIClient.scriptedRoundNotes = [
+            QuickTotals(putts: 8, gir: 1, fir: 1, updatedAt: laterStamp)
+        ]
+        let screen = NoteScreen(model: model, visit: visit, roundId: "r1")
+        screen.fields = QuickNoteFields(text: "alfa", putts: "7", gir: "1", fir: "1", noteAt: "", focus: nil)
+        screen.push(delay: 0)
+        await until("la nota A no llegó a salir") { park.parked == 1 }
+        MockAPIClient.failNextRoundNote = true
+        screen.fields.text = "beta"
+        screen.fields.putts = "8"
+        screen.push(delay: 250_000_000)
+        park.release()
+        try await Task.sleep(nanoseconds: 40_000_000)
+        XCTAssertEqual(MockAPIClient.noteEntries, 1)
+        XCTAssertEqual(screen.paints, 0)
+        XCTAssertEqual(screen.retriggers, 0)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.rounds[0].putts, 32)
+        XCTAssertEqual(screen.fields.text, "beta")
+        XCTAssertEqual(screen.fields.putts, "8")
+        XCTAssertEqual(model.notes.note(for: "r1")?.text, "beta")
+        XCTAssertEqual(model.rounds[0].notes, "beta")
+        await until("la nota B no se aceptó") { screen.paints == 1 }
+        XCTAssertEqual(MockAPIClient.noteEntries, 2)
+        XCTAssertEqual(screen.retriggers, 0)
+        XCTAssertEqual(screen.fields.text, "beta")
+        XCTAssertEqual(model.rounds[0].putts, 8)
+        XCTAssertEqual(model.notes.note(for: "r1")?.text, "beta")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testAPriorAccountCompletionIsIgnoredAndAStaleSessionIsNotSent() async throws {
         let model = try makeModel()
         model.user = player("demo")
@@ -652,6 +770,7 @@ final class RoundNoteModelTests: XCTestCase {
         MockAPIClient.noteEntries = 0
         MockAPIClient.holeMarkEntries = 0
         MockAPIClient.holeReadEntries = 0
+        MockAPIClient.failNextRoundNote = false
         let container = try ModelContainer(
             for: RoundNote.self, HoleExtra.self, BagClubRecord.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
@@ -714,6 +833,52 @@ final class RoundNoteModelTests: XCTestCase {
             bag: [],
             hiHistory: []
         )
+    }
+}
+
+@MainActor
+private final class NoteScreen {
+    let model: AppModel
+    let visit: RoundVisit
+    let roundId: String
+    let saver = QuickNoteSaver()
+    var fields = QuickNoteFields(text: "", putts: "", gir: "", fir: "", noteAt: "", focus: nil)
+    var paints = 0
+    var retriggers = 0
+
+    init(model: AppModel, visit: RoundVisit, roundId: String) {
+        self.model = model
+        self.visit = visit
+        self.roundId = roundId
+    }
+
+    /// Same callback as the round screen: paint the accepted totals, and if a field
+    /// changed, save again. That second save is what `onChange` does.
+    func push(delay: UInt64) {
+        let session = model.sessionEpoch
+        let generation = visit.generation
+        saver.schedule(
+            model: model,
+            roundId: roundId,
+            text: fields.text,
+            putts: Int(fields.putts),
+            gir: Int(fields.gir),
+            fir: Int(fields.fir),
+            session: session,
+            visit: visit,
+            generation: generation,
+            delayNanoseconds: delay
+        ) { note in
+            self.paints += 1
+            let typed = self.fields.text
+            if QuickNoteSurface.absorb(note, into: &self.fields) {
+                self.fields.text = typed
+                self.retriggers += 1
+                self.push(delay: delay)
+            } else {
+                self.fields.text = typed
+            }
+        }
     }
 }
 

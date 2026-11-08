@@ -31,6 +31,8 @@ struct MockAPIClient: GolfletAPI {
     static var onSaveHoleMark: (@MainActor () async -> Void)?
     static var onHoleMarks: (@MainActor () async -> Void)?
     static var noteEntries = 0
+    /// Tests fail the next note save after its hook. False in the app.
+    static var failNextRoundNote = false
     static var holeMarkEntries = 0
     static var holeReadEntries = 0
     static var pendingNeedsClub = false
@@ -255,6 +257,14 @@ struct MockAPIClient: GolfletAPI {
         let hook = Self.take(&Self.onSaveRoundNotes)
         Self.noteEntries += 1
         if let hook { await hook() }
+        let fail: Bool = {
+            Self.sessionLock.lock()
+            defer { Self.sessionLock.unlock() }
+            let value = Self.failNextRoundNote
+            Self.failNextRoundNote = false
+            return value
+        }()
+        if fail { throw GolfletError.http(status: 500, message: "fallo") }
         Self.sessionLock.lock()
         if !Self.scriptedRoundNotes.isEmpty {
             let note = Self.scriptedRoundNotes.removeFirst()

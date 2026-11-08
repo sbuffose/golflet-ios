@@ -108,9 +108,32 @@ final class AppModel {
         epoch == snapshotEpoch && isAuthenticated
     }
 
+    /// Latest local note draft per round. An older save must not paint over it.
+    private var noteDrafts: [String: Int] = [:]
+
     private func rotateSession() {
         snapshotEpoch += 1
+        noteDrafts = [:]
         notes.clearQuickCache()
+    }
+
+    /// The text the player has now. Returns the token of this draft.
+    @discardableResult
+    func stageNoteDraft(roundId: String, text: String) -> Int {
+        let token = (noteDrafts[roundId] ?? 0) + 1
+        noteDrafts[roundId] = token
+        notes.saveNote(roundId: roundId, text: text)
+        if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
+            rounds[index].notes = text
+        }
+        if presentedRound?.roundId == roundId {
+            presentedRound?.notes = text
+        }
+        return token
+    }
+
+    func noteDraftStill(_ roundId: String, _ token: Int) -> Bool {
+        noteDrafts[roundId] == token
     }
 
     init(api: any GolfletAPI, notes: NotesStore) {
@@ -437,14 +460,17 @@ final class AppModel {
     /// `session` is the generation captured when the edit was scheduled.
     /// A mismatch before the request does not send. A mismatch after the request
     /// leaves the server write alone and does not touch this account.
-    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, text: String, session: Int) async -> QuickTotals? {
+    func saveRoundNotes(roundId: String, putts: Int?, gir: Int?, fir: Int?, text: String, session: Int, draft: Int? = nil) async -> QuickTotals? {
         guard sessionStill(session) else { return nil }
-        notes.saveNote(roundId: roundId, text: text)
-        if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
-            rounds[index].notes = text
-        }
-        if presentedRound?.roundId == roundId {
-            presentedRound?.notes = text
+        let ownsDraft = draft == nil || noteDraftStill(roundId, draft!)
+        if ownsDraft {
+            notes.saveNote(roundId: roundId, text: text)
+            if let index = rounds.firstIndex(where: { $0.roundId == roundId }) {
+                rounds[index].notes = text
+            }
+            if presentedRound?.roundId == roundId {
+                presentedRound?.notes = text
+            }
         }
         do {
             let note = try await api.saveRoundNotes(roundId: roundId, putts: putts, gir: gir, fir: fir, notes: text)
@@ -453,10 +479,13 @@ final class AppModel {
             if let value = note.putts { fields["putts"] = value }
             if let value = note.gir { fields["gir"] = value }
             if let value = note.fir { fields["fir"] = value }
-            guard applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(note.updatedAt), session: session) else { return nil }
+            let applied = applyStatFields(roundId: roundId, fields: fields, notesAt: QuickStats.noteDate(note.updatedAt), session: session)
+            guard draft == nil || noteDraftStill(roundId, draft!) else { return nil }
+            guard applied else { return nil }
             return note
         } catch {
             guard sessionStill(session) else { return nil }
+            guard draft == nil || noteDraftStill(roundId, draft!) else { return nil }
             errorMessage = error.localizedDescription
             return nil
         }

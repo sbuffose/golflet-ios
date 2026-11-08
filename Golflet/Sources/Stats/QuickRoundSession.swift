@@ -29,12 +29,59 @@ final class RoundVisit {
     }
 }
 
-/// Retains the note debounce so leaving or a new keystroke can cancel it before it sends.
+enum QuickNoteFocus { case putts, gir, fir }
+
+struct QuickNoteFields {
+    var text: String
+    var putts: String
+    var gir: String
+    var fir: String
+    var noteAt: String
+    var focus: QuickNoteFocus?
+}
+
+enum QuickNoteSurface {
+    /// Paints the accepted totals the way the round screen does.
+    /// True means a visible field changed, so the screen's onChange saves again.
+    /// The note text the player is typing is not replaced.
+    @discardableResult
+    static func absorb(_ note: QuickTotals, into fields: inout QuickNoteFields) -> Bool {
+        if let stamp = note.updatedAt { fields.noteAt = stamp }
+        var changed = false
+        if let value = note.putts {
+            let next = QuickStats.visibleTotal(current: fields.putts, authoritative: String(value), focused: fields.focus == .putts)
+            if next != fields.putts {
+                fields.putts = next
+                changed = true
+            }
+        }
+        if let value = note.gir {
+            let next = QuickStats.visibleTotal(current: fields.gir, authoritative: String(value), focused: fields.focus == .gir)
+            if next != fields.gir {
+                fields.gir = next
+                changed = true
+            }
+        }
+        if let value = note.fir {
+            let next = QuickStats.visibleTotal(current: fields.fir, authoritative: String(value), focused: fields.focus == .fir)
+            if next != fields.fir {
+                fields.fir = next
+                changed = true
+            }
+        }
+        return changed
+    }
+}
+
+/// Retains the note debounce. A newer keystroke owns the callback.
+/// The request already in flight is not cancelled on the server. Its callback is.
 @MainActor
 final class QuickNoteSaver {
     private var task: Task<Void, Never>?
+    private var owner = 0
 
     func cancel() {
+        owner += 1
         task?.cancel()
         task = nil
     }
@@ -52,22 +99,28 @@ final class QuickNoteSaver {
         delayNanoseconds: UInt64 = 600_000_000,
         onAccepted: @escaping @MainActor (QuickTotals) -> Void = { _ in }
     ) {
+        owner += 1
+        let owned = owner
         task?.cancel()
+        task = nil
         guard model.sessionStill(session), visit.allows(generation) else { return }
-        model.notes.saveNote(roundId: roundId, text: text)
-        task = Task {
+        let draft = model.stageNoteDraft(roundId: roundId, text: text)
+        task = Task { @MainActor in
             try? await Task.sleep(nanoseconds: delayNanoseconds)
-            guard !Task.isCancelled else { return }
+            guard owned == self.owner, !Task.isCancelled else { return }
             guard model.sessionStill(session), visit.allows(generation) else { return }
-            guard let note = await model.saveRoundNotes(
+            let note = await model.saveRoundNotes(
                 roundId: roundId,
                 putts: putts,
                 gir: gir,
                 fir: fir,
                 text: text,
-                session: session
-            ) else { return }
+                session: session,
+                draft: draft
+            )
+            guard owned == self.owner, !Task.isCancelled else { return }
             guard model.sessionStill(session), visit.allows(generation) else { return }
+            guard let note else { return }
             onAccepted(note)
         }
     }
