@@ -73,6 +73,12 @@ enum HoleWind {
         rows(holes: course.holes, windFromDeg: windFromDeg, speedKmh: speedKmh)
     }
 
+    /// Playable holes only. A missing bearing stays a count, not one warning per hole.
+    static func classified(_ holes: [Hole]) -> (rows: [Hole], omitted: Int) {
+        let rows = holes.filter { $0.relative != .unavailable && $0.speedKmh != nil }
+        return (rows, holes.count - rows.count)
+    }
+
     static func rows(holes: [GPSHole], windFromDeg: Double?, speedKmh: Int?) -> [Hole] {
         holes.map { hole in
             let bearing = bearing(of: hole)

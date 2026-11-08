@@ -58,6 +58,13 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertTrue(missing.first?.line.contains("sin rumbo") == true)
         XCTAssertFalse(HoleWind.relativeText(windFromDeg: nil, holes: missing).contains("en contra"))
         XCTAssertTrue(HoleWind.relativeText(windFromDeg: 180, holes: []).contains("Sin rumbo verificado"))
+        let blindRows = (1...18).map { hole(number: $0, tee: nil, pin: GPSCoord(lat: 1, lng: 1)) }
+        let collapsed = HoleWind.classified(HoleWind.rows(holes: blindRows, windFromDeg: 180, speedKmh: 18))
+        XCTAssertTrue(collapsed.rows.isEmpty)
+        XCTAssertEqual(collapsed.omitted, 18)
+        let mixed = HoleWind.classified(HoleWind.rows(holes: [east, blind], windFromDeg: 90, speedKmh: 18))
+        XCTAssertEqual(mixed.rows.map(\.number), [1])
+        XCTAssertEqual(mixed.omitted, 1)
     }
 
     func testWeatherUsesHoleBearingWhenItExists() {
