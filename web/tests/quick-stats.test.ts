@@ -4,7 +4,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
-import { accountView, applyMark, boundedCourseKey, mergeNote, noteFields, shouldCommit } from "../lib/quick-stats";
+import { createHash } from "node:crypto";
+import { HttpError } from "../lib/http-error";
+import {
+  accountView, applyMark, applyPresentColumns, boundedCourseKey, cardHoles, HOLE_MARK_UPSERT, mergeNote,
+  noteFields, notePatch, NOTE_UPSERT, phaseAfter, planHoleSend, saveMessage, seedHoleRevs, settleWrite, shouldCommit,
+} from "../lib/quick-stats";
 
 const PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
 const holes = PARS.map((par, index) => ({ hole: index + 1, par }));
@@ -17,6 +22,10 @@ type QuickJS = {
   applyMark: typeof applyMark;
   shouldCommit: typeof shouldCommit;
   accountView: typeof accountView;
+  seedHoleRevs: typeof seedHoleRevs;
+  planHoleSend: typeof planHoleSend;
+  phaseAfter: typeof phaseAfter;
+  saveMessage: typeof saveMessage;
 };
 const sandbox = { window: {} as { GolfletQuick: QuickJS } };
 vm.runInNewContext(readFileSync(new URL("../public/quick-stats.js", import.meta.url), "utf8"), sandbox);
@@ -32,12 +41,13 @@ test("one GIR yes does not replace putts 32, GIR 10 or FIR 8", () => {
 });
 
 test("a stale rev does not overwrite a newer hole or the round totals", () => {
-  const first = applyMark(null, { hole: 1, gir: true, rev: 1 });
-  const second = applyMark(first.mark, { hole: 1, gir: false, putts: 2, rev: 2 });
-  const late = applyMark(second.mark, { hole: 1, gir: true, putts: "", fir: "", rev: 1 });
+  const first = applyMark(null, { hole: 1, gir: true, rev: 1 }, holes);
+  const second = applyMark(first.mark, { hole: 1, gir: false, putts: 2, rev: 2 }, holes);
+  const late = applyMark(second.mark, { hole: 1, gir: true, putts: "", fir: "", rev: 1 }, holes);
   assert.equal(first.applied, true);
   assert.equal(second.applied, true);
   assert.equal(late.applied, false);
+  assert.equal(late.conflict, "stale");
   assert.equal(late.mark.gir, false);
   assert.equal(late.mark.putts, 2);
   assert.equal(late.mark.rev, 2);
@@ -45,13 +55,13 @@ test("a stale rev does not overwrite a newer hole or the round totals", () => {
   assert.equal(shouldCommit(1, 2, 2), false);
   assert.equal(shouldCommit(2, 2, 2), true);
   assert.deepEqual(mergeNote(totals, noteFields([late.mark], holes)), totals);
-  assert.equal(JSON.stringify(js.applyMark(second.mark, { hole: 1, gir: true, putts: "", fir: "", rev: 1 })), JSON.stringify({ mark: second.mark, applied: false }));
+  assert.equal(JSON.stringify(js.applyMark(second.mark, { hole: 1, gir: true, putts: "", fir: "", rev: 1 }, holes)), JSON.stringify(late));
   assert.equal(js.shouldCommit(1, 2, 1), false);
   assert.equal(js.shouldCommit(2, 2, 2), true);
 });
 
 test("reload and the other view keep the account totals", () => {
-  const saved = applyMark(null, { hole: 1, gir: true, rev: 1 }).mark;
+  const saved = applyMark(null, { hole: 1, gir: true, rev: 1 }, holes).mark;
   const again = accountView(totals, [saved], holes);
   assert.deepEqual(again.totals, totals);
   assert.deepEqual(again.fields, {});
@@ -76,7 +86,7 @@ test("an iOS fairway value counts only when every non-par-3 is marked", () => {
   const marks = holes.filter(hole => hole.par !== 3).map(hole => ({ hole: hole.hole, putts: null, gir: null, drive: "hit", rev: 1 }));
   const fields = noteFields(marks, holes);
   assert.deepEqual(fields, { fir: String(marks.length) });
-  const stored = applyMark(null, { hole: 1, drive: "hit", rev: 4 }).mark;
+  const stored = applyMark(null, { hole: 1, drive: "hit", rev: 4 }, holes).mark;
   assert.equal(stored.drive, "fairway");
 });
 
@@ -99,5 +109,109 @@ test("the quick buttons do not build the wiping notes payload, and strategy is n
   assert.match(strategy, /gen !== VIEW_GEN/);
   assert.match(strategy, /dataset\.ck !== ck/);
   assert.match(src, /\/hole-marks/);
-  assert.match(src, /shouldCommit/);
+  const quick = src.slice(src.indexOf("function bindQuick"), src.indexOf("const saveNote"));
+  assert.match(quick, /await seedPromise/);
+  assert.match(quick, /planHoleSend/);
+  assert.match(quick, /phaseAfter/);
+  assert.match(quick, /id="qretry"|#qretry/);
+  assert.equal(quick.includes("rev: mine"), false);
+  assert.equal(quick.includes("latest"), false);
+  assert.equal(quick.includes("textContent !== 'Guardando"), false);
+  const marksRoute = readFileSync(new URL("../app/api/rounds/[id]/hole-marks/route.ts", import.meta.url), "utf8");
+  const notesRoute = readFileSync(new URL("../app/api/rounds/[id]/notes/route.ts", import.meta.url), "utf8");
+  assert.equal(marksRoute.includes("delete from"), false);
+  assert.match(marksRoute, /cardHoles\(round\.holes\)/);
+  assert.match(marksRoute, /HOLE_MARK_UPSERT/);
+  assert.equal(notesRoute.includes("select putts"), false);
+  assert.match(notesRoute, /NOTE_UPSERT/);
+  assert.match(HOLE_MARK_UPSERT, /round_hole_mark\.rev < excluded\.rev/);
+  assert.equal(HOLE_MARK_UPSERT.includes("<="), false);
+  assert.match(NOTE_UPSERT, /case when \$8 then excluded\.gir else round_note\.gir end/);
+  const migration = readFileSync(new URL("../db/migrations/0044_round_hole_mark.sql", import.meta.url));
+  assert.equal(createHash("sha256").update(migration).digest("hex"), "b6ffd94559ee8393c0ee0275623583a79cbafbf7a778486ac10e4c03e4b35dac");
+});
+
+test("reloading rev 5 sends rev 6, and a rejected rev 1 is a conflict rather than Guardando", () => {
+  const seeded = seedHoleRevs([{ hole: 1, rev: 5 }]);
+  assert.equal(seeded["1"], 5);
+  assert.equal(planHoleSend(seeded, 1, 0), 6);
+  assert.equal(planHoleSend(seeded, 1, 6), 6);
+  assert.equal(js.planHoleSend(seeded, 1, 0), 6);
+  assert.equal(js.planHoleSend(seeded, 1, 6), 6);
+  const phase = phaseAfter(1, { applied: false, conflict: "stale", mark: { rev: 5 } });
+  assert.equal(phase, "conflict");
+  assert.equal(saveMessage(phase).includes("Guardando"), false);
+  assert.match(saveMessage(phase), /reintentar/i);
+  assert.equal(js.phaseAfter(1, { applied: false, conflict: "stale", mark: { rev: 5 } }), "conflict");
+  assert.equal(js.saveMessage(js.phaseAfter(1, { applied: false, conflict: "stale", mark: { rev: 5 } })).includes("Guardando"), false);
+});
+
+test("clearing a hole keeps the rev, so an older write cannot bring the value back", () => {
+  const marked = applyMark(null, { hole: 1, gir: true, rev: 5 }, holes).mark;
+  const cleared = applyMark(marked, { hole: 1, putts: null, gir: null, drive: null, rev: 6 }, holes);
+  assert.equal(cleared.applied, true);
+  assert.equal(cleared.mark.gir, null);
+  assert.equal(cleared.mark.rev, 6);
+  const late = applyMark(cleared.mark, { hole: 1, gir: true, rev: 5 }, holes);
+  assert.equal(late.applied, false);
+  assert.equal(late.conflict, "stale");
+  assert.equal(late.mark.gir, null);
+  assert.equal(late.mark.rev, 6);
+  const settled = settleWrite(cleared.mark, { hole: 1, putts: null, gir: true, drive: null, rev: 5 });
+  assert.equal(settled.conflict, "stale");
+  assert.equal(settled.mark.rev, 6);
+  assert.equal(JSON.stringify(js.applyMark(cleared.mark, { hole: 1, gir: true, rev: 5 }, holes)), JSON.stringify(late));
+});
+
+test("two devices with the same rev and different payloads conflict, and the same payload retries", () => {
+  const base = applyMark(null, { hole: 1, gir: true, rev: 5 }, holes).mark;
+  const first = applyMark(base, { hole: 1, gir: false, putts: null, drive: null, rev: 6 }, holes);
+  const second = applyMark(first.mark, { hole: 1, gir: true, putts: 2, drive: null, rev: 6 }, holes);
+  assert.equal(first.applied, true);
+  assert.equal(first.conflict, null);
+  assert.equal(second.applied, false);
+  assert.equal(second.conflict, "revision");
+  assert.equal(second.mark.gir, false);
+  assert.equal(second.mark.putts, null);
+  assert.equal(second.mark.rev, 6);
+  const retry = applyMark(first.mark, { hole: 1, gir: false, putts: null, drive: null, rev: 6 }, holes);
+  assert.equal(retry.applied, true);
+  assert.equal(retry.idempotent, true);
+  assert.equal(retry.conflict, null);
+  assert.equal(retry.mark.gir, false);
+  const raced = settleWrite(first.mark, { hole: 1, putts: 2, gir: true, drive: null, rev: 6 });
+  assert.equal(raced.conflict, "revision");
+  assert.equal(raced.mark.gir, false);
+  assert.equal(JSON.stringify(js.applyMark(first.mark, { hole: 1, gir: true, putts: 2, drive: null, rev: 6 }, holes)), JSON.stringify(second));
+  assert.equal(js.applyMark(first.mark, { hole: 1, gir: false, putts: null, drive: null, rev: 6 }, holes).idempotent, true);
+});
+
+test("a GIR-only note and a putts-only note keep both columns, in either order", () => {
+  const start = { putts: 32, gir: 10, fir: 8, notes: "existente" };
+  const girOnly = notePatch({ gir: "11" });
+  const puttsOnly = notePatch({ putts: "33" });
+  assert.equal(girOnly.girPresent, true);
+  assert.equal(girOnly.puttsPresent, false);
+  assert.equal(puttsOnly.puttsPresent, true);
+  assert.equal(puttsOnly.girPresent, false);
+  const left = applyPresentColumns(applyPresentColumns(start, girOnly), puttsOnly);
+  const right = applyPresentColumns(applyPresentColumns(start, puttsOnly), girOnly);
+  assert.deepEqual(left, { putts: 33, gir: 11, fir: 8, notes: "existente" });
+  assert.deepEqual(right, left);
+  assert.deepEqual(mergeNote(start, { gir: "11" }), { putts: 32, gir: 11, fir: 8, notes: "existente" });
+});
+
+test("a 9-hole card does not accept hole 10, and a par 3 does not accept a drive", () => {
+  const nine = [4, 4, 3, 5, 4, 4, 3, 4, 5].map((par, index) => ({ hole: index + 1, par }));
+  assert.equal(cardHoles([[1, 4, 4], [2, 3, 3], [3, 5, 5]]).map(h => h.hole).join(","), "1,2,3");
+  assert.throws(() => applyMark(null, { hole: 10, gir: true, rev: 1 }, nine), (error: unknown) => error instanceof HttpError && error.status === 404);
+  assert.throws(() => applyMark(null, { hole: 3, drive: "fairway", rev: 1 }, nine), (error: unknown) => error instanceof HttpError && error.status === 400);
+  assert.equal(applyMark(null, { hole: 3, gir: true, drive: null, rev: 1 }, nine).applied, true);
+  assert.equal(applyMark(null, { hole: 1, drive: "fairway", rev: 1 }, nine).mark.drive, "fairway");
+  assert.throws(() => js.applyMark(null, { hole: 10, gir: true, rev: 1 }, nine), /no está en la tarjeta/);
+  assert.throws(() => js.applyMark(null, { hole: 3, drive: "left", rev: 1 }, nine), /par 3/);
+  const done = nine.map(hole => ({ hole: hole.hole, putts: 2, gir: true, drive: hole.par === 3 ? null : "fairway", rev: 1 }));
+  assert.deepEqual(noteFields(done, nine), { putts: "18", gir: "9", fir: "7" });
+  assert.deepEqual(noteFields([done[0]], nine), {});
+  assert.equal(JSON.stringify(js.noteFields(done, nine)), JSON.stringify(noteFields(done, nine)));
 });

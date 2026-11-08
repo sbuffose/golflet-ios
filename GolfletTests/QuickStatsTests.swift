@@ -26,6 +26,7 @@ final class QuickStatsTests: XCTestCase {
         XCTAssertTrue(stored.applied)
         let rejected = QuickStats.apply(stored: stored.mark, incoming: late)
         XCTAssertFalse(rejected.applied)
+        XCTAssertEqual(rejected.conflict, "stale")
         XCTAssertEqual(rejected.mark.gir, false)
         XCTAssertEqual(rejected.mark.putts, 2)
         XCTAssertEqual(rejected.mark.rev, 2)
@@ -64,5 +65,99 @@ final class QuickStatsTests: XCTestCase {
         let stored = QuickStats.apply(stored: nil, incoming: incoming)
         XCTAssertEqual(stored.mark.drive, "fairway")
         XCTAssertEqual(QuickStats.localFairway("fairway"), "hit")
+    }
+
+    func testReloadRev5PlansRev6AndARejectedRev1IsAConflict() {
+        XCTAssertEqual(QuickStats.nextRev(stored: 5), 6)
+        XCTAssertEqual(QuickStats.nextRev(stored: nil), 1)
+        let phase = QuickStats.phaseAfter(sent: 1, responseRev: 5, conflict: "stale")
+        XCTAssertEqual(phase, "conflict")
+        XCTAssertNotEqual(phase, "saving")
+        XCTAssertFalse(QuickStats.saveMessage(phase).contains("Guardando"))
+        XCTAssertTrue(QuickStats.saveMessage(phase).contains("Reintentá"))
+    }
+
+    func testClearKeepsTheRevisionSoAnOlderWriteCannotReturn() {
+        let marked = HoleMark(hole: 1, putts: nil, gir: true, drive: nil, rev: 5)
+        let cleared = QuickStats.apply(stored: marked, incoming: HoleMark(hole: 1, putts: nil, gir: nil, drive: nil, rev: 6))
+        XCTAssertTrue(cleared.applied)
+        XCTAssertNil(cleared.mark.gir)
+        XCTAssertEqual(cleared.mark.rev, 6)
+        let late = QuickStats.apply(stored: cleared.mark, incoming: HoleMark(hole: 1, putts: nil, gir: true, drive: nil, rev: 5))
+        XCTAssertEqual(late.conflict, "stale")
+        XCTAssertFalse(late.applied)
+        XCTAssertNil(late.mark.gir)
+        XCTAssertEqual(late.mark.rev, 6)
+    }
+
+    func testEqualRevisionDifferentPayloadConflictsAndTheSamePayloadRetries() {
+        let base = HoleMark(hole: 1, putts: nil, gir: true, drive: nil, rev: 5)
+        let first = QuickStats.apply(stored: base, incoming: HoleMark(hole: 1, putts: nil, gir: false, drive: nil, rev: 6))
+        let second = QuickStats.apply(stored: first.mark, incoming: HoleMark(hole: 1, putts: 2, gir: true, drive: nil, rev: 6))
+        XCTAssertTrue(first.applied)
+        XCTAssertNil(first.conflict)
+        XCTAssertEqual(second.conflict, "revision")
+        XCTAssertFalse(second.applied)
+        XCTAssertEqual(second.mark.gir, false)
+        XCTAssertNil(second.mark.putts)
+        let retry = QuickStats.apply(stored: first.mark, incoming: HoleMark(hole: 1, putts: nil, gir: false, drive: nil, rev: 6))
+        XCTAssertTrue(retry.applied)
+        XCTAssertTrue(retry.idempotent)
+        XCTAssertEqual(retry.mark.gir, false)
+    }
+
+    func testNineHoleCardAndPar3Drive() {
+        let nine = (1...9).map { QuickHole(hole: $0, par: $0 == 3 || $0 == 7 ? 3 : 4) }
+        XCTAssertFalse(QuickStats.accepts(hole: 10, drive: nil, holes: nine))
+        XCTAssertFalse(QuickStats.accepts(hole: 3, drive: "fairway", holes: nine))
+        XCTAssertTrue(QuickStats.accepts(hole: 3, drive: nil, holes: nine))
+        XCTAssertTrue(QuickStats.accepts(hole: 1, drive: "fairway", holes: nine))
+        XCTAssertNil(QuickStats.driveForAccount(par: 3, fairway: "hit"))
+        XCTAssertEqual(QuickStats.driveForAccount(par: 4, fairway: "hit"), "fairway")
+        let marks = nine.map {
+            HoleMark(hole: $0.hole, putts: 2, gir: true, drive: $0.par == 3 ? nil : "fairway", rev: 1)
+        }
+        let fields = QuickStats.noteFields(marks: marks, holes: nine)
+        XCTAssertEqual(fields["putts"], 18)
+        XCTAssertEqual(fields["gir"], 9)
+        XCTAssertEqual(fields["fir"], 7)
+        XCTAssertTrue(QuickStats.noteFields(marks: [marks[0]], holes: nine).isEmpty)
+    }
+
+    func testMockKeepsATombstoneAndRejectsTheOtherDevice() async throws {
+        let api = MockAPIClient()
+        let round = UUID().uuidString
+        _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: nil, gir: true, drive: nil, rev: 5))
+        _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: nil, gir: false, drive: nil, rev: 6))
+        do {
+            _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: 2, gir: true, drive: nil, rev: 6))
+            XCTFail("La otra edición tenía que chocar")
+        } catch let error as GolfletError {
+            guard case .http(let status, _) = error else {
+                XCTFail("\(error)")
+                return
+            }
+            XCTAssertEqual(status, 409)
+        }
+        let retry = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: nil, gir: false, drive: nil, rev: 6))
+        XCTAssertEqual(retry.gir, false)
+        XCTAssertEqual(retry.rev, 6)
+        _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: nil, gir: nil, drive: nil, rev: 7))
+        do {
+            _ = try await api.saveHoleMark(roundId: round, mark: HoleMark(hole: 1, putts: nil, gir: true, drive: nil, rev: 6))
+            XCTFail("La marca borrada no tenía que volver")
+        } catch let error as GolfletError {
+            guard case .http(let status, _) = error else {
+                XCTFail("\(error)")
+                return
+            }
+            XCTAssertEqual(status, 409)
+        }
+        let marks = try await api.holeMarks(roundId: round)
+        XCTAssertEqual(marks.count, 1)
+        XCTAssertNil(marks[0].gir)
+        XCTAssertNil(marks[0].putts)
+        XCTAssertEqual(marks[0].rev, 7)
+        XCTAssertEqual(QuickStats.nextRev(stored: marks[0].rev), 8)
     }
 }

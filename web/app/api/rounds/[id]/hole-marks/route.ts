@@ -3,7 +3,7 @@ import { q } from "@/lib/db";
 import { body } from "@/lib/accounts";
 import { ownRound } from "@/lib/rounds";
 import { isUndefinedTable } from "@/lib/scorecard-lease";
-import { applyMark, type StoredMark } from "@/lib/quick-stats";
+import { applyMark, cardHoles, HOLE_MARK_UPSERT, settleWrite, type MarkConflict, type StoredMark } from "@/lib/quick-stats";
 
 function unavailable(e: unknown): never {
   if (isUndefinedTable(e, "round_hole_mark")) throw new HttpError(503, "Falta aplicar la migración de marcas por hoyo");
@@ -20,7 +20,17 @@ function rowMark(row: { hole: unknown; putts: unknown; gir: unknown; drive: unkn
   };
 }
 
-/** Marks for this round on the account. Does not read or write round totals. */
+function conflict(mark: StoredMark, kind: MarkConflict) {
+  return json({
+    error: "Otra edición llegó antes.",
+    conflict: kind,
+    applied: false,
+    idempotent: false,
+    mark,
+  }, 409);
+}
+
+/** Marks for this round, including a cleared hole. The null row is the rev that blocks an older write. */
 export const GET = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const user = await requireUser(req);
   const { id } = await ctx.params;
@@ -31,33 +41,32 @@ export const GET = handle(async (req: Request, ctx: { params: Promise<{ id: stri
   } catch (e) { unavailable(e); }
 });
 
-/** One hole. A lower rev is stored as a no-op. Totals live on round_note and are not written here. */
+/** One hole of this round. The rev is the one the client read, plus one. Totals are not written here. */
 export const PUT = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const user = await requireUser(req);
   const { id } = await ctx.params;
-  await ownRound(user.id, id);
+  const round = await ownRound(user.id, id);
   const incoming = await body<Record<string, unknown>>(req);
+  const card = cardHoles(round.holes);
   const hole = Number(incoming.hole);
-  if (!Number.isInteger(hole) || hole < 1 || hole > 18) throw new HttpError(400, "Hoyo inválido");
+  if (!card.some(h => h.hole === hole)) {
+    if (!Number.isInteger(hole) || hole < 1 || hole > 18) throw new HttpError(400, "Hoyo inválido");
+    throw new HttpError(404, "Ese hoyo no está en la tarjeta");
+  }
   try {
     const [cur] = await q(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and hole=$2`, [id, hole]);
-    const result = applyMark(cur ? rowMark(cur) : null, incoming);
-    if (!result.applied) return json({ mark: result.mark, applied: false });
-    const mark = result.mark;
-    if (mark.putts == null && mark.gir == null && mark.drive == null) {
-      await q(`delete from round_hole_mark where round_id=$1 and hole=$2 and rev <= $3`, [id, mark.hole, mark.rev]);
-      const [kept] = await q(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and hole=$2`, [id, mark.hole]);
-      return json({ mark: kept ? rowMark(kept) : mark, applied: !kept });
-    }
-    const [row] = await q(`insert into round_hole_mark (round_id, user_id, hole, putts, gir, drive, rev, updated_at)
-      values ($1,$2,$3,$4,$5,$6,$7,now())
-      on conflict (round_id, hole) do update set putts=excluded.putts, gir=excluded.gir, drive=excluded.drive, rev=excluded.rev, user_id=excluded.user_id, updated_at=now()
-      where round_hole_mark.rev <= excluded.rev
-      returning hole, putts, gir, drive, rev`, [id, user.id, mark.hole, mark.putts, mark.gir, mark.drive, mark.rev]);
+    const decision = applyMark(cur ? rowMark(cur) : null, incoming, card);
+    if (decision.conflict) return conflict(decision.mark, decision.conflict);
+    if (decision.idempotent) return json({ mark: decision.mark, applied: true, conflict: null, idempotent: true });
+    const mark = decision.mark;
+    const written = await q(HOLE_MARK_UPSERT, [id, user.id, mark.hole, mark.putts, mark.gir, mark.drive, mark.rev]);
+    const row = written[0];
     if (!row) {
       const [kept] = await q(`select hole, putts, gir, drive, rev from round_hole_mark where round_id=$1 and hole=$2`, [id, mark.hole]);
-      return json({ mark: kept ? rowMark(kept) : mark, applied: false });
+      const settled = settleWrite(kept ? rowMark(kept) : null, mark);
+      if (settled.conflict) return conflict(settled.mark, settled.conflict);
+      return json({ mark: settled.mark, applied: true, conflict: null, idempotent: settled.idempotent });
     }
-    return json({ mark: rowMark(row), applied: true });
+    return json({ mark: rowMark(row), applied: true, conflict: null, idempotent: false });
   } catch (e) { unavailable(e); }
 });
