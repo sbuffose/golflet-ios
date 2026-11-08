@@ -72,6 +72,7 @@ struct PlayHoleView: View {
                 Spacer(minLength: 0)
                 compactStrategy
                     .padding(.horizontal, 12)
+                    .accessibilityElement(children: .contain)
                 dock
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -612,28 +613,12 @@ struct PlayHoleView: View {
 
     @ViewBuilder
     private var compactStrategy: some View {
-        if let hole = strategy?.hole(hole) {
-            let title = hole.planTitle ?? "Cómo jugar el hoyo"
-            Button { showsStrategy = true } label: {
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(GType.label)
-                        .foregroundStyle(p.ink)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text("Ver")
-                        .font(GType.label)
-                        .foregroundStyle(p.accent)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.white.opacity(0.96))
-                .clipShape(Capsule())
+        if let plan = strategy?.hole(hole) {
+            CompactPlanControl(title: plan.planTitle ?? "Cómo jugar el hoyo") {
+                showsStrategy = true
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(title)
-            .accessibilityIdentifier("strategy-compact")
+            .frame(maxWidth: .infinity)
+            .frame(height: 32)
         }
     }
 
@@ -1327,5 +1312,98 @@ struct PlayHoleView: View {
         paceAlertText = PaceEngine.fallbackAlertText(elapsed: elapsed, expected: expected)
         updatePace { $0.alertedHole10 = true }
         showsPaceAlert = true
+    }
+}
+
+/// Visible plan chip. A SwiftUI `Text`/`Button` in this stack does not publish
+/// `strategy-compact` to XCUITest. A UIKit control does, and it opens the plan.
+private struct CompactPlanControl: UIViewRepresentable {
+    var title: String
+    var action: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    func makeUIView(context: Context) -> CompactPlanChip {
+        let chip = CompactPlanChip()
+        chip.addTarget(context.coordinator, action: #selector(Coordinator.fire), for: .touchUpInside)
+        chip.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        chip.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return chip
+    }
+
+    func updateUIView(_ chip: CompactPlanChip, context: Context) {
+        context.coordinator.action = action
+        chip.apply(title: title)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: CompactPlanChip, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 320, height: 32)
+    }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func fire() { action() }
+    }
+}
+
+private final class CompactPlanChip: UIControl {
+    private let titleLabel = UILabel()
+    private let verLabel = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = true
+        accessibilityIdentifier = "strategy-compact"
+        accessibilityTraits = .button
+        backgroundColor = UIColor.white.withAlphaComponent(0.96)
+        layer.cornerRadius = 16
+        clipsToBounds = true
+        let font = UIFont(name: "Geist-Medium", size: 12.5) ?? .systemFont(ofSize: 12.5, weight: .medium)
+        titleLabel.font = font
+        titleLabel.textColor = UIColor(red: 14 / 255, green: 27 / 255, blue: 44 / 255, alpha: 1)
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.isAccessibilityElement = false
+        verLabel.font = font
+        verLabel.text = "Ver"
+        verLabel.textColor = UIColor(red: 200 / 255, green: 16 / 255, blue: 46 / 255, alpha: 1)
+        verLabel.isAccessibilityElement = false
+        addSubview(titleLabel)
+        addSubview(verLabel)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func apply(title: String) {
+        titleLabel.text = title
+        accessibilityLabel = title
+        accessibilityIdentifier = "strategy-compact"
+        isAccessibilityElement = true
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let verSize = verLabel.intrinsicContentSize
+        verLabel.frame = CGRect(
+            x: bounds.width - 12 - verSize.width,
+            y: (bounds.height - verSize.height) / 2,
+            width: verSize.width,
+            height: verSize.height
+        )
+        let titleWidth = max(0, verLabel.frame.minX - 20)
+        let titleHeight = titleLabel.intrinsicContentSize.height
+        titleLabel.frame = CGRect(
+            x: 12,
+            y: (bounds.height - titleHeight) / 2,
+            width: titleWidth,
+            height: titleHeight
+        )
+    }
+
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: 32)
     }
 }
