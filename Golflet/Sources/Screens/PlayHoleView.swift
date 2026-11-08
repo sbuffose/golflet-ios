@@ -613,9 +613,10 @@ struct PlayHoleView: View {
     @ViewBuilder
     private var compactStrategy: some View {
         if let hole = strategy?.hole(hole) {
+            let title = hole.planTitle ?? "Cómo jugar el hoyo"
             Button { showsStrategy = true } label: {
                 HStack(spacing: 8) {
-                    Text(hole.planTitle ?? "Cómo jugar el hoyo")
+                    Text(title)
                         .font(GType.label)
                         .foregroundStyle(p.ink)
                         .lineLimit(1)
@@ -630,6 +631,8 @@ struct PlayHoleView: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title)
             .accessibilityIdentifier("strategy-compact")
         }
     }
