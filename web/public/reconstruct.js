@@ -132,6 +132,8 @@
     };
   }
 
+  let VISIT = 0;
+
   function scorePar(rows, n) {
     const row = (rows || []).find(h => Array.isArray(h) ? Number(h[0]) === n : Number(h.hole || h.number) === n);
     if (!row) return null;
@@ -139,6 +141,8 @@
   }
 
   async function mountEditor(root, id, holeHint, pending) {
+    const visit = ++VISIT;
+    const mine = () => visit === VISIT && !!root.isConnected;
     document.documentElement.classList.remove("rc-map");
     root.innerHTML = `<div class="tk-host" id="rc-host"></div>`;
     const host = root.querySelector("#rc-host");
@@ -159,6 +163,7 @@
       if (liveId) {
         const setup = await api("/api/reconstructions");
         const row = (setup.reconstructions || []).find(r => r.id === liveId);
+        if (!mine()) return;
         if (row) {
           courseName = courseName || row.course || "";
           roundId = roundId || row.round_id || "";
@@ -169,6 +174,7 @@
       }
       if (courseId) {
         const geo = await api("/api/gps/courses/" + encodeURIComponent(courseId));
+        if (!mine()) return;
         const raw = geo.course?.holes || [];
         holes = raw.map(h => {
           const n = Number(h.hole || h.number);
@@ -178,14 +184,15 @@
       }
       if (liveId) {
         const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
+        if (!mine()) return;
         shots = pack.shots || [];
       }
     } catch (e) {
-      if (!root.isConnected) return;
+      if (!mine()) return;
       fail(e?.message || "No pudimos abrir el mapa.");
       return;
     }
-    if (!root.isConnected) return;
+    if (!mine()) return;
     if (!window.GolfletTrack) { fail("No se cargó el mapa."); return; }
     const hole = Number(holeHint) >= 1 && Number(holeHint) <= 18 ? Number(holeHint) : 1;
     window.GolfletTrack.mount(host, {
@@ -199,30 +206,43 @@
       bag: CLUBS.map(c => ({ code: c })),
       api, esc, toast: () => {}, cid: () => "",
       onSave: async (shot) => {
-        if (!liveId) {
-          if (!pending?.courseId || !pending?.date || !pending?.roundId) throw new Error("Elegí la cancha.");
-          const created = await api("/api/reconstructions", { method: "POST", body: JSON.stringify({ date: pending.date, course_id: pending.courseId, round_id: pending.roundId }) });
-          liveId = created?.live_round?.id || "";
-          if (!liveId) throw new Error("No pudimos abrir la vuelta.");
-          const ronda = pending.roundId ? `&ronda=${encodeURIComponent(pending.roundId)}` : "";
-          history.replaceState(null, "", `#/reconstruir/${liveId}?hole=${shot.hole}${ronda}`);
+        if (!mine()) return null;
+        try {
+          if (!liveId) {
+            if (!pending?.courseId || !pending?.date || !pending?.roundId) throw new Error("Elegí la cancha.");
+            const created = await api("/api/reconstructions", { method: "POST", body: JSON.stringify({ date: pending.date, course_id: pending.courseId, round_id: pending.roundId }) });
+            if (!mine()) return null;
+            liveId = created?.live_round?.id || "";
+            if (!liveId) throw new Error("No pudimos abrir la vuelta.");
+            if (!mine()) return null;
+            const ronda = pending.roundId ? `&ronda=${encodeURIComponent(pending.roundId)}` : "";
+            history.replaceState(null, "", `#/reconstruir/${liveId}?hole=${shot.hole}${ronda}`);
+          }
+          if (!mine()) return null;
+          const body = {
+            hole: shot.hole,
+            club: shot.club || null,
+            result: shot.result || null,
+            penalty_strokes: shot.penalty ? 1 : 0,
+            lat: shot.from?.lat ?? null,
+            lng: shot.from?.lng ?? null,
+            end_lat: shot.land?.lat ?? null,
+            end_lng: shot.land?.lng ?? null,
+          };
+          const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`, { method: "POST", body: JSON.stringify(body) });
+          if (!mine()) return null;
+          return pack.shots || [];
+        } catch (e) {
+          if (!mine()) return null;
+          throw e;
         }
-        const body = {
-          hole: shot.hole,
-          club: shot.club || null,
-          result: shot.result || null,
-          penalty_strokes: shot.penalty ? 1 : 0,
-          lat: shot.from?.lat ?? null,
-          lng: shot.from?.lng ?? null,
-          end_lat: shot.land?.lat ?? null,
-          end_lng: shot.land?.lng ?? null,
-        };
-        const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`, { method: "POST", body: JSON.stringify(body) });
-        return pack.shots || [];
       },
       onUndo: async (shotId) => {
+        if (!mine()) return null;
         await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots?shot=${encodeURIComponent(shotId)}`, { method: "DELETE" });
+        if (!mine()) return null;
         const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
+        if (!mine()) return null;
         return pack.shots || [];
       },
     });

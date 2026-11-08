@@ -113,7 +113,10 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await page.evaluate(() => { (window as unknown as { __gps: number }).__gps = 0; });
     await page.click("#round-track");
     await page.waitForSelector("#play-set");
+    await page.waitForSelector("#play-cancel");
     await page.waitForSelector("#play-reticle");
+    assert.equal(await page.$("#play-hit"), null);
+    assert.equal(await page.$("#play-more"), null);
     const layout = await page.evaluate(() => {
       const map = document.querySelector("#tkmap");
       const set = document.querySelector("#play-set");
@@ -134,6 +137,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
         borrar: text.includes("Borrar puntos"),
         essay: text.includes("La mira queda fija"),
         hole: document.querySelector(".tk-hn b")?.textContent || "",
+        cancel: (document.querySelector("#play-cancel")?.textContent || "").trim(),
         rcMap: document.documentElement.classList.contains("rc-map"),
       };
     });
@@ -148,8 +152,9 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(layout.caida, false);
     assert.equal(layout.borrar, false);
     assert.equal(layout.essay, false);
-    assert.equal(layout.hole, "Hoyo 1");
-    assert.match(layout.prompt, /confirmar el tee/);
+    assert.equal(layout.hole, "");
+    assert.equal(layout.cancel, "Cancelar");
+    assert.match(layout.prompt, /confirmar la salida/);
     assert.match(await page.evaluate(() => location.hash), /ronda=r-nov/);
     assert.deepEqual(cardWrites(calls), []);
     assert.equal(calls.some(c => c.method === "GET" && c.path === "/api/gps/courses/course-fixture"), true);
@@ -158,9 +163,9 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(await page.evaluate(() => (window as unknown as { __gps?: number }).__gps || 0), 0);
     const beforePan = await page.$eval("#tkmap", el => el.getAttribute("data-cx"));
     const beforeZoom = await page.$eval("#tkmap", el => Number(el.getAttribute("data-z")));
-    await page.mouse.move(200, 520);
+    await page.mouse.move(200, 280);
     await page.mouse.down();
-    await page.mouse.move(80, 520);
+    await page.mouse.move(80, 280, { steps: 8 });
     await page.mouse.up();
     const afterPan = await page.$eval("#tkmap", el => el.getAttribute("data-cx"));
     assert.notEqual(afterPan, beforePan);
@@ -170,12 +175,19 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.deepEqual(cardWrites(calls), []);
     await page.screenshot({ path: join(ART, "track-map.png") });
     await page.click("#play-set");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("marcar la bandera"));
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("marcar el hoyo"));
     assert.match(await page.$eval("#tkro", el => el.textContent || ""), /yd/);
+    assert.notEqual(await page.$("#play-cancel"), null);
     assert.deepEqual(cardWrites(calls), []);
-    await page.click("#play-set");
+    await page.click("#play-cancel");
     await page.waitForSelector("#play-hit");
+    await page.waitForSelector("#play-club");
+    await page.waitForSelector("#play-penalty");
+    assert.equal(await page.$("#play-set"), null);
+    assert.equal(await page.$("#play-more"), null);
+    assert.equal(await page.$eval(".tk-hn b", el => el.textContent), "Hoyo 1");
     assert.deepEqual(cardWrites(calls), []);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await page.waitForFunction(() => location.hash.startsWith("#/reconstruir/live-new?hole=1"));
     const writes = cardWrites(calls).map(c => `${c.method} ${c.path}`);
@@ -185,6 +197,10 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(typeof shot.end_lat, "number");
     assert.equal("accuracy_m" in shot, false);
     assert.equal(shot.penalty_strokes, 0);
+    assert.equal(shot.club, "7i");
+    await page.waitForSelector("#play-undo");
+    assert.match(await page.$eval("#rc-shots", el => el.textContent || ""), /1\.\s*Hierro 7/);
+    assert.equal((await page.evaluate(() => document.body.innerText)).includes("SG"), false);
     await page.click("#rc-close");
     await page.waitForSelector("#round-track");
     assert.equal(await page.evaluate(() => location.hash), "#/ronda/r-nov");
@@ -195,13 +211,13 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await page.waitForSelector("#round-track");
     await page.click("#round-track");
     await page.waitForFunction(() => location.hash === "#/reconstruir/live-saved?hole=1&ronda=r-saved");
-    await page.waitForSelector("#play-more");
-    await page.click("#play-more");
-    await page.waitForSelector("#play-history");
-    await page.click("#play-history");
-    await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("7i"));
+    await page.waitForSelector("#play-club");
+    await page.waitForSelector("#play-hit");
+    await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("Hierro 7"));
+    assert.equal(await page.$("#play-more"), null);
+    assert.equal(await page.$("#play-set"), null);
     assert.equal(await page.$("#qstat"), null);
-    assert.equal(await page.$("#play-club"), null);
+    assert.notEqual(await page.$("#play-club"), null);
     assert.deepEqual(cardWrites(calls.slice(savedAt)), []);
   } finally {
     await browser.close();
@@ -264,6 +280,138 @@ test("a round does not open another club's course when only the course name matc
     assert.equal(calls.some(c => c.method === "POST" && c.path === "/api/reconstructions"), false);
     assert.equal(calls.some(c => c.method !== "GET" && c.path.startsWith("/api/rounds")), false);
   } finally {
+    await browser.close();
+    await new Promise<void>(r => server.close(() => r()));
+  }
+});
+
+test("a late reconstruction reply does not navigate or post the shot after the player left", { timeout: 90_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+  const calls: { method: string; path: string }[] = [];
+  const queued: Array<() => void> = [];
+  let holdCreates = 0;
+  const creates = () => calls.filter(c => c.method === "POST" && c.path === "/api/reconstructions");
+  const shotPosts = () => calls.filter(c => c.method === "POST" && /\/shots$/.test(c.path));
+  const until = async (pred: () => boolean, label: string) => {
+    const start = Date.now();
+    while (!pred()) {
+      if (Date.now() - start > 8_000) throw new Error(label);
+      await new Promise(r => setTimeout(r, 40));
+    }
+  };
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
+    const json = (body: unknown, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (url.pathname.startsWith("/api/")) {
+      for await (const chunk of req) void chunk;
+      calls.push({ method: req.method || "GET", path: url.pathname });
+      if (url.pathname === "/api/data") return json(data);
+      if (url.pathname === "/api/gps/courses") return json({ courses: [{ course_id: "course-fixture", club_name: "Club Fixture", course: "Cancha Fixture", label: "Cancha Fixture" }] });
+      if (url.pathname === "/api/gps/courses/course-fixture" || url.pathname === "/api/gps/courses/fx-cancha-fixture") {
+        return json({ course: { holes: [{ hole: 1, tee: { lat: -34.6, lng: -58.4 }, green: { center: { lat: -34.601, lng: -58.401 } } }] } });
+      }
+      if (url.pathname === "/api/reconstructions" && req.method === "GET") {
+        return json({
+          rounds: [
+            { id: "r-nov", date: "2026-11-02", course: "Cancha Fixture", club_name: "Club Fixture", club_code: "fx" },
+            { id: "r-saved", date: "2026-10-01", course: "Cancha Fixture", club_name: "Club Fixture", club_code: "fx" },
+          ],
+          reconstructions: [{ id: "live-saved", date: "2026-10-01", course: "Cancha Fixture", club_code: "fx", vm_course: "Cancha Fixture", round_id: "r-saved" }],
+        });
+      }
+      if (url.pathname === "/api/reconstructions" && req.method === "POST") {
+        if (holdCreates > 0) {
+          holdCreates -= 1;
+          await new Promise<void>(resolve => queued.push(resolve));
+        }
+        return json({ live_round: { id: "live-held" } }, 201);
+      }
+      if (req.method === "POST" && /\/shots$/.test(url.pathname)) return json({ shots: [{ id: "s-held", hole: 1, club: "7i", distance_m: 12, penalty_strokes: 0 }] });
+      if (url.pathname === "/api/reconstructions/live-saved/shots" && req.method === "GET") return json({ shots: [] });
+      return json({});
+    }
+    const file = url.pathname === "/" ? "/index.html" : url.pathname;
+    try {
+      const buf = await readFile(new URL(file.slice(1), ROOT));
+      res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" });
+      res.end(buf);
+    } catch { res.writeHead(404); res.end("missing"); }
+  });
+  await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const { default: puppeteer } = await import("puppeteer-core");
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  const release = () => {
+    const done = queued.shift();
+    if (!done) throw new Error("no reconstruction reply is waiting");
+    done();
+  };
+  const settle = () => new Promise(r => setTimeout(r, 500));
+  const reachEnter = async (page: { click: (s: string) => Promise<unknown>; waitForSelector: (s: string) => Promise<unknown>; waitForFunction: (fn: () => boolean) => Promise<unknown> }) => {
+    await page.waitForSelector("#round-track");
+    await page.click("#round-track");
+    await page.waitForSelector("#play-cancel");
+    await page.click("#play-cancel");
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("marcar el hoyo"));
+    await page.click("#play-cancel");
+    await page.waitForSelector("#play-hit");
+  };
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true });
+    await page.setRequestInterception(true);
+    page.on("request", req => {
+      const host = new URL(req.url()).hostname;
+      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      else req.continue();
+    });
+    await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
+    await reachEnter(page);
+    holdCreates = 1;
+    await page.click("#play-hit");
+    await until(() => creates().length === 1, "the create request did not start");
+    await page.evaluate(() => { location.hash = "#/inicio"; });
+    await page.waitForFunction(() => location.hash === "#/inicio");
+    release();
+    await settle();
+    assert.equal(await page.evaluate(() => location.hash), "#/inicio");
+    assert.equal(await page.evaluate(() => document.documentElement.classList.contains("rc-map")), false);
+    assert.equal(shotPosts().length, 0);
+
+    await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
+    await reachEnter(page);
+    holdCreates = 2;
+    await page.click("#play-hit");
+    await until(() => creates().length === 2, "the first of the two creates did not start");
+    await page.click("#rc-close");
+    await page.waitForFunction(() => location.hash === "#/ronda/r-nov");
+    await reachEnter(page);
+    await page.click("#play-hit");
+    await until(() => creates().length === 3, "the re-entered create did not start");
+    release();
+    await settle();
+    assert.equal(shotPosts().length, 0);
+    assert.equal(await page.evaluate(() => location.hash.includes("live-held")), false);
+    assert.match(await page.evaluate(() => location.hash), /ronda=r-nov/);
+    release();
+    await page.waitForFunction(() => location.hash.startsWith("#/reconstruir/live-held"));
+    await until(() => shotPosts().length === 1, "the live visit did not post its shot");
+
+    await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
+    await reachEnter(page);
+    holdCreates = 1;
+    await page.click("#play-hit");
+    await until(() => creates().length === 4, "the new-round create did not start");
+    await page.evaluate(() => { location.hash = "#/ronda/r-saved"; });
+    await page.waitForFunction(() => location.hash === "#/ronda/r-saved");
+    release();
+    await settle();
+    assert.equal(await page.evaluate(() => location.hash), "#/ronda/r-saved");
+    assert.equal(await page.evaluate(() => document.documentElement.classList.contains("rc-map")), false);
+    assert.equal(shotPosts().length, 1);
+    assert.equal(creates().length, 4);
+  } finally {
+    while (queued.length) queued.shift()?.();
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));
   }
