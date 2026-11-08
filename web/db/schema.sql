@@ -277,7 +277,7 @@ create table if not exists club_logo (                                     -- cr
 create table if not exists sync_log (                                      -- one row per sync run (history; sync_progress is pruned after a day)
   id bigserial primary key,
   user_id text references "user"(id) on delete cascade,
-  trigger text not null,                      -- link | manual | cron
+  trigger text not null,                      -- link | manual | cron | scorecard
   ok boolean not null,
   new_rounds int, updated int, pending int,
   clubs jsonb,                                -- [{club_name, ok, new_rounds, message}] (user-facing messages only)
@@ -933,3 +933,31 @@ create table if not exists cmp_create_key (
   primary key (user_id, idem_key)
 );
 alter table cmp_create_key add column if not exists payload_hash text;
+
+-- v42: durable scorecard reads, 5 hours after the tee. The standalone file is web/db/migrations/0042_scorecard_fetch.sql.
+create table if not exists scorecard_fetch (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null references "user"(id) on delete cascade,
+  tee_time_id uuid references tee_time(id) on delete cascade,
+  live_round_id uuid references live_round(id) on delete cascade,
+  club_account_id uuid references club_account(id) on delete set null,
+  played_at timestamptz not null,
+  date date not null,
+  time text,
+  club_code text,
+  course_label text,
+  status text not null check (status in ('scheduled','awaiting_card','complete','cancelled','needs_credentials','error','stopped')),
+  next_attempt_at timestamptz not null,
+  last_attempt_at timestamptz,
+  attempt_count int not null default 0,
+  last_error text,
+  round_id uuid references round(id) on delete set null,
+  locked_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint scorecard_fetch_target check (tee_time_id is not null or live_round_id is not null)
+);
+create unique index if not exists scorecard_fetch_tee on scorecard_fetch (tee_time_id) where tee_time_id is not null;
+create unique index if not exists scorecard_fetch_live on scorecard_fetch (live_round_id) where live_round_id is not null;
+create index if not exists scorecard_fetch_due on scorecard_fetch (next_attempt_at)
+  where status in ('scheduled','awaiting_card','needs_credentials','error');

@@ -135,7 +135,7 @@ function vInicio(){
   const top = `<div class="top"><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${esc(initials())}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
   if (!valid.length) return top + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas válidas. Tocá Actualizar para traerlas.</div>` : emptyData('Empecemos por tu club')) +
-    `<div id="tees"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
+    `<div id="tees"></div><div id="scorecards"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
   const hi = G.hi_history, d = hi.length>1 ? hi[hi.length-1].hi - hi[0].hi : null;
   const last = rounds[0], best = valid.slice().sort((a,b)=>a.gross-b.gross)[0];
   const pr = valid.filter(inR), prAll = rounds.filter(inR), bestR = pr.slice().sort((a,b)=>a.gross-b.gross)[0];
@@ -155,7 +155,7 @@ function vInicio(){
     <a class="card mini stat vx-tap" href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}"><div class="k">Mejor</div><div class="v num">${minOr(pr.map(r=>r.gross))}</div></a>
     <a class="card mini stat vx-tap" href="${rlink('birdies',{scope:'all',course:'all',sort:'date',order:'desc'})}"><div class="k">Birdies</div><div class="v num">${prAll.reduce((s,r)=>s+(r.holes?.length?r.holes.filter(h=>h[1]!=null&&h[2]!=null&&h[2]-h[1]===-1).length:(r.summary_counts?.birdies||0)),0)}</div></a>
   </div>${perRoundCard(prAll)}</div></div>
-  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
+  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
   <div class="o3"><div class="section"><h2>Amigos</h2>${G.user?.group_invitations?`<span class="badge gold">${G.user.group_invitations} invitación${G.user.group_invitations===1?'':'es'}</span>`:''}</div><a class="card gg-home" href="#/amigos"><span class="gg-home-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="3.2"/><circle cx="16.5" cy="10" r="2.6"/><path d="M3.5 19c.9-3 3-4.6 5.5-4.6s4.6 1.6 5.5 4.6M14.5 15c2.6-.3 4.8 1 5.8 3.8"/></svg></span><div><b>${G.user?.group_invitations?'Te invitaron a un grupo':'Comparar con amigos'}</b><p>Tabla, evolución y hoyo por hoyo con tus amigos. Solo si cada uno acepta.</p></div>${ICON.chev}</a></div>
   <div class="o5"><div class="section"><h2>Mis clubes</h2></div>${clubsCard()}</div></div></div>${CT_LINKS}`;
 }
@@ -496,7 +496,8 @@ const compInit = n => String(n || '').split(/\s+/).filter(Boolean).map(w => w[0]
 const firstN = n => { const s = String(n || '').trim(), p = s.includes(',') ? s.split(',')[1].trim() : s; return p.split(/\s+/)[0] || s; };
 const withWho = t => { const n = comps(t).map(c => firstN(c.name)); if (!n.length) return ''; const sh = n.slice(0, 2); return ` · con ${sh.join(' y ')}${n.length > 2 ? ` +${n.length - 2}` : ''}`; };
 const teeRow = t => { const d = dU(t.date);
-  return `<a class="row" href="#/tee/${t.id}">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name)}</div><div class="s tt-s">${(() => { const r = relDay(t.date), sh = +t.start_hole; return [t.course_label ? esc(t.course_label) : '', r === 'Hoy' || r === 'Mañana' ? r : `${WD[d.getUTCDay()]} · ${r}`, sh === 1 || sh === 10 ? `Hoyo ${sh}` : ''].filter(Boolean).join(' · '); })()}${esc(withWho(t))}</div></div><div class="score"><b class="num">${esc(t.time)}</b><span>salida</span></div>${ICON.chev}</a>`; };
+  const card = t.scorecard_label ? `<div class="s">${esc(t.scorecard_label)}</div>` : '';
+  return `<a class="row" href="#/tee/${t.id}">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name)}</div><div class="s tt-s">${(() => { const r = relDay(t.date), sh = +t.start_hole; return [t.course_label ? esc(t.course_label) : '', r === 'Hoy' || r === 'Mañana' ? r : `${WD[d.getUTCDay()]} · ${r}`, sh === 1 || sh === 10 ? `Hoyo ${sh}` : ''].filter(Boolean).join(' · '); })()}${esc(withWho(t))}</div>${card}</div><div class="score"><b class="num">${esc(t.time)}</b><span>salida</span></div>${ICON.chev}</a>`; };
 const PAGEL = { bookings:'reservas', companions:'jugadores de la línea', hi_history:'historial de hándicap', calculator:'calculadora de hándicap de juego' };
 function sourcesNote(clubs){
   if (!clubs?.length) return '';
@@ -563,15 +564,36 @@ function checkNewTees(){
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNewTees(); });
 addEventListener('pageshow', () => checkNewTees()); addEventListener('focus', () => checkNewTees());
 function sTees(){ return `<div class="bar"><span class="overline">Tee times</span></div><div id="teesall"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
+async function loadScorecards(){
+  const el = $('#scorecards'); if (!el) return;
+  try {
+    const d = await api('/api/scorecard-fetches');
+    const rows = d.fetches || [];
+    if (!rows.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>` + rows.map(f =>
+      `<div class="card"><b>${esc(f.club_name || 'Club')}${f.course_label ? ` · ${esc(f.course_label)}` : ''}</b><span>${esc([f.date, f.time].filter(Boolean).join(' · '))}</span><span>${esc(f.label)}</span></div>`).join('');
+  } catch(e){
+    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
+  }
+}
 async function loadTees(){
   const el = $('#teesall'); if (!el) return;
   try {
-    const [u, p] = await Promise.all([api('/api/tee-times?scope=upcoming&limit=200'), api('/api/tee-times?scope=past&limit=20')]); if (!$('#teesall')) return;
+    const [u, p, cards] = await Promise.all([
+      api('/api/tee-times?scope=upcoming&limit=200'),
+      api('/api/tee-times?scope=past&limit=20'),
+      api('/api/scorecard-fetches').catch(e => ({ fetches: [], error: e })),
+    ]); if (!$('#teesall')) return;
+    const byTee = {};
+    for (const f of cards.fetches || []) if (f.tee_time_id) byTee[f.tee_time_id] = f.label;
+    const mark = list => list.map(t => ({ ...t, scorecard_label: byTee[t.id] || '' }));
+    const cardNote = cards.error ? `<div class="msg err">${esc(cards.error.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>` : '';
     el.innerHTML = `<div class="stitle">Tee times</div>
-      <div class="section"><h2>Próximos</h2><span class="badge">${u.tee_times.length}</span></div>${u.tee_times.length?`${yrList(u.tee_times, t => t.date, teeRow)}`:`<div class="msg">No tenés reservas próximas en tu club.</div>`}
-      ${p.tee_times.length?`<div class="section"><h2>Pasados</h2></div>${yrList(p.tee_times, t => t.date, teeRow, 'list tt-past')}`:''}
+      ${cardNote}
+      <div class="section"><h2>Próximos</h2><span class="badge">${u.tee_times.length}</span></div>${u.tee_times.length?`${yrList(mark(u.tee_times), t => t.date, teeRow)}`:`<div class="msg">No tenés reservas próximas en tu club.</div>`}
+      ${p.tee_times.length?`<div class="section"><h2>Pasados</h2></div>${yrList(mark(p.tee_times), t => t.date, teeRow, 'list tt-past')}`:''}
       <div class="section"><h2>De dónde salen</h2></div>${sourcesNote(u.clubs)}
-      <p class="foot">Golflet lee tus reservas en el sitio de cada club con tu sesión, solo para mostrarlas: no reserva ni cancela nada. Se actualizan con tus tarjetas.</p>`;
+      <p class="foot">Golflet lee tus reservas en el sitio de cada club con tu sesión, solo para mostrarlas: no reserva ni cancela nada. La tarjeta se busca sola cinco horas después de la salida, aunque la app esté cerrada.</p>`;
   } catch(e){ el.innerHTML = errBox(e); }
 }
 function sTee(id){ return `<div class="bar"><span class="overline">Tee time</span></div><div id="tee" data-id="${esc(id)}"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
@@ -2798,7 +2820,7 @@ function bind(p, isDetail){
   if (p[0]==='plan' && GP) GP.load(p, location.hash);
   if ((p[0]==='partido' || p[0]==='partidos') && GM) GM.load(p, location.hash);
   if (!isDetail){
-    if (base==='inicio') { fitGreeting(); document.fonts?.ready.then(fitGreeting); loadRecurring(); loadImproveCard(); loadTeeCard().then(checkNewTees); loadCurrentTee(); loadHcpImp(); loadHiProfs(); loadHiGroups(); loadSorteoCard(); }
+    if (base==='inicio') { fitGreeting(); document.fonts?.ready.then(fitGreeting); loadRecurring(); loadImproveCard(); loadTeeCard().then(checkNewTees); loadScorecards(); loadCurrentTee(); loadHcpImp(); loadHiProfs(); loadHiGroups(); loadSorteoCard(); }
     if (base==='bolsa') loadBagBall();
     if (base==='resumen') { loadPuttCard(); loadWxRes(); loadPrivRes(); }
     decorateWx();

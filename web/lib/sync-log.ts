@@ -2,7 +2,7 @@
 import { q } from "./db";
 
 type R = { ok: boolean; new_rounds?: number; updated?: number; pending?: number; message?: string; clubs?: { club_name?: string; ok: boolean; new_rounds: number; message?: string }[] };
-export async function logSync(userId: string, trigger: "link" | "manual" | "cron", r: R | null, t0: number, failMessage?: string) {
+export async function logSync(userId: string, trigger: "link" | "manual" | "cron" | "scorecard", r: R | null, t0: number, failMessage?: string) {
   try {
     await q(`insert into sync_log (user_id, trigger, ok, new_rounds, updated, pending, clubs, message, duration_ms) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [userId, trigger, !!r?.ok, r?.new_rounds ?? 0, r?.updated ?? 0, r?.pending ?? 0,

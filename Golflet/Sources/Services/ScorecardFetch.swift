@@ -1,18 +1,17 @@
 import Foundation
 
-/// Cuándo pedir la tarjeta a Golfistics después de jugar.
+/// Reloj de la búsqueda de tarjeta. Lo ejecuta el servidor
+/// (`/api/cron/scorecard`), no un `Task` de la app: con la app cerrada
+/// este proceso no existe. La app solo muestra `/api/scorecard-fetches`.
 ///
-/// El sync no arranca al salir del hoyo 18. La tarjeta del club tarda.
-/// - Primera vez: 6 horas después del tee time, o 6 horas después de que
-///   la persona marcó que jugó (una vuelta de GPS cerrada, sin tee time).
-/// - Hasta el día calendario siguiente al de ese primer intento: cada 1 hora.
-/// - A partir de ese día: una vez por día.
+/// - Primera vez: 5 horas después del tee time (hora de Argentina).
+/// - Hasta el día calendario siguiente a ese primer intento: cada 1 hora.
+/// - Después: una vez por día, con un tope en el servidor.
 ///
-/// Se deja de pedir cuando la tarjeta de ese día ya está en las rondas.
-/// Un tee time y una marca de “jugué” el mismo día y el mismo club cuentan
-/// como un solo pedido: manda el tee time.
+/// Estas funciones quedan para que el reloj no vuelva a 6 horas ni a un
+/// timer local. No llaman a Golfistics.
 enum ScorecardFetch {
-    static let firstDelay: TimeInterval = 6 * 60 * 60
+    static let firstDelay: TimeInterval = 5 * 60 * 60
     static let hourly: TimeInterval = 60 * 60
     static let daily: TimeInterval = 24 * 60 * 60
 
@@ -38,7 +37,7 @@ enum ScorecardFetch {
     }
 
     /// Próximo instante en el que corresponde un sync. Si todavía no hubo
-    /// intentos, es el momento de juego más 6 horas.
+    /// intentos, es el momento de juego más 5 horas.
     static func nextAttempt(playedAt: Date, lastAttempt: Date?, calendar: Calendar? = nil) -> Date {
         let calendar = calendar ?? localCalendar
         let first = playedAt.addingTimeInterval(firstDelay)

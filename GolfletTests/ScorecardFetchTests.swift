@@ -13,19 +13,19 @@ final class ScorecardFetchTests: XCTestCase {
         return formatter.date(from: text)!
     }
 
-    func testFirstAttemptIsSixHoursLater() {
+    func testFirstAttemptIsFiveHoursLater() {
         let tee = date("2026-11-07T12:20:00Z")
         let next = ScorecardFetch.nextAttempt(playedAt: tee, lastAttempt: nil, calendar: calendar)
-        XCTAssertEqual(next, date("2026-11-07T18:20:00Z"))
-        XCTAssertFalse(ScorecardFetch.isDue(playedAt: tee, lastAttempt: nil, now: date("2026-11-07T18:19:00Z"), calendar: calendar))
-        XCTAssertTrue(ScorecardFetch.isDue(playedAt: tee, lastAttempt: nil, now: date("2026-11-07T18:20:00Z"), calendar: calendar))
+        XCTAssertEqual(next, date("2026-11-07T17:20:00Z"))
+        XCTAssertFalse(ScorecardFetch.isDue(playedAt: tee, lastAttempt: nil, now: date("2026-11-07T17:19:00Z"), calendar: calendar))
+        XCTAssertTrue(ScorecardFetch.isDue(playedAt: tee, lastAttempt: nil, now: date("2026-11-07T17:20:00Z"), calendar: calendar))
     }
 
     func testHourlyUntilTheNextCalendarDayThenDaily() {
         let tee = date("2026-11-07T12:20:00Z")
-        let first = date("2026-11-07T18:20:00Z")
+        let first = date("2026-11-07T17:20:00Z")
         let second = ScorecardFetch.nextAttempt(playedAt: tee, lastAttempt: first, calendar: calendar)
-        XCTAssertEqual(second, date("2026-11-07T19:20:00Z"))
+        XCTAssertEqual(second, date("2026-11-07T18:20:00Z"))
 
         let late = date("2026-11-07T23:20:00Z")
         let afterMidnight = ScorecardFetch.nextAttempt(playedAt: tee, lastAttempt: late, calendar: calendar)
