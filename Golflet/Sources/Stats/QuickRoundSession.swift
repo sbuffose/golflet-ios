@@ -116,7 +116,8 @@ final class QuickNoteSaver {
                 fir: fir,
                 text: text,
                 session: session,
-                draft: draft
+                draft: draft,
+                showsError: { owned == self.owner && !Task.isCancelled && visit.allows(generation) }
             )
             guard owned == self.owner, !Task.isCancelled else { return }
             guard model.sessionStill(session), visit.allows(generation) else { return }
