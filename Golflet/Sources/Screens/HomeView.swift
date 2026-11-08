@@ -223,6 +223,25 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("reconstruct-start")
+            Button {
+                Task { await model.bringLatestCard() }
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Traer última tarjeta")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text(model.cardNote.isEmpty ? "Lee el club con la clave guardada." : model.cardNote)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink.opacity(0.65))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(model.cardBusy)
+            .accessibilityIdentifier("bring-latest-card")
         }
     }
 

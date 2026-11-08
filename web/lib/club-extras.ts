@@ -5,14 +5,16 @@
 import { partnerKey } from "./private-metrics-core";
 import { q } from "./db";
 import { Golfistics, GolfisticsError } from "./golfistics";
-import { parseBookings, parseCompanions, parseEvents, courseFromEvent, inferDate, parseCalcForm, parseCalcResult, CALC_MODALITIES } from "./club-pages";
+import { parseBookings, parseCompanions, parseEvents, verifiedCourse, inferDate, parseCalcForm, parseCalcResult, CALC_MODALITIES } from "./club-pages";
 import { titleCase } from "./course-names";
 import { nowAR } from "./tee-times-core";
 
 type Page = "bookings" | "companions" | "hi_history" | "calculator";
 async function status(accId: string, page: Page, st: "ok" | "empty" | "missing" | "error", message: string | null, items: number | null = null) {
-  await q(`insert into club_page_status (club_account_id, page, status, message, items, checked_at) values ($1,$2,$3,$4,$5,now())
-           on conflict (club_account_id, page) do update set status=excluded.status, message=excluded.message, items=excluded.items, checked_at=now()`, [accId, page, st, message, items]);
+  const fresh = st === "ok" || st === "empty";
+  await q(`insert into club_page_status (club_account_id, page, status, message, items, checked_at) values ($1,$2,$3,$4,$5,case when $6 then now() else null end)
+           on conflict (club_account_id, page) do update set status=excluded.status, message=excluded.message, items=excluded.items,
+             checked_at=case when $6 then now() else club_page_status.checked_at end`, [accId, page, st, message, items, fresh]);
 }
 const failKind = (e: unknown) => (e instanceof GolfisticsError && /\b404\b/.test(e.message) ? "missing" : "error");
 const failMsg = (e: unknown) => (e instanceof GolfisticsError ? e.message : "Error leyendo la página del club").slice(0, 160);
@@ -30,12 +32,13 @@ async function courseDir(clubKey: string | null, clubId: number, course: string 
   return r?.id ?? null;
 }
 
-/** Bookings for one club account: upsert by TorneoID. t137u: kept forever; a future booking that disappears is marked gone_at (cancelled), never deleted. */
-export async function syncBookings(userId: string, acc: { id: string; club_id: number }, g: Golfistics, courses: string[], o: { light?: boolean } = {}) {
+/** Bookings for one club account: upsert by TorneoID. t137u: kept forever; a future booking that disappears is marked gone_at (cancelled), never deleted.
+ *  Returns whether misreservas.php was actually read. A failure does not move checked_at. */
+export async function syncBookings(userId: string, acc: { id: string; club_id: number }, g: Golfistics, courses: string[], o: { light?: boolean } = {}): Promise<"ok" | "empty" | "error"> {
   let html: string;
-  try { html = await g.req("GET", "misreservas.php"); } catch (e) { await status(acc.id, "bookings", failKind(e), failMsg(e)); return; }
+  try { html = await g.req("GET", "misreservas.php"); } catch (e) { await status(acc.id, "bookings", failKind(e), failMsg(e)); return "error"; }
   const b = parseBookings(html);
-  if (!b.recognized) { await status(acc.id, "bookings", "error", "La página de reservas no tiene el formato esperado"); return; }
+  if (!b.recognized) { await status(acc.id, "bookings", "error", "La página de reservas no tiene el formato esperado"); return "error"; }
   const today = nowAR().date, dir = await dirFor(acc.club_id);
   let events = new Map<string, any>();
   if (b.rows.length) { try { events = parseEvents(await g.req("GET", "torneoshabilitadosparareservas.php")); } catch { /* date falls back to weekday + day */ } }
@@ -44,7 +47,7 @@ export async function syncBookings(userId: string, acc: { id: string; club_id: n
   for (const r of b.rows) {
     const ev = events.get(r.torneo_id), date = ev?.date ?? inferDate(r.weekday, r.day, today);
     if (!date) continue;
-    const cf = courseFromEvent(ev?.event ?? null, courses);
+    const cf = verifiedCourse({ venue: ev?.venue ?? null }, courses);
     let companions: { name: string; hcp: number | null }[] = [];
     // t242u light check (home open): a booking we already have keeps its stored companions (the daily sync refreshes them); only new ones open their line page
     const known = o.light ? (await q(`select companions from tee_time where user_id=$1 and club_account_id=$2 and external_id=$3 and gone_at is null`, [userId, acc.id, `${r.torneo_id}@${r.time}`]))[0] : null;
@@ -63,8 +66,10 @@ export async function syncBookings(userId: string, acc: { id: string; club_id: n
   }
   const nt = nowAR().time;   // only bookings still in the future count as cancelled (past ones simply leave the club page once played)
   await q(`update tee_time set gone_at=now() where club_account_id=$1 and source='club' and gone_at is null and (date > $2::date or (date = $2::date and time > $4)) and not (external_id = any($3::text[]))`, [acc.id, today, keep, nt]);
-  await status(acc.id, "bookings", b.rows.length ? "ok" : "empty", b.none ? "Sin reservas próximas" : null, b.rows.length);
+  const outcome = b.rows.length ? "ok" : "empty";
+  await status(acc.id, "bookings", outcome, b.none ? "Sin reservas próximas" : null, b.rows.length);
   if (b.rows.length) await status(acc.id, "companions", compFail && !compOk ? "error" : "ok", compFail ? `${compFail} sin leer` : null, compOk);
+  return outcome;
 }
 
 async function syncHi(acc: { id: string }, g: Golfistics) {

@@ -77,6 +77,8 @@ protocol GolfletAPI: Sendable {
     func userSettings() async throws -> TextPrefs
     func saveUserSettings(_ prefs: TextPrefs) async throws -> TextPrefs
     func teeTimes() async throws -> [TeeTime]
+    func refreshBookings() async throws -> ReservationRefresh
+    func refreshReservation(id: String) async throws -> ReservationRefresh
     func scorecardFetches() async throws -> [ScorecardFetchJob]
     func playSettings() async throws -> PlaySettings
     func savePlaySettings(_ settings: PlaySettings) async throws -> PlaySettings

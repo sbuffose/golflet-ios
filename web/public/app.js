@@ -135,7 +135,7 @@ function vInicio(){
   const top = `<div class="top"><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${esc(initials())}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
   if (!valid.length) return top + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas válidas. Tocá Actualizar para traerlas.</div>` : emptyData('Empecemos por tu club')) +
-    `<div id="tees"></div><div id="scorecards"></div><a class="card" href="#/reconstruir"><div class="t">Cargar una vuelta ya jugada</div><div class="s">Marcá cada golpe en el mapa. El punto es manual y la distancia, estimada. No cambia la tarjeta del club.</div></a><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
+    `<div id="tees"></div><div id="scorecards"></div><a class="card" id="recon-start" href="#/reconstruir"><div class="t">Cargar una vuelta ya jugada</div><div class="s">Marcá cada golpe en el mapa. El punto es manual y la distancia, estimada. No cambia la tarjeta del club.</div></a><div id="cardpull"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
   const hi = G.hi_history, d = hi.length>1 ? hi[hi.length-1].hi - hi[0].hi : null;
   const last = rounds[0], best = valid.slice().sort((a,b)=>a.gross-b.gross)[0];
   const pr = valid.filter(inR), prAll = rounds.filter(inR), bestR = pr.slice().sort((a,b)=>a.gross-b.gross)[0];
@@ -155,7 +155,7 @@ function vInicio(){
     <a class="card mini stat vx-tap" href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}"><div class="k">Mejor</div><div class="v num">${minOr(pr.map(r=>r.gross))}</div></a>
     <a class="card mini stat vx-tap" href="${rlink('birdies',{scope:'all',course:'all',sort:'date',order:'desc'})}"><div class="k">Birdies</div><div class="v num">${prAll.reduce((s,r)=>s+(r.holes?.length?r.holes.filter(h=>h[1]!=null&&h[2]!=null&&h[2]-h[1]===-1).length:(r.summary_counts?.birdies||0)),0)}</div></a>
   </div>${perRoundCard(prAll)}</div></div>
-  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3"><a class="card" href="#/reconstruir"><div class="t">Cargar una vuelta ya jugada</div><div class="s">Marcá cada golpe en el mapa. El punto es manual y la distancia, estimada. No cambia la tarjeta del club.</div></a></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
+  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3"><a class="card" id="recon-start" href="#/reconstruir"><div class="t">Cargar una vuelta ya jugada</div><div class="s">Marcá cada golpe en el mapa. El punto es manual y la distancia, estimada. No cambia la tarjeta del club.</div></a></div><div class="o3" id="cardpull"></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
   <div class="o3"><div class="section"><h2>Amigos</h2>${G.user?.group_invitations?`<span class="badge gold">${G.user.group_invitations} invitación${G.user.group_invitations===1?'':'es'}</span>`:''}</div><a class="card gg-home" href="#/amigos"><span class="gg-home-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="3.2"/><circle cx="16.5" cy="10" r="2.6"/><path d="M3.5 19c.9-3 3-4.6 5.5-4.6s4.6 1.6 5.5 4.6M14.5 15c2.6-.3 4.8 1 5.8 3.8"/></svg></span><div><b>${G.user?.group_invitations?'Te invitaron a un grupo':'Comparar con amigos'}</b><p>Tabla, evolución y hoyo por hoyo con tus amigos. Solo si cada uno acepta.</p></div>${ICON.chev}</a></div>
   <div class="o5"><div class="section"><h2>Mis clubes</h2></div>${clubsCard()}</div></div></div>${CT_LINKS}`;
 }
@@ -542,27 +542,77 @@ async function loadTeeCard(fresh){
     fitGreeting();
     pill.onclick = ev => { ev.preventDefault(); const sec = $('#tees'), c = sec?.querySelector('.tt-next') || sec; if (!c) return; sec.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
       c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1800); }; }
-  el.innerHTML = `<div class="section"><h2>Próximos tee times</h2>${ts.length?`<a href="#/tees">Ver todos</a>`:''}</div>` + (ts.length
+  el.innerHTML = `<div class="section"><h2>Próximos tee times</h2>${ts.length?`<a href="#/tees">Ver todos</a>`:''}</div><p class="foot" id="teenote">${esc(TEE_NOTE)}</p>` + (ts.length
     ? `${yrList(ts.slice(0,3), t => t.date, teeRow)}`.replace('<a class="row" href="#/tee/', '<a class="row tt-next" href="#/tee/')
     : `<div class="card tt-empty"><b>No tenés reservas próximas en tu club</b><span>Cuando reserves una salida en tu club, la vas a ver acá con fecha, hora, cancha y con quién jugás.</span></div>`);
   if (fresh) for (const id of [...(fresh.new || []), ...(fresh.changed || [])]) { const a = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"]`); if (a) { a.classList.add('tt-in'); setTimeout(() => a.classList.remove('tt-in'), 2600); } }
   if (fresh) for (const id of fresh.new || []) { const sp = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"] .score span`); if (sp) { sp.textContent = 'nueva'; sp.classList.add('tt-newb'); } }
   if (fresh && (fresh.new || []).length) el.insertAdjacentHTML('beforeend', `<span class="sr" role="status">${fresh.new.length === 1 ? 'Apareció una reserva nueva' : `Aparecieron ${fresh.new.length} reservas nuevas`}</span>`);
 }
-/* t242u: every time Inicio opens or comes back (tab, PWA resume) ask ONLY for new bookings; cached cards stay on screen, nothing blocks.
-   The server throttles per club account (150 s) and dedupes; here: one call in flight and the same spacing per tab. */
-let TCK = null, TCK_AT = 0;
+/* Every visible entry re-reads the booking list. Overlapping focus/pageshow/visibility share one request.
+   A later entry, after that request finished, starts another. 150s does not skip it. */
+let TCK = null, TEE_NOTE = '';
+function teeNoteEl(){ return $('#teenote'); }
+function paintTeeNote(){ const n = teeNoteEl(); if (n) n.textContent = TEE_NOTE; }
 function checkNewTees(){
-  if (!$('#tees') || document.hidden || TCK || Date.now() - TCK_AT < 150e3) return;
-  TCK_AT = Date.now();
-  TCK = api('/api/tee-times/check?limit=4', { method:'POST', body:'{}' }).then(d => {
-    if (d.status === 'throttled' && d.next_in_s) TCK_AT = Date.now() - 150e3 + d.next_in_s * 1000;
-    if (!(d.new?.length || d.changed?.length || d.gone?.length) || !$('#tees')) return;
-    loadTeeCard(d); loadCurrentTee();
-  }).catch(() => {}).finally(() => { TCK = null; });
+  if (document.hidden || !G) return refreshReservations(false);
+  return refreshReservations(true);
+}
+function refreshReservations(online){
+  if (TCK) return TCK;
+  if (!online || navigator.onLine === false) { TEE_NOTE = 'Sin conexión: mostramos la última lectura.'; paintTeeNote(); return Promise.resolve(null); }
+  TEE_NOTE = 'Revisando'; paintTeeNote();
+  TCK = api('/api/tee-times/check?limit=50', { method:'POST', body:'{}' }).then(d => {
+    TEE_NOTE = d.fresh ? 'Leídas del club.' : (d.message || 'No pudimos verificar las reservas.');
+    paintTeeNote();
+    if (d.fresh && $('#tees')) { loadTeeCard(d); loadCurrentTee(); }
+    return d;
+  }).catch(() => { TEE_NOTE = 'No pudimos verificar las reservas.'; paintTeeNote(); return null; }).finally(() => { TCK = null; });
+  return TCK;
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNewTees(); });
 addEventListener('pageshow', () => checkNewTees()); addEventListener('focus', () => checkNewTees());
+let CARD_FLIGHT = null, CARD_NOTE = '', BOOK_FLIGHT = null, BOOK_NOTE = '';
+function paintCardPull(){
+  const el = $('#cardpull'); if (!el) return;
+  el.innerHTML = `<button type="button" class="btn ghost" id="bring-card">Traer última tarjeta</button><p class="foot" id="cardstat"></p>`;
+  const stat = $('#cardstat'); if (stat) stat.textContent = CARD_NOTE;
+  $('#bring-card').onclick = () => bringLatestCard($('#bring-card'));
+}
+function bringLatestCard(btn){
+  if (CARD_FLIGHT) return CARD_FLIGHT;
+  const clubs = (G.clubs || []).filter(a => a.password_saved);
+  const stat = $('#cardstat');
+  if (!clubs.length) { if (stat) stat.textContent = 'No hay una clave guardada para leer el club.'; return Promise.resolve(); }
+  btn.disabled = true;
+  if (stat) stat.textContent = 'Revisando';
+  CARD_FLIGHT = (async () => {
+    const results = [];
+    for (const a of clubs) {
+      try {
+        const r = await api(`/api/accounts/${a.id}/sync`, { method:'POST', body: JSON.stringify({ _id: a.id }) });
+        results.push({ ok: !!r.sync?.ok, newRounds: r.sync?.new_rounds || 0, message: r.sync?.message || '' });
+      } catch (e) { results.push({ ok: false, newRounds: 0, message: e.message || 'No pudimos leer el club.' }); }
+    }
+    const added = results.filter(r => r.ok).reduce((s, r) => s + r.newRounds, 0);
+    const ok = results.some(r => r.ok);
+    CARD_NOTE = !ok ? (results.find(r => r.message)?.message || 'No pudimos leer el club. La tarjeta en pantalla no cambió.') : added ? (added === 1 ? 'Llegó una tarjeta nueva.' : `Llegaron ${added} tarjetas nuevas.`) : 'No hay una tarjeta nueva. La última sigue siendo la que ya ves.';
+    if (stat) stat.textContent = CARD_NOTE;
+    if (ok && added) { try { G = { ...G, ...(await api('/api/data')) }; derive(); render(true); } catch (e) { CARD_NOTE = 'La tarjeta llegó, pero no pudimos actualizar la lista.'; const s = $('#cardstat'); if (s) s.textContent = CARD_NOTE; } }
+  })().finally(() => { CARD_FLIGHT = null; const b = $('#bring-card'); if (b) b.disabled = false; });
+  return CARD_FLIGHT;
+}
+function refreshBooking(id, btn){
+  if (BOOK_FLIGHT) return BOOK_FLIGHT;
+  btn.disabled = true;
+  BOOK_NOTE = 'Revisando';
+  const stat = $('#bookstat'); if (stat) stat.textContent = BOOK_NOTE;
+  BOOK_FLIGHT = api('/api/tee-times/check?limit=50', { method:'POST', body: JSON.stringify({ players: true, tee_id: id }) }).then(async d => {
+    BOOK_NOTE = d.fresh && d.players_read ? 'Jugadores leídos del club.' : (d.message || 'No pudimos verificar las reservas.');
+    await loadTee(id, { quiet: true });
+  }).catch(e => { BOOK_NOTE = e.message || 'No pudimos verificar las reservas.'; const s = $('#bookstat'); if (s) s.textContent = BOOK_NOTE; }).finally(() => { BOOK_FLIGHT = null; const b = $('#refresh-booking'); if (b) b.disabled = false; });
+  return BOOK_FLIGHT;
+}
 function sTees(){ return `<div class="bar"><span class="overline">Tee times</span></div><div id="teesall"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
 async function loadScorecards(){
   const el = $('#scorecards'); if (!el) return;
@@ -576,7 +626,7 @@ async function loadScorecards(){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
 }
-async function loadTees(){
+async function loadTees(opts){
   const el = $('#teesall'); if (!el) return;
   try {
     const [u, p, cards] = await Promise.all([
@@ -594,6 +644,7 @@ async function loadTees(){
       ${p.tee_times.length?`<div class="section"><h2>Pasados</h2></div>${yrList(mark(p.tee_times), t => t.date, teeRow, 'list tt-past')}`:''}
       <div class="section"><h2>De dónde salen</h2></div>${sourcesNote(u.clubs)}
       <p class="foot">Golflet lee tus reservas en el sitio de cada club con tu sesión, solo para mostrarlas: no reserva ni cancela nada. La tarjeta se busca sola a partir de cinco horas después de la salida. El servidor revisa cada quince minutos, así que la primera lectura puede llegar hasta un cuarto de hora más tarde, aunque la app esté cerrada.</p>`;
+    if (!opts?.quiet) refreshReservations(navigator.onLine !== false).then(d => { if (d?.fresh && $('#teesall')) loadTees({ quiet: true }); });
   } catch(e){ el.innerHTML = errBox(e); }
 }
 function sTee(id){ return `<div class="bar"><span class="overline">Tee time</span></div><div id="tee" data-id="${esc(id)}"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
@@ -652,19 +703,11 @@ function pickCourse(pool, nameOrKey){
     || (G.courses || []).filter(c => foldN(c.course) === foldN(nameOrKey) || foldN(c.key) === foldN(nameOrKey)).map(c => ({ name: c.course || c.label, key: c.key }))[0]
     || { name: nameOrKey, key: nameOrKey };
 }
-function resolveTeeCourse(t, id){
+function resolveTeeCourse(t){
   const o = teeCoursePool(t);
   if (o.label && foldN(o.label) !== foldN(o.club)) {
-    const hit = pickCourse(o, o.label); if (hit) return { course: hit, choices: [], why: 'reserva' };
+    const hit = pickCourse(o, o.label); if (hit && foldN(hit.name) !== foldN(o.club)) return { course: hit, choices: [], why: 'reserva' };
   }
-  try { const saved = localStorage.getItem('gl_tee_course_' + id); if (saved) { const hit = pickCourse(o, saved); if (hit) return { course: hit, choices: [], why: 'elegida' }; } } catch (_){}
-  const last = rounds.find(r => { const a = foldN(r.club_name), b = foldN(o.club); return a && b && (a === b || a.includes(b) || b.includes(a)); });
-  if (last) {
-    const name = (last.course_key || '').split(':').slice(1).join(':') || last.course_label;
-    const hit = pickCourse(o, name); if (hit) return { course: hit, choices: [], why: 'última ronda' };
-  }
-  if (o.all.length === 1) return { course: o.all[0], choices: [], why: 'única' };
-  if (o.all.length > 1) return { course: null, choices: o.all, why: 'elegí' };
   return { course: null, choices: [], why: 'vacío' };
 }
 function wxCardHTML(title, pin, now, fc, holes){
@@ -698,7 +741,7 @@ async function holeBearings(courseKey, courseName){
 }
 async function fillTeePrep(t, id){
   const box = $('#teeprep'); if (!box) return;
-  const r = resolveTeeCourse(t, id);
+  const r = resolveTeeCourse(t);
   if (r.choices.length) {
     box.innerHTML = `<div class="section"><h2>¿Qué cancha jugás?</h2></div>
       <p class="lede">La reserva no dice cuál. Elegí una para ver el viento y el plan.</p>
@@ -707,7 +750,7 @@ async function fillTeePrep(t, id){
     return;
   }
   if (!r.course) {
-    box.innerHTML = `<div class="section"><h2>Clima y estrategia</h2></div><div class="msg">Esta reserva no trae la cancha, y no hay una para resolver. El viento y el plan aparecen cuando sepamos dónde jugás.</div>`;
+    box.innerHTML = `<div class="section"><h2>Clima y estrategia</h2></div><div class="msg">La reserva no especifica la cancha.</div>`;
     return;
   }
   const pin = pinFor(t.club_name, r.course.key) || pinFor(t.club_name, t.club_key);
@@ -750,20 +793,23 @@ async function loadCanchaWx(){
     el.innerHTML = wxCardHTML(pin.title, pin, now, fc, holes);
   } catch (e) { el.innerHTML = ''; }
 }
-async function loadTee(id){
+async function loadTee(id, opts){
   const el = $('#tee'); if (!el) return;
   try {
     const d = await api(`/api/tee-times/${encodeURIComponent(id)}?${teeQS(id)}`); if (!$('#tee')) return;
     const t = d.tee_time, dd = dU(t.date), past = daysTo(t.date) < 0, minsTo = (Date.parse(t.starts_at || `${t.date}T${t.time}:00-03:00`) - Date.now()) / 60000;
     el.innerHTML = `<div class="tt-hero"><div class="overline">${past?'Ya jugado':relDay(t.date)}</div><div class="tt-when"><b class="num">${esc(t.time)}</b><span>${WDL[dd.getUTCDay()]} ${dd.getUTCDate()} de ${MESL[dd.getUTCMonth()]}${t.start_hole?` · sale del hoyo ${t.start_hole}`:''}</span></div>
-        <div class="tt-where"><b>${esc(t.club_name)}</b>${t.course_label?`<span>Cancha ${esc(t.course_label)}${t.course_how==='color'?' (según el color de la planilla)':''}</span>`:'<span>La reserva no dice en qué cancha</span>'}${t.modality?`<span>${esc(t.modality)}</span>`:''}</div></div>
+        <div class="tt-where"><b>${esc(t.club_name)}</b>${t.course_label?`<span>Cancha ${esc(t.course_label)}</span>`:'<span>La reserva no especifica la cancha.</span>'}${t.modality?`<span>${esc(t.modality)}</span>`:''}</div></div>
       ${t.event_name?`<p class="foot" style="margin-top:8px">${esc(t.event_name)}</p>`:''}
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
       <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HCP ${f1(c.hcp)}`:''}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HCP</span></div>`:''}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
       <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
       ${past ? '' : `<div class="section"><h2>Tu hándicap de juego</h2></div><div class="card tt-now">${teeBlock(d, t.id)}</div>`}
-      <p class="foot">Leída de la página de reservas de ${esc(t.club_name)}${t.seen_at?` · ${ago(t.seen_at)}`:''}. Para cambiarla o cancelarla, hacelo en tu club: Golflet solo la muestra.</p>`;
+      <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>
+      <button type="button" class="btn ghost" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>`;
+    const rb = $('#refresh-booking'); if (rb) rb.onclick = () => refreshBooking(id, rb);
     el.insertAdjacentHTML('beforeend', '<div id="teeprep"></div>');
+    if (!opts?.quiet) refreshReservations(navigator.onLine !== false).then(d => { if (d?.fresh && $('#tee')?.dataset.id === id) loadTee(id, { quiet: true }); });
     bindTeeBlock(el, t.id, () => loadTee(id));
     fillTeePrep(t, id);
   } catch(e){ el.innerHTML = errBox(e, 'este tee time'); }
@@ -2604,7 +2650,7 @@ async function loadPrivado(what, arg){
          <p class="foot">Mañana: antes de las 11 · Mediodía: 11 a 14 · Tarde: desde las 14.</p>${priv}`;
   } catch(e){ el.innerHTML = errBox(e); }
 }
-const DETAIL = ['jugar','metricas','notificaciones','notificacion','pelota','sorteos','sorteo','ronda','hoyo','vincular','club','cuenta','metrica','gps','palo','estrategia','amigos','grupo','unirse','compartir','nivel','trabajar','putting','tee','tees','equipo','impacto','club-faltante','hi-cambio','cambios','outliers','profesor','profesores','profe','clima','privado','plan','partido','partidos'];
+const DETAIL = ['reconstruir','jugar','metricas','notificaciones','notificacion','pelota','sorteos','sorteo','ronda','hoyo','vincular','club','cuenta','metrica','gps','palo','estrategia','amigos','grupo','unirse','compartir','nivel','trabajar','putting','tee','tees','equipo','impacto','club-faltante','hi-cambio','cambios','outliers','profesor','profesores','profe','clima','privado','plan','partido','partidos'];
 const GROUPISH = k => ['amigos','grupo','unirse','compartir'].includes(k);
 const GG = window.GolfletGroups;
 const GM = window.GolfletMatch;   // t260u Armar partido (public/match.js)
@@ -2762,6 +2808,7 @@ function countUp(){
   requestAnimationFrame(f);
 }
 /* inline confirmation row (no dialogs) */
+if (window.GolfletRecon) window.GolfletRecon.init({ api: (u, o) => api(u, o), esc });
 if (GG) GG.init({ api: (u, o) => api(u, o), esc, f1, toast: t => toast(t), ask: (b, m, y) => askInline(b, m, y) });
 if (GP) GP.init({ api: (u, o) => api(u, o), esc, toast: t => toast(t) });
 if (GM) GM.init({ api: (u, o) => api(u, o), esc, toast: t => toast(t) });
@@ -2822,7 +2869,7 @@ function bind(p, isDetail){
   if (p[0]==='plan' && GP) GP.load(p, location.hash);
   if ((p[0]==='partido' || p[0]==='partidos') && GM) GM.load(p, location.hash);
   if (!isDetail){
-    if (base==='inicio') { fitGreeting(); document.fonts?.ready.then(fitGreeting); loadRecurring(); loadImproveCard(); loadTeeCard().then(checkNewTees); loadScorecards(); loadCurrentTee(); loadHcpImp(); loadHiProfs(); loadHiGroups(); loadSorteoCard(); }
+    if (base==='inicio') { fitGreeting(); document.fonts?.ready.then(fitGreeting); loadRecurring(); loadImproveCard(); paintCardPull(); loadTeeCard().then(() => checkNewTees()); loadScorecards(); loadCurrentTee(); loadHcpImp(); loadHiProfs(); loadHiGroups(); loadSorteoCard(); }
     if (base==='bolsa') loadBagBall();
     if (base==='resumen') { loadPuttCard(); loadWxRes(); loadPrivRes(); }
     decorateWx();
@@ -2862,6 +2909,14 @@ function bind(p, isDetail){
   if (p[0]==='cuenta'){ const lo = view.querySelector('[data-logout]'); if (lo) lo.onclick = async () => { await fetch('/api/auth/sign-out', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}' }); location.replace('/login'); }; }
 }
 addEventListener('hashchange', () => render());
+document.addEventListener('click', ev => {
+  const a = ev.target.closest && ev.target.closest('a[href="#/reconstruir"], a[href^="#/reconstruir/"]');
+  if (!a) return;
+  const href = a.getAttribute('href');
+  if (!href || location.hash === href) return;
+  ev.preventDefault();
+  location.hash = href;
+}, true);
 view.innerHTML = '<div style="padding:40vh 0;text-align:center;color:var(--color-ink3)"><span class="spin"></span></div>';
 // first sign-in with Golfistics: run the first sync (clubs + cards) with the usual sync screen
 const firstSync = () => runSync({ club: 'tus clubes', url: '/api/accounts/first-sync', body: {},
