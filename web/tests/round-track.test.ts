@@ -193,6 +193,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await page.waitForFunction(() => location.hash.startsWith("#/reconstruir/live-new?hole=1"));
+    await page.waitForSelector(".tk-shot-n");
     const writes = cardWrites(calls).map(c => `${c.method} ${c.path}`);
     assert.deepEqual(writes, ["POST /api/reconstructions", "POST /api/reconstructions/live-new/shots"]);
     const shot = JSON.parse(calls.find(c => c.path === "/api/reconstructions/live-new/shots")?.body || "{}");
@@ -203,6 +204,8 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(shot.club, "7i");
     await page.waitForSelector("#play-undo");
     assert.match(await page.$eval("#rc-shots", el => el.textContent || ""), /1\.\s*Hierro 7/);
+    assert.deepEqual(await page.$$eval(".tk-shot-n", nodes => nodes.map(node => node.textContent)), ["1"]);
+    assert.notEqual(await page.$(".tk-sh"), null);
     assert.equal((await page.evaluate(() => document.body.innerText)).includes("SG"), false);
     await page.click("#rc-close");
     await page.waitForSelector("#round-track");
@@ -221,6 +224,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(await page.$("#play-set"), null);
     assert.equal(await page.$("#qstat"), null);
     assert.notEqual(await page.$("#play-club"), null);
+    assert.deepEqual(await page.$$eval(".tk-shot-n", nodes => nodes.map(node => node.textContent)), []);
     assert.deepEqual(cardWrites(calls.slice(savedAt)), []);
   } finally {
     await browser.close();
@@ -532,7 +536,143 @@ test("a stored shot with no point stays unknown and the next shot does not start
     assert.equal(seen.rail.includes("7837291"), false);
     assert.equal(seen.ballLat, "-34.601");
     assert.equal(seen.ballLng, "-58.401");
+    const marks = await page.$$eval(".tk-shot-mark", nodes => nodes.map(node => ({
+      n: node.getAttribute("data-n"),
+      lat: node.getAttribute("data-lat"),
+      lng: node.getAttribute("data-lng"),
+      label: node.querySelector(".tk-shot-n")?.textContent || "",
+    })));
+    assert.deepEqual(marks, [{ n: "5", lat: "-34.601", lng: "-58.401", label: "5" }]);
+    assert.equal(marks.some(m => m.lat === "0" && m.lng === "0"), false);
     assert.deepEqual(cardWrites(calls), []);
+  } finally {
+    await browser.close();
+    await new Promise<void>(r => server.close(() => r()));
+  }
+});
+
+test("each ENTER drops the next numbered dot and undo takes that dot off the map", { timeout: 60_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+  const calls: { method: string; path: string }[] = [];
+  const shots: { id: string; hole: number; club: string | null; lat: number | null; lng: number | null; end_lat: number | null; end_lng: number | null; distance_m: number }[] = [];
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
+    const json = (body: unknown, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (url.pathname.startsWith("/api/")) {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      calls.push({ method: req.method || "GET", path: url.pathname });
+      if (url.pathname === "/api/data") return json(data);
+      if (url.pathname === "/api/gps/courses") return json({ courses: [{ course_id: "course-fixture", club_name: "Club Fixture", course: "Cancha Fixture", label: "Cancha Fixture" }] });
+      if (url.pathname === "/api/gps/courses/course-fixture" || url.pathname === "/api/gps/courses/fx-cancha-fixture") {
+        return json({ course: { holes: [{ hole: 1, tee: { lat: -34.6, lng: -58.4 }, green: { center: { lat: -34.601, lng: -58.401 } } }] } });
+      }
+      if (url.pathname === "/api/reconstructions" && req.method === "GET") {
+        return json({ rounds: [{ id: "r-nov", date: "2026-11-02", course: "Cancha Fixture", club_name: "Club Fixture", club_code: "fx" }], reconstructions: [] });
+      }
+      if (url.pathname === "/api/reconstructions" && req.method === "POST") return json({ live_round: { id: "live-new" } }, 201);
+      if (url.pathname === "/api/reconstructions/live-new/shots" && req.method === "POST") {
+        const posted = JSON.parse(raw || "{}");
+        shots.push({ id: `s${shots.length + 1}`, hole: 1, club: posted.club || null, lat: posted.lat ?? null, lng: posted.lng ?? null, end_lat: posted.end_lat ?? null, end_lng: posted.end_lng ?? null, distance_m: 12 });
+        return json({ shots });
+      }
+      if (url.pathname === "/api/reconstructions/live-new/shots" && req.method === "DELETE") { shots.pop(); return json({}); }
+      if (url.pathname === "/api/reconstructions/live-new/shots" && req.method === "GET") return json({ shots });
+      return json({});
+    }
+    const file = url.pathname === "/" ? "/index.html" : url.pathname;
+    try {
+      const buf = await readFile(new URL(file.slice(1), ROOT));
+      res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" });
+      res.end(buf);
+    } catch { res.writeHead(404); res.end("missing"); }
+  });
+  await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const { default: puppeteer } = await import("puppeteer-core");
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  const page = await browser.newPage();
+  const labels = () => page.$$eval(".tk-shot-n", nodes => nodes.map(node => node.textContent));
+  const place = async () => page.evaluate(() => {
+    const svg = document.querySelector(".tk-svg");
+    const line = document.querySelector(".tk-sh");
+    const box = (svg as SVGSVGElement).viewBox.baseVal;
+    const pts = (line?.getAttribute("points") || "").trim().split(/\s+/).filter(Boolean).map(p => p.split(",").map(Number));
+    const last = pts[pts.length - 1] || [NaN, NaN];
+    return {
+      dots: [...document.querySelectorAll(".tk-shot-mark")].map(node => ({
+        n: node.getAttribute("data-n"),
+        lat: node.getAttribute("data-lat"),
+        lng: node.getAttribute("data-lng"),
+        cx: Number(node.querySelector("circle")?.getAttribute("cx")),
+        cy: Number(node.querySelector("circle")?.getAttribute("cy")),
+      })),
+      lastX: last[0], lastY: last[1], midX: box.width / 2, midY: box.height * 0.42,
+      controls: {
+        undo: !!document.querySelector("#play-undo"),
+        club: !!document.querySelector("#play-club"),
+        penalty: !!document.querySelector("#play-penalty"),
+        enter: !!document.querySelector("#play-hit"),
+        more: !!document.querySelector("#play-more"),
+        next: !!document.querySelector("#play-next"),
+      },
+    };
+  });
+  try {
+    await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true });
+    await page.setRequestInterception(true);
+    page.on("request", req => {
+      const host = new URL(req.url()).hostname;
+      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      else req.continue();
+    });
+    await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("#round-track");
+    await page.click("#round-track");
+    await page.waitForSelector("#play-cancel");
+    await page.click("#play-cancel");
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("marcar el hoyo"));
+    await page.click("#play-cancel");
+    await page.waitForSelector("#play-hit");
+    await page.click("#play-hit");
+    await page.waitForSelector(".tk-shot-n");
+    assert.deepEqual(await labels(), ["1"]);
+    const dropped = await place();
+    assert.equal(dropped.dots.length, 1);
+    assert.equal(dropped.controls.undo, true);
+    assert.equal(dropped.controls.club, true);
+    assert.equal(dropped.controls.penalty, true);
+    assert.equal(dropped.controls.enter, true);
+    assert.equal(dropped.controls.more, false);
+    assert.equal(dropped.controls.next, false);
+    const first = dropped.dots[0];
+    await page.mouse.move(200, 320);
+    await page.mouse.down();
+    await page.mouse.move(40, 360, { steps: 8 });
+    await page.mouse.up();
+    const panned = await place();
+    assert.notEqual(panned.dots[0].cx, first.cx);
+    assert.ok(Math.hypot(panned.lastX - panned.midX, panned.lastY - panned.midY) < 3);
+    assert.ok(Math.hypot(panned.dots[0].cx - panned.midX, panned.dots[0].cy - panned.midY) > 20);
+    await page.click("#play-zoom-in");
+    const zoomed = await place();
+    assert.notEqual(zoomed.dots[0].cx, panned.dots[0].cx);
+    assert.equal(zoomed.dots[0].lat, first.lat);
+    assert.equal(zoomed.dots[0].lng, first.lng);
+    await page.click("#play-hit");
+    await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 2);
+    const both = await place();
+    assert.deepEqual(await labels(), ["1", "2"]);
+    assert.notEqual(both.dots[0].cx, both.dots[1].cx);
+    assert.equal(both.dots[0].lat, first.lat);
+    assert.equal((await page.evaluate(() => document.body.innerText)).includes("SG"), false);
+    await page.click("#play-undo");
+    await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 1);
+    const left = await place();
+    assert.deepEqual(await labels(), ["1"]);
+    assert.equal(left.dots[0].lat, first.lat);
+    assert.equal(left.dots[0].lng, first.lng);
+    assert.equal(shots.length, 1);
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));

@@ -143,8 +143,30 @@
       const mark = (ll, cls) => { const s = toScreen(ll, W, H); if (s) o += `<circle class="${cls}" cx="${s[0]}" cy="${s[1]}" r="7"/>`; };
       if (tee) mark(tee, 'tk-pl');
       if (pin) mark(pin, 'tk-pin');
-      const played = S.track.marks.filter(m => !m.penalty).map(m => ({ lat: m.lat, lng: m.lng }));
-      if (tee && played.length) o += `<polyline class="tk-sh" points="${polyAttr([tee, ...played], W, H)}"/>`;
+      const played = [];
+      let seq = 0;
+      for (const m of S.track.marks) {
+        if (m.drop) continue;
+        const at = R().knownPoint(m.lat, m.lng);
+        if (!at) continue;
+        seq += 1;
+        const n = Number.isInteger(m.n) && m.n > 0 ? m.n : seq;
+        played.push({ ...m, at, n });
+      }
+      const trail = [];
+      if (tee && R().knownPoint(tee.lat, tee.lng)) trail.push(tee);
+      for (const m of played) trail.push(m.at);
+      if (S.track.phase === 'tracking' && !S.done && trail.length) {
+        const here = fromCenter();
+        const cursor = here && R().knownPoint(here.lat, here.lng);
+        if (cursor) trail.push(cursor);
+      }
+      if (trail.length >= 2) o += `<polyline class="tk-sh" points="${polyAttr(trail, W, H)}"/>`;
+      for (const m of played) {
+        const s = toScreen(m.at, W, H);
+        if (!s) continue;
+        o += `<g class="tk-shot-mark" data-n="${m.n}" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><circle class="tk-dot" cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-shot-n" x="${s[0]}" y="${s[1]}">${m.n}</text></g>`;
+      }
       return o;
     };
 
@@ -154,9 +176,10 @@
       S.suggestedTee = tee;
       S.suggestedPin = pin;
       const saved = (S.saved || []).filter(s => Number(s.hole) === Number(S.hole));
-      const placed = saved.flatMap(s => {
+      const placed = [];
+      saved.forEach((s, i) => {
         const end = R().knownPoint(s.end_lat, s.end_lng);
-        return end ? [{ ...s, end }] : [];
+        if (end) placed.push({ ...s, end, n: i + 1 });
       });
       if (!saved.length) {
         S.done = false;
@@ -170,8 +193,8 @@
         tee: tee ? { ...tee } : null,
         flag: pin ? { ...pin } : null,
         ball: last ? { ...last.end } : (tee ? { ...tee } : null),
-        marks: placed.map((s, i) => ({
-          id: s.id || i + 1, lat: s.end.lat, lng: s.end.lng, club: s.club || null,
+        marks: placed.map(s => ({
+          id: s.id || s.n, n: s.n, lat: s.end.lat, lng: s.end.lng, club: s.club || null,
           countsStroke: s.result !== 'penalty', holed: s.result === 'holed',
           penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0, drop: false,
         })),
@@ -377,7 +400,14 @@
       try {
         const id = await postShot(out.holed && S.track.flag ? S.track.flag : here, out.holed ? 'holed' : (phase === 'penaltyWhere' ? 'penalty' : null), from);
         if (!S.alive || id === false) return;
-        S.track = out.state;
+        S.track = {
+          ...out.state,
+          marks: out.state.marks.map((m, i, arr) => {
+            if (m.drop || (Number.isInteger(m.n) && m.n > 0)) return m;
+            const prior = arr.slice(0, i).reduce((max, x) => Math.max(max, Number(x.n) || 0), 0);
+            return { ...m, n: prior + 1 };
+          }),
+        };
         if (out.holed) S.done = true;
         if (phase === 'penaltyWhere') S.penaltyShotId = id;
         S.msg = out.holed ? 'En el hoyo.' : '';
