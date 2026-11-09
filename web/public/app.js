@@ -256,9 +256,8 @@ function vResumen(){
   <div class="card" style="padding:16px 14px 14px">${trend()}
     <div class="legend"><span><i style="background:${C.primary}"></i>Índice (mejores 8 de 20)</span>${G.courses.map(c=>`<span><i style="background:${CCOL[c.key]};opacity:.6"></i>${esc(c.label)}</span>`).join('')}</div></div>
   <p class="foot">Cada punto es un diferencial calculado por Golflet (tu club no lo publica).${G.hi_history.length?` <a class="link" href="${mlink('handicap',{scope:'all'})}">HCP Index oficial: ${f1(G.hi_history[0]?.hi)} → ${f1(G.hi_history.at(-1)?.hi)}</a>.`:''}</p>
-  </div><div class="col-b"><div class="section"><h2>Resultados por hoyo</h2></div>
-  <div class="grid3 rstats" style="gap:8px">${['eagles','birdies','pars','bogeys'].map(k=>{ const n = pool.reduce((s,r)=>s+(r.holes?.length? r.holes.filter(h=>h[1]!=null&&h[2]!=null&&(k==='eagles'?h[2]-h[1]<=-2:k==='birdies'?h[2]-h[1]===-1:k==='pars'?h[2]===h[1]:h[2]-h[1]===1)).length : (k==='eagles'?0:(r.summary_counts?.[k]||0))),0);
-    return `<a class="card mini stat vx-tap res-t res-${k}" style="padding:12px 10px" href="${rlink(k,{scope:'all',course:cq,sort:'date',order:'desc'})}"><div class="k"><i class="rsw" aria-hidden="true"></i>${MTITLE[k]}</div><div class="v num" style="font-size:calc(24px*var(--ts,1))">${n}</div></a>`; }).join('')}</div>
+  </div><div class="col-b">  <div class="section"><h2>Resultados por hoyo</h2></div>
+  ${holeResults(pool, cq)}
   ${hard.length?`<div class="section"><h2>Hoyos que más te cuestan</h2></div>
   <div class="list">${hard.map(h=>`<a class="row" href="#/hoyo/${encodeURIComponent(h.ck)}/${h.hole}"><div class="date"><b class="num">${h.hole}</b><span>${esc(h.cn.slice(0,3))}</span></div><div class="body"><div class="t">Par ${h.par} · Handicap ${h.hcp}</div><div class="s">Promedio ${f2(h.stats.avg)} en ${h.stats.n} vueltas</div></div><span class="badge neg num">${sg(h.stats.avg_to_par)}</span>${ICON.chev}</a>`).join('')}</div>`:''}
   <p class="foot">Sobre ${pool.length} tarjetas válidas de 18 hoyos${ranged?` (${rlabel(RANGE).toLowerCase()})`:""}; las DES y las de 9 hoyos no cuentan.</p><div id="puttcard"></div><div id="wxres"></div><div id="privres"></div></div></div>`;
@@ -292,6 +291,19 @@ function nine(r, c, from){
     <span class="lab">Par</span>${hs.map(h=>`<span class="c">${h[1]??''}</span>`).join('')}<span class="tot" style="color:var(--color-ink2);font-weight:var(--fw500,500)">${tot(hs.map(h=>h[1]))}</span>
     <span class="lab"></span>${hs.map(h=>`<span class="sc-s"><span class="b ${cls(h[2]==null||h[1]==null?null:h[2]-h[1])}">${h[2]??'·'}</span></span>`).join('')}<span class="tot">${tot(hs.map(h=>h[2]))}</span>
   </div>`;
+}
+const HOLE_MARK = {
+  eagles: `<svg class="hr-ic" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path fill="#0B2545" d="M3 17.5c3.2-.4 6.2-4.6 9.4-4.6 1.6 0 2.6 1.4 4.8 1.6 2.6.2 4.4-2.2 7.2-2.4 1.2 2.6 1.6 4.8-.2 6.6-2.2 2.2-5.2 1.2-7.4 1.6-2.4.4-3.6 2.4-6.2 2.2-2.8-.2-4.6-2.6-7.6-2.2-1 .2-2 .8-3 1.2.2-1.4.6-2.8 1-4z"/><path fill="#C4A36A" d="M24.2 10.2c1.6-.2 3.2.2 4.4 1.2-1.4.6-2.6.4-3.8-.2-.4-.8-.6-1-.6-1z"/><circle cx="23.2" cy="12.2" r=".9" fill="#F6F7F9"/></svg>`,
+  birdies: `<svg class="hr-ic" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path fill="#0B2545" d="M8 18.5c2.2-3.6 5.4-5.2 8.2-4.2 1.2.4 2.2 1.4 3.6 1.2 1.6-.2 2.4-1.8 4-1.6-.2 1.6-1.2 2.6-2.6 3.2 1.2.8 1.8 2 1.4 3.2-2.2.2-3.8-.6-5.2-1.4-1.6 1.6-4 2.4-6.4 1.6-2.2-.8-3.6-2.2-3-2z"/><path fill="#C8102E" d="M23.6 13.2l4.2.6-3.4 1.4z"/><circle cx="20.4" cy="15.2" r=".8" fill="#F6F7F9"/></svg>`,
+  pars: `<svg class="hr-ic" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path fill="#0B2545" d="M15 6h2v16h-2z"/><path fill="#C8102E" d="M17 7.2h8.2l-1.6 3.2 1.6 3.2H17z"/><ellipse cx="16" cy="24.5" rx="6.2" ry="2.2" fill="#C4A36A"/></svg>`,
+  bogeys: `<svg class="hr-ic" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><ellipse cx="18.5" cy="22.5" rx="7" ry="2.4" fill="none" stroke="#0B2545" stroke-width="1.8"/><circle cx="11" cy="13" r="5.2" fill="#F6F7F9" stroke="#0B2545" stroke-width="1.6"/><path fill="none" stroke="#C4A36A" stroke-width="1.2" d="M8.2 13.2c1.2-1.6 2.6-1.4 3.6.2"/></svg>`,
+};
+function holeResults(pool, cq){
+  const keys = ['eagles', 'birdies', 'pars', 'bogeys'];
+  return `<div class="hr-grid">${keys.map(k => {
+    const n = pool.reduce((s, r) => s + (r.holes?.length ? r.holes.filter(h => h[1] != null && h[2] != null && (k === 'eagles' ? h[2] - h[1] <= -2 : k === 'birdies' ? h[2] - h[1] === -1 : k === 'pars' ? h[2] === h[1] : h[2] - h[1] === 1)).length : (k === 'eagles' ? 0 : (r.summary_counts?.[k] || 0))), 0);
+    return `<a class="hr-card vx-tap hr-${k}" href="${rlink(k, { scope: 'all', course: cq, sort: 'date', order: 'desc' })}"><span class="hr-art" aria-hidden="true">${HOLE_MARK[k]}</span><span class="hr-copy"><span class="k">${MTITLE[k]}</span><span class="v num">${n}</span></span></a>`;
+  }).join('')}</div>`;
 }
 function holeTally(r){
   const holes = r.holes || [], known = holes.filter(h => h[1] != null && h[2] != null);
@@ -358,7 +370,7 @@ function vCancha(){
   <div class="teechips">${Object.entries(c.tees||{}).map(([t,x])=>`<span class="teechip"><i class="tee" style="background:${TEE[t.toUpperCase()]||'#ccc'}"></i>${esc(t)} <b class="num">${f1(x.course_rating)}</b>/${x.slope}</span>`).join('')}</div>
   <div id="stratcard" data-ck="${esc(c.key)}"></div>
   <div id="cancwx" data-ck="${esc(c.key)}" data-club="${esc(c.club_name||'')}"></div>
-  <a class="card row vx-tap lb-cbook" href="#/plan/cancha?ck=${encodeURIComponent(c.key)}"><div class="body"><div class="t">Libreta de la cancha</div><div class="s">Diseño, rumbo, marcas y greens para imprimir · sin reserva</div></div><span class="chev">›</span></a>
+  <a class="lb-entry vx-tap" href="#/plan/cancha?ck=${encodeURIComponent(c.key)}" aria-label="Abrir la libreta de ${esc(c.course)}. Diseño, rumbo, marcas y greens para imprimir, sin reserva."><span class="lb-cover" aria-hidden="true"><svg class="lb-book" viewBox="0 0 32 40" fill="none"><path d="M6 4.5h16.5A3.5 3.5 0 0 1 26 8v26.5H9.5A3.5 3.5 0 0 0 6 38V4.5z" fill="#F7F4EE"/><path d="M6 4.5h16.5A3.5 3.5 0 0 1 26 8v26.5" stroke="#0B2545" stroke-width="1.6"/><path d="M6 8h3.2V36" stroke="#C8102E" stroke-width="2.2"/><path d="M11 12h10M11 17h10M11 22h7" stroke="#0B2545" stroke-width="1.3" stroke-linecap="round"/></svg></span><span class="lb-copy"><span class="lb-k">Libreta de la cancha</span><span class="lb-s">Diseño, rumbo, marcas y greens para imprimir. Sin reserva.</span></span><span class="lb-go">Abrir libreta ${ICON.chev}</span></a>
   <div id="bench" data-ck="${esc(c.key)}"></div>
   <div class="section"><h2>Hoyos</h2><span class="badge">golpes sobre el par</span></div>
   <div class="hgrid">${c.holes.map(h=>{ const st = HS(h), v = st.n ? st.avg_to_par : null, hard = top.includes(h.hole);
@@ -678,11 +690,18 @@ async function loadScorecards(){
     const rows = d.fetches || [];
     if (!rows.length) { el.innerHTML = ''; return; }
     const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
-    const block = (title, list) => list.length ? `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${list.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div></div></div>`).join('')}</div>` : '';
-    const open = rows.filter(f => ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status));
-    const done = rows.filter(f => f.status === 'complete');
-    const rest = rows.filter(f => !open.includes(f) && !done.includes(f));
-    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${block('En curso', open)}${block('Ya está', done)}${block('Otras', rest)}`;
+    const block = (title, list) => list.length ? `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${list.map(f => `<div class="row sc-job" data-bucket="${esc(f.presentation || '')}"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div></div></div>`).join('')}</div>` : '';
+    const bucket = f => f.presentation || (f.status === 'complete' ? 'ready' : f.status === 'cancelled' ? 'cancelled' : 'pending');
+    const groups = [
+      ['En curso', rows.filter(f => bucket(f) === 'pending')],
+      ['Próxima', rows.filter(f => bucket(f) === 'future')],
+      ['No presentó', rows.filter(f => bucket(f) === 'absent')],
+      ['Ya está', rows.filter(f => bucket(f) === 'ready')],
+      ['Sin confirmar', rows.filter(f => bucket(f) === 'problem')],
+      ['Otras', rows.filter(f => bucket(f) === 'cancelled')],
+    ];
+    const note = groups[2][1].length ? `<p class="foot">«No presentó» es la lectura de Golflet cuando el club contestó y no había tarjeta después del día de la salida. No es el estado de la AAG y no cambia el hándicap.</p>` : '';
+    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${groups.map(([title, list]) => block(title, list)).join('')}${note}`;
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -1453,12 +1472,12 @@ function vBolsa(){
   const bag = G.bag, filled = bag.filter(b=>b.carry||b.total).length;
   return `<div class="top"><span class="overline">Mis distancias</span></div>
   <h1 class="ltitle">Mi bolsa</h1>
-  <div class="section"><h2>Mis palos</h2><a class="badge" href="#/equipo/nuevo">+ Agregar palo</a></div><div id="equip"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
+  <div class="section"><h2>Mis palos</h2><span class="eq-adds"><a class="badge" href="#/equipo/juego">Configurar juego de hierros</a><a class="badge" href="#/equipo/nuevo">+ Agregar palo</a></span></div><div id="equip"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
   <a class="card bagball" id="bagball" href="#/pelota"><span class="gi">${BALL_IC}</span><span class="bb-t">Pelota<small>&nbsp;</small></span>${ICON.chev}</a>
   <div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div>
   <div class="card bagsum"><p class="bagsum-n num" id="bagcount">${filled} de ${bag.length}</p><div id="bagmsg" class="bagsum-d">${filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste.</p></div>
   <div class="bagtable"><div class="baghdr" aria-hidden="true"><span>Palo</span><span>Carry</span><span>Total</span></div>
-  <div class="list">${bag.map((b,i)=>`<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
+  <div class="list">${bag.map((b,i)=>{ const putt = /^(pt|putter)$/i.test(String(b.club||'').trim()); if (putt) return `<div class="bagrow bag-putt" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><span class="bag-nodist">Sin distancia de vuelo</span></div>`; return `<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`; }).join('')}</div></div>
   <p class="foot" id="bagsaved">Tu distancia es la que manda. Al lado, lo que mediste con GPS (total, no carry). Yardas, sin datos inventados.</p>
   <div class="section"><h2>Distancias por palo</h2><span class="badge gold">GPS</span></div><div id="cdist"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div><div id="gpsrounds"></div>`;
 }

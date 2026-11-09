@@ -135,6 +135,56 @@ export function syncKey(job: Pick<FetchJob, "userId" | "accountId" | "source" | 
   return null;
 }
 
+/** Written only when a read succeeded and the club list had no card, then the search stopped. */
+export const EMPTY_CARD_STOP = "El club respondió y no había tarjeta. Dejamos de buscarla solos.";
+
+/** Midnight ART after the first planned read (tee + 5h). Same cutoff the hourly window already uses. Not an AAG rule. */
+export function absenceCutoff(playedAt: Date): Date {
+  const first = new Date(playedAt.getTime() + FIRST_DELAY_MS);
+  return artTeeInstant(addArtDays(artParts(first).date, 1), "00:00");
+}
+
+export type ScorecardBucket = "future" | "pending" | "absent" | "ready" | "cancelled" | "problem";
+
+export function confirmedEmptyRead(status: FetchStatus, lastAttemptAt: string | null, lastError: string | null): boolean {
+  if (status === "awaiting_card") return !!lastAttemptAt && !lastError;
+  return status === "stopped" && lastError === EMPTY_CARD_STOP;
+}
+
+/** How the home card groups a job. The stored status does not change. */
+export function scorecardPresentation(input: {
+  status: FetchStatus;
+  playedAt: string;
+  nextAttemptAt?: string | null;
+  lastAttemptAt?: string | null;
+  lastError?: string | null;
+  roundId?: string | null;
+}, now = new Date()): { bucket: ScorecardBucket; heading: string; label: string } {
+  const status = input.status;
+  const played = new Date(input.playedAt);
+  if (status === "complete" || input.roundId) return { bucket: "ready", heading: "Ya está", label: "La tarjeta ya está." };
+  if (status === "cancelled") return { bucket: "cancelled", heading: "Otras", label: "La reserva se canceló." };
+  if (status === "needs_credentials" || status === "error") {
+    return { bucket: "problem", heading: "Sin confirmar", label: scorecardLabel(status, input.nextAttemptAt || null, input.lastError || null, now) };
+  }
+  if (status === "scheduled" && Number.isFinite(played.getTime()) && now.getTime() < played.getTime()) {
+    return { bucket: "future", heading: "Próxima", label: "La salida todavía no fue. La buscamos cinco horas después." };
+  }
+  const empty = confirmedEmptyRead(status, input.lastAttemptAt || null, input.lastError || null);
+  if (empty && Number.isFinite(played.getTime()) && now.getTime() >= absenceCutoff(played).getTime()) {
+    const base = "No presentó. El club respondió y esa salida no tenía tarjeta. No es una decisión de la AAG y no cambia el hándicap ni el score.";
+    return {
+      bucket: "absent",
+      heading: "No presentó",
+      label: status === "awaiting_card" ? `${base} Seguimos mirando una vez por día, por si la cargan.` : `${base} Ya no la buscamos solos.`,
+    };
+  }
+  if (status === "stopped") {
+    return { bucket: "problem", heading: "Sin confirmar", label: input.lastError || scorecardLabel(status, null, input.lastError || null, now) };
+  }
+  return { bucket: "pending", heading: "En curso", label: scorecardLabel(status, input.nextAttemptAt || null, input.lastError || null, now) };
+}
+
 export function scorecardLabel(status: FetchStatus, nextAttemptAt: string | null, lastError: string | null, now = new Date()): string {
   const when = nextAttemptAt ? artWhen(new Date(nextAttemptAt), now) : "";
   if (status === "scheduled") return lastError ? `${lastError} La buscamos ${when}.` : `La buscamos ${when}.`;
@@ -334,7 +384,9 @@ export function applyAttempt(job: FetchJob, now: Date, attempt: Attempt): FetchJ
     next.status = "stopped";
     next.attemptCount = attemptCount;
     next.lastAttemptAt = now.toISOString();
-    next.lastError = "Dejamos de buscar esta tarjeta automáticamente. Podés actualizar desde la app.";
+    next.lastError = attempt.type === "waiting" && !message
+      ? EMPTY_CARD_STOP
+      : (message ? message.slice(0, 200) : "Dejamos de buscar esta tarjeta automáticamente. Podés actualizar desde la app.");
     next.nextAttemptAt = nextAttempt(played, now).toISOString();
     return next;
   }

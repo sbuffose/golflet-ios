@@ -89,21 +89,24 @@ test("the home entry is a compact control and opens hole 1 on the map", { timeou
       const el = document.querySelector("#tkmap");
       const r = el?.getBoundingClientRect();
       return {
-        hole: document.querySelector("#tk-hole b")?.textContent || "",
+        hole: document.querySelector(".tk-hn b")?.textContent || "",
         frame: el?.getAttribute("data-frame") || "",
         aim: el?.getAttribute("data-aim-lat") || "",
         tile: Number(el?.getAttribute("data-tile-z") || 0),
         w: r?.width || 0, h: r?.height || 0, vw: innerWidth, vh: innerHeight,
-        cancel: (document.querySelector("#play-cancel")?.textContent || "").trim(),
+        hit: !!document.querySelector("#play-hit"),
+        cancel: document.querySelector("#play-cancel"),
       };
     });
     assert.equal(map.hole, "Hoyo 1");
-    assert.equal(map.frame, "overview");
-    assert.equal(map.aim.startsWith("-38.033812"), true);
+    assert.equal(map.frame, "play");
+    assert.ok(map.aim.startsWith("-38.037"), map.aim);
     assert.ok(map.tile <= 17);
     assert.ok(map.w >= map.vw - 2 && map.h >= map.vh - 2);
-    assert.equal(map.cancel, "Cancelar");
+    assert.equal(map.hit, true);
+    assert.equal(map.cancel, null);
     assert.equal((await page.evaluate(() => document.body.innerText)).includes("Arrastrá para confirmar la salida"), false);
+    assert.equal((await page.evaluate(() => document.body.innerText)).includes("[object Object]"), false);
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));
@@ -152,24 +155,21 @@ test("an existing hole is kept, the next hole uses its own tee, and a bad hole i
     }));
     await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true });
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-keep`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#tk-hole");
+    await page.waitForSelector(".tk-hn");
     let seen = await read();
     assert.equal(seen.hole, "Hoyo 2");
-    assert.equal(seen.frame, "overview");
-    assert.equal(seen.aim.startsWith("-34.7015"), true);
+    assert.equal(seen.frame, "play");
+    assert.equal(Number(seen.aim), -34.7);
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-keep?hole=1`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#tk-hole");
+    await page.waitForSelector(".tk-hn");
     seen = await read();
     assert.equal(seen.hole, "Hoyo 1");
-    assert.equal(seen.aim.startsWith("-34.601"), true);
-    await page.click("#play-cancel");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
-    await page.click("#play-cancel");
+    assert.equal(Number(seen.aim), -34.6);
     await page.waitForSelector("#tknext");
     await page.click("#tknext");
-    await page.waitForFunction(() => document.querySelector("#tk-hole b")?.textContent === "Hoyo 2");
+    await page.waitForFunction(() => document.querySelector(".tk-hn b")?.textContent === "Hoyo 2");
     seen = await read();
-    assert.equal(seen.frame, "tee");
+    assert.equal(seen.frame, "play");
     assert.equal(Number(seen.aim), -34.7);
     assert.notEqual(seen.bearing, "");
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-keep?hole=3`, { waitUntil: "networkidle0" });

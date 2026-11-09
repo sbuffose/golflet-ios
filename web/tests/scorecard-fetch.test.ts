@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  FIRST_DELAY_MS, applyAttempt, artTeeInstant, blankJob, isDue, nextAttempt, planDue, reconcileJob, scorecardLabel,
+  FIRST_DELAY_MS, applyAttempt, artTeeInstant, blankJob, isDue, nextAttempt, planDue, reconcileJob, scorecardLabel, scorecardPresentation, absenceCutoff, EMPTY_CARD_STOP,
   type FetchJob, type RoundHit, type TeeSnap,
 } from "../lib/scorecard-fetch-core";
 
@@ -162,4 +162,51 @@ test("the cron, the table, and the migration are present and the daily schedule 
   const scorecard = schema.slice(schema.indexOf("v42:"));
   assert.equal(scorecard.includes("$$"), false);
   assert.match(scorecard, /scorecard_sync_lease/);
+});
+
+test("a successful empty read after the ART window reads as No presentó, and a late card stays complete", () => {
+  const played = artTeeInstant("2026-10-30", "14:48");
+  const cutoff = absenceCutoff(played);
+  assert.equal(cutoff.toISOString(), artTeeInstant("2026-10-31", "00:00").toISOString());
+  const during = artTeeInstant("2026-10-30", "22:00");
+  const open = scorecardPresentation({
+    status: "awaiting_card", playedAt: played.toISOString(), lastAttemptAt: during.toISOString(), lastError: null,
+    nextAttemptAt: artTeeInstant("2026-10-30", "23:00").toISOString(),
+  }, during);
+  assert.equal(open.bucket, "pending");
+  assert.match(open.label, /Todavía no está/);
+  const later = artTeeInstant("2026-11-09", "12:00");
+  const absent = scorecardPresentation({
+    status: "awaiting_card", playedAt: played.toISOString(), lastAttemptAt: during.toISOString(), lastError: null,
+    nextAttemptAt: artTeeInstant("2026-11-09", "23:30").toISOString(),
+  }, later);
+  assert.equal(absent.bucket, "absent");
+  assert.equal(absent.heading, "No presentó");
+  assert.match(absent.label, /no cambia el hándicap/);
+  const failed = scorecardPresentation({
+    status: "error", playedAt: played.toISOString(), lastAttemptAt: later.toISOString(), lastError: "El club no respondió",
+    nextAttemptAt: later.toISOString(),
+  }, later);
+  assert.equal(failed.bucket, "problem");
+  assert.equal(failed.heading, "Sin confirmar");
+  const future = scorecardPresentation({
+    status: "scheduled", playedAt: artTeeInstant("2026-11-12", "09:00").toISOString(), lastAttemptAt: null, lastError: null,
+  }, later);
+  assert.equal(future.bucket, "future");
+  const cancelled = scorecardPresentation({
+    status: "cancelled", playedAt: played.toISOString(), lastAttemptAt: null, lastError: null,
+  }, later);
+  assert.equal(cancelled.bucket, "cancelled");
+  assert.match(cancelled.label, /canceló/);
+  const stoppedEmpty = applyAttempt(job({ id: "old", playedAt: played.toISOString(), date: "2026-10-30", time: "14:48", attemptCount: 19, status: "awaiting_card" }), later, { type: "waiting" });
+  assert.equal(stoppedEmpty.status, "stopped");
+  assert.equal(stoppedEmpty.lastError, EMPTY_CARD_STOP);
+  const shown = scorecardPresentation(stoppedEmpty, later);
+  assert.equal(shown.bucket, "absent");
+  const stoppedErr = applyAttempt(job({ id: "bad", playedAt: played.toISOString(), date: "2026-10-30", attemptCount: 19, status: "error" }), later, { type: "error", message: "El club no respondió" });
+  assert.equal(scorecardPresentation(stoppedErr, later).bucket, "problem");
+  const late = applyAttempt(job({ id: "late", playedAt: played.toISOString(), date: "2026-10-30", status: "awaiting_card", lastAttemptAt: during.toISOString() }), later, { type: "complete", roundId: "r9" });
+  assert.equal(late.status, "complete");
+  assert.equal(late.roundId, "r9");
+  assert.equal(scorecardPresentation(late, later).bucket, "ready");
 });
