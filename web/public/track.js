@@ -61,9 +61,9 @@
       id: H.id, live: H.live, shots: H.shots || [], holes: H.holes || [], hole: H.live?.current_hole || 1,
       pos: null, acc: null, course: H.course || null, cmap: null, wind: null, strat: null, bag: H.bag || [],
       busy: false, watch: null, panned: false, club: '', penaltyShotId: null, msg: '',
-      track: R().trackNew(), cam: { z: 17, cx: 0.5, cy: 0.5, hdg: 0 }, frame: 'overview', axis: null, mapDown: false,
+      track: R().trackNew(), cam: { z: 17, cx: 0.5, cy: 0.5, hdg: 0 }, frame: 'overview', axis: null, mapReady: false, mapGen: 0, tileCache: new Map(), tileFlight: new Map(),
       more: false, history: false, saved: H.shots || [],
-      alive: true, done: false, suggestedTee: null, suggestedPin: null,
+      alive: true, done: false, suggestedTee: null, suggestedPin: null, cmapTried: false,
     };
 
     const holeRec = () => S.holes.find(h => h.hole === S.hole || h.number === S.hole) || S.holes[S.hole - 1] || {};
@@ -125,18 +125,89 @@
       const rad = -S.cam.hdg * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
       return [W / 2 + px * c - py * s, H * 0.42 + px * s + py * c];
     };
-    const tilesHTML = () => {
-      const z = Math.max(0, Math.min(R().IMAGERY_ZOOM_MAX, Math.floor(S.cam.z)));
-      const n = 2 ** z;
-      const cx = S.cam.cx * n, cy = S.cam.cy * n;
-      const pad = 4;
-      const x0 = Math.floor(cx - pad), x1 = Math.ceil(cx + pad), y0 = Math.floor(cy - pad), y1 = Math.ceil(cy + pad);
-      let html = '';
-      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
-        const wx = ((tx % n) + n) % n, wy = Math.min(n - 1, Math.max(0, ty));
-        html += `<img class="tk-tile" alt="" decoding="async" src="${TILE(z, wx, wy)}" style="left:${(tx - cx) * 256}px;top:${(ty - cy) * 256}px;width:256px;height:256px">`;
+    const sha256Hex = async buf => {
+      const dig = await crypto.subtle.digest('SHA-256', buf);
+      return [...new Uint8Array(dig)].map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+    let plateSlots = 0;
+    const plateWait = [];
+    const blankPlate = async buf => {
+      const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      if (bytes.byteLength > 6000) return false;
+      if (plateSlots >= 2) await new Promise(r => plateWait.push(r));
+      plateSlots += 1;
+      try {
+        const blob = new Blob([bytes], { type: 'image/jpeg' });
+        const bmp = await Promise.race([
+          createImageBitmap(blob),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('decode')), 1200)),
+        ]);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = bmp.width; canvas.height = bmp.height;
+          const g = canvas.getContext('2d', { willReadFrequently: true });
+          if (!g) return false;
+          g.drawImage(bmp, 0, 0);
+          const data = g.getImageData(0, 0, bmp.width, bmp.height).data;
+          let n = 0, grey = 0, sum = 0;
+          for (let i = 0; i < data.length; i += 16) {
+            const r = data[i], gc = data[i + 1], b = data[i + 2];
+            n += 1; sum += r + gc + b;
+            if (Math.max(r, gc, b) - Math.min(r, gc, b) <= 8) grey += 1;
+          }
+          const mean = n ? sum / (n * 3) : 0;
+          return n > 0 && grey / n > 0.97 && mean > 185 && mean < 225;
+        } finally { bmp.close(); }
+      } finally {
+        plateSlots -= 1;
+        const next = plateWait.shift();
+        if (next) next();
       }
-      return html;
+    };
+    const kindByHash = new Map();
+    const classifyTile = async bytes => {
+      let hex = '';
+      try { hex = await sha256Hex(bytes.slice().buffer); } catch { hex = ''; }
+      if (hex && kindByHash.has(hex)) return kindByHash.get(hex);
+      let kind = 'real';
+      if (hex && hex === R().ESRI_BLANK_TILE_SHA256) kind = 'placeholder';
+      else {
+        try { if (await blankPlate(bytes)) kind = 'placeholder'; }
+        catch { kind = 'error'; }
+      }
+      if (hex) kindByHash.set(hex, kind);
+      return kind;
+    };
+    const loadTile = url => {
+      const hit = S.tileCache.get(url);
+      if (hit) return Promise.resolve(hit);
+      const flight = S.tileFlight.get(url);
+      if (flight) return flight;
+      const job = (async () => {
+        try {
+          const res = await fetch(url, { mode: 'cors' });
+          if (!res.ok) return { kind: 'error', objectUrl: '' };
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          const kind = await classifyTile(bytes);
+          return { kind, objectUrl: URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' })) };
+        } catch { return { kind: 'error', objectUrl: '' }; }
+      })().then(rec => { S.tileCache.set(url, rec); S.tileFlight.delete(url); return rec; });
+      S.tileFlight.set(url, job);
+      return job;
+    };
+    const setMapButtons = on => {
+      for (const id of ['play-set', 'play-hit']) {
+        const b = el.querySelector('#' + id);
+        if (!b) continue;
+        b.disabled = !on || (id === 'play-hit' && !!S.live?.ended_at);
+      }
+    };
+    const showMapBanner = (on, placeholder) => {
+      const ban = el.querySelector('#tk-maperr');
+      if (!ban) return;
+      ban.hidden = !on;
+      const title = ban.querySelector('b');
+      if (title) title.textContent = placeholder ? 'Esta vista no tiene imagen de la cancha.' : 'El mapa no cargó.';
     };
     const polyAttr = (pts, W, H) => pts.map(p => { const s = toScreen(asLL(p) || p, W, H); return s ? s.map(v => v.toFixed(1)).join(',') : ''; }).filter(Boolean).join(' ');
     const overlaySVG = (W, H) => {
@@ -149,31 +220,48 @@
       if (h.green?.polygon) stroke(h.green.polygon, 'tk-g');
       const pin = cupLL(), tee = S.track.tee;
       const mark = (ll, cls) => { const s = toScreen(ll, W, H); if (s) o += `<circle class="${cls}" cx="${s[0]}" cy="${s[1]}" r="7"/>`; };
-      if (tee) mark(tee, 'tk-pl');
-      if (pin) mark(pin, 'tk-pin');
-      const played = [];
-      let seq = 0;
+      if (tee && R().knownPoint(tee.lat, tee.lng)) mark(tee, 'tk-pl');
+      if (pin && R().knownPoint(pin.lat, pin.lng)) mark(pin, 'tk-pin');
+      const known = [];
+      let shotNo = 0;
       for (const m of S.track.marks) {
-        if (m.drop) continue;
         const at = R().knownPoint(m.lat, m.lng);
         if (!at) continue;
-        seq += 1;
-        const n = Number.isInteger(m.n) && m.n > 0 ? m.n : seq;
-        played.push({ ...m, at, n });
+        const row = { ...m, at };
+        if (row.countsStroke) { shotNo += 1; row.n = Number.isInteger(m.n) && m.n > 0 ? m.n : shotNo; }
+        known.push(row);
       }
-      const trail = [];
-      if (tee && R().knownPoint(tee.lat, tee.lng)) trail.push(tee);
-      for (const m of played) trail.push(m.at);
-      if (S.track.phase === 'tracking' && !S.done && trail.length) {
-        const here = fromCenter();
-        const cursor = here && R().knownPoint(here.lat, here.lng);
-        if (cursor) trail.push(cursor);
+      const line = (pts, cls) => { const p = polyAttr(pts, W, H); if (p && pts.length >= 2) o += `<polyline class="${cls}" points="${p}"/>`; };
+      const solid = [];
+      if (tee && R().knownPoint(tee.lat, tee.lng)) solid.push(tee);
+      for (const m of known) if (!m.penalty) solid.push(m.at);
+      const here = fromCenter();
+      const cursor = here && R().knownPoint(here.lat, here.lng);
+      const phase = S.track.phase;
+      if (phase === 'tracking' && !S.done && cursor && solid.length) solid.push(cursor);
+      line(solid, 'tk-sh');
+      if (phase === 'penaltyWhere' && cursor) {
+        const from = S.track.ball && R().knownPoint(S.track.ball.lat, S.track.ball.lng) || (tee && R().knownPoint(tee.lat, tee.lng));
+        if (from) line([from, cursor], 'tk-lost-line');
       }
-      if (trail.length >= 2) o += `<polyline class="tk-sh" points="${polyAttr(trail, W, H)}"/>`;
-      for (const m of played) {
+      const lostOf = before => [...known.slice(0, before)].reverse().find(m => m.penalty);
+      known.forEach((m, i) => {
+        if (!m.drop) return;
+        const lost = lostOf(i);
+        if (lost) line([lost.at, m.at], 'tk-drop-line');
+      });
+      if (phase === 'drop' && cursor) {
+        const lost = [...known].reverse().find(m => m.penalty);
+        if (lost) line([lost.at, cursor], 'tk-drop-line');
+      }
+      for (const m of known) {
         const s = toScreen(m.at, W, H);
         if (!s) continue;
-        o += `<g class="tk-shot-mark" data-n="${m.n}" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><circle class="tk-dot" cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-shot-n" x="${s[0]}" y="${s[1]}">${m.n}</text></g>`;
+        if (m.penalty) {
+          o += `<g class="tk-lost" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><line x1="${s[0] - 7}" y1="${s[1] - 7}" x2="${s[0] + 7}" y2="${s[1] + 7}"/><line x1="${s[0] + 7}" y1="${s[1] - 7}" x2="${s[0] - 7}" y2="${s[1] + 7}"/></g>`;
+        } else if (m.countsStroke) {
+          o += `<g class="tk-shot-mark" data-n="${m.n}" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><circle class="tk-dot" cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-shot-n" x="${s[0]}" y="${s[1]}">${m.n}</text></g>`;
+        }
       }
       return o;
     };
@@ -184,30 +272,51 @@
       S.suggestedTee = tee;
       S.suggestedPin = pin;
       const saved = (S.saved || []).filter(s => Number(s.hole) === Number(S.hole));
-      const placed = [];
-      saved.forEach((s, i) => {
-        const end = R().knownPoint(s.end_lat, s.end_lng);
-        if (end) placed.push({ ...s, end, n: i + 1 });
-      });
       if (!saved.length) {
         S.done = false;
         S.track = R().trackNew();
         return;
       }
-      const last = placed[placed.length - 1];
+      const marks = [];
+      let play = tee ? { ...tee } : null;
+      let afterPenalty = false;
+      saved.forEach((s, i) => {
+        const end = R().knownPoint(s.end_lat, s.end_lng);
+        const start = R().knownPoint(s.lat, s.lng);
+        const penalty = s.result === 'penalty' || Number(s.penalty_strokes) > 0;
+        if (afterPenalty && start && (!play || hav(play, start) > 2)) {
+          marks.push({ id: `drop-${s.id || i}`, lat: start.lat, lng: start.lng, club: null, countsStroke: false, holed: false, penalty: false, drop: true });
+          play = { ...start };
+        }
+        afterPenalty = false;
+        marks.push({
+          id: s.id || i, n: i + 1, lat: end ? end.lat : null, lng: end ? end.lng : null, club: penalty ? null : (s.club || null),
+          countsStroke: true, holed: s.result === 'holed', penalty, drop: false,
+        });
+        if (penalty) afterPenalty = true;
+        else if (end) play = { ...end };
+      });
+      const last = saved[saved.length - 1];
+      const openPenalty = (last.result === 'penalty' || Number(last.penalty_strokes) > 0) && last.result !== 'holed';
       S.done = saved.some(s => s.result === 'holed');
       S.track = {
-        phase: 'tracking',
+        phase: openPenalty && !S.done ? 'relief' : 'tracking',
         tee: tee ? { ...tee } : null,
         flag: pin ? { ...pin } : null,
-        ball: last ? { ...last.end } : (tee ? { ...tee } : null),
-        marks: placed.map(s => ({
-          id: s.id || s.n, n: s.n, lat: s.end.lat, lng: s.end.lng, club: s.club || null,
-          countsStroke: s.result !== 'penalty', holed: s.result === 'holed',
-          penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0, drop: false,
-        })),
-        nextID: placed.length + 1,
+        ball: play ? { ...play } : null,
+        marks,
+        nextID: marks.length + 1,
       };
+    };
+    const playingPoint = marks => {
+      for (let i = marks.length - 1; i >= 0; i--) {
+        const m = marks[i];
+        if (m.drop || (m.countsStroke && !m.penalty)) {
+          const at = R().knownPoint(m.lat, m.lng);
+          if (at) return at;
+        }
+      }
+      return S.track.tee || S.suggestedTee || null;
     };
     const skipPrompt = () => {
       if (!S.alive) return;
@@ -298,18 +407,19 @@
       let prevKnown = R().knownPoint(S.track.tee?.lat, S.track.tee?.lng);
       const savedRail = savedRows.map((s, i) => {
         const end = R().knownPoint(s.end_lat, s.end_lng);
+        const penalty = s.result === 'penalty' || Number(s.penalty_strokes) > 0;
         let yards = ydOf(s.distance_m);
         if (!yards && end && prevKnown) {
           const meters = hav(prevKnown, end);
           if (meters != null) yards = `${yd(meters)} yd`;
         }
-        if (end) prevKnown = end;
-        return { id: s.id, club: clubLabel(s.club) || s.club, yards, unknown: !end && !yards, n: i + 1 };
+        if (end && !penalty) prevKnown = end;
+        return { id: s.id, club: penalty ? 'Penalidad' : (clubLabel(s.club) || s.club), yards, unknown: !end && !yards, n: i + 1 };
       });
-      const railSource = savedRail.length ? savedRail : S.track.marks.map((m, i) => {
-        const prev = i ? { lat: S.track.marks[i - 1].lat, lng: S.track.marks[i - 1].lng } : S.track.tee;
+      const railSource = savedRail.length ? savedRail : S.track.marks.filter(m => m.countsStroke).map((m, i) => {
+        const prev = playingPoint(S.track.marks.slice(0, S.track.marks.indexOf(m)));
         const meters = prev ? hav(prev, { lat: m.lat, lng: m.lng }) : null;
-        return { id: m.id, club: clubLabel(m.club) || m.club, yards: meters == null ? '' : `${yd(meters)} yd`, unknown: false, n: i + 1 };
+        return { id: m.id, club: m.penalty ? 'Penalidad' : (clubLabel(m.club) || m.club), yards: meters == null ? '' : `${yd(meters)} yd`, unknown: !R().knownPoint(m.lat, m.lng), n: m.n || i + 1 };
       });
       const rail = retro && railSource.length ? `<div class="tk-shots-rail" id="rc-shots" aria-label="Golpes">${railSource.map((s, i) => `<button type="button" class="tk-shot" id="play-shot-${i}">${s.n}. ${esc(s.club || '—')}${s.yards ? ` · ${esc(s.yards)}` : s.unknown ? ' · Sin ubicación' : ''}</button>`).join('')}</div>` : (!retro ? `<div class="tk-shots-rail" aria-label="Golpes">${marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? 'Drop' : m.penalty ? 'P' : m.holed ? 'Hoyo' : (m.club ? esc(clubLabel(m.club)) : (i + 1))}</span>`).join('')}</div>` : '');
       const setup = retro && (phase === 'confirmTee' || phase === 'confirmFlag');
@@ -318,10 +428,12 @@
       const holeBits = [par ? `Par ${par}` : '', cardYd ? `${cardYd} yd` : '', verifiedFlag() && !verifiedTee() ? 'Sin salida verificada' : ''].filter(Boolean);
       const holeChip = retro ? `<div class="tk-hole" id="tk-hole"><b>Hoyo ${S.hole}</b>${holeBits.length ? `<span>${esc(holeBits.join(' · '))}</span>` : ''}</div>` : '';
       const read = cursorRead(here);
+      const cursorKind = phase === 'penaltyWhere' ? 'penalty' : phase === 'drop' ? 'drop' : phase === 'confirmFlag' ? 'flag' : (phase === 'confirmTee' && S.frame === 'tee') ? 'tee' : 'shot';
+      const nextStroke = S.track.marks.filter(m => m.countsStroke).length + 1;
       el.innerHTML = `<div class="tk" id="play-track">
         <div class="tk-map" id="tkmap"></div>
         <div class="tk-maperr" id="tk-maperr" hidden><b>El mapa no cargó.</b><button type="button" id="tk-retry">Reintentar</button></div>
-        <div class="tk-ret on ${pen ? 'pen' : ''}" id="play-reticle" aria-hidden="true"><i></i></div>
+        <div class="tk-ret on ${pen ? 'pen' : ''}" id="play-reticle" data-cursor="${cursorKind}" aria-hidden="true"><i></i>${cursorKind === 'drop' ? `<b>${nextStroke}</b>` : ''}</div>
         ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>` : ''}
         ${rail}
         <div class="tk-top">
@@ -340,15 +452,15 @@
           </div>`}
           ${S.msg ? `<p class="tk-msg">${esc(S.msg)}</p>` : ''}
           <div class="tk-acts">
-            ${setup ? `<button type="button" class="tk-cancel" id="play-cancel">Cancelar</button><button type="button" class="tk-enter" id="play-set">SET</button>` : ''}
+            ${setup ? `<button type="button" class="tk-cancel" id="play-cancel">Cancelar</button><button type="button" class="tk-enter" id="play-set" disabled>SET</button>` : ''}
             ${retro && S.done ? `<button type="button" class="tk-next" id="play-next">Siguiente hoyo</button>` : ''}
             ${marking && S.track.marks.length ? `<button type="button" class="tk-ghost tk-undo" id="play-undo" aria-label="Deshacer">↩</button>` : ''}
             ${(marking || (!retro && phase === 'tracking')) ? `<label class="tk-club">Palo<select id="play-club" aria-label="Palo"><option value="">Después</option>${clubOptions}</select></label>` : ''}
             ${(marking || (!retro && phase === 'tracking')) ? `<button type="button" class="tk-ghost" id="play-penalty" aria-label="Penalidad">P</button>` : ''}
             ${!retro && phase === 'relief' ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
             ${!setup && (phase === 'penaltyWhere' || phase === 'relief' || phase === 'drop') ? `<button type="button" class="tk-ghost" id="play-cancel">Cancelar</button>` : ''}
-            ${!retro && setPhase ? `<button type="button" class="tk-enter" id="play-set">SET</button>` : ''}
-            ${!S.done && !setPhase && phase !== 'relief' ? `<button type="button" class="tk-enter" id="play-hit" ${S.live?.ended_at ? 'disabled' : ''}>ENTER</button>` : ''}
+            ${(retro && phase === 'drop') || (!retro && setPhase) ? `<button type="button" class="tk-enter" id="play-set" disabled>SET</button>` : ''}
+            ${!S.done && !setPhase && phase !== 'relief' ? `<button type="button" class="tk-enter" id="play-hit" disabled>ENTER</button>` : ''}
             ${retro && (phase === 'relief') ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
           </div>
         </div>
@@ -359,10 +471,47 @@
 
     const paintMap = () => {
       const map = mapBox(); if (!map) return;
+      const gen = ++S.mapGen;
+      S.mapReady = false;
       const W = map.clientWidth || innerWidth, Hh = map.clientHeight || innerHeight;
       const tileZ = Math.max(0, Math.min(R().IMAGERY_ZOOM_MAX, Math.floor(S.cam.z)));
       const scale = 2 ** (S.cam.z - tileZ);
-      map.innerHTML = `<div class="tk-tiles" style="transform:translate(${W / 2}px,${Hh * 0.42}px) scale(${scale}) rotate(${-S.cam.hdg}deg);transform-origin:0 0">${tilesHTML()}</div><svg class="tk-svg" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">${overlaySVG(W, Hh)}</svg>`;
+      const n = 2 ** tileZ;
+      const cx = S.cam.cx * n, cy = S.cam.cy * n;
+      const pad = 4;
+      const x0 = Math.floor(cx - pad), x1 = Math.ceil(cx + pad), y0 = Math.floor(cy - pad), y1 = Math.ceil(cy + pad);
+      const tiles = [];
+      const seen = new Set();
+      const addTile = (tx, ty) => {
+        const wx = ((tx % n) + n) % n, wy = Math.min(n - 1, Math.max(0, ty));
+        const url = TILE(tileZ, wx, wy);
+        if (seen.has(url)) return;
+        seen.add(url);
+        tiles.push({ url, left: (tx - cx) * 256, top: (ty - cy) * 256 });
+      };
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) addTile(tx, ty);
+      const urlAt = (sx, sy) => {
+        const dx = sx - W / 2, dy = sy - Hh * 0.42;
+        const c0 = Math.cos(-S.cam.hdg * Math.PI / 180), s0 = Math.sin(-S.cam.hdg * Math.PI / 180);
+        const px = dx * c0 + dy * s0, py = -dx * s0 + dy * c0;
+        const nVis = 2 ** S.cam.z;
+        const mercX = S.cam.cx + px / (nVis * 256), mercY = S.cam.cy + py / (nVis * 256);
+        const tx = Math.floor(mercX * n), ty = Math.floor(mercY * n);
+        const wx = ((tx % n) + n) % n, wy = Math.min(n - 1, Math.max(0, ty));
+        return TILE(tileZ, wx, wy);
+      };
+      const sampleUrls = [];
+      for (let y = 8; y < Hh; y += 64) for (let x = 8; x < W; x += 64) {
+        const url = urlAt(Math.min(W - 2, Math.max(1, x)), Math.min(Hh - 2, Math.max(1, y)));
+        if (!sampleUrls.includes(url)) sampleUrls.push(url);
+      }
+      const aim = urlAt(W / 2, Hh * 0.42);
+      if (!sampleUrls.includes(aim)) sampleUrls.push(aim);
+      for (const url of sampleUrls) if (!seen.has(url)) {
+        const m = /\/tile\/(\d+)\/(\d+)\/(\d+)$/.exec(url);
+        if (m) addTile(Number(m[3]), Number(m[2]));
+      }
+      map.innerHTML = `<div class="tk-tiles" style="transform:translate(${W / 2}px,${Hh * 0.42}px) scale(${scale}) rotate(${-S.cam.hdg}deg);transform-origin:0 0">${tiles.map((t, i) => `<img class="tk-tile" data-i="${i}" alt="" decoding="async" style="left:${t.left}px;top:${t.top}px;width:256px;height:256px">`).join('')}</div><svg class="tk-svg" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">${overlaySVG(W, Hh)}</svg>`;
       map.dataset.cx = String(S.cam.cx);
       map.dataset.cy = String(S.cam.cy);
       map.dataset.z = String(S.cam.z);
@@ -374,33 +523,58 @@
       map.dataset.hole = String(S.hole);
       map.dataset.ballLat = S.track.ball && Number.isFinite(S.track.ball.lat) ? String(S.track.ball.lat) : '';
       map.dataset.ballLng = S.track.ball && Number.isFinite(S.track.ball.lng) ? String(S.track.ball.lng) : '';
-      const imgs = [...map.querySelectorAll('.tk-tile')];
-      let left = imgs.length, failed = 0;
-      const finish = ok => {
-        left -= 1; if (!ok) failed += 1;
-        if (left > 0) return;
-        S.mapDown = failed === imgs.length && imgs.length > 0;
-        const ban = el.querySelector('#tk-maperr');
-        if (ban) ban.hidden = !S.mapDown;
-        for (const id of ['play-set', 'play-hit']) { const b = el.querySelector('#' + id); if (b) b.disabled = !!S.mapDown; }
+      const cursor = fromCenter();
+      map.dataset.cursorLat = cursor && Number.isFinite(cursor.lat) ? String(cursor.lat) : '';
+      map.dataset.cursorLng = cursor && Number.isFinite(cursor.lng) ? String(cursor.lng) : '';
+      map.dataset.phase = S.track.phase || '';
+      map.dataset.lie = lieAt(cursor) || '';
+      map.dataset.cmap = S.cmapTried ? (S.cmap ? '1' : '0') : '';
+      map.dataset.map = 'loading';
+      setMapButtons(false);
+      showMapBanner(false, false);
+      const publish = () => {
+        if (gen !== S.mapGen) return;
+        const kinds = sampleUrls.map(url => S.tileCache.get(url)?.kind || '');
+        if (!kinds.length || kinds.some(k => !k)) {
+          S.mapReady = false;
+          map.dataset.map = 'loading';
+          setMapButtons(false);
+          showMapBanner(false, false);
+          return;
+        }
+        const ready = kinds.every(k => k === 'real');
+        S.mapReady = ready;
+        map.dataset.map = ready ? 'ready' : 'blocked';
+        setMapButtons(ready);
+        showMapBanner(!ready, kinds.some(k => k === 'placeholder'));
       };
-      imgs.forEach(img => {
-        if (img.complete) finish(img.naturalWidth > 0);
-        else { img.onload = () => finish(true); img.onerror = () => finish(false); }
+      tiles.forEach((t, i) => {
+        const img = map.querySelector(`[data-i="${i}"]`);
+        loadTile(t.url).then(rec => {
+          if (gen !== S.mapGen) return;
+          if (img && rec.objectUrl) img.src = rec.objectUrl;
+          publish();
+        });
       });
+      publish();
     };
     const paintRead = () => {
       const ro = el.querySelector('#tkro'); if (ro) ro.innerHTML = cursorRead(fromCenter());
     };
 
-    const postShot = async (land, result, from) => {
+    const clubNow = () => {
+      const here = fromCenter();
+      if (S.track.phase === 'tracking' && here && lieAt(here) === 'green') return 'Pt';
+      return S.club || '';
+    };
+    const postShot = async (land, result, from, club) => {
       if (retro && typeof H.onSave === 'function') {
         const shots = await H.onSave({
           hole: S.hole,
           from: from || S.track.ball || S.track.tee,
           land,
           result: result || null,
-          club: result === 'penalty' ? '' : (S.club || ''),
+          club: result === 'penalty' ? '' : (club || ''),
           penalty: result === 'penalty',
         });
         if (!S.alive || shots == null) return false;
@@ -410,7 +584,7 @@
       }
       const body = { client_id: cid(), hole: S.hole, lat: land.lat, lng: land.lng, accuracy_m: S.acc };
       if (result) body.result = result;
-      if (S.club && result !== 'penalty') body.club = String(S.club).slice(0, 8);
+      if (club && result !== 'penalty') body.club = String(club).slice(0, 8);
       const lie = lieAt(land);
       if (lie && ['tee', 'fairway', 'rough', 'bunker', 'green'].includes(lie)) body.lie = lie;
       const r = await api(`/api/live-rounds/${encodeURIComponent(S.id)}/shots`, { method: 'POST', body: JSON.stringify(body) });
@@ -420,7 +594,7 @@
     };
 
     const commit = async () => {
-      if (!S.alive || S.busy || S.live?.ended_at || S.done) return;
+      if (!S.alive || S.busy || S.live?.ended_at || S.done || !S.mapReady) return;
       const here = fromCenter();
       if (!here || !Number.isFinite(here.lat)) { S.msg = 'No hay un punto para marcar.'; render(); return; }
       const phase = S.track.phase;
@@ -446,11 +620,12 @@
       const meters = cup ? hav(here, cup) : null;
       const cupOn = meters != null && R().onCup(meters);
       const from = S.track.ball || S.track.tee;
-      const out = R().trackEnter(S.track, here, S.club || null, phase === 'tracking' && cupOn);
+      const club = clubNow();
+      const out = R().trackEnter(S.track, here, club || null, phase === 'tracking' && cupOn);
       if (!out.recorded) return;
       S.busy = true;
       try {
-        const id = await postShot(out.holed && S.track.flag ? S.track.flag : here, out.holed ? 'holed' : (phase === 'penaltyWhere' ? 'penalty' : null), from);
+        const id = await postShot(out.holed && S.track.flag ? S.track.flag : here, out.holed ? 'holed' : (phase === 'penaltyWhere' ? 'penalty' : null), from, club);
         if (!S.alive || id === false) return;
         S.track = {
           ...out.state,
@@ -523,9 +698,15 @@
 
     const undoLast = async () => {
       if (!S.alive || !S.track.marks.length) return;
+      const last = S.track.marks[S.track.marks.length - 1];
       const marks = S.track.marks.slice(0, -1);
-      const prev = marks[marks.length - 1];
-      const ball = prev ? { lat: prev.lat, lng: prev.lng } : (S.track.tee || S.suggestedTee);
+      const ball = playingPoint(marks);
+      if (last.drop) {
+        S.track = { ...S.track, marks, ball: ball ? { ...ball } : null, phase: 'relief' };
+        S.done = false;
+        render();
+        return;
+      }
       S.track = { ...S.track, marks, ball: ball ? { ...ball } : null, phase: 'tracking' };
       S.done = marks.some(m => m.holed);
       const savedId = (S.saved || []).filter(s => Number(s.hole) === Number(S.hole)).slice(-1)[0]?.id;
@@ -550,11 +731,18 @@
       const pen = el.querySelector('#play-penalty'); if (pen) pen.onclick = () => { S.track = R().trackPenalty(S.track); render(); };
       const rel = el.querySelector('#play-reload'); if (rel) rel.onclick = () => { S.track = R().trackReload(S.track); S.msg = ''; render(); };
       const drop = el.querySelector('#play-drop'); if (drop) drop.onclick = () => { S.track = R().trackDrop(S.track); render(); };
-      const cancel = el.querySelector('#play-cancel'); if (cancel) cancel.onclick = () => { if (retro && (S.track.phase === 'confirmTee' || S.track.phase === 'confirmFlag')) skipPrompt(); else cancelRelief(); };
+      const cancel = el.querySelector('#play-cancel'); if (cancel) cancel.onclick = () => {
+        if (retro && (S.track.phase === 'confirmTee' || S.track.phase === 'confirmFlag')) skipPrompt();
+        else if (S.track.phase === 'drop') { S.track = { ...S.track, phase: 'relief' }; render(); }
+        else cancelRelief();
+      };
       const undo = el.querySelector('#play-undo'); if (undo) undo.onclick = () => undoLast();
       const nextHole = el.querySelector('#play-next'); if (nextHole) nextHole.onclick = () => goHole(Math.min(18, S.hole + 1));
       const close = el.querySelector('#rc-close'); if (close) close.onclick = () => { if (H.back) location.hash = H.back; };
-      const retry = el.querySelector('#tk-retry'); if (retry) retry.onclick = () => { S.mapDown = false; paintMap(); };
+      const retry = el.querySelector('#tk-retry'); if (retry) retry.onclick = () => {
+        for (const [url, rec] of S.tileCache) if (!rec || rec.kind !== 'real') S.tileCache.delete(url);
+        paintMap();
+      };
       const more = el.querySelector('#play-more'); if (more) more.onclick = () => { S.more = !S.more; render(); };
       const hist = el.querySelector('#play-history'); if (hist) hist.onclick = () => { S.history = !S.history; render(); };
       const zoomBy = d => { S.cam.z = Math.max(15, Math.min(R().IMAGERY_ZOOM_MAX + 0.8, S.cam.z + d)); paintMap(); paintRead(); };
@@ -634,8 +822,19 @@
       render();
     };
 
-    if (retro) { armRetro(); S.frame = S.track.phase === 'tracking' ? 'play' : 'overview'; document.documentElement.classList.add('rc-map'); }
+    const loadCourseMap = async () => {
+      const club = S.course?.club_code || S.live?.club_code;
+      const course = S.course?.course || S.live?.course || S.live?.vm_course;
+      if (!club || !course || course === 'Golflet') return;
+      try { S.cmap = await api(`/api/course-maps/${encodeURIComponent(club)}/${encodeURIComponent(course)}`); }
+      catch (e) { S.cmap = null; }
+      S.cmapTried = true;
+      if (!S.alive || S.busy || S.panned) return;
+      render();
+    };
+    if (retro) { armRetro(); S.frame = S.track.phase === 'tracking' ? 'play' : (S.track.phase === 'relief' ? 'play' : 'overview'); document.documentElement.classList.add('rc-map'); }
     fitCam(); render();
+    if (retro) loadCourseMap();
     if (!retro) { watch(); loadExtras(); }
     const onResize = () => paintMap();
     addEventListener('resize', onResize);

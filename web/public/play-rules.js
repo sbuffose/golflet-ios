@@ -5,7 +5,7 @@
 /** Pure play rules shared by the web client, the metric API and the tests.
  *  Meteorological wind is where it comes FROM. A shot is holed only on the cup. */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HI_UNIDENTIFIED = exports.IMAGERY_ZOOM_MAX = exports.MES_FULL = exports.MES = exports.MONTHS_VISIBLE = exports.PUTT_M = exports.CUP_M = void 0;
+exports.HI_UNIDENTIFIED = exports.ESRI_BLANK_TILE_SHA256 = exports.IMAGERY_ZOOM_MAX = exports.MES_FULL = exports.MES = exports.MONTHS_VISIBLE = exports.PUTT_M = exports.CUP_M = void 0;
 exports.knownPoint = knownPoint;
 exports.projectLL = projectLL;
 exports.holeSpan = holeSpan;
@@ -59,6 +59,8 @@ const norm = (d) => ((d % 360) + 360) % 360;
 /** Esri World Imagery at Cancha Vieja hole 1 serves real golf pixels through zoom 17.
  *  Zoom 18 and 19 answer HTTP 200 with the grey "Map data not yet available" tile. */
 exports.IMAGERY_ZOOM_MAX = 17;
+/** Byte-identical Esri JPEG served with HTTP 200 for "Map data not yet available". */
+exports.ESRI_BLANK_TILE_SHA256 = "9eafd300d61393184a4abc1d458564cfd1cd9b6f9c4e9c74687045c0a0e5b858";
 function projectLL(lat, lng) {
     const x = (lng + 180) / 360;
     const s = Math.sin(lat * Math.PI / 180);

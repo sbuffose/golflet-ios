@@ -36,6 +36,9 @@ const norm = (d: number) => ((d % 360) + 360) % 360;
  *  Zoom 18 and 19 answer HTTP 200 with the grey "Map data not yet available" tile. */
 export const IMAGERY_ZOOM_MAX = 17;
 
+/** Byte-identical Esri JPEG served with HTTP 200 for "Map data not yet available". */
+export const ESRI_BLANK_TILE_SHA256 = "9eafd300d61393184a4abc1d458564cfd1cd9b6f9c4e9c74687045c0a0e5b858";
+
 export function projectLL(lat: number, lng: number): [number, number] {
   const x = (lng + 180) / 360;
   const s = Math.sin(lat * Math.PI / 180);
