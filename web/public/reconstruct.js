@@ -149,6 +149,7 @@
     const host = root.querySelector("#rc-host");
     let liveId = id || "";
     let courseId = pending?.courseId || "";
+    let clubCode = pending?.clubCode || "";
     let savedHole = 0;
     let courseName = pending?.courseName || "";
     let roundId = pending?.roundId || "";
@@ -171,6 +172,7 @@
           roundId = roundId || row.round_id || "";
           const kept = Number(row.current_hole);
           if (kept >= 1 && kept <= 18) savedHole = kept;
+          if (row.club_code) clubCode = clubCode || row.club_code;
           if (!courseId && row.club_code && row.vm_course) {
             courseId = `${row.club_code}-${String(row.vm_course).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
           }
@@ -185,6 +187,7 @@
           return { ...h, hole: n, par: h.par || scorePar(pending?.scoreHoles, n) };
         });
         courseName = courseName || geo.course?.course || geo.course?.label || "";
+        if (geo.course?.club_code) clubCode = clubCode || geo.course.club_code;
       }
       if (liveId) {
         const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
@@ -204,10 +207,10 @@
       retro: true,
       id: liveId,
       back,
-      live: { course: courseName || "Golflet", course_id: courseId, current_hole: hole },
+      live: { course: courseName || "Golflet", course_id: courseId, club_code: clubCode || null, current_hole: hole },
       shots,
       holes,
-      course: { holes, course: courseName, course_id: courseId },
+      course: { holes, course: courseName, course_id: courseId, club_code: clubCode || null },
       bag: CLUBS.map(c => ({ code: c })),
       api, esc, toast: () => {}, cid: () => "",
       onSave: async (shot) => {

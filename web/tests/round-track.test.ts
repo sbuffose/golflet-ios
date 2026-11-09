@@ -19,6 +19,10 @@ function cardWrites(calls: { method: string; path: string }[]) {
   return calls.filter(c => c.method !== "GET" && c.method !== "HEAD" && !(c.method === "POST" && c.path === "/api/tee-times/check"));
 }
 
+function untilReady(page: { waitForFunction: (fn: () => boolean, opts?: { timeout?: number }) => Promise<unknown> }) {
+  return page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-map") === "ready", { timeout: 25000 });
+}
+
 const data = {
   user: { name: "TEST-ONLY", first_name: "TEST-ONLY", pending_first_sync: false },
   player: { name: "TEST-ONLY", handicap_index: 8 },
@@ -187,11 +191,13 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.ok(Number(await page.$eval("#tkmap", el => el.getAttribute("data-tile-z"))) <= 17);
     assert.deepEqual(cardWrites(calls), []);
     await page.screenshot({ path: join(ART, "track-map.png") });
+    await untilReady(page);
     await page.click("#play-set");
     await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-frame") === "tee");
     assert.match(await page.$eval("#tkro", el => el.textContent || ""), /salida/);
     assert.ok((await page.$eval("#tkro", el => el.getBoundingClientRect().height)) < 40);
     assert.deepEqual(cardWrites(calls), []);
+    await untilReady(page);
     await page.click("#play-set");
     await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
     assert.match(await page.$eval("#tkro", el => el.textContent || ""), /yd/);
@@ -206,6 +212,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(await page.$eval(".tk-hn b", el => el.textContent), "Hoyo 1");
     assert.deepEqual(cardWrites(calls), []);
     await page.select("#play-club", "7i");
+    await untilReady(page);
     await page.click("#play-hit");
     await page.waitForFunction(() => location.hash.startsWith("#/reconstruir/live-new?hole=1"));
     await page.waitForSelector(".tk-shot-n");
@@ -396,6 +403,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await reachEnter(page);
     holdCreates = 1;
+    await untilReady(page);
     await page.click("#play-hit");
     await until(() => creates().length === 1, "the create request did not start");
     await page.evaluate(() => { location.hash = "#/inicio"; });
@@ -409,11 +417,13 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await reachEnter(page);
     holdCreates = 2;
+    await untilReady(page);
     await page.click("#play-hit");
     await until(() => creates().length === 2, "the first of the two creates did not start");
     await page.click("#rc-close");
     await page.waitForFunction(() => location.hash === "#/ronda/r-nov");
     await reachEnter(page);
+    await untilReady(page);
     await page.click("#play-hit");
     await until(() => creates().length === 3, "the re-entered create did not start");
     release();
@@ -428,6 +438,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await reachEnter(page);
     holdCreates = 1;
+    await untilReady(page);
     await page.click("#play-hit");
     await until(() => creates().length === 4, "the new-round create did not start");
     await page.evaluate(() => { location.hash = "#/ronda/r-saved"; });
@@ -442,11 +453,13 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await reachEnter(page);
     holdCreates = 2;
+    await untilReady(page);
     await page.click("#play-hit");
     await until(() => creates().length === 5, "the older create did not start");
     await page.click("#rc-close");
     await page.waitForFunction(() => location.hash === "#/ronda/r-nov");
     await reachEnter(page);
+    await untilReady(page);
     await page.click("#play-hit");
     await until(() => creates().length === 6, "the newer create did not start");
     releaseLast();
@@ -461,6 +474,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await reachEnter(page);
     holdCreates = 1;
+    await untilReady(page);
     await page.click("#play-hit");
     await until(() => creates().length === 7, "the logout create did not start");
     await page.evaluate(() => { location.replace("/login"); });
@@ -649,6 +663,7 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
     await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
     await page.click("#play-cancel");
     await page.waitForSelector("#play-hit");
+    await untilReady(page);
     await page.click("#play-hit");
     await page.waitForSelector(".tk-shot-n");
     assert.deepEqual(await labels(), ["1"]);
@@ -674,6 +689,7 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
     assert.notEqual(zoomed.dots[0].cx, panned.dots[0].cx);
     assert.equal(zoomed.dots[0].lat, first.lat);
     assert.equal(zoomed.dots[0].lng, first.lng);
+    await untilReady(page);
     await page.click("#play-hit");
     await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 2);
     const both = await place();

@@ -1,7 +1,8 @@
 /** TEST-ONLY. Hole framing uses verified ends. Imagery check hits the public course read and Esri, not a fixture JPEG. */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { frameHole, holeSpan, IMAGERY_ZOOM_MAX, knownPoint, screenOf, worldTile } from "../lib/play-rules";
+import { createHash } from "node:crypto";
+import { ESRI_BLANK_TILE_SHA256, frameHole, holeSpan, IMAGERY_ZOOM_MAX, knownPoint, screenOf, worldTile } from "../lib/play-rules";
 
 const VIEW = { width: 390, height: 844 };
 
@@ -69,4 +70,6 @@ test("Cancha Vieja hole 1 sits on the club and zoom 17 is real imagery", { timeo
   assert.ok(good.length > 8000, `real tile ${good.length}`);
   assert.ok(grey.length < 4000, `placeholder ${grey.length}`);
   assert.notEqual(good.length, grey.length);
+  assert.equal(createHash("sha256").update(grey).digest("hex"), ESRI_BLANK_TILE_SHA256);
+  assert.notEqual(createHash("sha256").update(good).digest("hex"), ESRI_BLANK_TILE_SHA256);
 });
