@@ -156,6 +156,7 @@
     const back = pending?.back || (roundId ? `#/ronda/${roundId}` : "#/rondas");
     let holes = [];
     let shots = [];
+    let bag = null;
     const fail = (message) => {
       document.documentElement.classList.remove("rc-map");
       host.innerHTML = `<div class="card"><p class="s">${esc(message)}</p><button type="button" class="btn" id="rc-close">Volver a la tarjeta</button></div>`;
@@ -194,6 +195,11 @@
         if (!mine()) return;
         shots = pack.shots || [];
       }
+      try {
+        const pack = await api("/api/bag");
+        const rows = Array.isArray(pack) ? pack : (Array.isArray(pack?.clubs) ? pack.clubs : (Array.isArray(pack?.bag) ? pack.bag : null));
+        if (Array.isArray(rows)) bag = rows;
+      } catch (e) {}
     } catch (e) {
       if (!mine()) return;
       fail(e?.message || "No pudimos abrir el mapa.");
@@ -211,7 +217,7 @@
       shots,
       holes,
       course: { holes, course: courseName, course_id: courseId, club_code: clubCode || null },
-      bag: CLUBS.map(c => ({ code: c })),
+      bag: Array.isArray(bag) ? bag : CLUBS.map(c => ({ code: c })),
       api, esc, toast: () => {}, cid: () => "",
       onSave: async (shot) => {
         if (!mine()) return null;
