@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
-import { ESRI_BLANK_TILE_SHA256, frameHole, holeSpan, IMAGERY_ZOOM_MAX, knownPoint, screenOf, worldTile } from "../lib/play-rules";
+import { ESRI_BLANK_TILE_SHA256, frameHole, holeSpan, IMAGERY_ZOOM_MAX, knownPoint, screenOf, VISUAL_ZOOM_MAX, worldTile } from "../lib/play-rules";
 
 const VIEW = { width: 390, height: 844 };
 
@@ -29,9 +29,17 @@ test("a new hole frames the flag, and a missing or absurd end is not invented", 
   assert.ok(Math.floor(overview.z) <= IMAGERY_ZOOM_MAX);
   assert.equal(worldTile(flag.lat, flag.lng, 19)?.z, IMAGERY_ZOOM_MAX);
   const onlyFlag = frameHole(null, flag, "tee", VIEW);
-  assert.equal(onlyFlag?.mode, "point");
+  assert.equal(onlyFlag?.mode, "seek");
+  assert.notEqual(onlyFlag?.mode, "tee");
   assert.equal(onlyFlag?.bearing, null);
   assert.equal(onlyFlag?.aimLat, flag.lat);
+  const flagClose = frameHole(tee, flag, "flag", VIEW);
+  assert.ok((flagClose?.z || 0) > IMAGERY_ZOOM_MAX);
+  assert.ok((flagClose?.z || 0) <= VISUAL_ZOOM_MAX);
+  assert.equal(worldTile(flag.lat, flag.lng, flagClose?.z || 19)?.z, IMAGERY_ZOOM_MAX);
+  const teeOnly = frameHole(tee, null, "tee", VIEW);
+  assert.equal(teeOnly?.mode, "tee");
+  assert.equal(teeOnly?.aimLat, tee.lat);
   assert.equal(frameHole(null, null, "overview", VIEW), null);
   assert.equal(frameHole({ lat: 0, lng: 0 }, flag, "overview", VIEW)?.aimLat, flag.lat);
   assert.equal(knownPoint(0, 0), null);

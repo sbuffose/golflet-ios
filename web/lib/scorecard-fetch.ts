@@ -7,7 +7,7 @@ import { syncAccount, syncAppLink, type SyncResult } from "./sync";
 import { claimLoginLease, isUndefinedColumn, isUndefinedTable, newLeaseToken, releaseLoginLease, type Sql } from "./scorecard-lease";
 import {
   LOOKBACK_DAYS, MAX_SYNCS_PER_RUN, SYNC_BUSY_MESSAGE, applyAttempt, artParts, artTeeInstant, blankJob, nextAttempt, outcomeAfterRead,
-  planDue, reconcileJob, sameSchedule, scorecardLabel, shouldStop, syncDisposition, syncKey, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
+  planDue, reconcileJob, sameSchedule, scorecardLabel, scorecardPresentation, shouldStop, syncDisposition, syncKey, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
 } from "./scorecard-fetch-core";
 
 export class ScorecardSchemaError extends Error {
@@ -571,6 +571,19 @@ export async function listScorecardFetches(userId: string, now = new Date(), sql
     attempt_count: Number(r.attempt_count) || 0,
     last_error: r.last_error ? String(r.last_error) : null,
     round_id: r.round_id ? String(r.round_id) : null,
+    played_at: iso(r.played_at),
     label: scorecardLabel(r.status, iso(r.next_attempt_at), r.last_error ? String(r.last_error) : null, now),
-  }));
+    presentation: "pending" as string,
+    heading: "En curso",
+  })).map((row: any) => {
+    const view = scorecardPresentation({
+      status: row.status,
+      playedAt: row.played_at || row.date,
+      nextAttemptAt: row.next_attempt_at,
+      lastAttemptAt: row.last_attempt_at,
+      lastError: row.last_error,
+      roundId: row.round_id,
+    }, now);
+    return { ...row, label: view.label, presentation: view.bucket, heading: view.heading };
+  });
 }
