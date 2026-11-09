@@ -78,11 +78,13 @@
       const rec = holeRec(), g = rec.green || gpsHole()?.green || {};
       const pin = asLL(rec.day_pin);
       if (pin) return { point: pin, kind: 'pin' };
-      const center = asLL(g.center) || asLL(g.front);
+      const mapGreen = cmapHole()?.green || {};
+      const mapped = mapGreen.confidence === 'schematic' || mapGreen.confidence === 'satellite_visual_draft' ? null : asLL(mapGreen.center);
+      const center = asLL(g.center) || asLL(g.front) || mapped;
       return { point: center, kind: center ? 'green' : 'none' };
     };
     const pinCoord = () => flagRead().point;
-    const verifiedTee = () => asLL(gpsHole()?.tee) || asLL(holeRec().tee);
+    const verifiedTee = () => asLL(gpsHole()?.tee) || asLL(holeRec().tee) || asLL(cmapHole()?.line?.[0]) || asLL((cmapHole()?.tees || [])[0]?.center);
     const verifiedFlag = () => pinCoord();
     const axis = () => R().holeSpan(verifiedTee(), verifiedFlag());
     const mapOk = () => {
@@ -96,7 +98,9 @@
     const lieAt = pt => {
       const h = cmapHole();
       if (!h || !pt) return null;
-      if ((h.green?.polygon || []).length && pip(pt, (h.green.polygon || []).map(asLL).filter(Boolean))) return 'green';
+      const g = h.green || {};
+      const known = !g.confidence || g.confidence === 'openstreetmap' || g.confidence === 'satellite_visual' || g.confidence === 'measured';
+      if (g.track_lie !== false && known && (g.polygon || []).length >= 3 && pip(pt, (g.polygon || []).map(asLL).filter(Boolean))) return 'green';
       for (const b of h.bunkers || []) if ((b.polygon || []).length && pip(pt, b.polygon.map(asLL).filter(Boolean))) return 'bunker';
       for (const w of h.water || []) if ((w.polygon || []).length && pip(pt, w.polygon.map(asLL).filter(Boolean))) return 'water';
       for (const f of h.fairways || []) if ((f.polygon || []).length && pip(pt, f.polygon.map(asLL).filter(Boolean))) return 'fairway';
@@ -550,7 +554,7 @@
         <div class="tk-map" id="tkmap"></div>
         <div class="tk-maperr" id="tk-maperr" hidden><b>El mapa no cargó.</b><button type="button" id="tk-retry">Reintentar</button></div>
         <div class="tk-ret on ${pen ? 'pen' : ''}" id="play-reticle" data-cursor="${cursorKind}" aria-hidden="true"><i></i>${cursorKind === 'drop' ? `<b>${nextStroke}</b>` : ''}</div>
-        ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>${S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? `<p class="tk-scale">Imagen ampliada. El satélite real llega al zoom 17.</p>` : ''}${greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}` : ''}
+        ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>${S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? `<p class="tk-scale">Imagen ampliada. El satélite real llega al zoom 17.</p>` : ''}${greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}${(cmapHole()?.green?.source === 'openstreetmap') ? `<p class="tk-osmnote">Contorno © OpenStreetMap contributors (ODbL) · Cancha Azul. No es el pin ni un relevamiento de caídas.</p>` : ''}${(cmapHole()?.green?.source === 'satellite_visual') ? `<p class="tk-osmnote">Contorno trazado sobre el satélite y aceptado en el admin. No es un relevamiento ni el pin.</p>` : ''}` : ''}
         ${rail}
         <div class="tk-top">
           ${retro ? `<button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button>` : `<a class="tk-ib" href="#/inicio" aria-label="Inicio">⌂</a>`}

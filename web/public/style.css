@@ -198,10 +198,11 @@ textarea.notes::placeholder{color:var(--color-ink3)}
 /* tab bar */
 #tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:30;display:flex;padding:8px 8px calc(8px + max(env(safe-area-inset-bottom),14px));
   background:rgba(247,245,240,.82);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-top:1px solid rgba(0,0,0,.06)}
-#tabbar a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:calc(10.5px*var(--ts,1));font-weight:var(--fw500,500);color:#8E948F}
+#tabbar a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:48px;font-size:calc(10.5px*var(--ts,1));font-weight:var(--fw500,500);color:#5C687B;border-radius:12px}
 #tabbar svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-#tabbar a.on{color:var(--color-primary)}
-#tabbar a.on svg{stroke-width:2.1}
+#tabbar a.on{color:#0B2545;background:rgba(11,37,69,.08);font-weight:650}
+#tabbar a.on svg{stroke-width:2.15}
+#tabbar .nav-accent{fill:#C8102E;stroke:none}
 body.shot #tabbar{position:absolute}
 body.shot .sheet{position:absolute;bottom:auto;min-height:100%;overflow:visible}
 body.shot .sheet-bg{position:absolute}
@@ -2552,6 +2553,11 @@ html[data-ts] .bagtable .baghdr,html[data-ts] .bagtable .bagrow{grid-template-co
 .jg-course{min-height:52px;border-bottom:1px solid var(--color-hairline,#E6E2D8);cursor:pointer}
 .jg-course input{width:18px;height:18px;accent-color:#0B2545}
 .jg-course .t{flex:1;font-weight:650}
+.jg-find{display:block;margin:4px 0 8px;font-size:calc(13px*var(--ts,1));color:var(--color-ink2)}
+.jg-find input{display:block;width:100%;margin-top:6px;height:46px;border:1px solid var(--color-hairline,#E6E2D8);border-radius:12px;padding:0 12px;background:#fff;font:inherit}
+.hard-id{align-items:flex-start}
+.hard-id .t,.hard-id .s{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.hard-id .s{display:block}
 .mo-scroll{display:flex;gap:6px;overflow-x:auto;scroll-snap-type:x proximity;padding:8px 2px 4px;-webkit-overflow-scrolling:touch}
 .mo-col{flex:0 0 16.6%;min-width:52px;scroll-snap-align:end;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:4px;color:#0B2545;font:600 12px/1 Geist,system-ui,sans-serif;padding:4px 0}
 .mo-yr{height:12px;font-size:10px;color:var(--color-ink3)}
@@ -2617,3 +2623,21 @@ html.rc-map .tk{background:#152016}
 .tk-more{display:flex;flex-direction:column;gap:8px;margin:0 0 8px}
 .tk-empty{position:absolute;left:24px;right:24px;top:46%;margin:0;color:#F6F7F9;font-size:16px;line-height:1.45;text-align:center}
 .tk-shots button{border:0;border-radius:10px;padding:4px 8px;background:#F6F7F9;color:#0B2545;font:650 12px/1 Geist,system-ui,sans-serif;cursor:pointer}
+.tk-osmnote{position:absolute;left:12px;right:72px;bottom:8px;margin:0;color:#F6F7F9;font-size:11px;line-height:1.35;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.avatar.av-img,img.avatar{object-fit:cover;padding:0}
+.bag-putter .bag-noputt{grid-column:2 / -1;color:var(--color-ink3);font-size:calc(12.5px*var(--ts,1))}
+.hr-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hr-card{display:flex;gap:10px;align-items:center;padding:12px;text-decoration:none;color:inherit}
+.hr-ic{width:32px;height:32px;flex:none}
+.hr-copy{display:flex;flex-direction:column}
+.hr-copy .v{font-size:calc(22px*var(--ts,1));font-weight:650}
+.lb-entry{display:block;padding:16px 18px;text-decoration:none;color:inherit;background:linear-gradient(180deg,#FBF8F1,#F3EDE0);border:1px solid #E4D8C4}
+.lb-entry .t{font-weight:650}
+.pc{position:fixed;inset:0;z-index:80;background:rgba(11,37,69,.55);display:grid;place-items:center;padding:16px}
+.pc-sheet{width:min(100%,420px);background:var(--color-surface);border-radius:18px;padding:14px}
+.pc-stage{width:min(100%,360px);aspect-ratio:1;margin:0 auto;background:#0B2545;border-radius:12px;overflow:hidden;touch-action:none}
+.pc-stage canvas{width:100%;height:100%;display:block}
+.pc-zoom{display:flex;gap:8px;align-items:center;margin:12px 0;font-size:13px}
+.pc-zoom input{flex:1}
+.pc-acts{display:flex;gap:8px;justify-content:flex-end}
+html.pc-open,html.pc-open body{overflow:hidden}

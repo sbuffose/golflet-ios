@@ -5,11 +5,19 @@ export type NR = { round_id?: string; par?: number | null; date: string; year: s
 const r1 = (x: number | null) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
 const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
 const TYPES = [["eagles", (d: number) => d <= -2], ["birdies", (d: number) => d === -1], ["pars", (d: number) => d === 0], ["bogeys", (d: number) => d === 1], ["doubles", (d: number) => d >= 2]] as const;
+/** Highest birdie count on one real hole card. An eagle is not a birdie. A round without hole scores does not count. */
+export function maxBirdiesInRound(rs: { holes: [number, number, number][] }[]): number | null {
+  const scored = rs.filter(r => r.holes.some(h => h[1] && h[2]));
+  if (!scored.length) return null;
+  return Math.max(...scored.map(r => r.holes.filter(h => h[1] && h[2] && h[2] - h[1] === -1).length));
+}
 
 export function memberStats(rs: NR[]) {
   const g = rs.map(r => r.gross!).filter(Boolean), n = rs.map(r => r.net).filter((x): x is number => x != null);
   const holes = rs.flatMap(r => r.holes.filter(h => h[1] && h[2]));
   const types: any = {}; for (const [k, f] of TYPES) { const c = holes.filter(h => f(h[2] - h[1])).length; types[k] = { total: c, per_round: rs.length ? r1(c / rs.length) : null }; }
+  const maxBirdies = maxBirdiesInRound(rs);
+  types.max_birdies = { total: maxBirdies, per_round: null };
   const par: any = {}; for (const p of [3, 4, 5]) { const hs = holes.filter(h => h[1] === p); par[`par${p}`] = { avg: r1(mean(hs.map(h => h[2]))), avg_to_par: r1(mean(hs.map(h => h[2] - p))), n: hs.length }; }
   const pu = rs.filter(r => r.putts != null), gi = rs.filter(r => r.gir != null), fi = rs.filter(r => r.fir != null);
   const months = new Map<string, number[]>(); for (const r of rs) { const k = r.date.slice(0, 7); months.set(k, [...(months.get(k) || []), r.gross!]); }

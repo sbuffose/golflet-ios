@@ -147,7 +147,8 @@ function clubsCard(){
 const CT_LINKS = `<nav class="ct-links" aria-label="Contacto"><a href="/feedback.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9.5L5 19.5v-4H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Feedback</a><a href="/contacto.html?tipo=contacto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 3.5h3l1.5 4-2 1.3a10 10 0 0 0 6.1 6.1l1.3-2 4 1.5v3c0 1.1-.9 2-2 2A16.5 16.5 0 0 1 4.6 5.5c0-1.1.9-2 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Contactar</a></nav>`;
 const reconEntry = () => `<a class="recon-entry" id="recon-start" href="#/reconstruir"><span class="rt-mark">TRACK</span><b>Cargar una vuelta ya jugada</b><span class="recon-go" aria-hidden="true">›</span></a>`;
 function vInicio(){
-  const top = `<div class="top"><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${esc(initials())}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
+  const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
+  const top = `<div class="top"><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
   if (!valid.length) return top + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas válidas. Tocá Actualizar para traerlas.</div>` : emptyData('Empecemos por tu club')) +
     `<div id="tees"></div><div id="scorecards"></div>${reconEntry()}<div id="cardpull"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
@@ -237,7 +238,7 @@ function vResumen(){
   const worst = (pool.filter(r=>r.date>=wSince).length ? pool.filter(r=>r.date>=wSince) : pool).slice().sort((a,b)=>b.gross-a.gross)[0];
   const bd = pool.filter(r=>r.differential_computed!=null).sort((a,b)=>a.differential_computed-b.differential_computed)[0];
   const rec = pool.filter(r=>r.date>=rSince);
-  const hard = G.courses.filter(c=>segR==='Todas'||c.key===segR).flatMap(c=>{ const hs = ranged ? holeStats(pool, c.key) : null; return c.holes.map(h=>({ck:c.key,cn:c.course,...h,stats:hstat(h,hs)})).filter(h=>h.stats.n); }).sort((a,b)=>b.stats.avg_to_par-a.stats.avg_to_par).slice(0,4);
+  const hard = G.courses.filter(c=>segR==='Todas'||c.key===segR).flatMap(c=>{ const hs = ranged ? holeStats(pool, c.key) : null; return c.holes.map(h=>({ck:c.key,club:c.club_name||'',course:c.course||'',...h,stats:hstat(h,hs)})).filter(h=>h.stats.n); }).sort((a,b)=>b.stats.avg_to_par-a.stats.avg_to_par).slice(0,4);
   const cq = segR==='Todas'?'all':segR;
   const card = (r,k,href,tone) => r ? `<a class="card stat vx-tap tone-${tone}" href="${href}"><div class="k"><i class="tdot" aria-hidden="true"></i>${k}</div><div class="v num">${r.gross}<small>neto ${r.net??'—'}</small></div><div class="d">${dmy(r.date)} · ${esc(clabel(r.course_key))}</div></a>` : '';
   return `<div class="top"><span class="overline">${ranged ? `${rlabel(RANGE)} · desde ${dmy(rangeSince(RANGE))}` : `${rounds[rounds.length-1].date.slice(0,4)} – ${rounds[0].date.slice(0,4)}`}</span></div>
@@ -257,10 +258,15 @@ function vResumen(){
     <div class="legend"><span><i style="background:${C.primary}"></i>Índice (mejores 8 de 20)</span>${G.courses.map(c=>`<span><i style="background:${CCOL[c.key]};opacity:.6"></i>${esc(c.label)}</span>`).join('')}</div></div>
   <p class="foot">Cada punto es un diferencial calculado por Golflet (tu club no lo publica).${G.hi_history.length?` <a class="link" href="${mlink('handicap',{scope:'all'})}">HCP Index oficial: ${f1(G.hi_history[0]?.hi)} → ${f1(G.hi_history.at(-1)?.hi)}</a>.`:''}</p>
   </div><div class="col-b"><div class="section"><h2>Resultados por hoyo</h2></div>
-  <div class="grid3 rstats" style="gap:8px">${['eagles','birdies','pars','bogeys'].map(k=>{ const n = pool.reduce((s,r)=>s+(r.holes?.length? r.holes.filter(h=>h[1]!=null&&h[2]!=null&&(k==='eagles'?h[2]-h[1]<=-2:k==='birdies'?h[2]-h[1]===-1:k==='pars'?h[2]===h[1]:h[2]-h[1]===1)).length : (k==='eagles'?0:(r.summary_counts?.[k]||0))),0);
-    return `<a class="card mini stat vx-tap res-t res-${k}" style="padding:12px 10px" href="${rlink(k,{scope:'all',course:cq,sort:'date',order:'desc'})}"><div class="k"><i class="rsw" aria-hidden="true"></i>${MTITLE[k]}</div><div class="v num" style="font-size:calc(24px*var(--ts,1))">${n}</div></a>`; }).join('')}</div>
+  <div class="hr-grid">${['eagles','birdies','pars','bogeys'].map(k=>{ const n = pool.reduce((s,r)=>s+(r.holes?.length? r.holes.filter(h=>h[1]!=null&&h[2]!=null&&(k==='eagles'?h[2]-h[1]<=-2:k==='birdies'?h[2]-h[1]===-1:k==='pars'?h[2]===h[1]:h[2]-h[1]===1)).length : (k==='eagles'?0:(r.summary_counts?.[k]||0))),0);
+    const ic = { eagles:'<circle cx="16" cy="16" r="8" fill="#0B2545"/>', birdies:'<path fill="#C8102E" d="M8 18c3-6 8-7 12-4 2 4-1 8-6 8-3 0-5-1-6-4z"/>', pars:'<path fill="#0B2545" d="M15 6h2v14h-2z"/><path fill="#C8102E" d="M17 8h7l-1 3 1 3h-7z"/>', bogeys:'<circle cx="16" cy="16" r="7" fill="none" stroke="#0B2545" stroke-width="2"/>' }[k];
+    return `<a class="card hr-card vx-tap res-t res-${k}" href="${rlink(k,{scope:'all',course:cq,sort:'date',order:'desc'})}"><svg class="hr-ic" viewBox="0 0 32 32" aria-hidden="true">${ic}</svg><span class="hr-copy"><span class="k">${MTITLE[k]}</span><span class="v num">${n}</span></span></a>`; }).join('')}</div>
   ${hard.length?`<div class="section"><h2>Hoyos que más te cuestan</h2></div>
-  <div class="list">${hard.map(h=>`<a class="row" href="#/hoyo/${encodeURIComponent(h.ck)}/${h.hole}"><div class="date"><b class="num">${h.hole}</b><span>${esc(h.cn.slice(0,3))}</span></div><div class="body"><div class="t">Par ${h.par} · Handicap ${h.hcp}</div><div class="s">Promedio ${f2(h.stats.avg)} en ${h.stats.n} vueltas</div></div><span class="badge neg num">${sg(h.stats.avg_to_par)}</span>${ICON.chev}</a>`).join('')}</div>`:''}
+  <div class="list">${hard.map(h=>{ const courseName = (h.course || (h.ck||'').split(':').slice(1).join(':') || '').trim(), clubName = (h.club || '').trim();
+    const vs = h.stats.avg_to_par == null ? '' : `${sg(h.stats.avg_to_par)} vs par`;
+    const score = h.stats.avg != null ? `score ${f1(h.stats.avg)}` : '';
+    const sample = `${h.stats.n} ${h.stats.n === 1 ? 'vuelta' : 'vueltas'}`;
+    return `<a class="row hard-id" href="#/hoyo/${encodeURIComponent(h.ck)}/${h.hole}"><div class="body"><div class="t">Hoyo ${h.hole} · ${esc(courseName || 'Cancha')}</div>${clubName ? `<div class="s">${esc(clubName)}</div>` : ''}<div class="s">Par ${h.par ?? '—'} · Hcp ${h.hcp ?? '—'} · ${[vs, score, sample].filter(Boolean).join(' · ')}</div></div><span class="badge neg num">${sg(h.stats.avg_to_par)}</span>${ICON.chev}</a>`; }).join('')}</div>`:''}
   <p class="foot">Sobre ${pool.length} tarjetas válidas de 18 hoyos${ranged?` (${rlabel(RANGE).toLowerCase()})`:""}; las DES y las de 9 hoyos no cuentan.</p><div id="puttcard"></div><div id="wxres"></div><div id="privres"></div></div></div>`;
 }
 
@@ -358,7 +364,7 @@ function vCancha(){
   <div class="teechips">${Object.entries(c.tees||{}).map(([t,x])=>`<span class="teechip"><i class="tee" style="background:${TEE[t.toUpperCase()]||'#ccc'}"></i>${esc(t)} <b class="num">${f1(x.course_rating)}</b>/${x.slope}</span>`).join('')}</div>
   <div id="stratcard" data-ck="${esc(c.key)}"></div>
   <div id="cancwx" data-ck="${esc(c.key)}" data-club="${esc(c.club_name||'')}"></div>
-  <a class="card row vx-tap lb-cbook" href="#/plan/cancha?ck=${encodeURIComponent(c.key)}"><div class="body"><div class="t">Libreta de la cancha</div><div class="s">Diseño, rumbo, marcas y greens para imprimir · sin reserva</div></div><span class="chev">›</span></a>
+  <a class="card lb-entry vx-tap lb-cbook" href="#/plan/cancha?ck=${encodeURIComponent(c.key)}"><div class="t">Libreta de la cancha</div><div class="s">Diseño, rumbo, marcas y greens para imprimir · sin reserva</div></a>
   <div id="bench" data-ck="${esc(c.key)}"></div>
   <div class="section"><h2>Hoyos</h2><span class="badge">golpes sobre el par</span></div>
   <div class="hgrid">${c.holes.map(h=>{ const st = HS(h), v = st.n ? st.avg_to_par : null, hard = top.includes(h.hole);
@@ -679,10 +685,10 @@ async function loadScorecards(){
     if (!rows.length) { el.innerHTML = ''; return; }
     const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
     const block = (title, list) => list.length ? `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${list.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div></div></div>`).join('')}</div>` : '';
-    const open = rows.filter(f => ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status));
-    const done = rows.filter(f => f.status === 'complete');
-    const rest = rows.filter(f => !open.includes(f) && !done.includes(f));
-    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${block('En curso', open)}${block('Ya está', done)}${block('Otras', rest)}`;
+    const headed = rows.some(f => f.heading);
+    const groups = headed ? ['Próxima', 'En curso', 'No presentó', 'Ya está', 'Sin confirmar', 'Otras'] : ['En curso', 'Ya está', 'Otras'];
+    const bucket = f => f.heading || (f.status === 'complete' ? 'Ya está' : ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status) ? 'En curso' : 'Otras');
+    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${groups.map(title => block(title, rows.filter(f => bucket(f) === title))).join('')}<p class="foot">«No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -1218,16 +1224,46 @@ async function loadJugar(id){
     let C, L; try { [C, L] = await Promise.all([api('/api/gps/courses'), api('/api/live-rounds')]); } catch(e){ el.innerHTML = errBox(e); return; }
     if (!$('#jugbody')) return;
     const today = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10), open = (L.live_rounds || []).find(l => !l.ended_at && String(l.date).slice(0, 10) === today);
-    const cs = (C.courses || []).filter(c => c.mine);
+    const cs = (C.courses || []).filter(c => c.mine !== false);
     const groups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(cs) : [{ code: 'c', club: '', distance: null, rows: cs.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
+    const courseRadios = (rows, checkedFirst) => rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${checkedFirst && i === 0 ? 'checked' : ''}><span class="t">${esc(c.name)}</span>${c.club ? `<span class="s">${esc(c.club)}</span>` : ''}<svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('');
     el.innerHTML = `<div class="stitle">Empezar ronda</div>
       ${open ? `<a class="card row vx-tap jg-open" href="#/jugar/${esc(open.id)}"><div><div class="t">Seguir la ronda de hoy</div><div class="s">${esc(open.course || open.vm_course || 'Cancha')} · hoyo ${open.current_hole || 1}</div></div>${ICON.chev || '›'}</a>` : ''}
       <p class="lede">Elegí la cancha. En el hoyo confirmás el tee, después la bandera, y cada golpe con ENTER. El mapa se mueve bajo la mira.</p>
-      ${cs.length ? groups.map((g, gi) => `<section class="jg-club" id="club-${esc(g.code)}"><div class="jg-club-h"><b>${esc(g.club)}</b>${g.distance ? `<span>${esc(g.distance)}</span>` : ''}</div>${g.rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${gi === 0 && i === 0 ? 'checked' : ''}><span class="t">${esc(c.name)}</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('')}</section>`).join('')
-        : `<div class="msg">No encontramos canchas de tus clubes. Vinculá tu matrícula para elegir la cancha.</div>`}
+      <div class="section"><h2>Mis clubes</h2></div>
+      ${cs.length ? groups.map((g, gi) => `<section class="jg-club" id="club-${esc(g.code)}"><div class="jg-club-h"><b>${esc(g.club)}</b>${g.distance ? `<span>${esc(g.distance)}</span>` : ''}</div>${courseRadios(g.rows.map(r => ({ ...r, club: '' })), gi === 0)}</section>`).join('')
+        : `<div class="msg">No encontramos canchas de tus clubes. Podés buscar otra en el catálogo.</div>`}
+      <div class="section"><h2>Otra cancha</h2></div>
+      <label class="jg-find">Buscar por club o cancha<input id="jgq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Ej. Pilar, Norte"></label>
+      <div id="jgqout"></div>
       <div class="section"><h2>Jugadores en tu grupo</h2></div><div class="seg jg-pl" role="radiogroup" aria-label="Jugadores">${[1, 2, 3, 4].map(n => `<button type="button" data-pl="${n}" aria-pressed="false">${n}</button>`).join('')}</div>
-      <p class="foot">Opcional: sirve para avisarte si van atrasados en el hoyo 10.</p>
+      <p class="foot">Opcional: sirve para avisarte si van atrasados en el hoyo 10. Elegir otra cancha no cambia tus clubes.</p>
       <button class="btn" id="jgstart" ${cs.length ? '' : 'disabled'}>Empezar ronda</button><div id="jgerr"></div>`;
+    let qGen = 0;
+    const known = new Set(cs.map(c => c.course_id));
+    $('#jgq').oninput = () => {
+      const q = $('#jgq').value.trim();
+      clearTimeout($('#jgq')._t);
+      if (q.length < 2) { $('#jgqout').innerHTML = q ? '<p class="foot">Escribí al menos 2 letras.</p>' : ''; return; }
+      $('#jgq')._t = setTimeout(async () => {
+        const gen = ++qGen; $('#jgqout').innerHTML = '<p class="foot">Buscando en el catálogo…</p>';
+        try {
+          const d = await api('/api/gps/courses?q=' + encodeURIComponent(q));
+          if (gen !== qGen || !$('#jgqout')) return;
+          const hits = (d.courses || []).filter(c => c.course_id && !known.has(c.course_id));
+          const already = (d.courses || []).filter(c => known.has(c.course_id));
+          const cov = d.coverage;
+          const covLine = cov && cov.catalog ? `<p class="foot">Catálogo: ${cov.catalog} canchas en ${cov.clubs} clubes.${cov.truncated ? ' Hay más: afiná el nombre.' : ''}</p>` : '';
+          if (d.reason === 'short') { $('#jgqout').innerHTML = '<p class="foot">Escribí al menos 2 letras.</p>'; return; }
+          if (!hits.length && !already.length) { $('#jgqout').innerHTML = `<p class="foot">No hay una cancha con ese nombre en el catálogo.</p>${covLine}`; return; }
+          const foundGroups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(hits) : [{ code: 'o', club: '', rows: hits.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
+          $('#jgqout').innerHTML = `${already.length && !hits.length ? '<p class="foot">Esa cancha ya está en Mis clubes.</p>' : ''}
+            ${hits.length ? foundGroups.map(g => `<section class="jg-club"><div class="jg-club-h"><b>${esc(g.club)}</b></div>${courseRadios(g.rows.map(r => ({ ...r, club: g.club })), false)}</section>`).join('') : ''}
+            ${already.length && hits.length ? `<p class="foot">${already.length === 1 ? 'Otra coincidencia ya está en Mis clubes.' : 'Algunas coincidencias ya están en Mis clubes.'}</p>` : ''}${covLine}`;
+          $('#jgqout').querySelectorAll('input[name=jgc]').forEach(inp => inp.onchange = () => { const b = $('#jgstart'); if (b) b.disabled = false; });
+        } catch (e) { if (gen === qGen && $('#jgqout')) $('#jgqout').innerHTML = errBox(e, 'el catálogo'); }
+      }, 300);
+    };
     let pl = null; el.querySelectorAll('[data-pl]').forEach(b => b.onclick = () => { pl = +b.dataset.pl; el.querySelectorAll('[data-pl]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); });
     $('#jgstart').onclick = async () => { const c = el.querySelector('input[name=jgc]:checked')?.value; if (!c) return; $('#jgstart').disabled = true;
       try { const r = await api('/api/live-rounds', { method: 'POST', body: JSON.stringify({ course_id: c, current_hole: 1, ...(pl ? { players: pl } : {}) }) }); location.hash = `#/jugar/${r.live_round.id}`; }
@@ -1449,16 +1485,26 @@ async function loadEstrategia(ck){
 
 
 /* ---------- MI BOLSA ---------- */
+function isPutterName(s){ const t = String(s || '').trim(); return /^(pt|putter)$/i.test(t) || /^putter\b/i.test(t); }
+function wedgeFace(c){
+  const code = String(c.code || '').toLowerCase();
+  if (!['gw', 'sw', 'lw'].includes(code)) return c.label;
+  const loft = c.loft == null || c.loft === '' ? '' : String(c.loft).replace('.', ',') + '°';
+  const catalog = { gw: 'Gap wedge', sw: 'Sand wedge', lw: 'Lob wedge' }, bag = { gw: 'GW', sw: 'SW', lw: 'LW' };
+  const label = String(c.label || '').trim();
+  if (label && label !== catalog[code] && label !== bag[code] && label.toLowerCase() !== code) return label;
+  return loft || label || catalog[code];
+}
 function vBolsa(){
-  const bag = G.bag, filled = bag.filter(b=>b.carry||b.total).length;
+  const bag = G.bag, yard = bag.filter(b => !isPutterName(b.club)), filled = yard.filter(b=>b.carry||b.total).length;
   return `<div class="top"><span class="overline">Mis distancias</span></div>
   <h1 class="ltitle">Mi bolsa</h1>
-  <div class="section"><h2>Mis palos</h2><a class="badge" href="#/equipo/nuevo">+ Agregar palo</a></div><div id="equip"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
+  <div class="section"><h2>Mis palos</h2><span><a class="badge" href="#/equipo/juego">Juego de hierros</a> <a class="badge" href="#/equipo/nuevo">+ Agregar palo</a></span></div><div id="equip"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
   <a class="card bagball" id="bagball" href="#/pelota"><span class="gi">${BALL_IC}</span><span class="bb-t">Pelota<small>&nbsp;</small></span>${ICON.chev}</a>
   <div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div>
-  <div class="card bagsum"><p class="bagsum-n num" id="bagcount">${filled} de ${bag.length}</p><div id="bagmsg" class="bagsum-d">${filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste.</p></div>
+  <div class="card bagsum"><p class="bagsum-n num" id="bagcount">${filled} de ${yard.length}</p><div id="bagmsg" class="bagsum-d">${filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste. El putter no lleva yardas acá.</p></div>
   <div class="bagtable"><div class="baghdr" aria-hidden="true"><span>Palo</span><span>Carry</span><span>Total</span></div>
-  <div class="list">${bag.map((b,i)=>`<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
+  <div class="list">${bag.map((b,i)=>isPutterName(b.club) ? `<div class="bagrow bag-putter" data-club="${esc(b.club)}" data-putter="1"><span class="n">${esc(b.club)}<small class="bsrc">Sin distancia en la bolsa</small></span><span class="bag-noputt">El putter no lleva yardas. En TRACK los metros del putt se cargan en el hoyo.</span></div>` : `<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
   <p class="foot" id="bagsaved">Tu distancia es la que manda. Al lado, lo que mediste con GPS (total, no carry). Yardas, sin datos inventados.</p>
   <div class="section"><h2>Distancias por palo</h2><span class="badge gold">GPS</span></div><div id="cdist"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div><div id="gpsrounds"></div>`;
 }
@@ -1467,7 +1513,7 @@ function vBolsa(){
 async function loadBagSources(){
   try { const d = await api('/api/bag/distances'); const norm = x => String(x||'').trim().toLowerCase();
     const find = name => d.clubs.find(x => norm(x.club) === norm(name) || norm(x.code) === norm(name));
-    document.querySelectorAll('.bagrow[data-club]').forEach(row => { const c = find(row.dataset.club), el = row.querySelector('.bsrc'), gb = row.querySelector('.bgps'); if (!el || !gb) return;
+    document.querySelectorAll('.bagrow[data-club]').forEach(row => { const c = find(row.dataset.club), el = row.querySelector('.bsrc'), gb = row.querySelector('.bgps'); if (row.dataset.putter) return; if (!el || !gb) return;
       const b = G.bag.find(x => norm(x.club) === norm(row.dataset.club)), man = !!(b && (b.carry || b.total)), g = c?.gps;
       el.textContent = man ? 'Definida por vos' : g ? 'Sin distancia cargada · hay tiros GPS' : ''; el.className = 'bsrc' + (man ? ' def' : g ? ' auto' : '');
       if (!g) { gb.hidden = true; gb.innerHTML = ''; return; }   /* t126u: GPS block only when there are measured shots */
@@ -1475,7 +1521,7 @@ async function loadBagSources(){
       gb.innerHTML = `<span class="bg-l">GPS</span><a href="${href('promedio')}"><span>Prom.</span><b class="num">${g.avg_yd} yd</b></a><a href="${href('tiros')}"><b class="num">${g.n}</b><span>${g.n === 1 ? 'tiro' : 'tiros'}</span></a>${g.used >= 3 ? `<a href="${href('dispersion')}"><span>Rango</span><b class="num">${g.range_yd[0]}–${g.range_yd[1]}</b><span class="num">±${g.spread_yd}</span></a>` : ''}`;
       gb.hidden = false; });
     /* t75u/t126u header: a club has distance if it has a typed one OR GPS-measured shots */
-    const bag = G.bag, st = bag.map(b => ({ man: !!(b.carry || b.total), gps: !!find(b.club)?.gps }));
+    const bag = G.bag.filter(b => !isPutterName(b.club)), st = bag.map(b => ({ man: !!(b.carry || b.total), gps: !!find(b.club)?.gps }));
     const man = st.filter(x => x.man).length, gps = st.filter(x => x.gps).length, tot = st.filter(x => x.man || x.gps).length;
     const cnt = $('#bagcount'), msg = $('#bagmsg'); if (!cnt || !msg) return;
     cnt.textContent = `${tot} de ${bag.length}`;
@@ -1601,7 +1647,7 @@ async function loadEquipList(){
     const done = clubs.filter(c => c.brand).length, nm = x => String(x || '').trim().toLowerCase();
     const bagOf = c => { const ks = [typ(c.code)?.bag, c.label, c.code].filter(Boolean).map(nm); return (G.bag || []).find(b => ks.includes(nm(b.club))); };
     el.innerHTML = `<p class="foot" style="margin:0 0 10px">${clubs.length} palos · ${done ? `${done} con marca y modelo` : 'cargá marca y modelo de cada uno'}.</p>
-      <div class="list">${[...Object.keys(CATL), 'otros'].filter(k => groups[k]).map(k => groups[k].map(c => { const b = bagOf(c), i = b ? G.bag.indexOf(b) : -1; return `<div class="row eq-row${c.enabled===false?' eq-off':''}"><a class="eq-a" href="#/equipo/${eqCode(c)}"><span class="eq-code num">${esc(c.code)}</span><div class="body"><div class="t">${esc(c.label)}${c.loft?` <span class="eq-loft num">${String(c.loft).replace('.',',')}°</span>`:''}</div><div class="s">${eqLine(c)}${c.enabled===false?' · oculto al marcar golpes':''}</div></div></a><label class="eq-yd" title="Carry en yardas"><input class="num" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" maxlength="3" data-eqc="${esc(c.code)}" value="${b?.carry ?? ''}" placeholder="—" aria-label="Carry de ${esc(c.label)} en yardas"><span>yd</span></label><a class="eq-ch" href="#/equipo/${eqCode(c)}" tabindex="-1" aria-hidden="true">${ICON.chev}</a></div>`; }).join('')).join('')}</div>`;
+      <div class="list">${[...Object.keys(CATL), 'otros'].filter(k => groups[k]).map(k => groups[k].map(c => { const b = bagOf(c), i = b ? G.bag.indexOf(b) : -1; return `<div class="row eq-row${c.enabled===false?' eq-off':''}"><a class="eq-a" href="#/equipo/${eqCode(c)}"><span class="eq-code num">${esc(c.code)}</span><div class="body"><div class="t">${esc(wedgeFace(c))}</div><div class="s">${eqLine(c)}${c.enabled===false?' · oculto al marcar golpes':''}</div></div></a>${(isPutterName(c.code) || isPutterName(c.label) || typ(c.code)?.category === 'putter') ? '<span class="eq-yd">Sin yardas</span>' : `<label class="eq-yd" title="Carry en yardas"><input class="num" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" maxlength="3" data-eqc="${esc(c.code)}" value="${b?.carry ?? ''}" placeholder="—" aria-label="Carry de ${esc(c.label)} en yardas"><span>yd</span></label>`}<a class="eq-ch" href="#/equipo/${eqCode(c)}" tabindex="-1" aria-hidden="true">${ICON.chev}</a></div>`; }).join('')).join('')}</div>`;
     /* t223u: the carry right on the row (the planner reads it from Mi bolsa: total if you typed one, else carry). Save on blur / Enter, no detail screen. */
     el.querySelectorAll('input[data-eqc]').forEach(inp => {
       inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } };
@@ -2940,16 +2986,26 @@ function decorateWx(){
   loadWX().then(d => { if (!d) return; view.querySelectorAll('a[href^="#/ronda/"]:not([data-wx])').forEach(a => {
     a.dataset.wx = '1'; const w = d.rounds[a.getAttribute('href').split('/')[2]]; if (!w || !w.condition) return;
     const t = a.querySelector('.body .t') || a.querySelector('.t'); if (!t) return;
-    t.insertAdjacentHTML('beforeend', ` <span class="wxi" title="${WX_L[w.condition]}${w.temp_c!=null?` · ${n1(w.temp_c)}°`:''}" aria-label="${WX_L[w.condition]}">${WX_IC[w.condition]}${w.temp_c!=null?`<b class="num">${Math.round(w.temp_c)}°</b>`:''}</span>`); }); });
+    const forecast = w.kind === 'forecast' || w.source === 'open-meteo-forecast', name = `${forecast ? 'Pronóstico: ' : ''}${WX_L[w.condition] || ''}`;
+    t.insertAdjacentHTML('beforeend', ` <span class="wxi" title="${name}${w.temp_c!=null?` · ${n1(w.temp_c)}°`:''}" aria-label="${name}">${WX_IC[w.condition]}${w.temp_c!=null?`<b class="num">${Math.round(w.temp_c)}°</b>`:''}</span>`); }); });
 }
-async function loadRoundWx(id){
+function wxMiss(reason){
+  const retry = '<button type="button" class="btn ghost sm" id="wxretry">Reintentar</button>';
+  if (reason === 'no_course_location') return '<div class="card wx-card wx-none"><span class="overline">Clima</span><span>No tenemos la ubicación de esta cancha, así que no hay clima.</span></div>';
+  if (reason === 'not_played' || reason === 'future') return '<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Esa fecha todavía no llegó en Argentina. No hay clima de la ronda.</span></div>';
+  if (reason === 'unavailable') return `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Open-Meteo no tiene datos para ese día y esa cancha.</span>${retry}</div>`;
+  if (reason === 'error') return `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>No pudimos consultar el clima.</span>${retry}</div>`;
+  return `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Todavía no leímos el clima de ese día.</span>${retry}</div>`;
+}
+async function loadRoundWx(id, retry){
   const el = $('#rwx'); if (!el) return;
-  let d; try { d = await api(`/api/rounds/${encodeURIComponent(id)}/weather`); } catch(e){ return; }
+  let d; try { d = await api(`/api/rounds/${encodeURIComponent(id)}/weather${retry ? '?retry=1' : ''}`); } catch(e){ if ($('#rwx')) { $('#rwx').innerHTML = wxMiss('error'); const b = $('#wxretry'); if (b) b.onclick = () => loadRoundWx(id, true); } return; }
   if (!$('#rwx')) return; const w = d.weather;
-  if (!w) { el.innerHTML = d.reason === 'no_course_location' ? '' : `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Todavía no tenemos el clima de ese día. Lo traemos en unos días.</span></div>`; return; }
-  el.innerHTML = `<div class="card wx-card"><div class="wx-h"><span class="wx-ic">${WX_IC[w.condition]||''}</span><div><span class="overline">Clima ${w.basis==='tee_time'?'en tu salida':'durante el día'}</span><b>${WX_L[w.condition]||'—'}</b></div></div>
+  if (!w) { el.innerHTML = wxMiss(d.reason); const b = $('#wxretry'); if (b) b.onclick = () => loadRoundWx(id, true); return; }
+  const forecast = w.kind === 'forecast' || w.source === 'open-meteo-forecast';
+  el.innerHTML = `<div class="card wx-card"><div class="wx-h"><span class="wx-ic">${WX_IC[w.condition]||''}</span><div><span class="overline">${forecast ? 'Pronóstico, no es el histórico' : `Clima ${w.basis==='tee_time'?'en tu salida':'durante el día'}`}</span><b>${WX_L[w.condition]||'—'}</b></div></div>
     <div class="wx-kv"><div><span>Temperatura</span><b class="num">${n1(w.temp_c)}°</b></div><div><span>Lluvia</span><b class="num">${n1(w.precip_mm)} mm</b></div><div><span>Viento</span><b class="num">${w.wind_kmh!=null?Math.round(w.wind_kmh):'—'} km/h</b></div><div><span>Ráfagas</span><b class="num">${w.gust_kmh!=null?Math.round(w.gust_kmh):'—'} km/h</b></div></div>
-    <p class="wx-src">${w.window[0]} a ${w.window[1]} h · Open-Meteo (histórico)</p></div>`;
+    <p class="wx-src">${w.window[0]} a ${w.window[1]} h · ${forecast ? 'Open-Meteo pronóstico. No entra en Clima y juego.' : 'Open-Meteo histórico.'}</p></div>`;
 }
 const dsg = v => v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '±') + String(Math.abs(Math.round(v*10)/10)).replace('.', ',');
 const DIMS = [['lluvia','Lluvia o seco'],['temperatura','Temperatura'],['viento','Viento']];

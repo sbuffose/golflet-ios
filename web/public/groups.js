@@ -8,7 +8,7 @@
   const MET = [
     ['rounds', 'Rondas', 'n', false], ['avg_gross', 'Promedio gross', 'f', true], ['best_gross', 'Mejor gross', 'i', true],
     ['avg_net', 'Promedio neto', 'f', true], ['best_net', 'Mejor neto', 'i', true], ['handicap', 'Hándicap', 'h', true],
-    ['eagles', 'Águilas', 't', false], ['birdies', 'Birdies', 't', false], ['pars', 'Pares', 't', false], ['bogeys', 'Bogeys', 't', true], ['doubles', 'Doble bogey o peor', 't', true],
+    ['eagles', 'Águilas', 't', false], ['birdies', 'Birdies', 't', false], ['max_birdies', 'Máximo de birdies', 't', false], ['pars', 'Pares', 't', false], ['bogeys', 'Bogeys', 't', true], ['doubles', 'Doble bogey o peor', 't', true],
     ['par3', 'Promedio en par 3', 'p', true], ['par4', 'Promedio en par 4', 'p', true], ['par5', 'Promedio en par 5', 'p', true],
     ['putts', 'Putts por ronda', 'u', true], ['gir', 'Greens en regulación', 'g', false], ['fir', 'Fairways', 'r', false],
   ];
@@ -84,9 +84,11 @@
     const box = document.getElementById('ngchips'), inp = document.getElementById('ngmi'), chips = [];   // {matricula, status, name}
     const addBtn = document.getElementById('ngadd');   // t151u: numeric keyboards (iPhone) have no space/comma/Enter → explicit Agregar
     const ph = document.getElementById('ngph'), prev = document.getElementById('ngprev'), phl = document.getElementById('ngphl');
-    ph.onchange = () => { const file = ph.files?.[0]; if (!file) return;
-      if (!file.type.startsWith('image/')) { H.toast('Solo imágenes.'); ph.value = ''; return; }
-      const u = URL.createObjectURL(file); prev.innerHTML = `<img src="${u}" alt="">`; prev.classList.add('has'); phl.textContent = 'Cambiar foto'; };
+    let cropped = null;
+    ph.onchange = async () => { const file = ph.files?.[0]; ph.value = ''; if (!file) return;
+      try { const blob = await window.GolfletCrop.open(file); if (!blob) return; cropped = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
+        prev.innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="">`; prev.classList.add('has'); phl.textContent = 'Cambiar foto'; }
+      catch (e) { H.toast(e.message); } };
     const draw = () => {
       box.querySelectorAll('.ng-chip').forEach(c => c.remove());
       chips.forEach((c, i) => { const el = document.createElement('span'); el.className = 'ng-chip ' + c.status;
@@ -137,7 +139,7 @@
       if (!f.name.value.trim()) { msg('Ponele un nombre al grupo.'); f.name.focus(); return; }
       if (inp.value.trim()) { const v = inp.value; inp.value = ''; await add(v); }
       const mats = chips.map(c => c.matricula);   // t151u: include chips still being looked up (tapping the button blurs the field first)
-      const file = ph.files?.[0];
+      const file = cropped;
       const btn = f.querySelector('button[type=submit]'); if (btn.disabled) return; btn.disabled = true;
       if (!f.dataset.idem) f.dataset.idem = (crypto.randomUUID ? crypto.randomUUID() : 'k' + Date.now().toString(36));
       try { const r = await H.api('/api/groups', { method: 'POST', headers: { 'Idempotency-Key': f.dataset.idem }, body: JSON.stringify({ name: f.name.value, matriculas: mats }) });
@@ -256,12 +258,12 @@
     el.innerHTML = `<div class="bar"><span class="overline">${H.esc(d.course.label)}</span><span class="gg-hnav">${nav(-1) ? `<a class="close" href="#/grupo/${id}/hoyo/${n - 1}${keepQs(qs)}" aria-label="Hoyo anterior">‹</a>` : ''}${nav(1) ? `<a class="close" href="#/grupo/${id}/hoyo/${n + 1}${keepQs(qs)}" aria-label="Hoyo siguiente">›</a>` : ''}</span></div>
       <div class="stitle">Hoyo ${n}</div><div class="chips"><span class="badge">Par ${h.par ?? '—'}</span>${h.hcp ? `<span class="badge">Hcp ${h.hcp}</span>` : ''}</div>${legend(ms)}
       <div class="card gg-board"><div class="tscroll"><table class="gg-t"><thead><tr><th></th>${ms.map(m => `<th>${dot(m.color)}<span>${H.esc(m.name.split(' ')[0])}</span></th>`).join('')}</tr></thead><tbody>
-      ${[['n', 'Veces jugado'], ['avg', 'Promedio'], ['avg_to_par', 'Vs par'], ['best', 'Mejor'], ['birdies', 'Birdies o mejor'], ['pars', 'Pares'], ['bogeys', 'Bogeys'], ['doubles', 'Doble o peor']].map(([k, l]) => {
+      ${[['n', 'Veces jugado'], ['avg', 'Promedio'], ['avg_to_par', 'Vs par'], ['best', 'Mejor'], ['eagles', 'Águilas'], ['birdies', 'Birdies'], ['pars', 'Pares'], ['bogeys', 'Bogeys'], ['doubles', 'Doble o peor']].map(([k, l]) => {
         const xs = ms.map(m => h.members.find(y => y.member_id === m.member_id) || {}); const lead = k === 'avg_to_par' ? h.leaders.avg : k === 'birdies' ? h.leaders.birdies : k === 'pars' ? h.leaders.pars : [];
         return `<tr><th>${l}</th>${xs.map(x => `<td class="${lead.includes(x.member_id) ? 'lead' : ''}"><b class="num">${x.n ? (k === 'avg' ? H.f1(x.avg) : k === 'avg_to_par' ? sgn(x.avg_to_par) : x[k] ?? '—') : '—'}</b></td>`).join('')}</tr>`; }).join('')}
       </tbody></table></div></div>
       <div class="section"><h2>Cómo terminó cada uno</h2></div><div class="card gg-bars">${ms.map(m => { const x = h.members.find(y => y.member_id === m.member_id) || { n: 0 }; const tot = x.n || 1;
-        return `<div class="gg-dist"><span class="gg-nm">${dot(m.color)}${H.esc(m.name)}</span><span class="vx-split">${[['birdies', '#C8102E'], ['pars', '#0B2545'], ['bogeys', '#DCD6C8'], ['doubles', '#B4553F']].map(([k, c]) => x[k] ? `<span style="flex:${x[k]};background:${c}" title="${k}: ${x[k]}"></span>` : '').join('') || '<span style="flex:1;background:#F1EEE6"></span>'}</span><small class="num">${x.n} vez${x.n === 1 ? '' : 'es'}</small></div>`; }).join('')}
+        return `<div class="gg-dist"><span class="gg-nm">${dot(m.color)}${H.esc(m.name)}</span><span class="vx-split">${[['eagles', '#C4A36A'], ['birdies', '#C8102E'], ['pars', '#0B2545'], ['bogeys', '#DCD6C8'], ['doubles', '#B4553F']].map(([k, c]) => x[k] ? `<span style="flex:${x[k]};background:${c}" title="${k}: ${x[k]}"></span>` : '').join('') || '<span style="flex:1;background:#F1EEE6"></span>'}</span><small class="num">${x.n} vez${x.n === 1 ? '' : 'es'}</small></div>`; }).join('')}
       <div class="gg-key"><span><i style="background:#C8102E"></i>birdie o mejor</span><span><i style="background:#0B2545"></i>par</span><span><i style="background:#DCD6C8"></i>bogey</span><span><i style="background:#B4553F"></i>doble o peor</span></div></div>`;
   }
 
@@ -275,7 +277,7 @@
       ${d.pending.length ? `<div class="section"><h2>Pendientes</h2></div><div class="card gg-list">${d.pending.map(p => `<div class="row"><div class="gg-t"><b class="num">${p.matricula ? 'Matrícula ' + H.esc(p.matricula) : 'Invitación pendiente'}</b><span>${p.matricula ? (p.is_user ? 'Esperando respuesta' : 'Todavía no usa Golflet: la ve cuando entre') : 'Esperando respuesta'}</span></div>${adm ? `<button class="btn ghost sm" data-rm="${p.member_id}" data-pend="1">Revocar</button>` : ''}</div>`).join('')}</div>` : ''}
       ${adm ? `<div class="section"><h2>Invitar por matrícula</h2></div><form class="card gg-form gg-inline" id="ggi"><label>Matrícula<input name="mat" inputmode="numeric" pattern="[0-9]{3,9}" required placeholder="123456"></label><button class="btn" type="submit">Invitar</button><div id="ggimsg"></div></form>
         <p class="foot"><a class="link" href="#/grupo/${id}/ajustes">Link de invitación, nombre y foto</a></p>` : ''}
-      <div class="section"><h2>Salir del grupo</h2></div><div class="card"><p class="foot" style="margin-top:0">Dejás de ver a los demás y ellos dejan de verte. ${d.group.is_admin && admins === 1 && d.members.length > 1 ? 'Sos el único admin: el jugador más antiguo pasa a ser admin.' : ''} Podés volver con el link o si te invitan de nuevo.</p><button class="btn ghost danger" id="ggleave">Salir del grupo</button></div>`;
+      <div class="section"><h2>Salir del grupo</h2></div><div class="card"><p class="foot" style="margin-top:0">Salís del grupo. El grupo y las tarjetas de los demás se quedan. ${d.group.is_admin && admins === 1 && d.members.length > 1 ? 'Sos el único admin: el jugador más antiguo pasa a ser admin.' : ''} Si eras el último, el grupo queda dormido.</p><button class="btn ghost danger" id="ggleave">Salir del grupo</button></div>`;
     el.querySelectorAll('[data-role]').forEach(b => b.onclick = async () => {
       try { await H.api(`/api/groups/${id}/members/${b.dataset.mid}`, { method: 'PATCH', body: JSON.stringify({ role: b.dataset.role }) }); H.toast(b.dataset.role === 'admin' ? `${b.dataset.nm} ahora es admin.` : 'Listo.'); load(['grupo', id, 'miembros'], location.hash); } catch (e) { H.toast(e.message); } });
     el.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => {
@@ -351,7 +353,7 @@
       <div class="section"><h2>Foto</h2></div>
       <div class="card gg-photo">${photo(d.group, 'gg-hph')}<div><label class="btn ghost sm gg-file">Elegir foto<input type="file" accept="image/*" id="ggph" hidden></label>${d.group.photo_url ? '<button class="btn ghost sm" id="ggphrm">Quitar</button>' : ''}<p class="foot">Solo imágenes. La achicamos a 512 px.</p><div id="ggpmsg"></div></div></div>
       <div class="section"><h2>Nombre</h2></div><form class="card gg-form gg-inline" id="ggr"><label>Nombre del grupo<input name="name" maxlength="40" value="${H.esc(d.group.name)}" required></label><button class="btn ghost" type="submit">Guardar</button></form>
-      <div class="section"><h2>Borrar el grupo</h2></div><div class="card"><p class="foot" style="margin-top:0">Se borra para todos. Nadie sigue viendo los números de nadie.</p><button class="btn ghost danger" id="ggdel">Borrar grupo</button></div>
+      <p class="foot">Un grupo no se borra. Cada jugador sale por su cuenta y las tarjetas de los demás siguen.</p>
       ${nuevo ? `<p style="margin-top:18px"><a class="btn ghost" href="#/grupo/${id}">Ir al grupo</a></p>` : ''}`;
     const msg = (sel, t, err) => { const m = document.getElementById(sel); m.innerHTML = `<div class="msg ${err ? 'err' : ''}"></div>`; m.firstChild.textContent = t; };
     const cp = document.getElementById('ggcopy'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(L.url); H.toast('Link copiado.'); } catch (_) { document.getElementById('gglink').select(); } };
@@ -361,12 +363,13 @@
       if (a === 'regenerate' && L.url && !(await H.ask(b, 'El link anterior deja de funcionar.', 'Sí, generar uno nuevo'))) return;
       if (a === 'disable' && !(await H.ask(b, 'Nadie más puede entrar con este link hasta que lo actives.', 'Sí, desactivar'))) return;
       try { await H.api(`/api/groups/${id}/link`, { method: 'POST', body: JSON.stringify({ action: a }) }); load(['grupo', id, 'ajustes'], location.hash); } catch (e) { msg('gglmsg', e.message, 1); } });
-    const ph = document.getElementById('ggph'); ph.onchange = async () => { const f = ph.files[0]; if (!f) return; msg('ggpmsg', 'Subiendo…');
-      try { await uploadPhoto(id, f); H.toast('Foto guardada.'); load(['grupo', id, 'ajustes'], location.hash); } catch (e) { msg('ggpmsg', e.message, 1); } };
+    const ph = document.getElementById('ggph'); ph.onchange = async () => { const f = ph.files && ph.files[0]; ph.value = ''; if (!f) return;
+      let blob; try { blob = await window.GolfletCrop.open(f); } catch (e) { msg('ggpmsg', e.message, 1); return; }
+      if (!blob) { msg('ggpmsg', 'Cancelaste. La anterior sigue igual.'); return; }
+      msg('ggpmsg', 'Subiendo…');
+      try { await uploadPhoto(id, new File([blob], 'foto.jpg', { type: 'image/jpeg' })); H.toast('Foto guardada.'); load(['grupo', id, 'ajustes'], location.hash); } catch (e) { msg('ggpmsg', e.message, 1); } };
     const pr = document.getElementById('ggphrm'); if (pr) pr.onclick = async () => { try { await H.api(`/api/groups/${id}/photo`, { method: 'DELETE' }); load(['grupo', id, 'ajustes'], location.hash); } catch (e) { msg('ggpmsg', e.message, 1); } };
     const fr = document.getElementById('ggr'); fr.onsubmit = async e => { e.preventDefault(); try { await H.api(`/api/groups/${id}`, { method: 'PATCH', body: JSON.stringify({ name: fr.name.value }) }); H.toast('Nombre guardado.'); } catch (err) { H.toast(err.message); } };
-    const dl = document.getElementById('ggdel'); dl.onclick = async () => { if (!(await H.ask(dl, 'Se borra el grupo para todos.', 'Sí, borrar'))) return;
-      try { await H.api(`/api/groups/${id}`, { method: 'DELETE' }); location.hash = '#/amigos'; } catch (e) { H.toast(e.message); } };
   }
 
   /* my own view of the group (admins don't set other members' views) + optional per-group sharing */
@@ -433,10 +436,10 @@
   }
 
   /* ---------- t163u: Comparativo (Semana | Mes), rankings per stat, member profiles and shared scorecards ---------- */
-  const PST = { rounds: 'Rondas jugadas', best_net: 'Mejor neto vs par', best_gross: 'Mejor gross vs par', avg_gross: 'Promedio de golpes', hi_change: 'Cambio de hándicap', eagles: 'Águilas o mejor', birdies: 'Birdies',
+  const PST = { rounds: 'Rondas jugadas', best_net: 'Mejor neto vs par', best_gross: 'Mejor gross vs par', avg_gross: 'Promedio de golpes', hi_change: 'Cambio de hándicap', eagles: 'Águilas o mejor', birdies: 'Birdies', max_birdies: 'Máximo de birdies en una vuelta',
     birdie_pct: 'Birdie o mejor (% de hoyos)', pars: 'Pares', bogey_avoid: 'Bogey o peor (% de hoyos)', par3: 'Promedio en par 3', par4: 'Promedio en par 4', par5: 'Promedio en par 5',
     gir: 'Greens en regulación', fir: 'Fairways', scrambling: 'Scrambling', putts_round: 'Putts por ronda', putts_gir: 'Putts por green en regulación' };
-  const PGROUPS = [['Scoring', ['avg_gross', 'best_gross', 'best_net', 'rounds', 'hi_change']], ['Birdies y pares', ['birdies', 'eagles', 'birdie_pct', 'pars', 'bogey_avoid']],
+  const PGROUPS = [['Scoring', ['avg_gross', 'best_gross', 'best_net', 'rounds', 'hi_change']], ['Birdies y pares', ['birdies', 'max_birdies', 'eagles', 'birdie_pct', 'pars', 'bogey_avoid']],
     ['Promedio por par', ['par3', 'par4', 'par5']], ['Greens, fairways y putts', ['gir', 'fir', 'scrambling', 'putts_round', 'putts_gir']]];
   const KINDS = [['semana', 'Semana'], ['mes', 'Mes']];
   const MINW = { r: ['ronda', 'rondas'], gh: ['hoyo con GIR', 'hoyos con GIR'], dr: ['salida medida', 'salidas medidas'], mg: ['green errado', 'greens errados'], pr: ['ronda con putts', 'rondas con putts'], gp: ['green en regulación con putts', 'greens en regulación con putts'] };
@@ -450,6 +453,7 @@
     if (def.key === 'best_net' || def.key === 'best_gross') return `${e.score} en ${H.esc(e.course || '')} · ${dmy(e.date)}`;
     if (def.key === 'avg_gross') return `${nOf(x.n, ['ronda', 'rondas'])}${e.to_par != null ? ` · ${e.to_par > 0 ? '+' : e.to_par < 0 ? '−' : ''}${H.f1(Math.abs(e.to_par))} vs par` : ''}`;
     if (def.key === 'hi_change') return `${H.f1(e.from)} → ${H.f1(e.to)}`;
+    if (def.key === 'max_birdies') return nOf(x.n, ['vuelta con hoyos', 'vueltas con hoyos']);
     if (['eagles', 'birdies', 'pars'].includes(def.key)) return e.per_round != null ? `${H.f1(e.per_round)} por ronda` : '';
     if (def.key === 'birdie_pct' || def.key === 'bogey_avoid') return `${e.count} de ${x.n} hoyos`;
     if (/^par\d$/.test(def.key)) return `${nOf(x.n, ['hoyo', 'hoyos'])}${e.to_par != null ? ` · ${e.to_par > 0 ? '+' : e.to_par < 0 ? '−' : ''}${f2(Math.abs(e.to_par))} vs par` : ''}`;
