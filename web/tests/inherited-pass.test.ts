@@ -8,6 +8,7 @@ import { extname } from "node:path";
 import { mkdirSync, existsSync } from "node:fs";
 import test from "node:test";
 import { maxBirdiesInRound } from "../lib/group-stats";
+import { STATS } from "../lib/group-period-core";
 import { courseEvidence, priorityCourses, TRACE_IMAGERY, validateTrace } from "../lib/trace-review";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
@@ -34,10 +35,16 @@ test("salir no borra el grupo, un águila no es birdie y Cancha Vieja no se inve
     { holes: [[1, 4, 4], [2, 3, 3]] },
   ]), 1);
   assert.equal(maxBirdiesInRound([{ holes: [[1, 4, 2]] }]), 0);
+  assert.equal(STATS.length, 19);
+  assert.ok(STATS.some(s => s.key === "max_birdies"));
   const vieja = courseEvidence("209", "Cancha Vieja");
   assert.ok(vieja);
+  assert.equal(vieja.holes[0].audience, "sebastian");
   assert.equal(vieja.holes[0].anchor, null);
   assert.equal(vieja.holes[0].polygon, null);
+  const azul = courseEvidence("118", "Azul");
+  assert.equal(azul?.holes[0].audience, "satellite");
+  assert.ok((azul?.holes[0].polygon || []).length >= 3);
   const invented = validateTrace(vieja.holes[0], {
     status: "accepted", parent: "none", confirm: true,
     green: [{ lat: -38.0338, lng: -57.5382 }, { lat: -38.0337, lng: -57.5381 }, { lat: -38.0339, lng: -57.5383 }],
@@ -62,7 +69,7 @@ test("foto, salida del grupo, bolsa y trazado de Cancha Vieja en el teléfono", 
       calls.push(`${req.method} ${url.pathname}`);
       if (req.method !== "GET") writes.push({ method: req.method || "", path: url.pathname, body: raw });
       if (url.pathname === "/api/data") return json({
-        user: { name: "TEST-ONLY", first_name: "TEST-ONLY", pending_first_sync: false, photo_url: null },
+        user: { name: "TEST-ONLY", first_name: "TEST-ONLY", pending_first_sync: false, photo_url: null, photo_state: "unavailable" },
         player: { name: "TEST-ONLY", handicap_index: 8 }, hi_history: [],
         clubs: [{ id: "acc", club_name: "Club Fixture", rounds: 0, last_sync_status: "ok", last_sync_at: "2026-11-07T12:00:00Z", password_saved: false, source: "site" }],
         courses: [], rounds: [],
@@ -155,18 +162,26 @@ test("foto, salida del grupo, bolsa y trazado de Cancha Vieja en el teléfono", 
     assert.equal(putterList.inputs, 0);
     const beforeItems = writes.filter(w => w.path.startsWith("/api/my-clubs/items")).length;
     await page.click('a[href="#/equipo/juego"]');
-    await page.waitForFunction(() => (document.body.innerText || "").includes("no está en tu bolsa"));
+    await page.waitForSelector("#ironset");
+    await page.waitForFunction(() => (document.body.innerText || "").includes("No lo creamos"));
+    assert.equal(await page.$("#equipo"), null);
+    assert.doesNotMatch(await page.evaluate(() => document.body.innerText), /Ese palo no está/);
     assert.equal(writes.filter(w => w.path.startsWith("/api/my-clubs/items")).length, beforeItems);
+    assert.equal(writes.filter(w => w.path === "/api/my-clubs/iron-set").length, 0);
     await page.screenshot({ path: `${ART}/inherit-bag-390.png` });
 
     await page.goto(`http://127.0.0.1:${port}/#/cuenta`, { waitUntil: "networkidle0" });
     await page.waitForFunction(() => /tu cuenta/i.test(document.body.innerText || ""));
     const photo = await page.evaluate(() => ({
-      files: document.querySelectorAll('input[type="file"]').length,
-      img: !!document.querySelector("img.av-img, img.avatar"),
+      files: document.querySelectorAll("#meph").length,
+      img: !!document.querySelector("img.me-face"),
+      msg: document.querySelector("#mephmsg")?.textContent || "",
     }));
-    assert.equal(photo.files, 0);
+    assert.equal(photo.files, 1);
     assert.equal(photo.img, false);
+    assert.match(photo.msg, /0045/);
+    assert.match(photo.msg, /No se guardó nada/);
+    assert.equal(writes.some(w => w.path === "/api/me/photo"), false);
     await page.screenshot({ path: `${ART}/inherit-cuenta-390.png` });
 
     await page.goto(`http://127.0.0.1:${port}/#/grupo/g1/miembros`, { waitUntil: "networkidle0" });
@@ -197,15 +212,19 @@ test("foto, salida del grupo, bolsa y trazado de Cancha Vieja en el teléfono", 
       if (a) a.click();
     });
     await admin.waitForFunction(() => (document.body.innerText || "").includes("u/v"));
+    assert.match(await admin.evaluate(() => document.body.innerText), /Sebastián/);
+    assert.match(await admin.evaluate(() => document.body.innerText), /no es un polígono/i);
     assert.equal(await admin.$("#trsave"), null);
+    assert.equal(await admin.$("#trhelp"), null);
     await admin.click("#trprev");
     await admin.waitForFunction(() => (document.querySelector("#trmsg")?.textContent || "").includes("No se escribió"));
-    await admin.click("#trhelp");
-    await admin.waitForFunction(() => (document.querySelector("#trmsg")?.textContent || "").includes("0046"));
-    assert.match(await admin.$eval("#trmsg", el => el.textContent || ""), /No se guardó nada/);
-    assert.equal(writes.filter(w => w.path.includes("/api/admin/trazos") && w.body.includes('"confirm":true') && w.method === "PUT").length, 1);
-    assert.equal(writes.some(w => w.body.includes('"saved":true')), false);
+    assert.match(await admin.$eval("#trmsg", el => el.textContent || ""), /Sebastián/);
+    assert.equal(writes.filter(w => w.method === "PUT" && w.path.includes("/api/admin/trazos")).length, 0);
     await admin.screenshot({ path: `${ART}/inherit-trazo-vieja-390.png` });
+    await admin.goto(`http://127.0.0.1:${port}/admin/trazos/118/Azul/1`, { waitUntil: "networkidle0" });
+    await admin.waitForFunction(() => /OpenStreetMap|contorno/i.test(document.body.innerText || ""));
+    assert.match(await admin.evaluate(() => document.body.innerText), /no lo reemplaza/);
+    assert.equal(await admin.$("#trsave"), null);
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));

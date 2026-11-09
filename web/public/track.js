@@ -687,17 +687,41 @@
           return;
         }
         const ready = kinds.every(k => k === 'real');
-        S.mapReady = ready;
-        map.dataset.map = ready ? 'ready' : 'blocked';
-        setMapButtons(ready);
-        showMapBanner(!ready, kinds.some(k => k === 'placeholder'));
+        if (!ready) {
+          S.mapReady = false;
+          map.dataset.map = 'blocked';
+          setMapButtons(false);
+          showMapBanner(true, kinds.some(k => k === 'placeholder'));
+          return;
+        }
+        const painted = sampleUrls.every(url => {
+          const img = map.querySelector(`[data-i][data-url="${url}"]`);
+          return !!(img && img.complete && img.naturalWidth > 0);
+        });
+        if (!painted) {
+          S.mapReady = false;
+          map.dataset.map = 'loading';
+          setMapButtons(false);
+          showMapBanner(false, false);
+          return;
+        }
+        S.mapReady = true;
+        map.dataset.map = 'ready';
+        setMapButtons(true);
+        showMapBanner(false, false);
       };
       tiles.forEach((t, i) => {
         const img = map.querySelector(`[data-i="${i}"]`);
         loadTile(t.url).then(rec => {
           if (gen !== S.mapGen) return;
-          if (img && rec.objectUrl) img.src = rec.objectUrl;
-          publish();
+          if (img) img.dataset.url = t.url;
+          const kick = () => { if (gen === S.mapGen) publish(); };
+          if (img && rec.objectUrl && img.getAttribute('src') !== rec.objectUrl) {
+            img.onload = kick;
+            img.onerror = kick;
+            img.src = rec.objectUrl;
+            if (img.complete) kick();
+          } else kick();
         });
       });
       publish();

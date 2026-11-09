@@ -35,6 +35,8 @@ export type HoleEvidence = {
   par: number | null;
   card_yards: number | null;
   detail: string;
+  /** satellite: a lat/lng already in the repo can sit on the imagery. sebastian: no anchor, so a schematic is not a polygon. */
+  audience: "satellite" | "sebastian";
 };
 
 export type CourseCoverage = {
@@ -65,7 +67,7 @@ export function ringCentroid(pts: LatLng[]): LatLng | null {
   return { lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length };
 }
 
-function azulHole(n: number): HoleEvidence {
+function azulHole(n: number): Omit<HoleEvidence, "audience"> {
   const h = azulOsmHoles().find(x => x.hole === n);
   const polygon = (h?.green.polygon || []).length >= 3 ? h!.green.polygon : null;
   const tee = h?.line?.[0] || h?.tees?.[0]?.center || null;
@@ -81,7 +83,7 @@ function azulHole(n: number): HoleEvidence {
   };
 }
 
-function coloradaHole(n: number): HoleEvidence {
+function coloradaHole(n: number): Omit<HoleEvidence, "audience"> {
   const card = COLORADA_YARDS.find(h => h.n === n);
   return {
     hole: n, state: "necesito_una_mano", confidence: "none", track_lie: false, track_camera: false,
@@ -91,7 +93,7 @@ function coloradaHole(n: number): HoleEvidence {
   };
 }
 
-function viejaHole(n: number): HoleEvidence {
+function viejaHole(n: number): Omit<HoleEvidence, "audience"> {
   const g = MDP_CANCHA_VIEJA.greens?.[n];
   return {
     hole: n, state: "necesito_una_mano", confidence: "schematic", track_lie: false, track_camera: false,
@@ -106,9 +108,10 @@ function viejaHole(n: number): HoleEvidence {
 export function priorityCourses(): CourseCoverage[] {
   const azul = azulOsmHoles();
   const fairways = azul.filter(h => h.fairways.length > 0).length;
-  const holes = (build: (n: number) => HoleEvidence) => Array.from({ length: 18 }, (_, i) => build(i + 1));
-  const pack = (club_code: string, course: string, title: string, source: string, list: HoleEvidence[], fairway_holes: number | null, note: string): CourseCoverage => ({
-    club_code, course, title, source, holes: list, fairway_holes, note,
+  const holes = (build: (n: number) => Omit<HoleEvidence, "audience">) => Array.from({ length: 18 }, (_, i) => build(i + 1));
+  const tagged = (list: Omit<HoleEvidence, "audience">[]): HoleEvidence[] => list.map(h => ({ ...h, audience: h.anchor ? "satellite" : "sebastian" }));
+  const pack = (club_code: string, course: string, title: string, source: string, list: Omit<HoleEvidence, "audience">[], fairway_holes: number | null, note: string): CourseCoverage => ({
+    club_code, course, title, source, holes: tagged(list), fairway_holes, note,
     listo: list.filter(h => h.state === "listo").length,
     revisar: list.filter(h => h.state === "revisar").length,
     ayuda: list.filter(h => h.state === "necesito_una_mano").length,
@@ -117,9 +120,9 @@ export function priorityCourses(): CourseCoverage[] {
     pack("118", "Azul", "Jockey Club · Cancha Azul", "Golflet/Resources/Fixtures/hoyos-azul.json", holes(azulHole), fairways,
       "18 hoyos con anillo de green y línea OSM. El fairway no está en todos. TRACK puede usar el contorno y la salida. No es el pin."),
     pack("118", "Colorada", "Jockey Club · Cancha Colorada", "web/lib/jockey-plans.ts", holes(coloradaHole), null,
-      "Solo el plan de tarjeta. Sin polígono en el repo. Queda para trazar cuando haya un eje o un punto que pegues en el admin."),
+      "Solo el plan de tarjeta. Sin lat/lng. No es un polígono y no ancla el satélite. Queda para Sebastián."),
     pack("209", "Cancha Vieja", "Mar del Plata Golf Club · Cancha Vieja", "web/lib/green-guide/209-cancha-vieja.ts", holes(viejaHole), null,
-      "Guía AAG transcripta, esquemática. El eje de Golfistics, cuando la lectura GPS lo trae, orienta la cámara y no dibuja el green."),
+      "Guía AAG en u/v. No es un polígono ni una coordenada. No se proyecta sobre el satélite. Queda para Sebastián. El eje de Golfistics, si la lectura GPS lo trae, orienta la cámara y no dibuja el green."),
   ];
 }
 

@@ -9,16 +9,24 @@ export function missingPhotoColumn(err: unknown): boolean {
   return e?.code === "42703" || /column ["']?photo/i.test(String(e?.message || ""));
 }
 
-export async function profilePhotoUrl(userId: string): Promise<string | null> {
+export const PHOTO_UNAVAILABLE = "La foto de perfil necesita la migración 0045, que todavía no está aplicada. No se guardó nada.";
+export type PhotoState = "unavailable" | "empty" | "ready";
+
+/** A read. unavailable means the column is not there yet. It does not create the column. */
+export async function profilePhotoStatus(userId: string): Promise<{ state: PhotoState; photo_url: string | null }> {
   try {
     const [r] = await q(`select (photo is not null) as has_photo, photo_updated_at from user_pref where user_id=$1`, [userId]);
-    if (!r?.has_photo) return null;
+    if (!r?.has_photo) return { state: "empty", photo_url: null };
     const v = r.photo_updated_at ? new Date(r.photo_updated_at).getTime() : 0;
-    return `/api/me/photo?v=${v}`;
+    return { state: "ready", photo_url: `/api/me/photo?v=${v}` };
   } catch (e) {
-    if (missingPhotoColumn(e)) return null;
+    if (missingPhotoColumn(e)) return { state: "unavailable", photo_url: null };
     throw e;
   }
+}
+
+export async function profilePhotoUrl(userId: string): Promise<string | null> {
+  return (await profilePhotoStatus(userId)).photo_url;
 }
 
 export async function readProfilePhoto(userId: string): Promise<Buffer | null> {
@@ -32,15 +40,13 @@ export async function readProfilePhoto(userId: string): Promise<Buffer | null> {
   }
 }
 
-const UNAVAILABLE = "La foto de perfil necesita la migración 0045, que todavía no está aplicada. No se guardó nada.";
-
 export async function setProfilePhoto(userId: string, buf: Buffer | null) {
   const photo = buf ? await processPhoto(buf) : null;
   try {
     await q(`insert into user_pref (user_id, photo, photo_updated_at, updated_at) values ($1,$2,case when $2::bytea is null then null else now() end,now())
       on conflict (user_id) do update set photo=excluded.photo, photo_updated_at=case when excluded.photo is null then null else now() end, updated_at=now()`, [userId, photo]);
   } catch (e) {
-    if (missingPhotoColumn(e)) throw new HttpError(503, UNAVAILABLE);
+    if (missingPhotoColumn(e)) throw new HttpError(503, PHOTO_UNAVAILABLE);
     throw e;
   }
   return { ok: true, photo_url: photo ? await profilePhotoUrl(userId) : null };

@@ -364,7 +364,7 @@ function vCancha(){
   <div class="teechips">${Object.entries(c.tees||{}).map(([t,x])=>`<span class="teechip"><i class="tee" style="background:${TEE[t.toUpperCase()]||'#ccc'}"></i>${esc(t)} <b class="num">${f1(x.course_rating)}</b>/${x.slope}</span>`).join('')}</div>
   <div id="stratcard" data-ck="${esc(c.key)}"></div>
   <div id="cancwx" data-ck="${esc(c.key)}" data-club="${esc(c.club_name||'')}"></div>
-  <a class="card lb-entry vx-tap lb-cbook" href="#/plan/cancha?ck=${encodeURIComponent(c.key)}"><div class="t">Libreta de la cancha</div><div class="s">Diseño, rumbo, marcas y greens para imprimir · sin reserva</div></a>
+  <a class="card lb-entry vx-tap lb-cbook" href="#/plan/cancha?ck=${encodeURIComponent(c.key)}"><div class="t">Libreta de la cancha</div><div class="s">Imprimir el diseño o, después de jugar, subir las fotos de la libreta. Sin reserva.</div></a>
   <div id="bench" data-ck="${esc(c.key)}"></div>
   <div class="section"><h2>Hoyos</h2><span class="badge">golpes sobre el par</span></div>
   <div class="hgrid">${c.holes.map(h=>{ const st = HS(h), v = st.n ? st.avg_to_par : null, hard = top.includes(h.hole);
@@ -684,7 +684,14 @@ async function loadScorecards(){
     const rows = d.fetches || [];
     if (!rows.length) { el.innerHTML = ''; return; }
     const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
-    const block = (title, list) => list.length ? `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${list.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div></div></div>`).join('')}</div>` : '';
+    const rowText = f => f.heading === 'No presentó' ? 'El club respondió y no había tarjeta.' : (f.label || '');
+    const shown = (title, list) => title === 'No presentó' ? list.slice(0, 6) : list;
+    const block = (title, list) => {
+      const rows = shown(title, list);
+      if (!rows.length) return '';
+      const more = title === 'No presentó' && list.length > rows.length ? `<p class="foot">Hay ${list.length - rows.length} más en «No presentó». No cambia el hándicap.</p>` : '';
+      return `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${rows.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(rowText(f))}</div></div></div>`).join('')}</div>${more}`;
+    };
     const headed = rows.some(f => f.heading);
     const groups = headed ? ['Próxima', 'En curso', 'No presentó', 'Sin confirmar', 'Otras'] : ['En curso', 'Otras'];
     const bucket = f => f.heading || (f.status === 'complete' ? 'Ya está' : ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status) ? 'En curso' : 'Otras');
@@ -1662,6 +1669,50 @@ async function loadEquipList(){
     });
   } catch(e){ el.innerHTML = errBox(e); }
 }
+const IRON_SET = ['4i', '5i', '6i', '7i', '8i', '9i', 'PW'];
+function sIronSet(){
+  return `<div class="bar"><span class="overline">Mi bolsa</span></div><div class="stitle">Juego de hierros</div><p class="foot">Del 4 al pitching, en un solo paso. No abre un palo suelto y no crea los que faltan.</p><div id="ironset"><div style="padding:40px 0;text-align:center"><span class="spin"></span></div></div>`;
+}
+async function loadIronSet(){
+  const el = $('#ironset'); if (!el) return;
+  try {
+    const [cat, { clubs }] = await Promise.all([bagCat(), api('/api/my-clubs/items')]); if (!$('#ironset')) return;
+    const rows = IRON_SET.map(code => ({ code, club: clubs.find(c => c.code.toLowerCase() === code.toLowerCase()) }));
+    const present = rows.filter(r => r.club);
+    const brands = (cat.brands || []).filter(b => b.categories && b.categories.iron && b.categories.iron.length).map(b => b.brand);
+    el.innerHTML = `<div class="list">${rows.map(r => `<div class="row"><div class="body"><div class="t">${esc(r.code)}</div><div class="s">${r.club ? esc([r.club.brand, r.club.model].filter(Boolean).join(' · ') || r.club.label) : 'No está en tu bolsa. No lo creamos.'}</div></div></div>`).join('')}</div>
+      ${present.length ? `<form class="card gg-form" id="ironf">
+        <label>Marca<select id="ironb"><option value="">Elegí la marca</option>${brands.map(b => `<option>${esc(b)}</option>`).join('')}<option value="__other">Otra marca</option></select></label>
+        <input id="ironbo" hidden maxlength="40" placeholder="Marca" aria-label="Marca escrita a mano">
+        <label>Modelo <small>(opcional)</small><input id="ironm" maxlength="60" placeholder="Modelo"></label>
+        <div class="tt-acts"><button class="btn" type="button" id="ironprev">Ver qué cambia</button><a class="btn ghost" href="#/bolsa">Cancelar</a></div>
+        <div id="ironmsg"></div><div id="ironplan"></div>
+      </form>` : `<p class="foot">Ningún hierro del 4 al PW está en la bolsa. No inventamos el juego.</p><a class="btn ghost" href="#/bolsa">Volver a Mi bolsa</a>`}`;
+    const brandEl = $('#ironb'); if (!brandEl) return;
+    const say = (t, err) => { const m = $('#ironmsg'); m.innerHTML = `<div class="msg${err ? ' err' : ''}"></div>`; m.firstChild.textContent = t; };
+    brandEl.onchange = () => { $('#ironbo').hidden = brandEl.value !== '__other'; };
+    const brandNow = () => brandEl.value === '__other' ? $('#ironbo').value.trim() : brandEl.value;
+    $('#ironprev').onclick = async () => {
+      const brand = brandNow(); if (!brand) return say('Escribí la marca.', 1);
+      const model = $('#ironm').value.trim();
+      try {
+        const r = await api('/api/my-clubs/iron-set', { method: 'POST', body: JSON.stringify({ brand, model, confirm: false }) });
+        const need = (r.rows || []).some(row => row.overwrite || row.modelCleared);
+        $('#ironplan').innerHTML = (r.rows || []).map(row => `<p class="foot"><b>${esc(row.code)}</b> ${esc(row.note || '')}</p>`).join('')
+          + (need ? `<label class="check"><input type="checkbox" id="ironack"><span>Reemplazo la marca o el modelo que ya tenían.</span></label>` : '')
+          + `<button type="button" class="btn" id="ironsave">Guardar el juego</button>`;
+        $('#ironsave').onclick = async () => {
+          if (need && !$('#ironack')?.checked) return say('Revisá la vista previa y confirmá el reemplazo.', 1);
+          try {
+            const saved = await api('/api/my-clubs/iron-set', { method: 'POST', body: JSON.stringify({ brand, model, confirm: true, ack: !!need }) });
+            if (!saved.saved) return say('No se guardó. La bolsa sigue igual.', 1);
+            toast('Juego de hierros guardado.'); location.hash = '#/bolsa';
+          } catch (err) { say(err.message || 'No se guardó. La bolsa sigue igual.', 1); }
+        };
+      } catch (err) { say(err.message || 'No pudimos armar la vista previa. No se guardó nada.', 1); }
+    };
+  } catch (e) { el.innerHTML = errBox(e, 'el juego de hierros'); }
+}
 function sEquipo(code, edit){ return `<div class="bar"><span class="overline">Mi bolsa</span></div><div id="equipo" data-code="${esc(code)}"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
 async function loadEquipo(code, edit){
   const el = $('#equipo'); if (!el) return;
@@ -1783,9 +1834,45 @@ function bindNick(){
       catch (err) { m.textContent = errText(err); } };
   };
 }
+function photoFace(){
+  if (G.user?.photo_url) return `<img class="me-face" src="${esc(G.user.photo_url)}" alt="">`;
+  return `<span class="me-face">${esc(initials())}</span>`;
+}
+function photoCopy(state){
+  if (state === 'unavailable') return 'La foto de perfil todavía no se puede guardar: falta la migración 0045. No se guardó nada. Seguís con tus iniciales.';
+  if (state === 'ready') return 'Esta es la foto de tu cuenta. Al cambiarla, la anterior se reemplaza.';
+  return 'Sin foto. En la app se ven tus iniciales.';
+}
+function bindPhoto(){
+  const msg = $('#mephmsg'); if (!msg) return;
+  const state = G.user?.photo_state || (G.user?.photo_url ? 'ready' : 'empty');
+  msg.textContent = photoCopy(state);
+  const input = $('#meph');
+  const send = async (method, body) => {
+    if (state === 'unavailable') { msg.textContent = photoCopy('unavailable'); return; }
+    msg.textContent = method === 'DELETE' ? 'Quitando…' : 'Subiendo…';
+    try {
+      const r = await fetch('/api/me/photo', { method, credentials: 'same-origin', headers: body ? { 'Content-Type': 'image/jpeg' } : {}, body: body || undefined });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { msg.textContent = j.error || 'No se pudo cambiar la foto. La anterior sigue igual.'; return; }
+      G.user.photo_url = j.photo_url || null;
+      G.user.photo_state = j.photo_url ? 'ready' : 'empty';
+      toast(j.photo_url ? 'Foto guardada.' : 'Foto quitada. Vuelven tus iniciales.');
+      render(true);
+    } catch (_) { msg.textContent = 'No se pudo enviar la foto. La anterior sigue igual.'; }
+  };
+  if (input) input.onchange = async () => {
+    const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+    let blob; try { blob = await window.GolfletCrop.open(f); } catch (e) { msg.textContent = e.message || 'No pudimos leer la foto. La anterior sigue igual.'; return; }
+    if (!blob) { msg.textContent = 'Cancelaste. La anterior sigue igual.'; return; }
+    await send('PUT', blob);
+  };
+  const rm = $('#mephrm'); if (rm) rm.onclick = () => send('DELETE');
+}
 function sCuenta(){
   return `<div class="bar"><span class="overline">Tu cuenta</span><span class="bar-r">${G.user?.role?`<a class="staff-l" href="${G.user.role==='admin'?'/admin':'/admin/strategy'}">${G.user.role==='admin'?'Admin':'Editor'}</a>`:''}<button class="close" data-close>${ICON.x}</button></span></div>
   ${G.user?.call_name ? `<div class="stitle nick" id="nick">${nickView()}</div>` : `<div class="stitle">${esc(G.user?.name||'')}</div>`}<div style="font-size:calc(14px*var(--ts,1));color:var(--color-ink2);margin-top:4px">${esc(/@golfistics\.invalid$/.test(G.user?.email||'') ? 'Entrás con tu matrícula' : (G.user?.email||''))}</div>
+  <div class="me-photo">${photoFace()}<div><label class="btn ghost sm">Elegir foto<input type="file" accept="image/*" id="meph" hidden></label>${G.user?.photo_url ? '<button type="button" class="btn ghost sm" id="mephrm">Quitar</button>' : ''}<p class="foot" id="mephmsg"></p></div></div>
   ${G.player?.name?`<div class="chips"><span class="badge">${esc(title(G.player.name))}</span>${G.player.handicap_index!=null?`<span class="badge gold">HI ${f1(G.player.handicap_index)}</span>`:''}</div>`:''}
   <a class="card gg-home nt-home" href="#/notificaciones"><span class="gg-home-ic">${NT_BELL}</span><div><b>Notificaciones</b><p>Invitaciones a grupos y mensajes de tus clubes.</p></div><span class="nt-home-r">${NBADGE}${ICON.chev}</span></a>
   ${G.user?.call_name ? '' : `<div class="section"><h2>Cómo te llamamos</h2></div>
@@ -3200,6 +3287,7 @@ function render(keepScroll){
   else if (p[0]==='profesores'){ detail = p[1]==='encontrar' ? sMatch(p[2]) : p[1] ? sProfBuscar() : sMisProfes(); base = 'cuenta'; }
   else if (p[0]==='profesor'){ detail = sProfesor(); base = 'cuenta'; }
   else if (p[0]==='profe'){ detail = p[1]==='perfil' ? sProfePerfil() : p[1]==='alumno' ? (p[3]==='clase' ? sProfeClase() : p[3]==='contenido' ? sProfeContenido() : sProfeAlumno()) : sProfe(); base = 'cuenta'; }
+  else if (p[0]==='equipo' && decodeURIComponent((p[1]||'').split('?')[0]) === 'juego'){ detail = sIronSet(); base = 'bolsa'; }
   else if (p[0]==='equipo'){ detail = sEquipo(decodeURIComponent(p[1]||'nuevo'), p[2]==='editar'); base = 'bolsa'; }
   else if (p[0]==='tee' && p[1] && p[1]!=='nuevo'){ detail = sTee(p[1]); base = 'inicio'; }
   else if (p[0]==='trabajar'){ const a = (p[1]||'').split('?')[0]; detail = sTrabajar(a); aside = asideTrabajar(a); base = 'inicio'; }
@@ -3295,9 +3383,10 @@ function bind(p, isDetail){
   if (p[0]==='profesores') { if (p[1]==='encontrar') loadMatch(p[2] || '1'); else if (p[1]) bindProfBuscar(); else loadProfsCard(); }
   if (p[0]==='profesor') loadProfesor(decodeURIComponent(p[1]||''));
   if (p[0]==='profe') { if (p[1]==='perfil') loadProfePerfil(); else if (p[1]==='alumno') { const sid = decodeURIComponent(p[2]||''); if (p[3]==='clase') bindProfeClase(sid); else if (p[3]==='contenido') loadProfeContenido(sid); else loadProfeAlumno(sid); } else loadProfe(); }
-  if (p[0]==='cuenta') { loadProfsCard().then(() => { if (sessionStorage.getItem('goProfs')) { sessionStorage.removeItem('goProfs'); $('#profs')?.scrollIntoView({ behavior:'smooth', block:'start' }); } }); bindNick(); }
+  if (p[0]==='cuenta') { loadProfsCard().then(() => { if (sessionStorage.getItem('goProfs')) { sessionStorage.removeItem('goProfs'); $('#profs')?.scrollIntoView({ behavior:'smooth', block:'start' }); } }); bindNick(); bindPhoto(); }
   if (p[0]==='club-faltante') bindClubFaltante();
-  if (p[0]==='equipo') loadEquipo(decodeURIComponent((p[1]||'nuevo').split('?')[0]), (p[2]||'').startsWith('editar'));
+  if (p[0]==='equipo' && decodeURIComponent((p[1]||'').split('?')[0]) === 'juego') loadIronSet();
+  else if (p[0]==='equipo') loadEquipo(decodeURIComponent((p[1]||'nuevo').split('?')[0]), (p[2]||'').startsWith('editar'));
   if (p[0]==='tee' && p[1] && p[1]!=='nuevo') loadTee(p[1]);
   if (p[0]==='trabajar') loadTrabajar((p[1]||'').split('?')[0]);
   if (p[0]==='putting') loadPutting((p[1]||'').split('?')[0]);

@@ -467,27 +467,42 @@ async function trazosView() {
   title('Trazos sobre satélite', 'Canchas');
   const d = await api('/api/admin/trazos');
   const chip = (n, l) => `<span class="chip ${n ? 'draft' : 'published'}">${n} ${l}</span>`;
-  main(`<p class="meta" style="margin:0 0 14px">${esc(d.scope)} La foto es el satélite que ya usa TRACK, hasta el zoom 17. Un hoyo sin coordenada no se centra en un punto inventado.</p>
+  const btn = (c, h) => {
+    const seb = h.audience === 'sebastian';
+    const label = seb ? 'Sebastián' : h.state === 'listo' ? 'listo' : h.state === 'revisar' ? 'revisar' : 'ayuda';
+    return `<a class="hbtn ${seb ? 'player' : h.state === 'listo' ? 'club' : ''}" data-nav href="/admin/trazos/${c.club_code}/${encodeURIComponent(c.course)}/${h.hole}"><b class="num">${h.hole}</b><small>${label}</small></a>`;
+  };
+  const seb = d.courses.flatMap(c => c.holes.filter(h => h.audience === 'sebastian').map(h => ({ ...h, club_code: c.club_code, course: c.course, title: c.title })));
+  main(`<p class="meta" style="margin:0 0 14px">${esc(d.scope)} La foto es el satélite que ya usa TRACK (Esri, zoom 17). Un hoyo sin lat/lng no se centra en un punto inventado y su guía u/v no es un polígono.</p>
   ${d.courses.map(c => `<div class="card"><div class="ov"><div><b>${esc(c.title)}</b><div class="meta">${esc(c.source)} · ${esc(c.note)}</div></div><div>${chip(c.listo, 'listos')} ${chip(c.revisar, 'a revisar')} ${chip(c.ayuda, 'necesito una mano')}</div></div>
-    <div class="hgrid" style="margin-top:12px">${c.holes.map(h => `<a class="hbtn ${h.state === 'listo' ? 'club' : h.state === 'revisar' ? '' : 'player'}" data-nav href="/admin/trazos/${c.club_code}/${encodeURIComponent(c.course)}/${h.hole}"><b class="num">${h.hole}</b><small>${h.state === 'listo' ? 'listo' : h.state === 'revisar' ? 'revisar' : 'ayuda'}</small></a>`).join('')}</div></div>`).join('')}
-  <div class="card"><h3 style="margin-top:0">Hoyos en los que hace falta una mano</h3>
-  ${d.ayuda.length ? d.ayuda.map(h => `<p class="meta"><a data-nav href="/admin/trazos/${h.club_code}/${encodeURIComponent(h.course)}/${h.hole}">${esc(h.title)} · hoyo ${h.hole}</a> — ${esc(h.detail)}</p>`).join('') : '<p class="meta">Ninguno.</p>'}</div>`);
+    <div class="hgrid" style="margin-top:12px">${c.holes.map(h => btn(c, h)).join('')}</div></div>`).join('')}
+  <div class="card"><h3 style="margin-top:0">Para Sebastián: sin lat/lng</h3>
+  <p class="meta">Estos hoyos no se dibujan sobre el satélite. La guía esquemática no es un polígono.</p>
+  ${seb.length ? seb.map(h => `<p class="meta"><a data-nav href="/admin/trazos/${h.club_code}/${encodeURIComponent(h.course)}/${h.hole}">${esc(h.title)} · hoyo ${h.hole}</a> — ${esc(h.detail)}</p>`).join('') : '<p class="meta">Ninguno.</p>'}</div>`);
 }
 async function trazosHole(club, course, hole) {
   const d = await api(`/api/admin/trazos/${club}/${encodeURIComponent(course)}`);
   const h = d.course.holes.find(x => x.hole === hole) || d.course.holes[0];
   title(`${d.course.course} · hoyo ${h.hole}`, 'Canchas · Trazos');
-  const canDraw = !(h.polygon && h.polygon.length >= 3) && !!h.anchor;
+  const forSebastian = h.audience === 'sebastian';
+  const hasRing = !!(h.polygon && h.polygon.length >= 3);
+  const canDraw = !forSebastian && !hasRing && !!h.anchor;
   main(`<div class="crumbs"><a data-nav href="/admin/trazos">← Trazos</a></div>
   <p class="meta">${esc(h.detail)}</p>
+  ${forSebastian ? '<p class="meta">Esto no es un polígono. No ancla el satélite. Queda para Sebastián. No se guarda un trazado.</p>' : ''}
+  ${hasRing ? '<p class="meta">TRACK ya usa este contorno. Un trazado sobre el satélite no lo reemplaza.</p>' : ''}
   <div id="trhost"></div>
-  <label class="meta" for="trnotein">Nota de procedencia</label>
-  <textarea id="trnotein" maxlength="400" placeholder="Qué estás viendo en la foto y qué no se puede afirmar."></textarea>
-  <div class="acts" style="margin-top:10px"><button class="btn ghost sm" id="trprev">Vista previa</button>${canDraw ? '<button class="btn sm" id="trsave">Guardar trazado</button>' : ''}<button class="btn ghost sm" id="trhelp">Dejar para revisión</button></div>
+  ${forSebastian ? '' : `<label class="meta" for="trnotein">Nota de procedencia</label>
+  <textarea id="trnotein" maxlength="400" placeholder="Qué estás viendo en la foto y qué no se puede afirmar."></textarea>`}
+  <div class="acts" style="margin-top:10px"><button class="btn ghost sm" id="trprev">Vista previa</button>${canDraw ? '<button class="btn sm" id="trsave">Guardar trazado</button><button class="btn ghost sm" id="trhelp">Dejar para revisión</button>' : ''}</div>
   <div id="trmsg" class="meta"></div>`);
   const view = window.GolfletTrace.mount($('#trhost'), { anchor: h.anchor, tee: h.tee, polygon: h.polygon, axis: h.axis, canDraw, detail: h.detail, credit: d.imagery.attribution });
   const parent = h.confidence === 'openstreetmap' ? 'openstreetmap' : h.axis ? 'golfistics_axis' : 'none';
   const say = (t, err) => { $('#trmsg').textContent = t; if (err) $('#trmsg').style.color = '#8C2F2F'; };
+  if (forSebastian) {
+    $('#trprev').onclick = () => say('La guía u/v no es un polígono. No se proyecta sobre el satélite. No se escribió nada. Queda para Sebastián.');
+    return;
+  }
   async function send(status, confirm) {
     const draft = view.draft() || { tee: null, green: [] };
     const body = { confirm, status, parent, tee: draft.tee, green: draft.green, note: $('#trnotein').value };
@@ -496,7 +511,7 @@ async function trazosHole(club, course, hole) {
   }
   $('#trprev').onclick = () => send(canDraw ? 'draft' : 'needs_review', false).catch(e => say(e.message, 1));
   const save = $('#trsave'); if (save) save.onclick = () => send('accepted', true).catch(e => say(e.message, 1));
-  $('#trhelp').onclick = () => send('needs_review', true).catch(e => say(e.message, 1));
+  const help = $('#trhelp'); if (help) help.onclick = () => send('needs_review', true).catch(e => say(e.message, 1));
 }
 async function gpsRunsView(id) {
   const [c, d] = await Promise.all([api(`/api/admin/gps/${id}`), api(`/api/admin/gps/runs?course=${encodeURIComponent(id)}&days=90`)]);
