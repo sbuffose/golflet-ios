@@ -3,7 +3,7 @@
 import { q } from "./db";
 import { visibleRoundIds } from "./data";
 import { nowAR } from "./tee-times-core";
-import { aggregate, windowFor, matchCourse, weatherGroups, bucketOf, roundWeatherPlan, weatherCacheFresh, countsAsObserved, daysBefore, ARCHIVE_SOURCE, FORECAST_SOURCE, type Hourly, type Wx, type WxRound } from "./weather-core";
+import { aggregate, windowFor, matchCourse, weatherGroups, weatherPlay, bucketOf, roundWeatherPlan, weatherCacheFresh, countsAsObserved, daysBefore, ARCHIVE_SOURCE, FORECAST_SOURCE, type Hourly, type Wx, type PlayRound } from "./weather-core";
 import { HttpError } from "./http-error";
 
 const ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
@@ -72,8 +72,9 @@ export async function weatherAt(lat: number, lng: number, date: string, w: [numb
 /** The user's (deduped) rounds with what we need for weather. Tee time hour comes from a matched club booking when we have it. */
 async function userRounds(userId: string) {
   const keep = [...await visibleRoundIds(userId)]; if (!keep.length) return [];
-  return q(`select r.id, r.date::text date, r.course, r.data->>'club_played' club_played, nullif(r.data->>'differential_computed','')::float8 diff,
+  return q(`select r.id, r.date::text date, r.course, r.holes, r.data->>'club_played' club_played, nullif(r.data->>'differential_computed','')::float8 diff,
               nullif(r.data->>'gross','')::int gross, coalesce((r.data->>'valid_card')::boolean, true) valid,
+              coalesce(r.data->>'tee', r.data->>'tee_name') tee, coalesce((r.data->>'is_9_holes')::boolean, false) nine,
               (select t.time from tee_time t where t.round_id=r.id and t.user_id=$2 order by t.time limit 1) tee_hhmm
             from round r where r.id = any($1::uuid[]) order by r.date desc`, [keep, userId]);
 }
@@ -96,10 +97,10 @@ export async function roundsWeather(userId: string, maxFetch = 20) {
     return { r, observed, wx: { temp_c: wx.temp_c, precip_mm: wx.precip_mm, rain_hours: wx.rain_hours, wind_kmh: wx.wind_kmh, gust_kmh: wx.gust_kmh, weather_code: wx.weather_code, condition: wx.condition, source: wx.source, kind: observed ? "observed" : "forecast" },
       window: w, basis: r.tee_hhmm ? "tee_time" : "day" };
   });
-  const rounds: Record<string, any> = {}; const list: WxRound[] = []; let forecastOnly = 0;
+  const rounds: Record<string, any> = {}; const list: PlayRound[] = []; let forecastOnly = 0;
   for (const x of res) if (x) {
     rounds[x.r.id] = { ...x.wx, window: x.window, basis: x.basis };
-    if (x.observed) list.push({ round_id: x.r.id, date: x.r.date, course: x.r.course, differential: x.r.valid ? x.r.diff : null, gross: x.r.gross, wx: x.wx as Wx });
+    if (x.observed) list.push({ round_id: x.r.id, date: x.r.date, course: x.r.course, tee: x.r.tee || null, nine: !!x.r.nine, holes: x.r.holes, differential: x.r.valid ? x.r.diff : null, gross: x.r.gross, wx: x.wx as Wx });
     else forecastOnly++;
   }
   return { source: "open-meteo", rounds, list, coverage: { rounds: rs.length, with_weather: list.length, forecast_only: forecastOnly, no_course_location: noCoords, pending } };
@@ -118,11 +119,11 @@ export async function roundWeather(userId: string, roundId: string, opt?: { retr
   return { round_id: roundId, weather: { ...rest, kind, window: w, basis: r.tee_hhmm ? "tee_time" : "day" }, source: wx.source };
 }
 export async function weatherMetrics(userId: string, dim?: string | null, bucket?: string | null) {
-  const d = await roundsWeather(userId, 20), g = weatherGroups(d.list);
+  const d = await roundsWeather(userId, 20), g = weatherGroups(d.list), play = weatherPlay(d.list as PlayRound[]);
   if (dim) {
     if (!["lluvia", "temperatura", "viento"].includes(dim)) throw new HttpError(400, "dim: lluvia | temperatura | viento");
     const rows = d.list.filter(r => r.differential != null && (!bucket || bucketOf(dim, r) === bucket)).map(r => ({ ...r, bucket: bucketOf(dim, r) }));
-    return { dim, bucket: bucket || null, group: (g as any)[dim], overall_avg_diff: g.overall_avg_diff, rounds: rows, coverage: d.coverage, source: d.source };
+    return { dim, bucket: bucket || null, group: (g as any)[dim], play: (play as any)[dim], overall_avg_diff: g.overall_avg_diff, rounds: rows, coverage: d.coverage, source: d.source };
   }
-  return { ...g, coverage: d.coverage, source: d.source };
+  return { ...g, play, coverage: d.coverage, source: d.source };
 }

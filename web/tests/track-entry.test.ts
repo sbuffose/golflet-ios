@@ -30,7 +30,8 @@ test("the home entry is a compact control and opens hole 1 on the map", { timeou
         courses: [], rounds: [],
       });
       if (url.pathname === "/api/scorecard-fetches") return json({ fetches: [
-        { status: "complete", club_name: "Mar del Plata Golf Club", date: "2026-11-07", time: "12:20", label: "La tarjeta ya está." },
+        { status: "complete", heading: "Ya está", club_name: "Mar del Plata Golf Club", date: "2026-11-07", time: "12:20", label: "La tarjeta ya está." },
+        { status: "error", heading: "Sin confirmar", club_name: "Jockey Club", course_label: "Azul", date: "2026-11-09", time: "08:00", label: "No pudimos leer el club." },
       ] });
       if (url.pathname === "/api/tee-times/check") return json({ fresh: false, message: "TEST-ONLY", tee_times: [] });
       if (url.pathname === "/api/tee-times") return json({ tee_times: [], clubs: [] });
@@ -60,7 +61,9 @@ test("the home entry is a compact control and opens hole 1 on the map", { timeou
     });
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#recon-start");
-    await page.waitForFunction(() => (document.body.innerText || "").includes("Ya está"));
+    await page.waitForFunction(() => (document.body.innerText || "").includes("No pudimos leer el club."));
+    assert.equal((await page.evaluate(() => document.body.innerText)).includes("Ya está"), false);
+    assert.equal((await page.evaluate(() => document.body.innerText)).includes("La tarjeta ya está."), false);
     const box = await page.$eval("#recon-start", el => {
       const node = el as HTMLElement;
       const r = node.getBoundingClientRect();

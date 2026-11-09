@@ -1373,6 +1373,16 @@ svg.hmap{display:block;width:100%;max-height:480px;border-radius:12px}
 .wx-card.wx-none{display:flex;flex-direction:column;gap:4px;font-size:calc(13px*var(--ts,1));color:var(--color-ink3)}
 .card.wx-empty{padding:14px 16px;font-size:calc(13.5px*var(--ts,1));line-height:1.45;color:var(--color-ink2)}
 .wx-list .s b,.priv-list .s b{color:#0B2545;font-weight:var(--fw600,600)}
+.wx-mix{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.wx-mix span{display:flex;flex-direction:column;gap:2px;min-width:72px;padding:8px 10px;border-radius:12px;background:rgba(11,37,69,.05)}
+.wx-mix b{font-variant-numeric:tabular-nums;white-space:nowrap}
+#clima .card>b{display:block}
+#clima .card>span.s{display:block;margin-top:2px;color:#5C687B}
+#privado .row .s,.priv-list .row .s{white-space:normal;overflow:visible;flex-wrap:wrap}
+.tk-sum{margin:0 12px 8px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.94);color:#0B2545;font-size:13px;line-height:1.4}
+.tk-sum span,.tk-sum p{display:block;margin:0}
+.tk-sum p{margin-top:6px;color:#5C687B;font-size:12px}
+.tk-sum button{margin-top:8px;min-height:44px}
 .wx-seg{display:flex;gap:6px;margin:12px 0 4px;overflow-x:auto}
 .wx-seg a{flex:none;padding:7px 12px;border-radius:999px;background:#EDE8DD;color:var(--color-ink2);font-size:calc(13px*var(--ts,1));font-weight:var(--fw500,500);text-decoration:none}
 .wx-seg a.on{background:#0B2545;color:#F6F7F9}

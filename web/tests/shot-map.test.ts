@@ -400,7 +400,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
       value: (el as HTMLSelectElement).value,
       labels: [...el.querySelectorAll("option")].map(o => o.textContent),
     }));
-    assert.deepEqual(emptyBag.labels, ["Elegir palo"]);
+    assert.deepEqual(emptyBag.labels, ["Elegir palo", "Putter"]);
     assert.equal(emptyBag.value, "");
     const emptyPosts = posts.length;
     await ready(page);
