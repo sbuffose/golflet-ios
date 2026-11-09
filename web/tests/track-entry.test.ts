@@ -171,7 +171,11 @@ test("an existing hole is kept, the next hole uses its own tee, and a bad hole i
     seen = await read();
     assert.equal(seen.hole, "Hoyo 1");
     assert.equal(Number(seen.ball), -34.6);
-    await page.waitForSelector("#tknext");
+    await page.waitForFunction(() => {
+      const map = document.querySelector("#tkmap") as HTMLElement | null;
+      const next = document.querySelector("#tknext");
+      return !!next && map?.dataset.moving === "0" && (map.dataset.cmap === "0" || map.dataset.cmap === "1");
+    });
     await page.click("#tknext");
     await page.waitForFunction(() => document.querySelector(".tk-hn b")?.textContent === "Hoyo 2");
     seen = await read();

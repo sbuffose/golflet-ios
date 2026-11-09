@@ -5,7 +5,7 @@ import { linkLiveRounds } from "@/lib/live";
 import { q } from "@/lib/db";
 import { callName } from "@/lib/person-name";
 import { linkPendingInvites } from "@/lib/groups";
-import { profilePhotoUrl } from "@/lib/profile-photo";
+import { profilePhotoStatus } from "@/lib/profile-photo";
 
 export const GET = handle(async (req: Request) => {
   const user = await requireUser(req);
@@ -17,6 +17,6 @@ export const GET = handle(async (req: Request) => {
   const call_name = pref[0]?.call_name ?? null;
   const first_name = callName({ chosen: call_name, accountName: user.name, golfistics: data.player?.name });
   const [inv] = await q(`select count(*)::int n from cmp_member where user_id=$1 and status='invited'`, [user.id]).catch(() => [{ n: 0 }]);
-  const photo_url = await profilePhotoUrl(user.id);
-  return json({ user: { ...user, is_admin: role === "admin", role, pending_first_sync: pending.length > 0, first_name, call_name, photo_url, group_invitations: inv?.n ?? 0 }, ...data });
+  const photo = await profilePhotoStatus(user.id);
+  return json({ user: { ...user, is_admin: role === "admin", role, pending_first_sync: pending.length > 0, first_name, call_name, photo_url: photo.photo_url, photo_state: photo.state, group_invitations: inv?.n ?? 0 }, ...data });
 });

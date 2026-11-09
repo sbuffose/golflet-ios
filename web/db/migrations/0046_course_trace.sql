@@ -5,6 +5,11 @@
 -- Do not run this from the app, a deploy, or this agent.
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f web/db/migrations/0046_course_trace.sql
 -- Until it is applied, the admin preview still works and Guardar answers 503 without writing.
+--
+-- Rollback, only after this file has been applied, and only by a person:
+--   drop table if exists course_trace;
+-- That drops the trace table. It does not touch course_map, vm_course, or green_surface.
+-- Do not run the rollback from the app, a deploy, or this agent.
 
 create table if not exists course_trace (
   club_code text not null,

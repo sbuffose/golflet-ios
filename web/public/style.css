@@ -101,7 +101,7 @@ button{font:inherit;color:inherit}
 .sc .tot{text-align:center;font-weight:var(--fw650,650);font-size:calc(15px*var(--tsc,1))}
 .sc .sc-s{display:grid;place-items:center;height:34px}
 .b{width:28px;height:28px;display:grid;place-items:center;font-size:calc(15px*var(--ts,1));font-weight:var(--fw600,600);border-radius:9px;letter-spacing:-.02em}
-.b.eagle{background:var(--color-primary);color:var(--color-accent);border-radius:50%}
+.b.eagle{background:var(--color-primary);color:var(--color-accent);border-radius:50%;box-shadow:0 0 0 2px var(--color-bg,#F7F5F0),0 0 0 4px var(--color-primary)}
 .b.birdie{background:var(--color-accent);color:#fff;border-radius:50%}
 .b.par{color:var(--color-ink)}
 .b.bogey{background:#ECE8DF}
@@ -2426,8 +2426,11 @@ html.gp-fix.gp-live #view{padding:0;bottom:0}
 html.gp-fix #view .tk-host,html.gp-fix #jugbody.tk-host{flex:1 1 auto;min-height:0;position:relative}
 .tk{position:absolute;inset:0;color:#F6F7F9;font-family:Geist,system-ui,sans-serif;overflow:hidden}
 .tk-map{position:absolute;inset:0;background:#152016;touch-action:none;overflow:hidden}
-.tk-tiles{position:absolute;left:0;top:0;width:0;height:0;will-change:transform;pointer-events:none}
-.tk-tile{position:absolute;display:block;pointer-events:none;user-select:none}
+.tk-tiles{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none}
+.tk-tile{position:absolute;display:block;width:256px;height:256px;max-width:none;pointer-events:none;user-select:none}
+.me-photo{display:flex;align-items:center;gap:14px;margin:14px 0 4px}
+.me-face{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:#0B2545;color:#fff;font-weight:650;overflow:hidden;flex:none}
+img.me-face{object-fit:cover;padding:0}
 .tk-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .tk-f{fill:rgba(141,190,115,.22);stroke:rgba(247,245,240,.35);stroke-width:1}
 .tk-b{fill:rgba(200,168,106,.28);stroke:rgba(200,168,106,.8);stroke-width:1}
