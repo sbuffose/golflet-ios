@@ -64,14 +64,17 @@ export function holeSpan(tee: LL | null | undefined, flag: LL | null | undefined
   return { meters, bearing };
 }
 
-export type FrameMode = "overview" | "tee" | "flag" | "play" | "point";
+export type FrameMode = "overview" | "tee" | "flag" | "play" | "point" | "seek";
 export type HoleFrame = { mode: FrameMode; z: number; cx: number; cy: number; bearing: number | null; aimLat: number; aimLng: number };
+
+/** Visual zoom may scale the last real tile. It must not ask Esri for a grey placeholder. */
+export const VISUAL_ZOOM_MAX = IMAGERY_ZOOM_MAX + 2.15;
 
 const clampNum = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
-function pointFrame(p: LL): HoleFrame {
+function pointFrame(p: LL, mode: FrameMode, z = IMAGERY_ZOOM_MAX): HoleFrame {
   const [cx, cy] = projectLL(p.lat, p.lng);
-  return { mode: "point", z: IMAGERY_ZOOM_MAX, cx, cy, bearing: null, aimLat: p.lat, aimLng: p.lng };
+  return { mode, z, cx, cy, bearing: null, aimLat: p.lat, aimLng: p.lng };
 }
 
 /** Overview puts the reticle on the flag, tee down-screen. Tee and flag cameras move to that end. */
@@ -88,17 +91,21 @@ export function frameHole(
   const height = Math.max(1, view?.height || 844);
   if (!span || !a || !b) {
     if (a && b) return null;
+    if (mode === "tee") return a ? pointFrame(a, "tee") : (b ? pointFrame(b, "seek", 16) : null);
+    if (mode === "flag") return b ? pointFrame(b, "flag", VISUAL_ZOOM_MAX) : (a ? pointFrame(a, "seek", 16) : null);
+    if (mode === "seek") return (b || a) ? pointFrame((b || a)!, "seek", 16) : null;
     const only = a || b;
-    return only ? pointFrame(only) : null;
+    return only ? pointFrame(only, "point") : null;
   }
   const [fx, fy] = projectLL(b.lat, b.lng);
   const [tx, ty] = projectLL(a.lat, a.lng);
   const dist = Math.hypot(tx - fx, ty - fy);
   if (!(dist > 0)) return null;
   const overviewZ = clampNum(Math.log2(Math.max(96, height * 0.36) / (dist * 256)), 15, IMAGERY_ZOOM_MAX + 0.8);
-  const tight = clampNum(overviewZ + 1.15, 16, IMAGERY_ZOOM_MAX + 0.8);
-  if (mode === "flag") return { mode, z: tight, cx: fx, cy: fy, bearing: span.bearing, aimLat: b.lat, aimLng: b.lng };
-  if (mode === "tee") return { mode, z: tight, cx: tx, cy: ty, bearing: span.bearing, aimLat: a.lat, aimLng: a.lng };
+  const teeZ = clampNum(Math.max(overviewZ + 1.15, IMAGERY_ZOOM_MAX + 0.6), 16, VISUAL_ZOOM_MAX);
+  const flagZ = VISUAL_ZOOM_MAX;
+  if (mode === "flag") return { mode, z: flagZ, cx: fx, cy: fy, bearing: span.bearing, aimLat: b.lat, aimLng: b.lng };
+  if (mode === "tee") return { mode, z: teeZ, cx: tx, cy: ty, bearing: span.bearing, aimLat: a.lat, aimLng: a.lng };
   if (mode === "play") {
     const aim = ball ? knownPoint(ball.lat, ball.lng) : a;
     if (!aim) return null;
@@ -165,6 +172,61 @@ export function onCup(meters: number): boolean {
 export function puttFeet(meters: number): number | null {
   if (!Number.isFinite(meters) || meters <= CUP_M || meters > PUTT_M) return null;
   return Math.round(meters * 3.28084);
+}
+
+/** A scorecard stores yards as a number or as a tee map ({ BLANCO: 445 }). Never stringify the object. */
+export function yardNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) && value >= 0 && value < 1000 ? Math.round(value) : null;
+  if (typeof value === "string") {
+    const text = value.trim();
+    const match = text.match(/^(\d+(?:[.,]\d+)?)/);
+    if (!match) return null;
+    const n = Number(match[1].replace(",", "."));
+    return Number.isFinite(n) && n >= 0 && n < 1000 ? Math.round(n) : null;
+  }
+  if (value && typeof value === "object") {
+    const nums = Object.values(value as Record<string, unknown>).map(yardNumber).filter((n): n is number => n != null);
+    return nums.length ? Math.max(...nums) : null;
+  }
+  return null;
+}
+export function yardLabel(value: unknown): string {
+  const n = yardNumber(value);
+  return n == null ? "" : `${n} yd`;
+}
+
+export type BagClubOption = { id: string; label: string };
+
+/** Accepts the bag API (`{club,carry,total}` or a name string) and `{code,label}` rows. Drops blanks. Does not invent a club. */
+export function bagClubs(raw: unknown): BagClubOption[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const out: BagClubOption[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    const text = typeof item === "string" ? item.trim() : "";
+    const row = item && typeof item === "object" ? item as Record<string, unknown> : null;
+    const id = String(row ? (row.code || row.id || row.club || row.name || row.label || "") : text).trim();
+    if (!id || seen.has(id.toLowerCase())) continue;
+    seen.add(id.toLowerCase());
+    const label = String(row ? (row.label || row.club || row.name || id) : text || id).trim() || id;
+    out.push({ id, label });
+  }
+  return out;
+}
+
+export function isDriverClub(id: string, label = ""): boolean {
+  return /^(dr|driver|d)$/i.test(id.trim()) || /^driver\b/i.test(label.trim());
+}
+
+/** Driver on a par 4 or 5 tee shot only when that club is in the bag and the player has not already chosen. */
+export function teeClub(bag: unknown, par: unknown, chosen: unknown, fromTee: boolean): string {
+  const pick = String(chosen ?? "").trim();
+  if (pick) return pick;
+  if (!fromTee) return "";
+  const n = typeof par === "number" ? par : Number(par);
+  if (n !== 4 && n !== 5) return "";
+  const hit = bagClubs(bag).find(c => isDriverClub(c.id, c.label));
+  return hit?.id || "";
 }
 
 function copyState(s: TrackState): TrackState {

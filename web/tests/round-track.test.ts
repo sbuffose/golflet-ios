@@ -119,14 +119,14 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await page.screenshot({ path: join(ART, "legend.png") });
     await page.evaluate(() => { (window as unknown as { __gps: number }).__gps = 0; });
     await page.click("#round-track");
-    await page.waitForSelector("#play-set");
-    await page.waitForSelector("#play-cancel");
+    await page.waitForSelector("#play-hit");
     await page.waitForSelector("#play-reticle");
-    assert.equal(await page.$("#play-hit"), null);
+    assert.equal(await page.$("#play-cancel"), null);
+    assert.equal(await page.$("#play-set"), null);
     assert.equal(await page.$("#play-more"), null);
     const layout = await page.evaluate(() => {
       const map = document.querySelector("#tkmap");
-      const set = document.querySelector("#play-set");
+      const set = document.querySelector("#play-hit");
       const ret = document.querySelector("#play-reticle");
       const bar = document.querySelector("#tabbar");
       const mr = map?.getBoundingClientRect();
@@ -149,7 +149,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
         borrar: text.includes("Borrar puntos"),
         essay: text.includes("La mira queda fija"),
         hole: document.querySelector(".tk-hn b")?.textContent || "",
-        cancel: (document.querySelector("#play-cancel")?.textContent || "").trim(),
+        club: (document.querySelector("#play-club") as HTMLSelectElement | null)?.value || "",
         rcMap: document.documentElement.classList.contains("rc-map"),
       };
     });
@@ -164,13 +164,14 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.equal(layout.caida, false);
     assert.equal(layout.borrar, false);
     assert.equal(layout.essay, false);
-    assert.equal(layout.hole, "");
-    assert.equal(layout.holeChip, "Hoyo 1");
-    assert.equal(layout.frame, "overview");
-    assert.equal(layout.aimLat.startsWith("-34.601"), true);
+    assert.equal(layout.hole, "Hoyo 1");
+    assert.equal(layout.holeChip, "");
+    assert.equal(layout.frame, "play");
+    assert.ok(layout.aimLat.startsWith("-34.6") && !layout.aimLat.startsWith("-34.601"), layout.aimLat);
     assert.ok(layout.tileZ >= 15 && layout.tileZ <= 17, `tile ${layout.tileZ}`);
-    assert.equal(layout.prompt, "");
-    assert.equal(layout.cancel, "Cancelar");
+    assert.match(layout.prompt, /yd/);
+    assert.equal(layout.prompt.includes("[object Object]"), false);
+    assert.equal(layout.club, "");
     assert.match(await page.evaluate(() => location.hash), /ronda=r-nov/);
     assert.deepEqual(cardWrites(calls), []);
     assert.equal(calls.some(c => c.method === "GET" && c.path === "/api/gps/courses/course-fixture"), true);
@@ -191,26 +192,16 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.ok(Number(await page.$eval("#tkmap", el => el.getAttribute("data-tile-z"))) <= 17);
     assert.deepEqual(cardWrites(calls), []);
     await page.screenshot({ path: join(ART, "track-map.png") });
-    await untilReady(page);
-    await page.click("#play-set");
-    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-frame") === "tee");
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /salida/);
-    assert.ok((await page.$eval("#tkro", el => el.getBoundingClientRect().height)) < 40);
-    assert.deepEqual(cardWrites(calls), []);
-    await untilReady(page);
-    await page.click("#play-set");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /yd/);
-    assert.notEqual(await page.$("#play-cancel"), null);
-    assert.deepEqual(cardWrites(calls), []);
-    await page.click("#play-cancel");
-    await page.waitForSelector("#play-hit");
+    const readout = await page.$eval("#tkro", el => ({ h: el.getBoundingClientRect().height, t: el.textContent || "" }));
+    assert.ok(readout.h < 40, JSON.stringify(readout));
     await page.waitForSelector("#play-club");
     await page.waitForSelector("#play-penalty");
     assert.equal(await page.$("#play-set"), null);
     assert.equal(await page.$("#play-more"), null);
     assert.equal(await page.$eval(".tk-hn b", el => el.textContent), "Hoyo 1");
+    assert.equal(await page.$eval(".tk-aim-n", el => el.textContent), "1");
     assert.deepEqual(cardWrites(calls), []);
+    await untilReady(page);
     await page.select("#play-club", "7i");
     await untilReady(page);
     await page.click("#play-hit");
@@ -385,10 +376,6 @@ test("a late reconstruction reply does not navigate or post the shot after the p
   const reachEnter = async (page: { click: (s: string) => Promise<unknown>; waitForSelector: (s: string) => Promise<unknown>; waitForFunction: (fn: () => boolean) => Promise<unknown> }) => {
     await page.waitForSelector("#round-track");
     await page.click("#round-track");
-    await page.waitForSelector("#play-cancel");
-    await page.click("#play-cancel");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
-    await page.click("#play-cancel");
     await page.waitForSelector("#play-hit");
   };
   try {
@@ -404,6 +391,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await reachEnter(page);
     holdCreates = 1;
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await until(() => creates().length === 1, "the create request did not start");
     await page.evaluate(() => { location.hash = "#/inicio"; });
@@ -418,12 +406,14 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await reachEnter(page);
     holdCreates = 2;
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await until(() => creates().length === 2, "the first of the two creates did not start");
     await page.click("#rc-close");
     await page.waitForFunction(() => location.hash === "#/ronda/r-nov");
     await reachEnter(page);
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await until(() => creates().length === 3, "the re-entered create did not start");
     release();
@@ -439,6 +429,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await reachEnter(page);
     holdCreates = 1;
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await until(() => creates().length === 4, "the new-round create did not start");
     await page.evaluate(() => { location.hash = "#/ronda/r-saved"; });
@@ -454,12 +445,14 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await reachEnter(page);
     holdCreates = 2;
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await until(() => creates().length === 5, "the older create did not start");
     await page.click("#rc-close");
     await page.waitForFunction(() => location.hash === "#/ronda/r-nov");
     await reachEnter(page);
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await until(() => creates().length === 6, "the newer create did not start");
     releaseLast();
@@ -475,6 +468,7 @@ test("a late reconstruction reply does not navigate or post the shot after the p
     await reachEnter(page);
     holdCreates = 1;
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await until(() => creates().length === 7, "the logout create did not start");
     await page.evaluate(() => { location.replace("/login"); });
@@ -624,7 +618,7 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
   const labels = () => page.$$eval(".tk-shot-n", nodes => nodes.map(node => node.textContent));
   const place = async () => page.evaluate(() => {
     const svg = document.querySelector(".tk-svg");
-    const line = document.querySelector(".tk-sh");
+    const line = document.querySelector(".tk-live") || document.querySelector(".tk-sh");
     const box = (svg as SVGSVGElement).viewBox.baseVal;
     const pts = (line?.getAttribute("points") || "").trim().split(/\s+/).filter(Boolean).map(p => p.split(",").map(Number));
     const last = pts[pts.length - 1] || [NaN, NaN];
@@ -658,12 +652,9 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#round-track");
     await page.click("#round-track");
-    await page.waitForSelector("#play-cancel");
-    await page.click("#play-cancel");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
-    await page.click("#play-cancel");
     await page.waitForSelector("#play-hit");
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await page.waitForSelector(".tk-shot-n");
     assert.deepEqual(await labels(), ["1"]);
@@ -690,6 +681,7 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
     assert.equal(zoomed.dots[0].lat, first.lat);
     assert.equal(zoomed.dots[0].lng, first.lng);
     await untilReady(page);
+    await page.select("#play-club", "7i");
     await page.click("#play-hit");
     await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 2);
     const both = await place();
