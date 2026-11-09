@@ -165,7 +165,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     await ready(page);
     await page.click("#play-hit");
     await page.waitForSelector("#play-drop");
-    const penalty = posts[1] as { penalty_strokes: number; result: string; end_lat: number; end_lng: number; lat: number; club: string | null };
+    const penalty = posts[1] as { penalty_strokes: number; result: string; end_lat: number; end_lng: number; lat: number; lng: number; club: string | null };
     assert.equal(posts.length, 2);
     assert.equal(penalty.penalty_strokes, 1);
     assert.equal(penalty.result, "penalty");
