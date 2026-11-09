@@ -254,6 +254,17 @@
           throw e;
         }
       },
+      onStats: async (body) => {
+        if (!mine() || !roundId) return null;
+        const pack = await api(`/api/rounds/${encodeURIComponent(roundId)}/hole-marks`);
+        if (!mine()) return null;
+        const stored = (pack.marks || []).find(m => Number(m.hole) === Number(body.hole)) || null;
+        const fill = window.GolfletRules && window.GolfletRules.emptyStatFill ? window.GolfletRules.emptyStatFill(stored, { putts: body.putts ?? null, gir: body.gir ?? null, fir: body.drive || null }) : null;
+        if (!fill) return { mark: stored, skipped: true };
+        const saved = await api(`/api/rounds/${encodeURIComponent(roundId)}/hole-marks`, { method: "PUT", body: JSON.stringify({ hole: body.hole, ...fill }) });
+        if (!mine()) return null;
+        return saved;
+      },
       onUndo: async (shotId) => {
         if (!mine()) return null;
         await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots?shot=${encodeURIComponent(shotId)}`, { method: "DELETE" });

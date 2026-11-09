@@ -686,9 +686,11 @@ async function loadScorecards(){
     const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
     const block = (title, list) => list.length ? `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${list.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div></div></div>`).join('')}</div>` : '';
     const headed = rows.some(f => f.heading);
-    const groups = headed ? ['Próxima', 'En curso', 'No presentó', 'Ya está', 'Sin confirmar', 'Otras'] : ['En curso', 'Ya está', 'Otras'];
+    const groups = headed ? ['Próxima', 'En curso', 'No presentó', 'Sin confirmar', 'Otras'] : ['En curso', 'Otras'];
     const bucket = f => f.heading || (f.status === 'complete' ? 'Ya está' : ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status) ? 'En curso' : 'Otras');
-    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${groups.map(title => block(title, rows.filter(f => bucket(f) === title))).join('')}<p class="foot">«No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
+    const open = rows.filter(f => bucket(f) !== 'Ya está');
+    if (!open.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${groups.map(title => block(title, open.filter(f => bucket(f) === title))).join('')}<p class="foot">Acá quedan las búsquedas que todavía piden algo. Las tarjetas que ya llegaron están en Rondas. «No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -3009,14 +3011,20 @@ async function loadRoundWx(id, retry){
 }
 const dsg = v => v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '±') + String(Math.abs(Math.round(v*10)/10)).replace('.', ',');
 const DIMS = [['lluvia','Lluvia o seco'],['temperatura','Temperatura'],['viento','Viento']];
+const per18 = v => v == null ? '—' : String(v).replace('.', ',');
+function mixBits(mix){
+  if (!mix) return '';
+  return `<div class="wx-mix">${[['Águilas', mix.eagles], ['Birdies', mix.birdies], ['Pares', mix.pars], ['Bogeys', mix.bogeys], ['Dobles+', mix.doubles]].map(([k, r]) => `<span><small>${k} / 18</small><b class="num">${per18(r.per_18)}</b></span>`).join('')}</div>`;
+}
 async function loadWxRes(){
   const el = $('#wxres'); if (!el) return;
   let d; try { d = await api('/api/metrics/weather'); } catch(e){ el.innerHTML = ''; return; }
   if (!$('#wxres')) return; const dims = DIMS.filter(([k]) => d[k]?.enough);
   if (!dims.length) { el.innerHTML = d.n ? `<div class="section"><h2>Clima y juego</h2></div><div class="card wx-empty">Con ${d.n} tarjetas con clima todavía no alcanza para comparar (hacen falta ${d.min_group} por grupo). Se arma a medida que juegues.</div>` : ''; return; }
+  const hint = (k, label) => { const row = (d.play?.[k] || []).find(b => b.sentence); return row ? row.sentence : `${label}: diferencial por grupo`; };
   el.innerHTML = `<div class="section"><h2>Clima y juego</h2><a href="#/clima/lluvia">Ver detalle</a></div>
-    <div class="list wx-list">${dims.map(([k, l]) => `<a class="row" href="#/clima/${k}"><div class="body"><div class="t">${l}</div><div class="s">${d[k].buckets.map(b => `${esc(b.label)} <b class="num">${n1(b.avg_diff)}</b>`).join(' · ')}</div></div>${ICON.chev}</a>`).join('')}</div>
-    <p class="foot">Diferencial promedio por grupo (más bajo es mejor), sobre ${d.n} tarjetas válidas con clima. Grupos con al menos ${d.min_group} tarjetas.</p>`;
+    <div class="list wx-list">${dims.map(([k, l]) => `<a class="row" href="#/clima/${k}"><div class="body"><div class="t">${l}</div><div class="s">${d[k].buckets.map(b => `${esc(b.label)} <b class="num">${n1(b.avg_diff)}</b>`).join(' · ')}</div><div class="s">${esc(hint(k, l))}</div></div>${ICON.chev}</a>`).join('')}</div>
+    <p class="foot">El diferencial es el promedio (más bajo es mejor), sobre ${d.n} tarjetas válidas con clima histórico. Los birdies y bogeys del detalle son un promedio cada 18 hoyos, no una suma. El pronóstico no entra.</p>`;
 }
 function sClima(){ return `<div class="bar"><span class="overline">Resumen</span><button class="close" data-close>${ICON.x}</button></div><div id="clima"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
 async function loadClima(dim, bucket){
@@ -3024,10 +3032,12 @@ async function loadClima(dim, bucket){
   try {
     const d = await api(`/api/metrics/weather?dim=${encodeURIComponent(dim)}${bucket?`&bucket=${encodeURIComponent(bucket)}`:''}`); if (!$('#clima')) return;
     const g = d.group, rows = d.rounds.slice().sort((a, b) => b.date.localeCompare(a.date));
+    const play = Array.isArray(d.play) ? d.play : [];
     el.innerHTML = `<div class="stitle">Clima y juego</div>
       <div class="seg wx-seg">${DIMS.map(([k, l]) => `<a href="#/clima/${k}" class="${k===dim?'on':''}">${l}</a>`).join('')}</div>
       ${g.enough ? `<div class="wx-bars">${g.buckets.map(b => `<a class="card wx-b${b.key===bucket?' on':''}" href="#/clima/${dim}${b.key===bucket?'':'/'+b.key}"><span>${esc(b.label)}</span><b class="num">${n1(b.avg_diff)}</b><small class="num ${b.vs_overall<0?'pos':b.vs_overall>0?'neg':''}">${dsg(b.vs_overall)} vs tu promedio</small><small class="num">${b.n} tarjetas</small></a>`).join('')}</div>`
         : `<div class="card wx-empty">Todavía no alcanza para comparar ${esc(DIMS.find(x=>x[0]===dim)?.[1].toLowerCase()||'')} (hacen falta ${3} tarjetas por grupo).</div>`}
+      ${play.map(b => `<div class="card" id="wx-${esc(b.key)}"><b>${esc(b.label)}</b><span class="s">${b.n} tarjetas${b.avg_diff!=null?` · diferencial ${n1(b.avg_diff)}`:''}</span>${mixBits(b.mix)}${b.sentence?`<p>${esc(b.sentence)}</p>`:''}${b.note?`<p class="foot">${esc(b.note)}</p>`:''}${b.mix?`<p class="foot">${b.mix.cards} tarjetas con hoyos · ${b.mix.holes} hoyos. Cada número es el promedio de una vuelta de 18, no la suma de golpes.${b.mix.nine?` ${b.mix.nine} ${b.mix.nine===1?'tarjeta es':'tarjetas son'} de 9 hoyos: entran por hoyo y se muestran cada 18.`:''}</p>`:''}</div>`).join('')}
       <p class="foot">Diferencial promedio (más bajo es mejor). Tu promedio con clima: <b class="num">${n1(d.overall_avg_diff)}</b>. ${vidSlot('clima')}</p>
       <div class="section"><h2>${bucket ? esc(g.buckets.find(b=>b.key===bucket)?.label || 'Tarjetas') : 'Tarjetas'}</h2><span class="badge">${rows.length}</span></div>
       ${yrList(rows, r => r.date, r => `<a class="row" href="#/ronda/${r.round_id}" data-wx="1">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course||'Ronda')} <span class="wxi">${WX_IC[r.wx.condition]||''}</span></div><div class="s">${WX_L[r.wx.condition]||''} · ${n1(r.wx.temp_c)}° · ${n1(r.wx.precip_mm)} mm · ${r.wx.wind_kmh!=null?Math.round(r.wx.wind_kmh):'—'} km/h</div></div><div class="score"><b class="num">${n1(r.differential)}</b><span>dif.</span></div>${ICON.chev}</a>`)}
@@ -3042,12 +3052,13 @@ async function loadPrivRes(){
   let d; try { d = await api('/api/me/private-metrics'); } catch(e){ el.innerHTML = ''; return; }
   if (!$('#privres')) return; const top = d.partners.slice(0, 3);
   el.innerHTML = `<div class="section"><h2 class="priv-h">${LOCK_IC}Solo para vos</h2></div>
-    <div class="list priv-list"><a class="row" href="#/privado/horario"><div class="body"><div class="t">Por horario</div><div class="s">${d.played ? d.bands.map(b => `${b.label} <b class="num">${b.played}</b>`).join(' · ') : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a>
-    <a class="row" href="#/privado/companeros"><div class="body"><div class="t">Con quién jugás</div><div class="s">${top.length ? top.map(p => `${esc(p.name.split(' ')[0])} <b class="num">${p.count}</b>`).join(' · ') : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a></div>
-    <p class="foot">Privado: solo lo ves vos. No aparece en grupos, profesores ni enlaces compartidos.</p>`;
+    <div class="list priv-list"><a class="row" href="#/privado/horario"><div class="body"><div class="t">Por horario</div><div class="s">${d.played ? `Salidas, no un resultado. ${d.bands.map(b => `${b.label} <b class="num">${b.played}</b> ${b.played===1?'salida':'salidas'}${b.avg_diff!=null?` · dif. ${n1(b.avg_diff)}`:''}`).join(' · ')}` : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a>
+    <a class="row" href="#/privado/companeros"><div class="body"><div class="t">Con quién jugás</div><div class="s">${top.length ? `Salidas juntos, no un resultado. ${top.map(p => `${esc(p.name)} <b class="num">${p.count}</b>`).join(' · ')}` : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a></div>
+    <p class="foot">Privado: solo lo ves vos. No aparece en grupos, profesores ni enlaces compartidos. El número de al lado del nombre es la cantidad de salidas.</p>`;
 }
 function sPrivado(){ return `<div class="bar"><span class="overline">Solo para vos</span><button class="close" data-close>${ICON.x}</button></div><div id="privado"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
-const teeRowP = t => `<${t.round_id?`a href="#/ronda/${t.round_id}"`:'div'} class="row">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name||'')}${t.course_label?' · '+esc(t.course_label):''}</div><div class="s">${esc(t.time)} · ${t.companions.length?esc(t.companions.map(n=>n.split(' ')[0]).join(', ')):'sin compañeros leídos'}</div></div>${t.round_id?`<div class="score"><b class="num">${n1(t.differential)}</b><span>dif.</span></div>${ICON.chev}`:'<div class="score"><span>sin tarjeta</span></div>'}</${t.round_id?'a':'div'}>`;
+const scoreFoot = s => s ? `En ${s.cards} tarjetas (${s.holes} hoyos), cada 18: ${s.eagles==null?'':per18(s.eagles)+' águilas · '}${per18(s.birdies)} birdies · ${per18(s.pars)} pares · ${per18(s.bogeys)} bogeys · ${per18(s.doubles)} dobles o peor. Es un promedio, no la suma. Más bajo en el diferencial es mejor.` : 'El resultado por hoyo aparece con al menos 3 tarjetas que tengan el detalle. No lo invento.';
+const teeRowP = t => `<${t.round_id?`a href="#/ronda/${t.round_id}"`:'div'} class="row">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name||'')}${t.course_label?' · '+esc(t.course_label):''}</div><div class="s">${esc(t.time)} · ${t.companions.length?esc(t.companions.join(', ')):'sin compañeros leídos'}</div></div>${t.round_id?`<div class="score"><b class="num">${n1(t.differential)}</b><span>dif.</span></div>${ICON.chev}`:'<div class="score"><span>sin tarjeta</span></div>'}</${t.round_id?'a':'div'}>`;
 async function loadPrivado(what, arg){
   const el = $('#privado'); if (!el) return;
   try {
@@ -3056,20 +3067,21 @@ async function loadPrivado(what, arg){
       const d = await api(what === 'franja' ? `/api/me/private-metrics/bands/${encodeURIComponent(arg)}` : `/api/me/private-metrics/partners/${encodeURIComponent(arg)}`); if (!$('#privado')) return;
       const h = what === 'franja' ? d.band : d.partner;
       el.innerHTML = `<div class="stitle">${esc(what === 'franja' ? h.label : h.name)}</div>
-        <div class="grid3" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px"><div class="card mini stat"><div class="k">${what==='franja'?'Veces que jugaste':'Salidas juntos'}</div><div class="v num">${what==='franja'?h.played:h.count}</div></div>
-        <div class="card mini stat"><div class="k">Diferencial promedio</div><div class="v num">${n1(h.avg_diff)}</div></div></div>
-        <p class="foot">${h.avg_diff==null?`El promedio aparece con al menos 3 salidas con tarjeta (hay ${h.matched}).`:`Sobre ${h.matched} salidas con tarjeta. Tu promedio general: ${n1(d.overall_avg_diff)}.`}</p>
+        <div class="grid3" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px"><div class="card mini stat"><div class="k">${what==='franja'?'Salidas en esta franja':'Salidas juntos'}</div><div class="v num">${what==='franja'?h.played:h.count}</div><div class="d">cantidad, no un resultado</div></div>
+        <div class="card mini stat"><div class="k">Diferencial</div><div class="v num">${n1(h.avg_diff)}</div><div class="d">más bajo es mejor</div></div></div>
+        <p class="foot">${h.avg_diff==null?`El diferencial aparece con al menos 3 salidas con tarjeta (hay ${h.matched}).`:`Sobre ${h.matched} salidas con tarjeta. Tu diferencial general: ${n1(d.overall_avg_diff)}.`}</p>
+        <p class="foot">${scoreFoot(h.scores)}</p>
         <div class="section"><h2>Salidas</h2><span class="badge">${d.tee_times.length}</span></div>${yrList(d.tee_times, t => t.date, teeRowP)}${priv}`;
       return;
     }
     const d = await api('/api/me/private-metrics'); if (!$('#privado')) return;
     if (d.empty) { el.innerHTML = `<div class="stitle">${what==='companeros'?'Con quién jugás':'Por horario'}</div><div class="card wx-empty" style="margin-top:14px">${PRIV_EMPTY}</div>${priv}`; return; }
     el.innerHTML = what === 'companeros'
-      ? `<div class="stitle">Con quién jugás</div><p class="foot">Compañeros de línea que el club muestra en tus reservas, de más a menos salidas.</p>
-         <div class="list">${d.partners.map((p, i) => `<a class="row" href="#/privado/companero/${encodeURIComponent(p.key)}"><div class="date"><b class="num">${i+1}</b></div><div class="body"><div class="t">${esc(p.name)}</div><div class="s">${p.count} ${p.count===1?'salida':'salidas'}${p.avg_diff!=null?` · dif. ${n1(p.avg_diff)}`:''}</div></div><span class="badge num">${p.count}</span>${ICON.chev}</a>`).join('') || `<div class="card wx-empty">Todavía no leímos compañeros en tus salidas.</div>`}</div>${priv}`
-      : `<div class="stitle">Por horario</div><p class="foot">Salidas reservadas en el club que ya pasaron: ${d.played}, ${d.matched} con tarjeta.</p>
-         <div class="list">${d.bands.map(b => `<a class="row" href="#/privado/franja/${b.key}"><div class="body"><div class="t">${b.label}</div><div class="s">${b.played} ${b.played===1?'vez':'veces'}${b.avg_diff!=null?` · dif. ${n1(b.avg_diff)}`:b.played?` · promedio con 3+ tarjetas`:''}</div></div><span class="badge num">${b.played}</span>${ICON.chev}</a>`).join('')}</div>
-         <p class="foot">Mañana: antes de las 11 · Mediodía: 11 a 14 · Tarde: desde las 14.</p>${priv}`;
+      ? `<div class="stitle">Con quién jugás</div><p class="foot">El número es la cantidad de salidas juntos, no un resultado. El nombre es el que muestra el club. Dos personas distintas no se juntan por compartir un apellido.</p>
+         <div class="list">${d.partners.map((p, i) => `<a class="row" href="#/privado/companero/${encodeURIComponent(p.key)}"><div class="date"><b class="num">${i+1}</b></div><div class="body"><div class="t">${esc(p.name)}</div><div class="s">${p.count} ${p.count===1?'salida':'salidas'}${p.avg_diff!=null?` · diferencial ${n1(p.avg_diff)} (más bajo es mejor)`:` · diferencial con 3 o más tarjetas`}</div></div><span class="badge num">${p.count} salidas</span>${ICON.chev}</a>`).join('') || `<div class="card wx-empty">Todavía no leímos compañeros en tus salidas.</div>`}</div>${priv}`
+      : `<div class="stitle">Por horario</div><p class="foot">El número es la cantidad de salidas reservadas que ya pasaron: ${d.played}. ${d.matched} tienen tarjeta. No es un resultado.</p>
+         <div class="list">${d.bands.map(b => `<a class="row" href="#/privado/franja/${b.key}"><div class="body"><div class="t">${b.label}</div><div class="s">${b.played} ${b.played===1?'salida':'salidas'}${b.avg_diff!=null?` · diferencial ${n1(b.avg_diff)}`:b.played?` · el diferencial pide 3 tarjetas (hay ${b.matched})`:''}</div></div><span class="badge num">${b.played} salidas</span>${ICON.chev}</a>`).join('')}</div>
+         <p class="foot">Mañana: antes de las 11 · Mediodía: 11 a 14 · Tarde: desde las 14. El diferencial más bajo es mejor.</p>${priv}`;
   } catch(e){ el.innerHTML = errBox(e); }
 }
 const DETAIL = ['reconstruir','jugar','metricas','notificaciones','notificacion','pelota','sorteos','sorteo','ronda','hoyo','vincular','club','cuenta','metrica','gps','palo','estrategia','amigos','grupo','unirse','compartir','nivel','trabajar','putting','tee','tees','equipo','impacto','club-faltante','hi-cambio','cambios','outliers','profesor','profesores','profe','clima','privado','plan','partido','partidos'];

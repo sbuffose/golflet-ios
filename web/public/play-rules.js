@@ -23,6 +23,9 @@ exports.puttMeters = puttMeters;
 exports.isPutterClub = isPutterClub;
 exports.yardNumber = yardNumber;
 exports.yardLabel = yardLabel;
+exports.shotDistanceLabel = shotDistanceLabel;
+exports.trackHoleSummary = trackHoleSummary;
+exports.emptyStatFill = emptyStatFill;
 exports.bagClubs = bagClubs;
 exports.isDriverClub = isDriverClub;
 exports.teeClub = teeClub;
@@ -268,6 +271,115 @@ function yardNumber(value) {
 function yardLabel(value) {
     const n = yardNumber(value);
     return n == null ? "" : `${n} yd`;
+}
+const EARTH_M = 6371008.8;
+function metersBetween(a, b) {
+    const rad = (d) => d * Math.PI / 180;
+    const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * EARTH_M * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+const fmtM = (m) => (Math.round(m * 10) / 10).toFixed(1).replace(".", ",");
+/**
+ * Yards are the tee-or-origin to the endpoint. A putt is an origin on the green, or a distance the player typed.
+ * A long shot whose stored lie is the landing is not a putt. The card length is never the shot.
+ */
+function shotDistanceLabel(shot) {
+    if (shot.penalty)
+        return { text: "", yards: null, meters: null, kind: "penalty" };
+    const start = knownPoint(shot.lat, shot.lng);
+    const end = knownPoint(shot.end_lat, shot.end_lng);
+    const prev = knownPoint(shot.prev_lat, shot.prev_lng);
+    let from = start, to = end;
+    if ((!from || !to) && prev) {
+        if (!to && from && metersBetween(prev, from) > 3) {
+            to = from;
+            from = prev;
+        }
+        else if (to && !from)
+            from = prev;
+        else if (!to && !from) { /* still missing */ }
+    }
+    const flown = from && to ? metersBetween(from, to) : null;
+    if (shot.distance_kind === "manual") {
+        const typed = puttMeters(shot.distance_m);
+        if (typed == null)
+            return { text: "Sin metros", yards: null, meters: null, kind: "manual" };
+        return { text: `${fmtM(typed)} m a mano`, yards: null, meters: typed, kind: "manual" };
+    }
+    const originGreen = shot.lie === "green" && (flown == null || flown <= 50);
+    if (originGreen) {
+        const meters = flown != null ? Math.round(flown * 10) / 10 : (typeof shot.distance_m === "number" && shot.distance_m > 0 && shot.distance_m <= 50 ? Math.round(shot.distance_m * 10) / 10 : null);
+        if (meters == null)
+            return { text: "Sin ubicación", yards: null, meters: null, kind: "missing" };
+        return { text: `${fmtM(meters)} m`, yards: null, meters, kind: "putt" };
+    }
+    if (flown != null) {
+        const yards = Math.round(flown / 0.9144);
+        return { text: `${yards} yd`, yards, meters: Math.round(flown * 10) / 10, kind: "yards" };
+    }
+    return { text: "Sin ubicación", yards: null, meters: null, kind: "missing" };
+}
+/** Putts count strokes that started on the green. FIR and GIR stay empty unless the lie is known. Nothing here is strokes gained. */
+function trackHoleSummary(par, shots) {
+    const finished = shots.some(s => s.holed);
+    const putts = finished ? shots.filter(s => s.originGreen && !s.penalty).length : null;
+    const p = par == null ? null : Number(par);
+    let fir = null;
+    const firApplies = p === 4 || p === 5;
+    if (firApplies) {
+        const drive = shots.find(s => !s.penalty);
+        if (drive?.endLie === "fairway")
+            fir = "fairway";
+        else if (drive && drive.endLie)
+            fir = "other";
+    }
+    const regulation = p != null ? p - 2 : null;
+    let gir = null;
+    if (regulation != null) {
+        let n = 0, greenAt = null, unknown = false;
+        for (const s of shots) {
+            n += 1;
+            if (s.endLie === "green" && greenAt == null)
+                greenAt = n;
+            else if (!s.penalty && s.endLie == null && greenAt == null && n <= regulation)
+                unknown = true;
+        }
+        if (greenAt != null)
+            gir = greenAt <= regulation;
+        else if (n >= regulation && !unknown)
+            gir = false;
+    }
+    const lines = [];
+    lines.push(putts == null ? "Putts: se confirman al embocar." : `Putts: ${putts}. Solo golpes que salieron del green.`);
+    if (p === 3)
+        lines.push("Fairway: un par 3 no lleva.");
+    else if (firApplies)
+        lines.push(fir == null ? "Fairway: falta el lugar de la salida." : `Fairway: ${fir === "fairway" ? "fairway" : "otro lado"}.`);
+    else
+        lines.push("Fairway: falta el par del hoyo.");
+    lines.push(gir == null ? "Green en regulación: falta saber si la pelota llegó al green." : gir ? `Green en regulación: sí, en ${regulation} o menos.` : "Green en regulación: no.");
+    if (!finished)
+        lines.push("El hoyo sigue abierto.");
+    return { finished, putts, fir: firApplies ? fir : null, gir, lines };
+}
+/** Copy only the derived fields the card does not already have. A stored value stays. */
+function emptyStatFill(stored, derived) {
+    const body = { rev: (Number(stored?.rev) || 0) + 1 };
+    let n = 0;
+    if (derived.putts != null && (stored == null || stored.putts == null)) {
+        body.putts = derived.putts;
+        n++;
+    }
+    if (derived.gir != null && (stored == null || stored.gir == null)) {
+        body.gir = derived.gir;
+        n++;
+    }
+    if (derived.fir && (stored == null || stored.drive == null)) {
+        body.drive = derived.fir;
+        n++;
+    }
+    return n ? body : null;
 }
 /** Accepts the bag API (`{club,carry,total}` or a name string) and `{code,label}` rows. Drops blanks. Does not invent a club. */
 function bagClubs(raw) {
