@@ -55,6 +55,49 @@ export function weatherGroups(rs: WxRound[]) {
 export function bucketOf(dim: string, r: WxRound): string | null {
   return dim === "lluvia" ? (isWet(r.wx) ? "lluvia" : "seco") : dim === "temperatura" ? tempBand(r.wx.temp_c) : dim === "viento" ? windBand(r.wx.wind_kmh) : null;
 }
+
+/** Archive is the observed source. The forecast model is never treated as observed. */
+export const ARCHIVE_SOURCE = "open-meteo-archive";
+export const FORECAST_SOURCE = "open-meteo-forecast";
+/** Same cutoff as the hourly reader: a day more than 6 days before today can use the archive directly. */
+export const ARCHIVE_AFTER_DAYS = 6;
+export const FORECAST_TTL_MS = 3600e3;
+export const MISS_TTL_MS = 15 * 60e3;
+
+export function daysBefore(date: string, today: string): number {
+  return Math.round((Date.parse(today + "T12:00:00Z") - Date.parse(date + "T12:00:00Z")) / 864e5);
+}
+
+/**
+ * What a round date may ask Open-Meteo.
+ * The archive does not include the local day. Recent days often are not in the archive yet:
+ * a forecast fill-in stays labeled forecast and must not enter Clima y juego.
+ */
+export function roundWeatherPlan(date: string, today: string):
+  | { action: "skip"; reason: "not_played" }
+  | { action: "forecast" }
+  | { action: "archive"; forecastFallback: boolean } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return { action: "skip", reason: "not_played" };
+  if (date > today) return { action: "skip", reason: "not_played" };
+  if (date === today) return { action: "forecast" };
+  return { action: "archive", forecastFallback: daysBefore(date, today) <= ARCHIVE_AFTER_DAYS };
+}
+
+export function countsAsObserved(source: string | null | undefined): boolean {
+  return source === ARCHIVE_SOURCE;
+}
+
+/** Final archive rows stay. Forecast and misses are retried. An explicit retry still keeps a final archive row. */
+export function weatherCacheFresh(row: { status?: string | null; source?: string | null; fetched_at?: string | Date | null }, now = Date.now(), retry = false): boolean {
+  if (!row?.fetched_at) return false;
+  const source = row.source || ARCHIVE_SOURCE;
+  const age = now - new Date(row.fetched_at).getTime();
+  if (!Number.isFinite(age) || age < 0) return false;
+  if (row.status === "ok" && source === ARCHIVE_SOURCE) return true;
+  if (retry) return false;
+  if (row.status === "ok" && source === FORECAST_SOURCE) return age < FORECAST_TTL_MS;
+  return age < MISS_TTL_MS;
+}
 /** "Jockey Club Buenos Aires" + "Colorada" → the vm_course whose name ends with the course and shares a club token. */
 export function matchCourse(clubPlayed: string | null, course: string | null, vm: { vm_course: string; lat: number; lng: number }[]) {
   const n = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();

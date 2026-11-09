@@ -378,6 +378,17 @@ a.tile:hover{transform:translateY(-1px);box-shadow:var(--shadow-float)}
 .gm-bg{fill:#E6E9DC}.gm-green{fill:#BFD9BF;stroke:#9CC09C}.gm-p{fill:#fff;stroke:#0F3D2E;stroke-width:1.2}.gm-l{font:600 10.5px Geist,system-ui;fill:#0F3D2E}
 .gmap g line{stroke:#0F3D2E;stroke-width:1.6}.gm-flag path,.gm-flag circle{fill:#C8A86A}.gm-new path,.gm-new circle{fill:#0F3D2E}.gm-new line{stroke:#0F3D2E}
 .gm-rep path,.gm-rep circle{fill:#B4553F}.gm-rep line{stroke:#B4553F}.gm-who{fill:#75AADB;stroke:#fff;stroke-width:1.5}
+.tr-map{position:relative;height:min(68vh,560px);background:#152016;border-radius:16px;overflow:hidden;touch-action:none}
+.tr-map img{position:absolute;width:256px;height:256px}
+.tr-svg{position:absolute;inset:0;width:100%;height:100%}
+.tr-osm{fill:rgba(11,37,69,.28);stroke:#F6F7F9;stroke-width:2}
+.tr-draw{fill:rgba(200,16,46,.28);stroke:#C8102E;stroke-width:2}
+.tr-axis{fill:none;stroke:#C4A36A;stroke-width:2}
+.tr-tee{fill:#F6F7F9;stroke:#0B2545;stroke-width:2}
+.tr-vert{fill:#C8102E}
+.tr-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tr-miss{padding:8px 0 4px}
+.tr-note{font-weight:600}
 .lg{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px 0 10px;vertical-align:-1px}.lg.rep{background:#B4553F}.lg.who{background:#75AADB}.lg.cur{background:#C8A86A}.lg.new{background:#0F3D2E}
 </style>
 </head>
@@ -390,6 +401,7 @@ a.tile:hover{transform:translateY(-1px);box-shadow:var(--shadow-float)}
   </div>
 </div>
 <div id="toast"></div>
+<script src="/trace-map.js"></script>
 <script>/*APP_JS*/</script>
 </body>
 </html>

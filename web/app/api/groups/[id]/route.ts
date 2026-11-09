@@ -17,7 +17,7 @@ export const PATCH = handle(async (req: Request, ctx: C) => {
   const u = await requireUser(req); const { id } = await ctx.params; let b: any; try { b = await req.json(); } catch { throw new HttpError(400, "JSON inválido"); }
   return json(await renameGroup(u.id, id, b?.name));
 });
-/** DELETE (admins) → deletes the group for everyone. */
+/** DELETE answers 409. A group stays; each player leaves. */
 export const DELETE = handle(async (req: Request, ctx: C) => {
   const u = await requireUser(req); const { id } = await ctx.params;
   return json(await deleteGroup(u.id, id));

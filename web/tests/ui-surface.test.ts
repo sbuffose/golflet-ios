@@ -147,7 +147,7 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     assert.match(bagText, /3 definidas por vos/);
     assert.match(bagText, /1 palo con tiros medidos por GPS/);
     assert.equal(bagText.includes("3/6"), false);
-    assert.equal(await page.$eval("#bagcount", el => el.textContent), "3 de 6");
+    assert.equal(await page.$eval("#bagcount", el => el.textContent), "3 de 5");
     const driver = await page.$eval('.bagrow[data-club="Driver"]', row => ({
       carry: (row.querySelector('[data-k="carry"]') as HTMLInputElement).value,
       total: (row.querySelector('[data-k="total"]') as HTMLInputElement).value,
@@ -286,6 +286,8 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
       input.files = dt.files;
       input.dispatchEvent(new Event("change"));
     });
+    await page.waitForSelector("#pc-ok");
+    await page.click("#pc-ok");
     await page.waitForFunction(() => (document.querySelector(".gg-img")?.getAttribute("src") || "").includes("v=2"));
     assert.equal(puts.at(-1)?.type, "image/jpeg");
     assert.ok((puts.at(-1)?.bytes || 0) < 150_000, `resized bytes ${puts.at(-1)?.bytes}`);
@@ -304,6 +306,8 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
       input.files = dt.files;
       input.dispatchEvent(new Event("change"));
     });
+    await page.waitForSelector("#pc-ok");
+    await page.click("#pc-ok");
     await page.waitForFunction(() => (document.querySelector("#ggpmsg")?.textContent || "").includes("anterior sigue"));
     assert.equal(await page.$eval(".gg-img", el => el.getAttribute("src")), kept);
     await page.screenshot({ path: `${ART}/group-photo.png` });

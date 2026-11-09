@@ -31,7 +31,7 @@ let ME = null;
 const NAV = [
   [null, [['dashboard', '/admin', 'Métricas']]],
   ['Plataforma', [['users', '/admin/users', 'Usuarios'], ['roles', '/admin/roles', 'Accesos y roles'], ['access', '/admin/access', 'Usuarios del panel'], ['profesores', '/admin/profesores', 'Profesores'], ['requests', '/admin/pedidos', 'Pedidos de club'], ['leadsp', '/admin/profesores-interesados', 'Profesores interesados'], ['leadsm', '/admin/marcas', 'Contactos de marcas'], ['leadsc', '/admin/contactos', 'Contactos'], ['feedback', '/admin/feedback', 'Feedback'], ['sorteos', '/admin/sorteos', 'Sorteos'], ['clubmsgs', '/admin/mensajes', 'Mensajes de clubes'], ['clubs', '/admin/clubs', 'Clubes y escudos'], ['arclubs', '/admin/ar-clubs', 'Clubes de Argentina']]],
-  ['Canchas', [['courses', '/admin/cards', 'Tarjetas: hoyos, par y yardas'], ['gps', '/admin/gps', 'Greens GPS'], ['strategy', '/admin/strategy', 'Cómo jugar la cancha'], ['pace', '/admin/ritmo', 'Ritmo de juego'], ['pins', '/admin/banderas/cargar', 'Banderas del día'], ['pinstaff', '/admin/banderas', 'Banderas: reportes y clubes']]],
+  ['Canchas', [['courses', '/admin/cards', 'Tarjetas: hoyos, par y yardas'], ['gps', '/admin/gps', 'Greens GPS'], ['trazos', '/admin/trazos', 'Trazos sobre satélite'], ['strategy', '/admin/strategy', 'Cómo jugar la cancha'], ['pace', '/admin/ritmo', 'Ritmo de juego'], ['pins', '/admin/banderas/cargar', 'Banderas del día'], ['pinstaff', '/admin/banderas', 'Banderas: reportes y clubes']]],
   ['Sistema', [['settings', '/admin/settings', 'Ajustes y flags'], ['videos', '/admin/videos', 'Videos explicativos'], ['audit', '/admin/audit', 'Registro de cambios']]],
 ];
 function nav(active) {
@@ -59,6 +59,8 @@ const ROUTES = [
   [/^\/admin\/ar-clubs\/([a-z0-9-]{3,64})$/, 'arclubs', m => window.GArClubs.detail(m[1])],
   [/^\/admin\/cards\/?$/, 'courses', () => cardsView()],
   [/^\/admin\/cards\/(\d+)\/(.+)$/, 'courses', m => cardView(+m[1], decodeURIComponent(m[2]))],
+  [/^\/admin\/trazos\/?$/, 'trazos', () => trazosView()],
+  [/^\/admin\/trazos\/(\d+)\/([^/]+)(?:\/(\d{1,2}))?$/, 'trazos', m => trazosHole(m[1], decodeURIComponent(m[2]), m[3] ? +m[3] : 0)],
   [/^\/admin\/gps\/?$/, 'gps', () => gpsView()],
   [/^\/admin\/gps\/([a-z0-9-]+)$/, 'gps', m => gpsCourseView(m[1])],
   [/^\/admin\/gps\/([a-z0-9-]+)\/lecturas$/, 'gps', m => gpsRunsView(m[1])],
@@ -461,6 +463,41 @@ async function gpsCourseView(id) {
   $('#grf').onclick = async e => { e.target.disabled = true; try { await api(`/api/admin/gps/${id}/refresh`, { method:'POST', body: '{}' }); toast('Greens leídos de nuevo. Tus correcciones siguen.'); gpsCourseView(id); } catch (err) { toast(err.message, 1); e.target.disabled = false; } };
 }
 
+async function trazosView() {
+  title('Trazos sobre satélite', 'Canchas');
+  const d = await api('/api/admin/trazos');
+  const chip = (n, l) => `<span class="chip ${n ? 'draft' : 'published'}">${n} ${l}</span>`;
+  main(`<p class="meta" style="margin:0 0 14px">${esc(d.scope)} La foto es el satélite que ya usa TRACK, hasta el zoom 17. Un hoyo sin coordenada no se centra en un punto inventado.</p>
+  ${d.courses.map(c => `<div class="card"><div class="ov"><div><b>${esc(c.title)}</b><div class="meta">${esc(c.source)} · ${esc(c.note)}</div></div><div>${chip(c.listo, 'listos')} ${chip(c.revisar, 'a revisar')} ${chip(c.ayuda, 'necesito una mano')}</div></div>
+    <div class="hgrid" style="margin-top:12px">${c.holes.map(h => `<a class="hbtn ${h.state === 'listo' ? 'club' : h.state === 'revisar' ? '' : 'player'}" data-nav href="/admin/trazos/${c.club_code}/${encodeURIComponent(c.course)}/${h.hole}"><b class="num">${h.hole}</b><small>${h.state === 'listo' ? 'listo' : h.state === 'revisar' ? 'revisar' : 'ayuda'}</small></a>`).join('')}</div></div>`).join('')}
+  <div class="card"><h3 style="margin-top:0">Hoyos en los que hace falta una mano</h3>
+  ${d.ayuda.length ? d.ayuda.map(h => `<p class="meta"><a data-nav href="/admin/trazos/${h.club_code}/${encodeURIComponent(h.course)}/${h.hole}">${esc(h.title)} · hoyo ${h.hole}</a> — ${esc(h.detail)}</p>`).join('') : '<p class="meta">Ninguno.</p>'}</div>`);
+}
+async function trazosHole(club, course, hole) {
+  const d = await api(`/api/admin/trazos/${club}/${encodeURIComponent(course)}`);
+  const h = d.course.holes.find(x => x.hole === hole) || d.course.holes[0];
+  title(`${d.course.course} · hoyo ${h.hole}`, 'Canchas · Trazos');
+  const canDraw = !(h.polygon && h.polygon.length >= 3) && !!h.anchor;
+  main(`<div class="crumbs"><a data-nav href="/admin/trazos">← Trazos</a></div>
+  <p class="meta">${esc(h.detail)}</p>
+  <div id="trhost"></div>
+  <label class="meta" for="trnotein">Nota de procedencia</label>
+  <textarea id="trnotein" maxlength="400" placeholder="Qué estás viendo en la foto y qué no se puede afirmar."></textarea>
+  <div class="acts" style="margin-top:10px"><button class="btn ghost sm" id="trprev">Vista previa</button>${canDraw ? '<button class="btn sm" id="trsave">Guardar trazado</button>' : ''}<button class="btn ghost sm" id="trhelp">Dejar para revisión</button></div>
+  <div id="trmsg" class="meta"></div>`);
+  const view = window.GolfletTrace.mount($('#trhost'), { anchor: h.anchor, tee: h.tee, polygon: h.polygon, axis: h.axis, canDraw, detail: h.detail, credit: d.imagery.attribution });
+  const parent = h.confidence === 'openstreetmap' ? 'openstreetmap' : h.axis ? 'golfistics_axis' : 'none';
+  const say = (t, err) => { $('#trmsg').textContent = t; if (err) $('#trmsg').style.color = '#8C2F2F'; };
+  async function send(status, confirm) {
+    const draft = view.draft() || { tee: null, green: [] };
+    const body = { confirm, status, parent, tee: draft.tee, green: draft.green, note: $('#trnotein').value };
+    const r = await api(`/api/admin/trazos/${club}/${encodeURIComponent(course)}/${h.hole}`, { method: 'PUT', body: JSON.stringify(body) });
+    say(r.saved ? 'Guardado. TRACK solo usa un trazado aceptado, y no pisa un contorno que ya existía.' : `Vista previa: ${r.preview.track_lie ? 'TRACK podría detectar el green con este anillo.' : 'TRACK no va a detectar el green con esto.'} ${r.preview.note || ''}`);
+  }
+  $('#trprev').onclick = () => send(canDraw ? 'draft' : 'needs_review', false).catch(e => say(e.message, 1));
+  const save = $('#trsave'); if (save) save.onclick = () => send('accepted', true).catch(e => say(e.message, 1));
+  $('#trhelp').onclick = () => send('needs_review', true).catch(e => say(e.message, 1));
+}
 async function gpsRunsView(id) {
   const [c, d] = await Promise.all([api(`/api/admin/gps/${id}`), api(`/api/admin/gps/runs?course=${encodeURIComponent(id)}&days=90`)]);
   title(`Lecturas · ${c.course_label || c.vm_course}`, `Canchas · Greens GPS${c.club_name && c.club_name !== c.course_label ? ' · ' + c.club_name : ''}`);
@@ -738,7 +775,7 @@ async function profesoresView() {
 /* ---------- audit ---------- */
 const ACTIONS = [['', 'Todo'], ['admin.', 'Ingresos al panel'], ['role.', 'Accesos'], ['course.', 'Tarjetas'], ['green.', 'Greens GPS'], ['club.', 'Clubes'], ['ar_club.', 'Clubes de Argentina'], ['strategy.', 'Cómo jugar la cancha']];
 const ACTION_L = { 'role.grant':'Acceso dado', 'role.change':'Rol cambiado', 'role.revoke':'Acceso quitado', 'course.override':'Tarjeta corregida', 'course.override_clear':'Tarjeta restaurada',
-  'green.override':'Green corregido', 'green.override_clear':'Green restaurado', 'green.refresh':'Greens releídos', 'green.read':'Greens leídos (manual)', 'green.daily_read':'Lectura diaria de greens', 'green.daily_toggle':'Lectura diaria cambiada', 'green.review_done':'Green revisado', 'settings.gps_daily_read':'Ajuste: lectura diaria', 'admin.login.ok':'Ingreso al panel', 'admin.login.fail':'Ingreso rechazado', 'admin.logout':'Salió del panel', 'admin.password.change':'Contraseña cambiada', 'admin.password.fail':'Cambio de contraseña rechazado', 'admin.credential.set':'Credenciales asignadas', 'admin.credential.delete':'Credenciales quitadas', 'club.update':'Club renombrado', 'club.logo':'Escudo subido', 'club.logo_reset':'Escudo restaurado', 'ar_club.override':'Club AR corregido', 'ar_club.override_clear':'Club AR restaurado', 'ar_club.logo':'Logo AR subido', 'ar_club.logo_reset':'Logo AR restaurado',
+  'green.override':'Green corregido', 'green.override_clear':'Green restaurado', 'green.refresh':'Greens releídos', 'green.read':'Greens leídos (manual)', 'green.daily_read':'Lectura diaria de greens', 'green.daily_toggle':'Lectura diaria cambiada', 'green.review_done':'Green revisado', 'trace.save':'Trazado de hoyo', 'settings.gps_daily_read':'Ajuste: lectura diaria', 'admin.login.ok':'Ingreso al panel', 'admin.login.fail':'Ingreso rechazado', 'admin.logout':'Salió del panel', 'admin.password.change':'Contraseña cambiada', 'admin.password.fail':'Cambio de contraseña rechazado', 'admin.credential.set':'Credenciales asignadas', 'admin.credential.delete':'Credenciales quitadas', 'club.update':'Club renombrado', 'club.logo':'Escudo subido', 'club.logo_reset':'Escudo restaurado', 'ar_club.override':'Club AR corregido', 'ar_club.override_clear':'Club AR restaurado', 'ar_club.logo':'Logo AR subido', 'ar_club.logo_reset':'Logo AR restaurado',
   'strategy.draft':'Estrategia: borrador', 'strategy.overview':'Estrategia: resumen', 'strategy.publish':'Estrategia publicada', 'strategy.unpublish':'Estrategia despublicada', 'strategy.discard':'Estrategia: cambios descartados', 'strategy.prefill':'Estrategia: peligros precargados' };
 async function auditView() {
   title('Registro de cambios', 'Sistema');

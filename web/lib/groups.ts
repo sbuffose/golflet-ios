@@ -121,25 +121,31 @@ export async function respond(userId: string, groupId: string, accept: boolean) 
   await q(`insert into notification_read (user_id, item_key) values ($1, $2) on conflict do nothing`, [userId, `group_invite:${me!.member_id}`]).catch(() => {});  // t154u
   return { ok: true, status: accept ? "accepted" : "declined" };
 }
-/** Any member can leave. If the last admin leaves, the oldest remaining member becomes admin; the last member leaving deletes the group. */
+export type LeaveSeat = { member_id: string; status: string; role: string; responded_at?: string | null; invited_at?: string | null };
+/** The last accepted member leaves a dormant group. The row stays. Nobody else's cards are removed. */
+export function leavePlan(meId: string, members: LeaveSeat[]) {
+  const others = members.filter(m => m.status === "accepted" && m.member_id !== meId);
+  if (!others.length) return { deleted: false as const, dormant: true as const, remaining: 0, promoted_member_id: null as string | null };
+  const promoted = others.some(m => m.role === "admin") ? null
+    : others.slice().sort((a, b) => String(a.responded_at || a.invited_at).localeCompare(String(b.responded_at || b.invited_at)))[0].member_id;
+  return { deleted: false as const, dormant: false as const, remaining: others.length, promoted_member_id: promoted };
+}
+/** Any member can leave. The group is never deleted here. A sole admin hands the role to the oldest remaining member. */
 export async function leave(userId: string, groupId: string) {
   const { me, members } = await loadGroup(groupId, userId, "member");
-  const others = members.filter(m => m.status === "accepted" && m.member_id !== me!.member_id);
-  if (!others.length) { await q(`delete from cmp_group where id=$1`, [groupId]); await event(userId, "group.delete", groupId); return { ok: true, deleted: true }; }
+  const plan = leavePlan(me!.member_id, members);
   await q(`update cmp_member set status='left', role='member', responded_at=now() where id=$1`, [me!.member_id]);
   await event(userId, "leave", groupId, me!.member_id);
-  let promoted: string | null = null;
-  if (!others.some(m => m.role === "admin")) {
-    const oldest = others.slice().sort((a, b) => String(a.responded_at || a.invited_at).localeCompare(String(b.responded_at || b.invited_at)))[0];
-    await q(`update cmp_member set role='admin' where id=$1`, [oldest.member_id]); promoted = oldest.member_id;
-    await event(userId, "role.auto_admin", groupId, oldest.member_id);
+  if (plan.promoted_member_id) {
+    await q(`update cmp_member set role='admin' where id=$1`, [plan.promoted_member_id]);
+    await event(userId, "role.auto_admin", groupId, plan.promoted_member_id);
   }
-  return { ok: true, remaining: others.length, promoted_member_id: promoted };
+  return { ok: true, deleted: false, dormant: plan.dormant, remaining: plan.remaining, promoted_member_id: plan.promoted_member_id };
 }
-/** Delete the group for everyone (admins). */
+/** A group is not deleted. Each player leaves. Admin check stays so a guest still gets 403, then 409. */
 export async function deleteGroup(userId: string, groupId: string) {
   await loadGroup(groupId, userId, "admin");
-  await q(`delete from cmp_group where id=$1`, [groupId]); await event(userId, "group.delete", groupId); return { ok: true, deleted: true };
+  throw new HttpError(409, "Un grupo no se borra. Cada jugador sale por su cuenta. El grupo y las tarjetas de los demás se quedan.");
 }
 /** Admins: make an accepted member admin or remove admin status. A group always keeps at least one admin. */
 export async function setRole(userId: string, groupId: string, memberId: string, role: unknown) {
@@ -255,7 +261,7 @@ export async function groupHoles(groupId: string, viewerId: string, course: stri
       const sc = rs.map(r => r.holes.find(h => h[0] === n)).filter((h): h is [number, number, number] => !!h && !!h[2]);
       const par = hd?.par ?? sc[0]?.[1] ?? null;
       const tp = sc.map(h => h[2] - h[1]);
-      return { member_id: d.m.member_id, n: sc.length, avg: r1(mean(sc.map(h => h[2]))), avg_to_par: r1(mean(tp)), birdies: tp.filter(x => x <= -1).length, pars: tp.filter(x => x === 0).length,
+      return { member_id: d.m.member_id, n: sc.length, avg: r1(mean(sc.map(h => h[2]))), avg_to_par: r1(mean(tp)), birdies: tp.filter(x => x === -1).length, eagles: tp.filter(x => x <= -2).length, pars: tp.filter(x => x === 0).length,
         bogeys: tp.filter(x => x === 1).length, doubles: tp.filter(x => x >= 2).length, best: sc.length ? Math.min(...sc.map(h => h[2])) : null, par };
     });
     const live = ms.filter(x => x.n);

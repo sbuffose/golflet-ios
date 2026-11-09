@@ -3,6 +3,8 @@ import { greenSurfaceHoles } from "./green-surface";
 import { q } from "./db";
 import { holeWind, courseCompleteness, markersToEntrance, type Completeness } from "./course-map-core";
 import { getGreenGuide } from "./green-guide";
+import { azulBundledMap, isJockeyAzul } from "./azul-osm";
+import { mergeTrace, readAcceptedTraces } from "./course-trace";
 
 export const IMAGERY = {
   provider: "ign_ortho_amba_2013",
@@ -26,15 +28,21 @@ export async function listCourseMaps() {
 
 export async function getCourseMap(clubCode: string, course: string, o: { hole?: number | null; windFrom?: number | null; windKmh?: number | null } = {}) {
   const [m] = await q(`select id, club_code, course, extracted_at, imported_at, sources, boundary, summary from course_map where club_code=$1 and lower(course)=lower($2)`, [clubCode, course]);
-  if (!m) return null;
+  if (!m) {
+    if (!isJockeyAzul(clubCode, course)) return null;
+    const bundled = azulBundledMap(o.hole);
+    const traces = await readAcceptedTraces(clubCode, course);
+    return { ...bundled, imagery: imageryConfig(), holes: bundled.holes.map(h => mergeTrace(h, traces.find((t: any) => Number(t.hole) === h.hole) || null)) };
+  }
   const holes = await q(`select hole, data, crosscheck, coverage from course_map_hole where course_map_id=$1 ${o.hole ? "and hole=$2" : ""} order by hole`, o.hole ? [m.id, o.hole] : [m.id]);
+  const traces = await readAcceptedTraces(m.club_code, m.course);
   const wind = o.windFrom != null && o.windKmh != null, gg = getGreenGuide(m.club_code, m.course);
   const { id, ...meta } = m;
   return {
     ...meta, imagery: imageryConfig(), completeness: await courseCompletenessFor(m.club_code, m.course),
     green_surfaces: await greenSurfaceHoles(m.club_code, m.course),   // t181u: holes whose green has a REAL slope survey (usually none)
     attribution: [m.sources?.osm?.attribution, m.sources?.trace?.attribution, m.sources?.dem?.attribution].filter(Boolean),
-    holes: holes.map(h => withGuide({ ...h.data, crosscheck: h.crosscheck, coverage: h.coverage, ...(wind ? { wind: holeWind(h.data, o.windFrom!, o.windKmh!) } : {}) }, h.hole, gg)),
+    holes: holes.map(h => withGuide(mergeTrace({ ...h.data, crosscheck: h.crosscheck, coverage: h.coverage, ...(wind ? { wind: holeWind(h.data, o.windFrom!, o.windKmh!) } : {}) }, traces.find((t: any) => Number(t.hole) === h.hole) || null), h.hole, gg)),
     marker_ref: gg?.marker_ref?.to === "entrada" ? { to: "entrada", label: "a la entrada del green", source: gg.marker_ref.source } : { to: "centro", label: "al centro del green", source: "mapa" },
   };
 }

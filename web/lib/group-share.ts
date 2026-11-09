@@ -50,7 +50,7 @@ export async function effectiveShare(groupId: string, userIds: string[]): Promis
 }
 
 /* ---- per-member view of a group (only the member edits it) ---- */
-export const VIEW_METRICS = ["rounds", "avg_gross", "best_gross", "avg_net", "best_net", "handicap", "eagles", "birdies", "pars", "bogeys", "doubles", "par3", "par4", "par5", "putts", "gir", "fir"] as const;
+export const VIEW_METRICS = ["rounds", "avg_gross", "best_gross", "avg_net", "best_net", "handicap", "eagles", "birdies", "max_birdies", "pars", "bogeys", "doubles", "par3", "par4", "par5", "putts", "gir", "fir"] as const;
 export const VIEW_SECTIONS = ["table", "trend", "holes", "vs", "clubs"] as const;
 export const VIEW_DEFAULT = { metrics: [...VIEW_METRICS], sections: [...VIEW_SECTIONS], range: "all", course: null as string | null };
 export function cleanView(v: any) {
