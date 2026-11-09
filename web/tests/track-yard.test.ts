@@ -1,7 +1,7 @@
 /** TEST-ONLY. Card yards and the bag keep their real API shape. A driver is not invented. */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bagClubs, frameHole, isDriverClub, teeClub, VISUAL_ZOOM_MAX, worldTile, yardLabel, yardNumber } from "../lib/play-rules";
+import { bagClubs, frameHole, isDriverClub, isPutterClub, puttMeters, screenOf, teeClub, VISUAL_ZOOM_MAX, worldTile, yardLabel, yardNumber } from "../lib/play-rules";
 
 const VIEW = { width: 390, height: 844 };
 
@@ -33,6 +33,13 @@ test("the bag uses the club the player stored, and Driver is only the par 4 or 5
   assert.equal(teeClub(["Madera 3"], 4, "", true), "");
   assert.equal(isDriverClub("Dr", "Driver"), true);
   assert.equal(isDriverClub("7i", "7i"), false);
+  assert.equal(isPutterClub("Pt", "Putter"), true);
+  assert.equal(isPutterClub("PW", "PW"), false);
+  assert.equal(puttMeters("2,4"), 2.4);
+  assert.equal(puttMeters("2.4"), 2.4);
+  assert.equal(puttMeters("0,05"), null);
+  assert.equal(puttMeters("80"), null);
+  assert.equal(puttMeters("abc"), null);
 });
 
 test("a hole with only a green is framed on that green and is not called the tee", () => {
@@ -48,7 +55,15 @@ test("a hole with only a green is framed on that green and is not called the tee
   assert.ok((flag?.z || 0) <= VISUAL_ZOOM_MAX);
   assert.equal(worldTile(green.lat, green.lng, flag?.z || 19)?.z, 17);
   const tee = { lat: -34.6, lng: -58.4 };
-  const play = frameHole(tee, { lat: -34.601, lng: -58.401 }, "play", VIEW, tee);
+  const target = { lat: -34.601, lng: -58.401 };
+  const play = frameHole(tee, target, "play", VIEW, tee);
   assert.equal(play?.mode, "play");
-  assert.equal(play?.aimLat, tee.lat);
+  assert.ok(play);
+  const flagScreen = screenOf(target.lat, target.lng, play, VIEW);
+  const teeScreen = screenOf(tee.lat, tee.lng, play, VIEW);
+  assert.ok(flagScreen && teeScreen);
+  assert.ok(flagScreen[1] < VIEW.height * 0.42);
+  assert.ok(teeScreen[1] > VIEW.height * 0.42);
+  assert.ok(play.aimLat < tee.lat && play.aimLat > target.lat);
+  assert.equal(worldTile(target.lat, target.lng, play.z)?.z, 17);
 });

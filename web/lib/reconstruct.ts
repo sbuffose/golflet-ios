@@ -151,17 +151,26 @@ function present(id: string, shot: ReturnType<typeof shotFields>) {
 }
 
 function presentRow(row: any) {
-  const placed = placeShot({
-    lat: row.lat, lng: row.lng, end_lat: row.end_lat, end_lng: row.end_lng,
-    distance_m: row.distance_kind === "estimated" && row.lat == null ? row.distance_m : null,
-    penalty_strokes: row.penalty_strokes,
-  });
+  const manual = row.distance_kind === "manual";
+  let placed: PlacedShot;
+  try {
+    placed = placeShot({
+      lat: row.lat, lng: row.lng, end_lat: row.end_lat, end_lng: row.end_lng,
+      distance_m: manual ? row.distance_m : (row.distance_kind === "estimated" && row.lat == null ? row.distance_m : null),
+      distance_kind: manual ? "manual" : undefined,
+      penalty_strokes: row.penalty_strokes,
+    });
+  } catch {
+    placed = placeShot({ lat: row.lat, lng: row.lng, end_lat: row.end_lat, end_lng: row.end_lng, penalty_strokes: row.penalty_strokes });
+  }
+  const kind = manual && placed.distance_kind === "manual" ? "manual" : (row.distance_kind || placed.distance_kind);
+  const meters = row.distance_m == null ? placed.distance_m : Number(row.distance_m);
   return {
     id: String(row.id), hole: Number(row.hole), shot_number: Number(row.shot_number),
     club: row.club, lie: row.lie, result: row.result,
     ...placed,
-    distance_m: row.distance_m == null ? placed.distance_m : Number(row.distance_m),
-    distance_kind: row.distance_kind || placed.distance_kind,
-    distance_label: row.distance_kind === "estimated" ? "Distancia estimada" : placed.distance_label,
+    distance_m: meters,
+    distance_kind: kind,
+    distance_label: kind === "manual" ? "A mano" : kind === "estimated" ? "Distancia estimada" : placed.distance_label,
   };
 }
