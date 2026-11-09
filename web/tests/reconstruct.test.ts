@@ -26,6 +26,14 @@ test("a reconstructed shot never becomes a GPS fix, and an unknown place needs n
   assert.ok((marked.distance_m || 0) > 50);
   assert.equal(marked.position_label, "Marcado a mano");
   assert.equal(marked.distance_label, "Distancia estimada");
+  const putt = placeShot({ lat: -38.0339, lng: -57.5382, end_lat: -38.03385, end_lng: -57.53819, distance_m: "2,4", distance_kind: "manual" });
+  assert.equal(putt.distance_kind, "manual");
+  assert.equal(putt.distance_m, 2.4);
+  assert.equal(putt.distance_label, "A mano");
+  assert.equal(putt.lat, -38.0339);
+  assert.equal(putt.end_lat, -38.03385);
+  assert.notEqual(putt.source, "gps");
+  assert.throws(() => placeShot({ lat: -38.03, lng: -57.53, end_lat: -38.031, end_lng: -57.53, distance_m: "2 metros", distance_kind: "manual" }));
   assert.equal(marked.penalty_strokes, 1);
   assert.notEqual(marked.source, "gps");
   const zero = placeShot({ lat: 0, lng: 0 });
