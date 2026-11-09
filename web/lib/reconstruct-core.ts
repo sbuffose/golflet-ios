@@ -4,7 +4,7 @@
 import { haversine, validLatLng } from "./geo";
 
 export type ManualSource = "manual" | "estimated" | "unknown";
-export type DistanceKind = "estimated" | "unknown";
+export type DistanceKind = "estimated" | "unknown" | "manual";
 
 export type PlacedShot = {
   lat: number | null;
@@ -28,12 +28,17 @@ export class ReconstructInputError extends Error {
 }
 
 export function placeShot(input: {
-  lat?: unknown; lng?: unknown; end_lat?: unknown; end_lng?: unknown; distance_m?: unknown; penalty_strokes?: unknown;
+  lat?: unknown; lng?: unknown; end_lat?: unknown; end_lng?: unknown; distance_m?: unknown; distance_kind?: unknown; penalty_strokes?: unknown;
 }): PlacedShot {
   const start = validLatLng(input.lat, input.lng);
   const end = validLatLng(input.end_lat, input.end_lng);
   const penalty = penaltyOf(input.penalty_strokes);
   if (start && end) {
+    if (input.distance_kind === "manual") {
+      const typed = typedPutt(input.distance_m);
+      if (typed == null) throw new ReconstructInputError("El putt a mano tiene que estar entre 0,1 y 50 metros");
+      return pack(start, "manual", end, typed, "manual", penalty);
+    }
     const distance = Math.round(haversine(start, end) * 10) / 10;
     return pack(start, "manual", end, distance, "estimated", penalty);
   }
@@ -53,6 +58,7 @@ export function positionLabel(source: string | null, hasPoint: boolean): string 
 
 export function distanceLabel(kind: string | null, meters: number | null): string {
   if (kind === "measured" && meters != null) return "Medida";
+  if (kind === "manual" && meters != null) return "A mano";
   if (kind === "estimated" && meters != null) return "Distancia estimada";
   return "Sin distancia";
 }
@@ -68,6 +74,16 @@ function typedDistance(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0 || n > 600) throw new ReconstructInputError("La distancia estimada tiene que estar entre 1 y 600 metros");
+  return Math.round(n * 10) / 10;
+}
+
+function typedPutt(value: unknown): number | null {
+  if (typeof value === "number") return value >= 0.1 && value <= 50 ? Math.round(value * 10) / 10 : null;
+  if (typeof value !== "string") return null;
+  const text = value.trim().replace(",", ".");
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return null;
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < 0.1 || n > 50) return null;
   return Math.round(n * 10) / 10;
 }
 

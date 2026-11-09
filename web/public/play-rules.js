@@ -9,6 +9,8 @@ exports.HI_UNIDENTIFIED = exports.VISUAL_ZOOM_MAX = exports.ESRI_BLANK_TILE_SHA2
 exports.knownPoint = knownPoint;
 exports.projectLL = projectLL;
 exports.holeSpan = holeSpan;
+exports.unprojectLL = unprojectLL;
+exports.frameAdvance = frameAdvance;
 exports.frameHole = frameHole;
 exports.screenOf = screenOf;
 exports.worldTile = worldTile;
@@ -17,6 +19,8 @@ exports.windRelative = windRelative;
 exports.windPlay = windPlay;
 exports.onCup = onCup;
 exports.puttFeet = puttFeet;
+exports.puttMeters = puttMeters;
+exports.isPutterClub = isPutterClub;
 exports.yardNumber = yardNumber;
 exports.yardLabel = yardLabel;
 exports.bagClubs = bagClubs;
@@ -98,6 +102,36 @@ function pointFrame(p, mode, z = exports.IMAGERY_ZOOM_MAX) {
     const [cx, cy] = projectLL(p.lat, p.lng);
     return { mode, z, cx, cy, bearing: null, aimLat: p.lat, aimLng: p.lng };
 }
+function unprojectLL(x, y) {
+    const lng = x * 360 - 180;
+    const n = Math.PI - 2 * Math.PI * y;
+    const lat = Math.atan(Math.sinh(n)) * 180 / Math.PI;
+    return { lat, lng };
+}
+/** Play camera: ball toward the bottom, flag toward the top, reticle between them.
+ *  The bearing is the geographic ball→flag direction. It is a framing choice checked
+ *  against the screen, not a claim about another app's camera equation.
+ *  Zoom never asks for a tile past the last real imagery; a short putt may scale that tile. */
+function frameAdvance(origin, target, view) {
+    const a = knownPoint(origin.lat, origin.lng);
+    const b = knownPoint(target.lat, target.lng);
+    if (!a || !b)
+        return null;
+    const bearing = bearingDeg(a, b);
+    const [ox, oy] = projectLL(a.lat, a.lng);
+    const [tx, ty] = projectLL(b.lat, b.lng);
+    const dist = Math.hypot(tx - ox, ty - oy);
+    if (bearing == null || !(dist > 0))
+        return pointFrame(a, "play");
+    const height = Math.max(1, view?.height || 844);
+    const spanPx = Math.max(120, height * 0.52);
+    const z = clampNum(Math.log2(spanPx / (dist * 256)), 15.5, exports.VISUAL_ZOOM_MAX);
+    const frac = 0.32 / 0.52;
+    const cx = ox + (tx - ox) * frac;
+    const cy = oy + (ty - oy) * frac;
+    const aim = unprojectLL(cx, cy);
+    return { mode: "play", z, cx, cy, bearing, aimLat: aim.lat, aimLng: aim.lng };
+}
 /** Overview puts the reticle on the flag, tee down-screen. Tee and flag cameras move to that end. */
 function frameHole(tee, flag, mode, view, ball) {
     const a = tee ? knownPoint(tee.lat, tee.lng) : null;
@@ -128,13 +162,8 @@ function frameHole(tee, flag, mode, view, ball) {
         return { mode, z: flagZ, cx: fx, cy: fy, bearing: span.bearing, aimLat: b.lat, aimLng: b.lng };
     if (mode === "tee")
         return { mode, z: teeZ, cx: tx, cy: ty, bearing: span.bearing, aimLat: a.lat, aimLng: a.lng };
-    if (mode === "play") {
-        const aim = ball ? knownPoint(ball.lat, ball.lng) : a;
-        if (!aim)
-            return null;
-        const [ax, ay] = projectLL(aim.lat, aim.lng);
-        return { mode: "play", z: overviewZ, cx: ax, cy: ay, bearing: span.bearing, aimLat: aim.lat, aimLng: aim.lng };
-    }
+    if (mode === "play")
+        return frameAdvance(ball ? knownPoint(ball.lat, ball.lng) || a : a, b, view);
     return { mode: "overview", z: overviewZ, cx: fx, cy: fy, bearing: span.bearing, aimLat: b.lat, aimLng: b.lng };
 }
 function screenOf(lat, lng, cam, view) {
@@ -197,6 +226,26 @@ function puttFeet(meters) {
     if (!Number.isFinite(meters) || meters <= exports.CUP_M || meters > exports.PUTT_M)
         return null;
     return Math.round(meters * 3.28084);
+}
+/** A putt the player types. Comma or dot. The map estimate is not rewritten to match it. */
+function puttMeters(value) {
+    let n;
+    if (typeof value === "number")
+        n = value;
+    else if (typeof value === "string") {
+        const text = value.trim().replace(",", ".");
+        if (!/^\d+(?:\.\d+)?$/.test(text))
+            return null;
+        n = Number(text);
+    }
+    else
+        return null;
+    if (!Number.isFinite(n) || n < 0.1 || n > 50)
+        return null;
+    return Math.round(n * 10) / 10;
+}
+function isPutterClub(id, label = "") {
+    return /^(pt|putter)$/i.test(id.trim()) || /^putter\b/i.test(String(label || "").trim());
 }
 /** A scorecard stores yards as a number or as a tee map ({ BLANCO: 445 }). Never stringify the object. */
 function yardNumber(value) {
@@ -278,11 +327,11 @@ function trackSet(state, at) {
     }
     return next;
 }
-function trackEnter(state, at, club, cup) {
+function trackEnter(state, at, club, cup, snapToFlag = false) {
     const next = copyState(state);
     if (state.phase === "tracking") {
         const holed = !!cup;
-        const spot = holed && state.flag ? { ...state.flag } : { ...at };
+        const spot = holed && snapToFlag && state.flag ? { ...state.flag } : { ...at };
         next.marks.push({ id: next.nextID, lat: spot.lat, lng: spot.lng, club, countsStroke: true, holed, penalty: false, drop: false });
         next.nextID += 1;
         next.ball = spot;

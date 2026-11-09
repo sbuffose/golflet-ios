@@ -28,6 +28,9 @@ const greenRing = [
 function near(a: number, b: number) {
   return Math.abs(a - b) < 1e-5;
 }
+function apart(aLat: number, aLng: number, bLat: number, bLng: number) {
+  return Math.hypot(aLat - bLat, aLng - bLng) > 1e-5;
+}
 
 test("penalty, drop and the next shot keep separate origins", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   const shots: Record<string, unknown>[] = [];
@@ -168,7 +171,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     assert.equal(penalty.result, "penalty");
     assert.equal(penalty.club, null);
     assert.ok(near(penalty.end_lat, lost.lat) && near(penalty.end_lng, lost.lng));
-    assert.ok(!near(penalty.lat, penalty.end_lat));
+    assert.ok(apart(penalty.lat, penalty.lng, penalty.end_lat, penalty.end_lng));
     assert.equal(await page.$("#play-hit"), null);
     assert.notEqual(await page.$("#play-reload"), null);
     assert.notEqual(await page.$(".tk-lost"), null);
@@ -180,7 +183,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     assert.equal(await page.$eval("#play-reticle b", el => el.textContent), "3");
     await pan(page, 90, -20);
     const dropAt = await cursor(page);
-    assert.ok(!near(dropAt.lat, penalty.end_lat));
+    assert.ok(apart(dropAt.lat, dropAt.lng, penalty.end_lat, penalty.end_lng));
     const postsBeforeSet = posts.length;
     await ready(page);
     await page.click("#play-set");
@@ -192,11 +195,11 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     await ready(page);
     await page.click("#play-hit");
     await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 2);
-    const played = posts[2] as { penalty_strokes: number; lat: number; lng: number; end_lat: number; club: string };
+    const played = posts[2] as { penalty_strokes: number; lat: number; lng: number; end_lat: number; end_lng: number; club: string };
     assert.equal(played.penalty_strokes, 0);
     assert.ok(near(played.lat, dropAt.lat) && near(played.lng, dropAt.lng));
-    assert.ok(!near(played.lat, penalty.end_lat));
-    assert.ok(!near(played.end_lat, played.lat));
+    assert.ok(apart(played.lat, played.lng, penalty.end_lat, penalty.end_lng));
+    assert.ok(apart(played.end_lat, played.end_lng, played.lat, played.lng));
     assert.equal(played.club, "7i");
     assert.deepEqual(await page.$$eval(".tk-shot-n", nodes => nodes.map(node => node.textContent)), ["1", "3"]);
     assert.notEqual(await page.$(".tk-drop-line"), null);
@@ -313,6 +316,9 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     await page.mouse.up();
     assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-ball-lat")), opened.ball);
     assert.equal(posts.length, beforeShape);
+    await page.click("#play-zoom-out");
+    await page.click("#play-zoom-out");
+    await page.click("#play-zoom-out");
     const zBeforePinch = await page.$eval("#tkmap", el => Number(el.getAttribute("data-z")));
     const pinched = await page.evaluate(`(() => {
       const map = document.querySelector("#tkmap");
