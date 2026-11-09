@@ -1,7 +1,7 @@
 /** TEST-ONLY. Manual shot map: penalty is a stroke, the next shot starts at the drop. */
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import test from "node:test";
@@ -12,6 +12,11 @@ const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javasc
 const holes = [
   { hole: 1, par: 4, yards: 380, tee: { lat: -34.6, lng: -58.4 }, green: { center: { lat: -34.601, lng: -58.401 } } },
   { hole: 2, par: 3, yards: 150, tee: { lat: -34.7, lng: -58.5 }, green: { center: { lat: -34.7012, lng: -58.5004 } } },
+];
+const shaped = [
+  { hole: 1, par: 4, yards: { BLANCO: 380, AZUL: "410" }, tee: { lat: -34.6, lng: -58.4 }, green: { center: { lat: -34.601, lng: -58.401 } } },
+  { hole: 2, par: 3, yards: { BLANCO: 156 }, tee: { lat: -34.7, lng: -58.5 }, green: { center: { lat: -34.7012, lng: -58.5004 } } },
+  { hole: 3, par: 4, yards: { BLANCO: 390 }, green: { center: { lat: -34.602, lng: -58.402 } } },
 ];
 const greenRing = [
   { lat: -34.5995, lng: -58.3995 },
@@ -36,6 +41,12 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 90_000,
       let raw = "";
       for await (const chunk of req) raw += chunk;
       if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [] });
+      if (url.pathname === "/api/bag") return json([
+        { club: "Driver", carry: 300, total: 300 },
+        { club: "7i", carry: 165, total: 165 },
+        { club: "SW", carry: 105, total: 105 },
+      ]);
+      if (url.pathname === "/api/gps/courses/fx-forma-fixture") return json({ course: { club_code: "fx", course: "Forma Fixture", holes: shaped } });
       if (url.pathname.startsWith("/api/gps/courses/fx-")) return json({ course: { club_code: "fx", course: "Cancha Fixture", holes } });
       if (url.pathname === "/api/course-maps/fx/Cancha%20Fixture" || url.pathname === "/api/course-maps/fx/Cancha Fixture") return json({ holes: [] });
       if (url.pathname === "/api/course-maps/fx/Green%20Fixture" || url.pathname === "/api/course-maps/fx/Green Fixture") {
@@ -48,6 +59,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 90_000,
             { id: "live-map", current_hole: 1, club_code: "fx", vm_course: "Cancha Fixture", course: "Cancha Fixture", round_id: null },
             { id: "live-pen", current_hole: 1, club_code: "fx", vm_course: "Cancha Fixture", course: "Cancha Fixture", round_id: null },
             { id: "live-green", current_hole: 1, club_code: "fx", vm_course: "Green Fixture", course: "Green Fixture", round_id: null },
+            { id: "live-shape", current_hole: 1, club_code: "fx", vm_course: "Forma Fixture", course: "Forma Fixture", round_id: null },
           ],
         });
       }
@@ -113,12 +125,10 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 90_000,
       else req.continue();
     });
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-map?hole=1`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#play-cancel");
-    await page.waitForFunction(() => { const v = document.querySelector("#tkmap")?.getAttribute("data-cmap"); return v === "0" || v === "1"; });
-    await page.click("#play-cancel");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
-    await page.click("#play-cancel");
     await page.waitForSelector("#play-hit");
+    await page.waitForFunction(() => { const v = document.querySelector("#tkmap")?.getAttribute("data-cmap"); return v === "0" || v === "1"; });
+    assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-phase")), "tracking");
+    assert.equal(await page.$eval(".tk-aim-n", el => el.textContent), "1");
     await page.select("#play-club", "7i");
     await ready(page);
     await page.click("#play-hit");
@@ -185,13 +195,15 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 90_000,
     assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-phase")), "relief");
 
     await page.click("#tknext");
-    await page.waitForFunction(() => document.querySelector("#tk-hole b")?.textContent === "Hoyo 2");
+    await page.waitForFunction(() => document.querySelector(".tk-hn b")?.textContent === "Hoyo 2");
     const next = await page.evaluate(() => ({
       frame: document.querySelector("#tkmap")?.getAttribute("data-frame") || "",
       aim: document.querySelector("#tkmap")?.getAttribute("data-aim-lat") || "",
     }));
-    assert.equal(next.frame, "tee");
+    assert.equal(next.frame, "play");
     assert.equal(next.aim.startsWith("-34.7"), true);
+    assert.notEqual(await page.$eval("#play-club", el => (el as HTMLSelectElement).value), "Driver");
+    assert.notEqual(await page.$eval("#play-club", el => (el as HTMLSelectElement).value), "Dr");
 
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-pen`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#play-drop");
@@ -210,16 +222,111 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 90_000,
     assert.notEqual(resumed.ball, resumed.lost);
 
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-green`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#play-cancel");
+    await page.waitForSelector("#play-hit");
     await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-cmap") === "1");
-    await page.click("#play-cancel");
-    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
-    await page.click("#play-cancel");
     await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-lie") === "green");
     await ready(page);
     await page.click("#play-hit");
     await page.waitForSelector(".tk-shot-n");
     assert.equal((posts.at(-1) as { club: string }).club, "Pt");
+
+    const beforeShape = posts.length;
+    await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-shape?hole=1`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("#play-hit");
+    const opened = await page.evaluate(() => {
+      const club = document.querySelector("#play-club") as HTMLSelectElement | null;
+      const text = document.body.innerText || "";
+      return {
+        phase: document.querySelector("#tkmap")?.getAttribute("data-phase") || "",
+        frame: document.querySelector("#tkmap")?.getAttribute("data-frame") || "",
+        aim: document.querySelector("#tkmap")?.getAttribute("data-aim-lat") || "",
+        ball: document.querySelector("#tkmap")?.getAttribute("data-ball-lat") || "",
+        origin: document.querySelector(".tk-origin")?.getAttribute("data-lat") || "",
+        aimN: document.querySelector(".tk-aim-n")?.textContent || "",
+        club: club?.value || "",
+        label: club?.selectedOptions[0]?.textContent || "",
+        blank: !!club?.querySelector("option[value='']"),
+        hole: document.querySelector(".tk-hn")?.textContent || "",
+        text,
+      };
+    });
+    assert.equal(opened.phase, "tracking");
+    assert.equal(opened.frame, "play");
+    assert.ok(opened.aim.startsWith("-34.6") && !opened.aim.startsWith("-34.601"));
+    assert.equal(opened.ball, opened.origin);
+    assert.equal(opened.aimN, "1");
+    assert.equal(opened.club, "Driver");
+    assert.equal(opened.label, "Driver");
+    assert.equal(opened.blank, false);
+    assert.match(opened.hole, /410 yd/);
+    assert.equal(opened.hole.includes("[object Object]"), false);
+    assert.equal(opened.text.includes("[object Object]"), false);
+    assert.equal(opened.text.includes("Después"), false);
+    await ready(page);
+    mkdirSync("/opt/cursor/artifacts", { recursive: true });
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-shot-ready.png" });
+    const z0 = await page.$eval("#tkmap", el => Number(el.getAttribute("data-z")));
+    await page.click("#play-zoom-in");
+    await page.click("#play-zoom-in");
+    const zoomed = await page.evaluate(() => ({
+      z: Number(document.querySelector("#tkmap")?.getAttribute("data-z") || 0),
+      tile: Number(document.querySelector("#tkmap")?.getAttribute("data-tile-z") || 0),
+      imagery: document.querySelector("#tkmap")?.getAttribute("data-imagery") || "",
+      phase: document.querySelector("#tkmap")?.getAttribute("data-phase") || "",
+      ball: document.querySelector("#tkmap")?.getAttribute("data-ball-lat") || "",
+    }));
+    assert.ok(zoomed.z > z0);
+    assert.ok(zoomed.tile <= 17);
+    assert.equal(zoomed.phase, "tracking");
+    assert.equal(zoomed.ball, opened.ball);
+    if (zoomed.z > 17.05) assert.equal(zoomed.imagery, "scaled");
+    assert.equal(posts.length, beforeShape);
+    await page.mouse.move(200, 360);
+    await page.mouse.down();
+    await page.mouse.move(120, 300, { steps: 6 });
+    await page.mouse.up();
+    assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-ball-lat")), opened.ball);
+    assert.equal(posts.length, beforeShape);
+    await page.click("#play-flag");
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-phase") === "confirmFlag");
+    const flag = await page.evaluate(() => ({
+      frame: document.querySelector("#tkmap")?.getAttribute("data-frame") || "",
+      kind: document.querySelector("#tkmap")?.getAttribute("data-flag-kind") || "",
+      tile: Number(document.querySelector("#tkmap")?.getAttribute("data-tile-z") || 0),
+      imagery: document.querySelector("#tkmap")?.getAttribute("data-imagery") || "",
+      z: Number(document.querySelector("#tkmap")?.getAttribute("data-z") || 0),
+      text: document.querySelector("#tkro")?.textContent || "",
+    }));
+    assert.equal(flag.frame, "flag");
+    assert.equal(flag.kind, "green");
+    assert.ok(flag.z > 17);
+    assert.equal(flag.tile, 17);
+    assert.equal(flag.imagery, "scaled");
+    assert.match(flag.text, /Referencia del green/);
+    assert.equal(posts.length, beforeShape);
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-flag-close.png" });
+    await page.click("#play-zoom-out");
+    assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-phase")), "confirmFlag");
+    assert.equal(posts.length, beforeShape);
+    await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-shape?hole=3`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("#tkro");
+    const missingTee = await page.evaluate(() => ({
+      frame: document.querySelector("#tkmap")?.getAttribute("data-frame") || "",
+      phase: document.querySelector("#tkmap")?.getAttribute("data-phase") || "",
+      aim: document.querySelector("#tkmap")?.getAttribute("data-aim-lat") || "",
+      text: document.querySelector("#tkro")?.textContent || "",
+      hole: document.querySelector("#tk-hole")?.textContent || "",
+    }));
+    assert.equal(missingTee.frame, "seek");
+    assert.equal(missingTee.phase, "confirmTee");
+    assert.ok(missingTee.aim.startsWith("-34.602"));
+    assert.match(missingTee.text, /Sin salida verificada/);
+    assert.equal(missingTee.text.includes("Confirmá la salida"), false);
+    assert.match(missingTee.hole, /390 yd/);
+    assert.equal(missingTee.hole.includes("[object Object]"), false);
+    await ready(page);
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-no-tee.png" });
+    assert.equal(posts.length, beforeShape);
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));

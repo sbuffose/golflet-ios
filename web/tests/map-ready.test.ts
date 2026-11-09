@@ -67,7 +67,7 @@ async function openMap(mode: Mode) {
     req.respond({ status: 200, contentType: "image/jpeg", headers: { "access-control-allow-origin": "*" }, body: gate.mode === "placeholder" ? blankTile : realTile });
   });
   await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-map`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#play-set");
+  await page.waitForSelector("#play-hit");
   const posts = () => calls.filter(c => c.startsWith("POST ") && !c.startsWith("POST /api/tee-times/check"));
   const release = async (next: Mode) => {
     gate.mode = next;
@@ -97,19 +97,21 @@ test("a loading map does not take SET, and real tiles then unlock it", { timeout
   try {
     const early = await session.page.evaluate(() => ({
       map: document.querySelector("#tkmap")?.getAttribute("data-map") || "",
-      set: (document.querySelector("#play-set") as HTMLButtonElement | null)?.disabled ?? null,
+      phase: document.querySelector("#tkmap")?.getAttribute("data-phase") || "",
+      hit: (document.querySelector("#play-hit") as HTMLButtonElement | null)?.disabled ?? null,
+      set: document.querySelector("#play-set"),
     }));
     assert.equal(early.map, "loading");
-    assert.equal(early.set, true);
-    const moved = await force(session.page, "#play-set");
+    assert.equal(early.phase, "tracking");
+    assert.equal(early.hit, true);
+    assert.equal(early.set, null);
+    const moved = await force(session.page, "#play-hit");
     assert.equal((moved as { frame: string }).frame, (moved as { after: string }).after);
     assert.deepEqual(session.posts(), []);
     await session.release("real");
     await session.page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-map") === "ready", { timeout: 20000 });
-    const open = await session.page.evaluate(() => (document.querySelector("#play-set") as HTMLButtonElement).disabled);
+    const open = await session.page.evaluate(() => (document.querySelector("#play-hit") as HTMLButtonElement).disabled);
     assert.equal(open, false);
-    await session.page.click("#play-set");
-    await session.page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-frame") === "tee");
     assert.deepEqual(session.posts(), []);
   } finally { await session.close(); }
 });
@@ -120,24 +122,20 @@ test("the HTTP 200 placeholder stays on screen and does not enable SET or ENTER"
     await session.page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-map") === "blocked");
     await session.page.waitForFunction(() => [...document.querySelectorAll(".tk-tile")].some(img => (img as HTMLImageElement).naturalWidth > 50));
     const view = await session.page.evaluate(() => ({
-      set: (document.querySelector("#play-set") as HTMLButtonElement).disabled,
+      hit: (document.querySelector("#play-hit") as HTMLButtonElement).disabled,
+      set: document.querySelector("#play-set"),
       shown: [...document.querySelectorAll(".tk-tile")].some(img => (img as HTMLImageElement).naturalWidth > 50),
       banner: document.querySelector("#tk-maperr")?.textContent || "",
       hidden: (document.querySelector("#tk-maperr") as HTMLElement).hidden,
     }));
-    assert.equal(view.set, true);
+    assert.equal(view.hit, true);
+    assert.equal(view.set, null);
     assert.equal(view.shown, true);
     assert.equal(view.hidden, false);
     assert.match(view.banner, /no tiene imagen/);
-    const moved = await force(session.page, "#play-set");
-    assert.equal((moved as { frame: string }).frame, "overview");
-    assert.equal((moved as { after: string }).after, "overview");
-    await session.page.click("#play-cancel");
-    await session.page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("el hoyo"));
-    await session.page.click("#play-cancel");
-    await session.page.waitForSelector("#play-hit");
-    assert.equal(await session.page.evaluate(() => (document.querySelector("#play-hit") as HTMLButtonElement).disabled), true);
-    await force(session.page, "#play-hit");
+    const moved = await force(session.page, "#play-hit");
+    assert.equal((moved as { frame: string }).frame, "play");
+    assert.equal((moved as { after: string }).after, "play");
     assert.deepEqual(session.posts(), []);
   } finally { await session.close(); }
 });
@@ -149,13 +147,13 @@ test("a failed map stays blocked and retry accepts real tiles", { timeout: 60_00
     const banner = await session.page.$eval("#tk-maperr", el => ({ text: el.textContent || "", hidden: (el as HTMLElement).hidden }));
     assert.equal(banner.hidden, false);
     assert.match(banner.text, /no cargó/);
-    assert.equal(await session.page.evaluate(() => (document.querySelector("#play-set") as HTMLButtonElement).disabled), true);
-    await force(session.page, "#play-set");
+    assert.equal(await session.page.evaluate(() => (document.querySelector("#play-hit") as HTMLButtonElement).disabled), true);
+    await force(session.page, "#play-hit");
     assert.deepEqual(session.posts(), []);
     session.gate.mode = "real";
     await session.page.click("#tk-retry");
     await session.page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-map") === "ready", { timeout: 20000 });
-    assert.equal(await session.page.evaluate(() => (document.querySelector("#play-set") as HTMLButtonElement).disabled), false);
+    assert.equal(await session.page.evaluate(() => (document.querySelector("#play-hit") as HTMLButtonElement).disabled), false);
   } finally { await session.close(); }
 });
 
@@ -171,7 +169,7 @@ test("zooming drops the previous ready state until the new tiles are real", { ti
       const state = await session.page.evaluate(() => ({
         map: document.querySelector("#tkmap")?.getAttribute("data-map") || "",
         z: document.querySelector("#tkmap")?.getAttribute("data-tile-z") || "",
-        set: (document.querySelector("#play-set") as HTMLButtonElement).disabled,
+        set: (document.querySelector("#play-hit") as HTMLButtonElement).disabled,
         frame: document.querySelector("#tkmap")?.getAttribute("data-frame") || "",
       }));
       if (state.z !== startZ) saw = JSON.stringify(state);
@@ -179,9 +177,9 @@ test("zooming drops the previous ready state until the new tiles are real", { ti
     const state = JSON.parse(saw) as { map: string; set: boolean; frame: string };
     assert.equal(state.map, "loading");
     assert.equal(state.set, true);
-    assert.equal(state.frame, "overview");
-    await force(session.page, "#play-set");
-    assert.equal(await session.page.$eval("#tkmap", el => el.getAttribute("data-frame")), "overview");
+    assert.equal(state.frame, "play");
+    await force(session.page, "#play-hit");
+    assert.equal(await session.page.$eval("#tkmap", el => el.getAttribute("data-frame")), "play");
     assert.deepEqual(session.posts(), []);
     await session.release("real");
     await session.page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-map") === "ready", { timeout: 20000 });
