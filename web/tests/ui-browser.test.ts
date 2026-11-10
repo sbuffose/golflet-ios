@@ -95,6 +95,13 @@ test("the public bundle opens the already-played round and the two explicit read
     await page.waitForFunction(() => (document.querySelector("#cardstat")?.textContent || "").includes("No hay una tarjeta nueva"));
     await page.click('a[href="#/tee/tt-fixture"]');
     await page.waitForSelector("#refresh-booking");
+    await page.evaluate(() => {
+      const button = document.querySelector("#refresh-booking");
+      const bar = document.querySelector("#tabbar");
+      if (!button || !bar) return;
+      const gap = bar.getBoundingClientRect().top - 12 - button.getBoundingClientRect().bottom;
+      if (gap < 0) window.scrollBy(0, -gap);
+    });
     const before = calls.players;
     const booking = page.click("#refresh-booking");
     await page.waitForFunction(() => (document.querySelector("#refresh-booking") as HTMLButtonElement | null)?.disabled === true);

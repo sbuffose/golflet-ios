@@ -4,7 +4,9 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import test from "node:test";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { VIEJA_GREEN_AXIS } from "../lib/golfistics-axis";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
@@ -189,16 +191,98 @@ test("an existing hole is kept, the next hole uses its own tee, and a bad hole i
     assert.match(seen.note, /no tiene geometría/);
     assert.equal(await page.$("#tkmap"), null);
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-keep?hole=4`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("#tkmap");
     await page.waitForSelector("#rc-nogeo");
     seen = await read();
-    assert.match(seen.note, /No invento el rumbo/);
-    assert.equal(await page.$("#play-set"), null);
+    assert.match(seen.note, /No marco un rumbo/);
+    assert.equal(seen.bearing, "");
+    assert.equal(Number(seen.aim).toFixed(1), "-36.6");
+    assert.equal(await page.$eval("#play-set", el => (el as HTMLButtonElement).disabled), true);
+    assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-span")), "0");
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-shot`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#play-hit");
     seen = await read();
     assert.equal(seen.hole, "Hoyo 2");
     assert.equal(await page.$("#play-set"), null);
     assert.equal(seen.frame, "play");
+  } finally {
+    await browser.close();
+    await new Promise<void>(r => server.close(() => r()));
+  }
+});
+
+test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { timeout: 90_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+  const open = VIEJA_GREEN_AXIS.slice(0, 2).map(h => ({ hole: h.hole, par: h.hole === 1 ? 4 : 3, yards: h.hole === 1 ? 445 : 195, green: { front: h.front, center: h.center, back: h.back } }));
+  const bad = open.map(h => ({ ...h, tee: { lat: h.green.center.lat - 2, lng: h.green.center.lng } }));
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
+    const json = (body: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (url.pathname.startsWith("/api/")) {
+      for await (const chunk of req) void chunk;
+      if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [] });
+      if (url.pathname === "/api/gps/courses/209-cancha-vieja") return json({ course: { club_code: "209", course: "Cancha Vieja", holes: open } });
+      if (url.pathname === "/api/gps/courses/209-cancha-vieja-mala") return json({ course: { club_code: "209", course: "Cancha Vieja Mala", holes: bad } });
+      if (url.pathname === "/api/reconstructions" && req.method === "GET") return json({ rounds: [], reconstructions: [
+        { id: "live-open", current_hole: 1, club_code: "209", vm_course: "Cancha Vieja", course: "Cancha Vieja", round_id: null },
+        { id: "live-bad", current_hole: 1, club_code: "209", vm_course: "Cancha Vieja Mala", course: "Cancha Vieja Mala", round_id: null },
+      ] });
+      if (url.pathname.endsWith("/shots")) return json({ shots: [] });
+      return json({});
+    }
+    const file = url.pathname === "/" ? "/index.html" : url.pathname;
+    try { const buf = await readFile(new URL(file.slice(1), ROOT)); res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" }); res.end(buf); }
+    catch { res.writeHead(404); res.end("missing"); }
+  });
+  await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const { default: puppeteer } = await import("puppeteer-core");
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  const art = "/opt/cursor/artifacts";
+  mkdirSync(art, { recursive: true });
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    const visit = async (id: string, holeN: number, file: string) => {
+      await page.goto(`http://127.0.0.1:${port}/#/reconstruir/${id}?hole=${holeN}`, { waitUntil: "networkidle0" });
+      await page.waitForSelector("#tkmap");
+      await page.waitForFunction(() => {
+        const map = document.querySelector("#tkmap");
+        return map?.getAttribute("data-drawn") === "1" && map?.getAttribute("data-moving") === "0";
+      }, { timeout: 25000 });
+      const state = await page.evaluate(() => {
+        const map = document.querySelector("#tkmap");
+        return {
+          aim: map?.getAttribute("data-aim-lat") || "",
+          bearing: map?.getAttribute("data-bearing") || "",
+          span: map?.getAttribute("data-span") || "",
+          note: document.querySelector("#rc-nogeo")?.textContent || "",
+          axis: document.querySelector(".tk-axisnote")?.textContent || "",
+          empty: !!document.querySelector(".tk-empty"),
+        };
+      });
+      await page.screenshot({ path: join(art, file) });
+      return state;
+    };
+    const h1 = await visit("live-open", 1, "vieja-h1-green-390.png");
+    assert.equal(h1.empty, false);
+    assert.equal(h1.note, "");
+    assert.equal(h1.bearing, "");
+    assert.ok(Math.abs(Number(h1.aim) - VIEJA_GREEN_AXIS[0].center.lat) < 1e-6);
+    assert.match(h1.axis, /Eje verificado del green/);
+    const h2 = await visit("live-open", 2, "vieja-h2-green-390.png");
+    assert.equal(h2.empty, false);
+    assert.ok(Math.abs(Number(h2.aim) - VIEJA_GREEN_AXIS[1].center.lat) < 1e-6);
+    const bad1 = await visit("live-bad", 1, "vieja-h1-unclosed-390.png");
+    assert.equal(bad1.empty, false);
+    assert.equal(bad1.bearing, "");
+    assert.equal(bad1.span, "0");
+    assert.match(bad1.note, /No marco un rumbo/);
+    assert.ok(Math.abs(Number(bad1.aim) - VIEJA_GREEN_AXIS[0].center.lat) < 1e-6);
+    const bad2 = await visit("live-bad", 2, "vieja-h2-unclosed-390.png");
+    assert.equal(bad2.span, "0");
+    assert.equal(bad2.bearing, "");
+    assert.ok(Math.abs(Number(bad2.aim) - VIEJA_GREEN_AXIS[1].center.lat) < 1e-6);
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));

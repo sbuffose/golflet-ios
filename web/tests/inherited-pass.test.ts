@@ -201,6 +201,14 @@ test("foto, salida del grupo, bolsa y trazado de Cancha Vieja en el teléfono", 
     assert.match(photo.msg, /0045/);
     assert.match(photo.msg, /No se guardó nada/);
     assert.equal(writes.some(w => w.path === "/api/me/photo"), false);
+    const idBox = await page.evaluate(() => {
+      const change = document.querySelector(".me-change") as HTMLElement;
+      const r = change.getBoundingClientRect();
+      return { h: r.height, ghost: !!document.querySelector(".me-photo .btn"), wide: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1 };
+    });
+    assert.ok(idBox.h >= 44, `elegir foto ${idBox.h}`);
+    assert.equal(idBox.ghost, false);
+    assert.equal(idBox.wide, true);
     await page.screenshot({ path: `${ART}/inherit-cuenta-390.png` });
 
     await page.goto(`http://127.0.0.1:${port}/#/grupo/g1/miembros`, { waitUntil: "networkidle0" });
