@@ -82,8 +82,11 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
       let raw = "";
       for await (const chunk of req) raw += chunk;
       if (req.method === "PUT" || req.method === "POST" || req.method === "DELETE") writes.push(`${req.method} ${url.pathname}`);
-      if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [] });
+      if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [], bag: [{ club: "Driver", carry: 250, total: 260 }, { club: "PW", carry: 110, total: 115 }] });
       if (url.pathname === "/api/bag") return json([{ club: "Driver", carry: 250, total: 260 }, { club: "PW", carry: 110, total: 115 }]);
+      if (url.pathname === "/api/club-stats") return json({ clubs: [{ club: "Dr", label: "Driver", tee_shots: { n: 6, avg_yd: 241 } }] });
+      if (url.pathname === "/api/live-rounds/lr1" && req.method === "GET") return json({ live_round: { id: "lr1", current_hole: 1, course_id: "209-cancha-vieja", course: "Cancha Vieja", club_code: "209" }, shots: [] });
+      if (url.pathname === "/api/live-rounds/lr1/holes") return json({ holes: vieja });
       if (url.pathname === "/api/gps/courses/209-cancha-vieja") return json({ course: { club_code: "209", course: "Cancha Vieja", holes: vieja } });
       if (url.pathname === "/api/gps/courses/209-green-ring") return json({ course: { club_code: "209", course: "Green Ring", holes: [{ hole: 1, par: 4, yards: 400, tee: TEE, green: { center: GREEN } }] } });
       if (url.pathname === "/api/course-maps/209/Green%20Ring" || url.pathname === "/api/course-maps/209/Green Ring") return json({ holes: [{ hole: 1, green: { polygon: ring, source: "openstreetmap", confidence: "openstreetmap" } }] });
@@ -148,9 +151,15 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     assert.equal(open.club, "Driver");
     assert.ok(open.options.includes("Putter"));
     assert.equal(open.putting, "0");
+    assert.equal(await page.$eval("#tabbar", el => getComputedStyle(el).display), "none");
+    await page.waitForFunction(() => (document.querySelector("#tk-driver")?.textContent || "").includes("241 yd"));
+    const driverHist = await page.$eval("#tk-driver", el => el.textContent || "");
+    assert.match(driverHist, /primer tiro: 241 yd · 6 tiros/);
+    assert.equal(driverHist.includes("250"), false);
     await page.select("#play-club", "Pt");
     assert.equal(await page.$("#play-putt-m"), null);
     assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-putting")), "0");
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-390-putter-off.png" });
     await page.select("#play-club", "Driver");
     const driven = await aim(page, -38.0362);
     assert.ok(driven < -38.0358 && driven > -38.0366, String(driven));
@@ -258,6 +267,15 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     assert.equal(posts[0].club, "PW");
     assert.equal(posts.length, 1);
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-ring.png" });
+    await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    await page.goto(`http://127.0.0.1:${port}/#/jugar/lr1`, { waitUntil: "networkidle0" });
+    await page.waitForFunction(() => document.documentElement.classList.contains("rc-map") && document.querySelector("#tkmap")?.getAttribute("data-map") === "ready", { timeout: 25000 });
+    assert.equal(await page.$eval("#tabbar", el => getComputedStyle(el).display), "none");
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-390-live.png" });
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.waitForFunction(() => getComputedStyle(document.querySelector("#tabbar") as Element).display === "none");
+    assert.equal(await page.$eval("#view", el => getComputedStyle(el).marginLeft), "0px");
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-live-desktop.png" });
     assert.equal(writes.some(w => w.includes("/api/bag")), false);
     assert.equal(writes.some(w => w.includes("hole-marks")), false);
   } finally {
