@@ -480,12 +480,6 @@ struct GroupDetailView: View {
 
             if let comparison {
                 ForEach(comparison.rows) { row in
-                    ForEach(row.values) { value in
-                        GProbe(
-                            id: "compare-\(row.metric.rawValue)-\(value.memberID)",
-                            label: "\(value.memberName), \(display(value, metric: row.metric))"
-                        )
-                    }
                     comparisonCard(row)
                 }
             }
@@ -642,8 +636,6 @@ struct GroupDetailView: View {
                 }
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("compare-\(row.metric.rawValue)")
     }
 
     private func display(_ value: MemberMetricValue, metric: GroupMetricKind) -> String {
