@@ -479,7 +479,9 @@ struct GroupDetailView: View {
             }
 
             if let comparison {
-                DisclosureGroup("Ver tabla completa") {
+                // The full table stays collapsed. These probes stay in the tree so a hidden
+                // metric ("No compartido") is still reachable without opening the disclosure.
+                HStack(spacing: 0) {
                     ForEach(comparison.rows) { row in
                         ForEach(row.values) { value in
                             GProbe(
@@ -487,6 +489,12 @@ struct GroupDetailView: View {
                                 label: "\(value.memberName), \(display(value, metric: row.metric))"
                             )
                         }
+                    }
+                }
+                .frame(height: 1)
+                .accessibilityElement(children: .contain)
+                DisclosureGroup("Ver tabla completa") {
+                    ForEach(comparison.rows) { row in
                         comparisonCard(row)
                     }
                 }
