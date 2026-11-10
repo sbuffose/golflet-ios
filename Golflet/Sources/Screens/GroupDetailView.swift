@@ -397,6 +397,25 @@ struct GroupDetailView: View {
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
                 .accessibilityIdentifier("group-view-range")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(GroupPeriod.allCases) { period in
+                        Button {
+                            selectPeriod(period)
+                        } label: {
+                            Text(period.title)
+                                .font(GType.label)
+                                .foregroundStyle(config.range == period ? p.onPrimary : p.ink)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(config.range == period ? p.primary : p.surface2)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("group-period-\(period.rawValue)")
+                    }
+                }
+            }
 
             if let comparison {
                 ForEach(comparison.rows) { row in
@@ -508,6 +527,12 @@ struct GroupDetailView: View {
         }
     }
 
+    private func selectPeriod(_ period: GroupPeriod) {
+        guard config.range != period else { return }
+        config.range = period
+        Task { await reloadComparison() }
+    }
+
     private func reloadComparison() async {
         do {
             comparison = try await model.api.groupComparison(groupID: groupID, config: config)
@@ -542,7 +567,7 @@ struct GroupViewSettings: View {
                         .font(GType.section)
                         .foregroundStyle(p.ink)
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(StatsRange.allCases) { range in
+                        ForEach(GroupPeriod.allCases) { range in
                             Button {
                                 draft.range = range
                             } label: {

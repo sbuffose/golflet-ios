@@ -182,7 +182,7 @@ enum GroupsParser {
             GroupChartKind(rawValue: string(value))
         }
         let sections = (blob["sections"] as? [Any] ?? []).compactMap { string($0) }
-        let range = StatsRange(rawValue: string(blob["range"])) ?? .year
+        let range = GroupPeriod.parse(string(blob["range"]))
         let course = optionalString(blob["course"] ?? blob["course_filter"])
         var resolvedCharts = charts
         if resolvedCharts.isEmpty {

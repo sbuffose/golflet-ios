@@ -88,10 +88,10 @@ final class GroupsTests: XCTestCase {
         let api = MockAPIClient(autoSession: true)
         var config = GroupViewConfig.default
         config.metrics = [.gross, .birdies]
-        config.range = .threeMonths
+        config.range = .quarter
         config.courseFilter = "Azul"
         let saved = try await api.saveGroupView(groupID: "g-jockey", config: config)
-        XCTAssertEqual(saved.range, .threeMonths)
+        XCTAssertEqual(saved.range, .quarter)
         XCTAssertEqual(saved.courseFilter, "Azul")
         let view = try await api.groupView(groupID: "g-jockey")
         XCTAssertEqual(view.metrics, [.gross, .birdies])
