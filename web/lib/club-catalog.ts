@@ -83,4 +83,15 @@ export const CATALOG: Record<string, Line> = {
 export const BRANDS = Object.keys(CATALOG);
 export function brandsFor(cat: Category) { return BRANDS.filter(b => CATALOG[b][cat]?.length); }
 export function modelsFor(brand: string, cat: Category) { return CATALOG[brand]?.[cat] || []; }
+
+/** Filter a catalog list. Newest stays first. A typed name that is not in the list becomes «Usar …». */
+export function catalogChoices(options: readonly string[], query: string): { label: string; value: string; custom: boolean }[] {
+  const q = query.trim();
+  const ql = q.toLowerCase();
+  const hits = (ql ? options.filter(x => x.toLowerCase().includes(ql)) : options).slice(0, 12);
+  const exact = !!q && options.some(x => x.toLowerCase() === ql);
+  const out = hits.map(value => ({ label: value, value, custom: false }));
+  if (q && !exact) out.push({ label: `Usar «${q}»`, value: q, custom: true });
+  return out;
+}
 export const findBrand = (s: string) => BRANDS.find(b => b.toLowerCase() === s.trim().toLowerCase()) || null;

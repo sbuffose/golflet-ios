@@ -21,7 +21,7 @@ function knownCoord(value: unknown): number | null {
 }
 export type WindRel = "favor" | "contra" | "cruzado" | "unavailable";
 export type TrackPhase = "confirmTee" | "confirmFlag" | "tracking" | "penaltyWhere" | "relief" | "drop";
-export type TrackMark = { id: number; lat: number; lng: number; club: string | null; countsStroke: boolean; holed: boolean; penalty: boolean; drop: boolean };
+export type TrackMark = { id: number; lat: number; lng: number; club: string | null; countsStroke: boolean; holed: boolean; penalty: boolean; drop: boolean; lost?: boolean; provisional?: boolean };
 export type TrackState = { phase: TrackPhase; tee: LL | null; flag: LL | null; ball: LL | null; marks: TrackMark[]; nextID: number };
 
 export const CUP_M = 1.2;
@@ -67,8 +67,8 @@ export function holeSpan(tee: LL | null | undefined, flag: LL | null | undefined
 export type FrameMode = "overview" | "tee" | "flag" | "play" | "point" | "seek";
 export type HoleFrame = { mode: FrameMode; z: number; cx: number; cy: number; bearing: number | null; aimLat: number; aimLng: number };
 
-/** Visual zoom may scale the last real tile. It must not ask Esri for a grey placeholder. */
-export const VISUAL_ZOOM_MAX = IMAGERY_ZOOM_MAX + 2.15;
+/** Visual zoom may scale the last real tile by up to three levels. The tile request stays on a real zoom. */
+export const VISUAL_ZOOM_MAX = IMAGERY_ZOOM_MAX + 3;
 
 const clampNum = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
@@ -286,7 +286,7 @@ export function shotDistanceLabel(shot: {
   return { text: "Sin ubicación", yards: null, meters: null, kind: "missing" };
 }
 
-export type ShotFact = { penalty?: boolean; holed?: boolean; originGreen?: boolean; endLie?: "green" | "fairway" | "bunker" | "water" | "rough" | "other" | null };
+export type ShotFact = { penalty?: boolean; holed?: boolean; lost?: boolean; putt?: boolean; originGreen?: boolean; endLie?: "green" | "fairway" | "bunker" | "water" | "rough" | "other" | null };
 export type HoleDerived = {
   finished: boolean;
   putts: number | null;
@@ -298,12 +298,14 @@ export type HoleDerived = {
 /** Putts count strokes that started on the green. FIR and GIR stay empty unless the lie is known. Nothing here is strokes gained. */
 export function trackHoleSummary(par: number | null, shots: ShotFact[]): HoleDerived {
   const finished = shots.some(s => s.holed);
-  const putts = finished ? shots.filter(s => s.originGreen && !s.penalty).length : null;
+  const puttShots = shots.filter(s => !s.penalty && !s.lost && (s.putt || s.originGreen));
+  const knowPutts = shots.some(s => s.putt || s.originGreen || s.endLie);
+  const putts = !finished ? null : (puttShots.length || knowPutts ? puttShots.length : null);
   const p = par == null ? null : Number(par);
   let fir: HoleDerived["fir"] = null;
   const firApplies = p === 4 || p === 5;
   if (firApplies) {
-    const drive = shots.find(s => !s.penalty);
+    const drive = shots.find(s => !s.penalty && !s.lost);
     if (drive?.endLie === "fairway") fir = "fairway";
     else if (drive && drive.endLie) fir = "other";
   }
@@ -320,13 +322,25 @@ export function trackHoleSummary(par: number | null, shots: ShotFact[]): HoleDer
     else if (n >= regulation && !unknown) gir = false;
   }
   const lines: string[] = [];
-  lines.push(putts == null ? "Putts: se confirman al embocar." : `Putts: ${putts}. Solo golpes que salieron del green.`);
+  lines.push(putts == null ? "Putts: se confirman al embocar." : `Putts: ${putts}. Solo putts o golpes que salieron del green.`);
   if (p === 3) lines.push("Fairway: un par 3 no lleva.");
   else if (firApplies) lines.push(fir == null ? "Fairway: falta el lugar de la salida." : `Fairway: ${fir === "fairway" ? "fairway" : "otro lado"}.`);
   else lines.push("Fairway: falta el par del hoyo.");
   lines.push(gir == null ? "Green en regulación: falta saber si la pelota llegó al green." : gir ? `Green en regulación: sí, en ${regulation} o menos.` : "Green en regulación: no.");
   if (!finished) lines.push("El hoyo sigue abierto.");
   return { finished, putts, fir: firApplies ? fir : null, gir, lines };
+}
+
+const VS_PAR: Record<number, string> = { [-2]: "Águila", [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Doble bogey", 3: "Triple bogey" };
+
+/** Closed-hole line. Putts stay unconfirmed when no shot is a putter or started on the green. */
+export function holeCloseText(par: number | null, strokes: number, putts: number | null): { line: string; vs: string | null } {
+  const n = Math.max(0, Math.round(strokes));
+  const puttLine = putts == null ? "Putts sin confirmar" : `${putts} ${putts === 1 ? "putt" : "putts"}`;
+  const p = par == null || !Number.isFinite(Number(par)) ? null : Number(par);
+  const diff = p == null ? null : n - p;
+  const vs = diff == null ? null : (VS_PAR[diff] || (diff > 0 ? `${diff} sobre el par` : `${Math.abs(diff)} bajo el par`));
+  return { line: `${n} ${n === 1 ? "golpe" : "golpes"} · ${puttLine}`, vs };
 }
 
 /** Copy only the derived fields the card does not already have. A stored value stays. */
@@ -413,6 +427,20 @@ export function trackEnter(state: TrackState, at: LL, club: string | null, cup: 
   }
   return { state, recorded: false, holed: false };
 }
+/** Stroke and distance. The ball last seen stays as a lost stroke. The next ball is back at its start, and the following stroke is the third. */
+export function trackLost(state: TrackState, at: LL, club: string | null): TrackState {
+  if (state.phase !== "tracking" && state.phase !== "penaltyWhere") return state;
+  const next = copyState(state);
+  const origin = state.ball || state.tee;
+  next.marks.push({ id: next.nextID, lat: at.lat, lng: at.lng, club, countsStroke: true, holed: false, penalty: false, drop: false, lost: true });
+  next.nextID += 1;
+  next.marks.push({ id: next.nextID, lat: at.lat, lng: at.lng, club: null, countsStroke: true, holed: false, penalty: true, drop: false });
+  next.nextID += 1;
+  next.ball = origin ? { ...origin } : next.ball;
+  next.phase = "tracking";
+  return next;
+}
+
 export function trackPenalty(state: TrackState): TrackState {
   if (state.phase !== "tracking") return state;
   const next = copyState(state);

@@ -305,14 +305,15 @@ test("clima y solo para vos se leen en 390 px", { timeout: 60_000, skip: CHROME 
       });
       if (url.pathname === "/api/me/private-metrics") return json({
         empty: false, played: 6, matched: 4,
+        unknown: 2, sources: { reservation: 4 },
         bands: [
-          { key: "manana", label: "Mañana", played: 4, matched: 3, avg_diff: 0.8 },
-          { key: "mediodia", label: "Mediodía", played: 1, matched: 1, avg_diff: null },
-          { key: "tarde", label: "Tarde", played: 1, matched: 0, avg_diff: null },
+          { key: "manana", label: "Mañana", played: 4, matched: 4, avg_diff: 0.8, impact: -0.4 },
+          { key: "mediodia", label: "Mediodía", played: 1, matched: 1, avg_diff: null, impact: null },
+          { key: "tarde", label: "Tarde", played: 1, matched: 0, avg_diff: null, impact: null },
         ],
         partners: [
-          { key: "juan garcia", name: "Juan García", count: 2, avg_diff: null },
-          { key: "id:p9", name: "García", count: 2, avg_diff: 1.1 },
+          { key: "juan garcia", name: "Juan García", count: 4, matched: 4, avg_diff: 1.2, impact: -1.8 },
+          { key: "id:p9", name: "García", count: 2, matched: 2, avg_diff: 1.1, impact: null },
         ],
       });
       if (url.pathname === "/api/profesores") return json({ profesores: [] });
@@ -343,15 +344,19 @@ test("clima y solo para vos se leen en 390 px", { timeout: 60_000, skip: CHROME 
     await page.goto(`http://127.0.0.1:${port}/#/privado/companeros`, { waitUntil: "networkidle0" });
     await page.waitForFunction(() => (document.body.innerText || "").includes("Juan García"));
     const priv = await page.evaluate(() => document.body.innerText);
-    assert.match(priv, /cantidad de salidas juntos, no un resultado/);
+    assert.match(priv, /Cómo te va según con quién jugás/);
     assert.match(priv, /Juan García/);
     assert.match(priv, /García/);
     assert.match(priv, /2 salidas/);
+    assert.match(priv, /−1,8 golpes/);
+    assert.match(priv, /Pocas tarjetas \(2\)/);
     assert.equal(priv.includes("Juan García García"), false);
     await page.screenshot({ path: `${ART}/privado-companeros-390.png` });
     await page.goto(`http://127.0.0.1:${port}/#/privado/horario`, { waitUntil: "networkidle0" });
-    await page.waitForFunction(() => (document.body.innerText || "").includes("cantidad de salidas"));
-    assert.match(await page.evaluate(() => document.body.innerText), /No es un resultado/);
+    await page.waitForFunction(() => (document.body.innerText || "").includes("Cómo te va según el horario"));
+    const horario = await page.evaluate(() => document.body.innerText);
+    assert.match(horario, /2 tarjetas sin horario conocido/);
+    assert.match(horario, /−0,4 golpes/);
     await page.screenshot({ path: `${ART}/privado-horario-390.png` });
   } finally {
     await browser.close();

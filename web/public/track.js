@@ -76,7 +76,7 @@
       more: false, history: false, saved: H.shots || [],
       alive: true, done: false, suggestedTee: null, suggestedPin: null, flagKind: 'none', adjusted: false, clubChosen: false, cmapTried: false,
       playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false, undoing: false,
-      driverTee: null, teeSource: '', flagSource: '',
+      driverTee: null, teeSource: '', flagSource: '', wx: null, wxState: '', lostPair: null, provisionalNext: false,
     };
 
     const holeRec = () => S.holes.find(h => h.hole === S.hole || h.number === S.hole) || S.holes[S.hole - 1] || {};
@@ -317,9 +317,19 @@
       const axis = greenAxis();
       if (axis) line(axis, 'tk-gaxis');
       const played = [];
+      const dashed = [];
       if (tee && R().knownPoint(tee.lat, tee.lng)) played.push(tee);
-      for (const m of known) if (!m.penalty && !m.drop) played.push(m.at);
+      for (const m of known) {
+        if (m.penalty || m.drop) continue;
+        if (m.lost) {
+          const prev = played[played.length - 1];
+          if (prev) dashed.push([prev, m.at]);
+          continue;
+        }
+        played.push(m.at);
+      }
       if (played.length >= 2) line(played, 'tk-sh');
+      for (const seg of dashed) line(seg, 'tk-lost-line');
       const here = fromCenter();
       const cursor = here && R().knownPoint(here.lat, here.lng);
       const phase = S.track.phase;
@@ -351,7 +361,8 @@
         if (m.penalty) {
           o += `<g class="tk-lost" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><line x1="${s[0] - 7}" y1="${s[1] - 7}" x2="${s[0] + 7}" y2="${s[1] + 7}"/><line x1="${s[0] + 7}" y1="${s[1] - 7}" x2="${s[0] - 7}" y2="${s[1] + 7}"/></g>`;
         } else if (m.countsStroke) {
-          o += `<g class="tk-shot-mark" data-n="${m.n}" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><circle class="tk-dot" cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-shot-n" x="${s[0]}" y="${s[1]}">${m.n}</text></g>`;
+          const lost = m.lost ? ' tk-lost-shot' : '';
+          o += `<g class="tk-shot-mark${lost}" data-n="${m.n}" data-lost="${m.lost ? '1' : '0'}" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><circle class="tk-dot" cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-shot-n" x="${s[0]}" y="${s[1]}">${m.n}</text></g>`;
         }
       }
       return o;

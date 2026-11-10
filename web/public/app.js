@@ -327,7 +327,8 @@ function sRonda(id){
   const tc = r.tee && TEE[r.tee.toUpperCase()];
   return `<div class="bar"><span class="overline">${dmy(r.date)}</span><button class="close" data-close>${ICON.x}</button></div>
   <div class="stitle">${cup(r)+esc(short(r.tournament)||'Ronda')}</div><div style="font-size:calc(12.5px*var(--ts,1));color:var(--color-ink3);margin-top:2px">${esc(title(r.tournament))}</div>
-  <div class="chips"><span class="badge">${esc(r.club_name)}</span>${r.course&&r.course!==r.club_name?`<span class="badge">${esc(r.course)}</span>`:''}${r.tee?`<span class="badge">${tc?`<i class="tee" style="background:${tc};margin-right:6px"></i>`:''}Tee ${esc(r.tee)}</span>`:''}${r.course_rating?`<span class="badge">${f1(r.course_rating)}${r.slope?' / '+r.slope:''}</span>`:''}</div>
+  <div class="chips"><span class="badge">${esc(r.club_name)}</span>${r.course&&r.course!==r.club_name?`<span class="badge">${esc(r.course)}</span>`:''}${r.tee?`<span class="badge">${tc?`<i class="tee" style="background:${tc};margin-right:6px"></i>`:''}Tee ${esc(r.tee)}</span>`:''}${r.course_rating!=null||r.slope!=null?`<a class="badge dif-chip" href="#/diferencial/${encodeURIComponent(r.round_id)}">${r.course_rating!=null?`Rating ${f1(r.course_rating)}`:''}${r.course_rating!=null&&r.slope!=null?' · ':''}${r.slope!=null?`Slope ${esc(String(r.slope))}`:''} <span class="dif-i" aria-hidden="true">i</span></a>`:''}</div>
+  <div class="r-partners" id="rpartners" hidden></div>
   <div id="rwx"></div>
   ${r.valid_card?'':'<div class="note-warn">Tarjeta DES: no presentada, levantada o descalificada. No cuenta en promedios.</div>'}
   <div class="grid3 rstats" style="gap:8px;margin-top:16px">
@@ -348,6 +349,37 @@ function sRonda(id){
   <div class="saved" id="saved" style="margin:8px 4px 0">${ICON.pencil}<span>${r.notes_at?'Guardado en tu cuenta · '+ago(r.notes_at):'Se guarda en tu cuenta'}</span></div>
   ${recapBox(r.round_id)}
   ${r.gps_shots?`<div class="section"><h2>Golpes con GPS</h2><span class="badge">${r.gps_shots}</span></div><div id="rshots"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>`:''}`;
+}
+function sDif(id){
+  const r = rounds.find(x => x.round_id === id);
+  if (!r) return '<p>Ronda no encontrada.</p>';
+  const n = v => { if (v == null || v === '') return null; const x = Number(String(v).replace(',', '.')); return Number.isFinite(x) ? x : null; };
+  const rating = n(r.course_rating), slope = n(r.slope), gross = n(r.gross), ags = n(r.adjusted_gross), pcc = n(r.pcc), shown = n(r.differential_computed);
+  const replay = ags != null && rating != null && slope ? Math.round((113 / slope) * (ags - rating) * 10) / 10 : null;
+  const same = replay != null && shown != null && Math.abs(replay - shown) < 0.051;
+  const line = (k, v) => `<div class="dif-row"><span>${k}</span><b class="num">${v}</b></div>`;
+  return `<div class="bar"><span class="overline">${dmy(r.date)}</span></div>
+  <div class="stitle">Cómo se calcula tu diferencial</div>
+  <p class="foot">Con los números de esta tarjeta. Si un dato no está guardado, queda en no disponible. No lo completo.</p>
+  <div class="card dif-card">
+    ${line('Course Rating', rating == null ? 'No disponible' : f1(rating))}
+    ${line('Slope', slope == null ? 'No disponible' : String(slope))}
+    ${line('Gross', gross == null ? 'No disponible' : String(gross))}
+    ${line('Adjusted gross', ags == null ? 'No disponible' : String(ags))}
+    ${line('PCC del día', pcc == null ? 'No disponible' : f1(pcc))}
+    ${line('Dif.*', shown == null ? 'No disponible' : f1(shown))}
+  </div>
+  <h2 class="dif-h">Course Rating</h2>
+  <p>Es el score que se espera de un jugador scratch en esa cancha y ese tee, en condiciones normales. ${rating == null ? 'Esta tarjeta no lo trae.' : `En esta tarjeta es ${f1(rating)}.`}</p>
+  <h2 class="dif-h">Slope</h2>
+  <p>Mide cuánto más difícil es la cancha para un bogey player respecto de un scratch. El estándar del mundo es 113. ${slope == null ? 'Esta tarjeta no trae slope.' : `Acá el slope es ${slope}: ${slope > 113 ? 'más difícil que el estándar' : slope < 113 ? 'más fácil que el estándar' : 'el estándar'}.`}</p>
+  <h2 class="dif-h">La cuenta</h2>
+  <p>El diferencial del World Handicap System es (113 / Slope) × (Adjusted Gross Score − Course Rating − PCC). El PCC es el cálculo del día: si la cancha jugó más fácil o más difícil que lo normal.</p>
+  <p>El adjusted gross no es el gross de la tarjeta. Cada hoyo se capa en doble bogey neto: par + 2 + los golpes que te da tu hándicap en ese hoyo. ${ags == null ? 'El adjusted gross de esta tarjeta no está guardado.' : gross != null && ags !== gross ? `El gross es ${gross} y el adjusted gross guardado es ${ags}.` : ags != null ? `El adjusted gross guardado es ${ags}.` : ''}</p>
+  <p>${pcc == null ? 'El PCC no está en los datos del club. No lo pongo en cero: queda no disponible. El Dif.* no le resta un PCC.' : `El PCC guardado de este día es ${f1(pcc)}.`}</p>
+  <h2 class="dif-h">Esta tarjeta</h2>
+  <p>${replay == null ? 'Falta el rating, el slope o el adjusted gross, así que no armo el ejemplo. ' : `(113 / ${slope}) × (${ags} − ${f1(rating)}) = ${f1(replay)}. Sin PCC, porque no está. `}${shown == null ? 'Esta tarjeta no tiene Dif.* guardado.' : same ? `Da ${f1(shown)}, el mismo Dif.* de la tarjeta.` : `El Dif.* guardado es ${f1(shown)}. No lo cambio para que cierre con la cuenta.`}</p>
+  <p class="foot">El asterisco de Dif.* quiere decir que es el diferencial estimado por Golflet con el rating, el slope y el adjusted gross de la tarjeta. No es el número de la federación si ese día hubo un PCC que el club no mandó.</p>`;
 }
 
 /* ---------- CANCHA ---------- */
@@ -806,7 +838,10 @@ function wxCardHTML(title, pin, now, fc, holes){
   const rows = rules && holes && holes.length ? holes.map(h => rules.windPlay(h.hole, from, h.bearing, kmh)) : [];
   const playable = rows.filter(p => p && p.relative && p.relative !== 'unavailable');
   const missing = rules && !rows.length ? rules.windPlay(0, from, null, kmh).text.replace(/^Hoyo 0 · /, '') : '';
-  const wind = playable.length ? `<div class="tw-holes">${playable.map(p => `<div><span>${esc(p.text)}</span></div>`).join('')}</div>` : (rows.length ? `<p class="tw-miss">No hay rumbo verificado del tee al green. El viento no se clasifica por hoyo.</p>` : (missing ? `<p class="tw-miss">${esc(missing)}</p>` : ''));
+  const byHole = new Map((holes || []).map(h => [h.hole, h]));
+  const lined = playable.length ? Array.from({ length: 18 }, (_, i) => byHole.get(i + 1) || { hole: i + 1, bearing: null }) : [];
+  const tiles = lined.length && window.GolfletPlan && window.GolfletPlan.windTiles ? window.GolfletPlan.windTiles(lined, { from_deg: from, kmh }) : '';
+  const wind = tiles || (rows.length ? `<p class="tw-miss">No hay rumbo verificado del tee al green. El viento no se clasifica por hoyo.</p>` : (missing ? `<p class="tw-miss">${esc(missing)}</p>` : ''));
   const driver = (typeof G !== 'undefined' && Array.isArray(G.bag) ? G.bag : []).find(b => /driver|^dr$/i.test(String(b.club || '')));
   const carry = driver && driver.carry != null && Number.isFinite(Number(driver.carry)) ? Math.round(Number(driver.carry)) : null;
   const bagLine = carry != null ? `<p class="foot">Driver cargado: ${carry} yd. No lo paso a metros y no elijo un palo por el viento o el frío.</p>` : '';
@@ -1688,18 +1723,89 @@ async function loadIronSet(){
     const rows = IRON_SET.map(code => ({ code, club: clubs.find(c => c.code.toLowerCase() === code.toLowerCase()) }));
     const present = rows.filter(r => r.club);
     const brands = (cat.brands || []).filter(b => b.categories && b.categories.iron && b.categories.iron.length).map(b => b.brand);
-    el.innerHTML = `<div class="list">${rows.map(r => `<div class="row"><div class="body"><div class="t">${esc(r.code)}</div><div class="s">${r.club ? esc([r.club.brand, r.club.model].filter(Boolean).join(' · ') || r.club.label) : 'No está en tu bolsa. No lo creamos.'}</div></div></div>`).join('')}</div>
-      ${present.length ? `<form class="card gg-form" id="ironf">
-        <label>Marca<select id="ironb"><option value="">Elegí la marca</option>${brands.map(b => `<option>${esc(b)}</option>`).join('')}<option value="__other">Otra marca</option></select></label>
+    const presentCodes = present.map(r => r.code);
+    const chips = [];
+    let start = presentCodes[0], prev = presentCodes[0];
+    const at = c => IRON_SET.indexOf(c);
+    for (const code of presentCodes.slice(1)) {
+      if (at(code) === at(prev) + 1) { prev = code; continue; }
+      chips.push(start === prev ? start : `${start}–${prev}`);
+      start = prev = code;
+    }
+    if (presentCodes.length) chips.push(start === prev ? start : `${start}–${prev}`);
+    const missing = rows.filter(r => !r.club).map(r => r.code);
+    const missLine = missing.length ? `<p class="iron-miss">${esc(missing.join(', '))} no está en tu bolsa. No lo creamos.</p>` : '';
+    el.innerHTML = present.length ? `<form class="card iron-sheet" id="ironf" autocomplete="off">
+        <p class="iron-kicker">En tu bolsa</p>
+        <div class="iron-chips" aria-label="Hierros en la bolsa">${chips.map(c => `<span class="iron-chip">${esc(c)}</span>`).join('')}</div>
+        ${missLine}
+        <label class="iron-field" for="ironb">Marca</label>
+        <div class="iron-combo">
+          <input id="ironb" role="combobox" aria-expanded="false" aria-controls="ironbl" aria-autocomplete="list" aria-label="Marca" autocomplete="off" placeholder="Buscar marca" maxlength="40">
+          <ul id="ironbl" class="iron-list" role="listbox" hidden></ul>
+        </div>
         <input id="ironbo" hidden maxlength="40" placeholder="Marca" aria-label="Marca escrita a mano">
-        <label>Modelo <small>(opcional)</small><input id="ironm" maxlength="60" placeholder="Modelo"></label>
-        <div class="tt-acts"><button class="btn" type="button" id="ironprev">Ver qué cambia</button><a class="btn ghost" href="#/bolsa">Cancelar</a></div>
+        <label class="iron-field" for="ironm">Modelo <small>(opcional)</small></label>
+        <div class="iron-combo">
+          <input id="ironm" role="combobox" aria-expanded="false" aria-controls="ironml" aria-autocomplete="list" aria-label="Modelo" autocomplete="off" placeholder="Buscar o escribir" maxlength="60">
+          <ul id="ironml" class="iron-list" role="listbox" hidden></ul>
+        </div>
+        <div class="tt-acts iron-acts"><button class="btn" type="button" id="ironprev">Ver qué cambia</button><a class="btn ghost" href="#/bolsa">Cancelar</a></div>
         <div id="ironmsg"></div><div id="ironplan"></div>
-      </form>` : `<p class="foot">Ningún hierro del 4 al PW está en la bolsa. No inventamos el juego.</p><a class="btn ghost" href="#/bolsa">Volver a Mi bolsa</a>`}`;
+      </form>` : `<p class="foot">${missLine ? missing.join(', ') + ' no está en tu bolsa. No lo creamos. ' : ''}Ningún hierro del 4 al PW está en la bolsa. No inventamos el juego.</p><a class="btn ghost" href="#/bolsa">Volver a Mi bolsa</a>`;
     const brandEl = $('#ironb'); if (!brandEl) return;
     const say = (t, err) => { const m = $('#ironmsg'); m.innerHTML = `<div class="msg${err ? ' err' : ''}"></div>`; m.firstChild.textContent = t; };
-    brandEl.onchange = () => { $('#ironbo').hidden = brandEl.value !== '__other'; };
-    const brandNow = () => brandEl.value === '__other' ? $('#ironbo').value.trim() : brandEl.value;
+    const canon = (name) => brands.find(b => b.toLowerCase() === String(name || '').trim().toLowerCase()) || '';
+    const modelsForBrand = () => { const b = canon(brandEl.value); const row = (cat.brands || []).find(x => x.brand === b); return (row && row.categories && row.categories.iron) || []; };
+    const choices = (options, query) => {
+      const q = String(query || '').trim(), ql = q.toLowerCase();
+      const hits = (ql ? options.filter(x => x.toLowerCase().includes(ql)) : options).slice(0, 12);
+      const exact = !!q && options.some(x => x.toLowerCase() === ql);
+      const out = hits.map(value => ({ label: value, value, custom: false }));
+      if (q && !exact) out.push({ label: 'Usar «' + q + '»', value: q, custom: true });
+      return out;
+    };
+    const wireCombo = (input, list, source, onPick) => {
+      let act = -1, items = [];
+      const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); act = -1; };
+      const paint = () => {
+        items = choices(source(), input.value);
+        list.innerHTML = items.length ? items.map((item, i) => `<li role="option" id="${list.id}-${i}" aria-selected="${i === act ? 'true' : 'false'}"${item.custom ? ' class="iron-use"' : ''}>${esc(item.label)}</li>`).join('') : '<li class="iron-empty" role="presentation">Sin modelos en el catálogo. Podés escribirlo.</li>';
+        list.hidden = false; input.setAttribute('aria-expanded', 'true');
+        if (act >= 0 && items[act]) input.setAttribute('aria-activedescendant', `${list.id}-${act}`);
+        list.querySelectorAll('[role=option]').forEach((li, i) => { li.onmousedown = ev => { ev.preventDefault(); pick(i); }; });
+      };
+      const pick = i => { const item = items[i]; if (!item) return; input.value = item.value; close(); onPick(item.value, item.custom); };
+      input.onfocus = paint;
+      input.oninput = () => { act = -1; paint(); onPick(input.value, !canon(input.value) && input === brandEl); };
+      input.onkeydown = ev => {
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); if (list.hidden) paint(); if (!items.length) return; act = ev.key === 'ArrowDown' ? Math.min(items.length - 1, act + 1) : Math.max(0, act - 1); paint(); }
+        else if (ev.key === 'Enter') { if (!list.hidden && act >= 0) { ev.preventDefault(); pick(act); } }
+        else if (ev.key === 'Escape') close();
+      };
+      input.onblur = () => setTimeout(close, 160);
+    };
+    wireCombo(brandEl, $('#ironbl'), () => brands, () => {
+      const known = canon(brandEl.value);
+      $('#ironbo').value = known ? '' : brandEl.value.trim();
+      const model = $('#ironm');
+      const allowed = modelsForBrand();
+      if (model.value && !allowed.some(m => m.toLowerCase() === model.value.trim().toLowerCase())) model.value = '';
+    });
+    wireCombo($('#ironm'), $('#ironml'), modelsForBrand, () => {});
+    const lift = () => {
+      const vv = window.visualViewport, sheet = $('#ironf'); if (!vv || !sheet) return;
+      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      sheet.style.paddingBottom = `${24 + covered}px`;
+      const acts = sheet.querySelector('.iron-acts'); if (!acts || covered < 40) return;
+      const rect = acts.getBoundingClientRect();
+      const limit = vv.offsetTop + vv.height - 12;
+      if (rect.bottom > limit) (document.scrollingElement || document.documentElement).scrollBy(0, rect.bottom - limit);
+    };
+    if (window.visualViewport) { visualViewport.addEventListener('resize', lift); visualViewport.addEventListener('scroll', lift); }
+    brandEl.addEventListener('focus', () => setTimeout(lift, 60));
+    $('#ironm').addEventListener('focus', () => setTimeout(lift, 60));
+    const brandNow = () => { const known = canon(brandEl.value); return known || brandEl.value.trim(); };
     $('#ironprev').onclick = async () => {
       const brand = brandNow(); if (!brand) return say('Escribí la marca.', 1);
       const model = $('#ironm').value.trim();
@@ -3150,13 +3256,27 @@ async function loadClima(dim, bucket){
 /* ---------- t136u/t137u: PRIVATE (owner-only) by tee-time hour band and partners ---------- */
 const LOCK_IC = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
 const PRIV_EMPTY = 'Se arma a medida que juegues: usamos tus salidas reservadas en el club desde que vinculaste tu cuenta.';
+const impactLabel = v => { const n = Math.round(Number(v) * 10) / 10; const body = String(Math.abs(n)).replace('.', ','); return `${n < 0 ? '−' : n > 0 ? '+' : ''}${body} golpes`; };
+const impactHtml = (impact, n) => impact == null ? `<b class="priv-impact few">Pocas tarjetas (${n})</b>` : `<b class="priv-impact ${impact < 0 ? 'good' : impact > 0 ? 'bad' : ''}">${impactLabel(impact)}</b>`;
+let privSort = 'n';
+const iniOf = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+async function paintRoundPartners(id){
+  const host = document.getElementById('rpartners'); if (!host) return;
+  let d; try { d = await api('/api/me/private-metrics'); } catch (e) { host.remove(); return; }
+  if (!document.getElementById('rpartners')) return;
+  const row = (d && d.with_partners || []).find(x => x.round_id === id);
+  const people = (row && row.companions || []).filter(p => p && p.name && p.key);
+  if (!people.length) { host.remove(); return; }
+  host.hidden = false;
+  host.innerHTML = `<span>Jugaste con</span>${people.map(p => `<a href="#/privado/companero/${encodeURIComponent(p.key)}"><i aria-hidden="true">${esc(iniOf(p.name))}</i>${esc(p.name)}</a>`).join('')}`;
+}
 async function loadPrivRes(){
   const el = $('#privres'); if (!el) return;
   let d; try { d = await api('/api/me/private-metrics'); } catch(e){ el.innerHTML = ''; return; }
   if (!$('#privres')) return; const top = d.partners.slice(0, 3);
   el.innerHTML = `<div class="section"><h2 class="priv-h">${LOCK_IC}Solo para vos</h2></div>
-    <div class="list priv-list"><a class="row" href="#/privado/horario"><div class="body"><div class="t">Por horario</div><div class="s">${d.played ? `Salidas, no un resultado. ${d.bands.map(b => `${b.label} <b class="num">${b.played}</b> ${b.played===1?'salida':'salidas'}${b.avg_diff!=null?` · dif. ${n1(b.avg_diff)}`:''}`).join(' · ')}` : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a>
-    <a class="row" href="#/privado/companeros"><div class="body"><div class="t">Con quién jugás</div><div class="s">${top.length ? `Salidas juntos, no un resultado. ${top.map(p => `${esc(p.name)} <b class="num">${p.count}</b>`).join(' · ')}` : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a></div>
+    <div class="list priv-list"><a class="row" href="#/privado/horario"><div class="body"><div class="t">Por horario</div><div class="s">${d.played ? d.bands.map(b => `${b.label} <b class="num">${b.played}</b>${b.impact!=null?` · ${impactLabel(b.impact)}`:''}`).join(' · ') : 'Se arma a medida que juegues'}${d.unknown ? ` · ${d.unknown} sin horario` : ''}</div></div>${ICON.chev}</a>
+    <a class="row" href="#/privado/companeros"><div class="body"><div class="t">Con quién jugás</div><div class="s">${top.length ? top.map(p => `${esc(p.name)} <b class="num">${p.count}</b>${p.impact!=null?` · ${impactLabel(p.impact)}`:''}`).join(' · ') : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a></div>
     <p class="foot">Privado: solo lo ves vos. No aparece en grupos, profesores ni enlaces compartidos. El número de al lado del nombre es la cantidad de salidas.</p>`;
 }
 function sPrivado(){ return `<div class="bar"><span class="overline">Solo para vos</span><button class="close" data-close>${ICON.x}</button></div><div id="privado"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
@@ -3179,21 +3299,30 @@ async function loadPrivado(what, arg){
     }
     const d = await api('/api/me/private-metrics'); if (!$('#privado')) return;
     if (d.empty) { el.innerHTML = `<div class="stitle">${what==='companeros'?'Con quién jugás':'Por horario'}</div><div class="card wx-empty" style="margin-top:14px">${PRIV_EMPTY}</div>${priv}`; return; }
+    const src = d.sources || {};
+    const srcBits = [['reservation', 'reserva'], ['card', 'tarjeta'], ['track', 'TRACK']].filter(([k]) => src[k]).map(([k, l]) => `${src[k]} por ${l}`);
+    const partners = (d.partners || []).slice().sort((a, b) => privSort === 'impact'
+      ? (a.impact == null) - (b.impact == null) || (a.impact ?? 0) - (b.impact ?? 0) || b.count - a.count
+      : b.count - a.count || a.name.localeCompare(b.name, 'es'));
+    const how = what === 'companeros'
+      ? `<details class="priv-how"><summary>Cómo se calcula</summary><p>El impacto es tu diferencial con esa persona menos tu diferencial en todas las tarjetas. Un número negativo es mejor. Hacen falta 3 tarjetas. Los nombres salen solo de las reservas del club que coinciden con una tarjeta: la tarjeta no trae compañeros. Dos personas no se juntan por un apellido. No invento un nombre.</p></details>`
+      : `<details class="priv-how"><summary>Cómo se calcula</summary><p>Cada tarjeta usa un horario real, en este orden: la reserva del club, un horario guardado en la tarjeta, el inicio de TRACK. Si no hay ninguno, queda afuera. Mañana es antes de las 11, mediodía de 11 a 14 y tarde desde las 14. El impacto es el diferencial de esa franja menos tu promedio. No invento un horario.</p></details>`;
     el.innerHTML = what === 'companeros'
-      ? `<div class="stitle">Con quién jugás</div><p class="foot">El número es la cantidad de salidas juntos, no un resultado. El nombre es el que muestra el club. Dos personas distintas no se juntan por compartir un apellido.</p>
-         <div class="list">${d.partners.map((p, i) => `<a class="row" href="#/privado/companero/${encodeURIComponent(p.key)}"><div class="date"><b class="num">${i+1}</b></div><div class="body"><div class="t">${esc(p.name)}</div><div class="s">${p.count} ${p.count===1?'salida':'salidas'}${p.avg_diff!=null?` · diferencial ${n1(p.avg_diff)} (más bajo es mejor)`:` · diferencial con 3 o más tarjetas`}</div></div><span class="badge num">${p.count} salidas</span>${ICON.chev}</a>`).join('') || `<div class="card wx-empty">Todavía no leímos compañeros en tus salidas.</div>`}</div>${priv}`
-      : `<div class="stitle">Por horario</div><p class="foot">El número es la cantidad de salidas reservadas que ya pasaron: ${d.played}. ${d.matched} tienen tarjeta. No es un resultado.</p>
-         <div class="list">${d.bands.map(b => `<a class="row" href="#/privado/franja/${b.key}"><div class="body"><div class="t">${b.label}</div><div class="s">${b.played} ${b.played===1?'salida':'salidas'}${b.avg_diff!=null?` · diferencial ${n1(b.avg_diff)}`:b.played?` · el diferencial pide 3 tarjetas (hay ${b.matched})`:''}</div></div><span class="badge num">${b.played} salidas</span>${ICON.chev}</a>`).join('')}</div>
-         <p class="foot">Mañana: antes de las 11 · Mediodía: 11 a 14 · Tarde: desde las 14. El diferencial más bajo es mejor.</p>${priv}`;
+      ? `<div class="stitle">Cómo te va según con quién jugás</div><p class="foot">Solo lo ves vos.</p>
+         <div class="seg priv-sort" role="group" aria-label="Orden"><button type="button" data-psort="n" class="${privSort==='n'?'on':''}">Por salidas</button><button type="button" data-psort="impact" class="${privSort==='impact'?'on':''}">Por impacto</button></div>
+         <div class="list priv-list">${partners.map(p => `<a class="row" href="#/privado/companero/${encodeURIComponent(p.key)}"><div class="body"><div class="t priv-name">${esc(p.name)}</div><div class="s">${p.count} ${p.count===1?'salida':'salidas'}</div></div>${impactHtml(p.impact, p.matched ?? p.count)}</a>`).join('') || `<div class="card wx-empty">Todavía no leímos compañeros en tus salidas.</div>`}</div>${how}${priv}`
+      : `<div class="stitle">Cómo te va según el horario</div><p class="foot">Solo lo ves vos.${d.unknown ? ` ${d.unknown} ${d.unknown===1?'tarjeta':'tarjetas'} sin horario conocido.` : ''}${srcBits.length ? ` Horario: ${srcBits.join(', ')}.` : ''}</p>
+         <div class="list priv-list">${d.bands.map(b => `<a class="row" href="#/privado/franja/${b.key}"><div class="body"><div class="t">${b.label}</div><div class="s">${b.played} ${b.played===1?'tarjeta':'tarjetas'}</div></div>${b.played ? impactHtml(b.impact, b.matched ?? b.played) : ''}</a>`).join('')}</div>${how}${priv}`;
+    el.querySelectorAll('[data-psort]').forEach(b => b.onclick = () => { privSort = b.dataset.psort; loadPrivado(what, arg); });
   } catch(e){ el.innerHTML = errBox(e); }
 }
-const DETAIL = ['reconstruir','jugar','metricas','notificaciones','notificacion','pelota','sorteos','sorteo','ronda','hoyo','vincular','club','cuenta','metrica','gps','palo','estrategia','amigos','grupo','unirse','compartir','nivel','trabajar','putting','tee','tees','equipo','impacto','club-faltante','hi-cambio','cambios','outliers','profesor','profesores','profe','clima','privado','plan','partido','partidos'];
+const DETAIL = ['reconstruir','jugar','metricas','notificaciones','notificacion','pelota','sorteos','sorteo','ronda','diferencial','hoyo','vincular','club','cuenta','metrica','gps','palo','estrategia','amigos','grupo','unirse','compartir','nivel','trabajar','putting','tee','tees','equipo','impacto','club-faltante','hi-cambio','cambios','outliers','profesor','profesores','profe','clima','privado','plan','partido','partidos'];
 const GROUPISH = k => ['amigos','grupo','unirse','compartir'].includes(k);
 const GG = window.GolfletGroups;
 const GM = window.GolfletMatch;   // t260u Armar partido (public/match.js)
 const GP = window.GolfletPlan;   // t176u Estrategia de juego (public/plan.js)
 const kind = h => (h || '').replace(/^#\/?/, '').split(/[/?]/)[0] || 'inicio';
-const PARENT = { reconstruir:'#/rondas', jugar:'#/metricas', metricas:'#/resumen', notificaciones:'#/inicio', notificacion:'#/notificaciones', clima:'#/resumen', privado:'#/resumen', pelota:'#/cuenta', sorteos:'#/cuenta', sorteo:'#/sorteos', profe:'#/cuenta', profesor:'#/cuenta', profesores:'#/cuenta', 'hi-cambio':'#/inicio', cambios:'#/inicio', outliers:'#/resumen', 'club-faltante':'#/cuenta', impacto:'#/inicio', equipo:'#/bolsa', tee:'#/inicio', tees:'#/inicio', trabajar:'#/inicio', putting:'#/resumen', nivel:'#/cancha', ronda:'#/rondas', hoyo:'#/cancha', vincular:'#/cuenta', club:'#/cuenta', cuenta:'#/inicio', metrica:'#/resumen', gps:'#/bolsa', palo:'#/bolsa', estrategia:'#/cancha' };
+const PARENT = { reconstruir:'#/rondas', jugar:'#/metricas', metricas:'#/resumen', notificaciones:'#/inicio', notificacion:'#/notificaciones', clima:'#/resumen', privado:'#/resumen', pelota:'#/cuenta', sorteos:'#/cuenta', sorteo:'#/sorteos', profe:'#/cuenta', profesor:'#/cuenta', profesores:'#/cuenta', 'hi-cambio':'#/inicio', cambios:'#/inicio', outliers:'#/resumen', 'club-faltante':'#/cuenta', impacto:'#/inicio', equipo:'#/bolsa', tee:'#/inicio', tees:'#/inicio', trabajar:'#/inicio', putting:'#/resumen', nivel:'#/cancha', ronda:'#/rondas', diferencial:'#/rondas', hoyo:'#/cancha', vincular:'#/cuenta', club:'#/cuenta', cuenta:'#/inicio', metrica:'#/resumen', gps:'#/bolsa', palo:'#/bolsa', estrategia:'#/cancha' };
 function labelFor(h){
   const p = (h || '#/inicio').replace(/^#\/?/, '').split('/'), k = p[0].split('?')[0] || 'inicio';
   if (GROUPISH(k) && GG) return GG.label(h);
@@ -3225,6 +3354,7 @@ function labelFor(h){
   if (k === 'trabajar') return p[1] ? (IMP?.areas?.find(a => a.key === p[1])?.label || 'Qué trabajar') : 'Qué trabajar';
   if (k === 'putting') return p[1] ? (PM[p[1].split('?')[0]] || 'Putting') : 'Putting';
   if (k === 'ronda') { const r = rounds.find(x => x.round_id === p[1]); return r ? short(r.tournament) || 'Ronda' : 'Ronda'; }
+  if (k === 'diferencial') return 'Cómo se calcula';
   if (k === 'club') return G.clubs.find(x => x.id === p[1])?.club_name || 'Club';
   return { inicio:'Inicio', resumen:'Resumen', rondas:'Rondas', cancha:'Cancha', bolsa:'Mi bolsa', cuenta:'Tu cuenta', vincular:'Vincular', estrategia:'Cómo jugar la cancha', gps:'Ronda con GPS', palo:'Distancias por palo', amigos:'Amigos' }[k] || 'Volver';
 }
@@ -3272,6 +3402,7 @@ function render(keepScroll){
   document.documentElement.classList.toggle('gp-live', playLive || !!(GP && GP.practiceLive && GP.practiceLive(location.hash))); setTabH();
   let detail = null, aside = null;
   if (p[0]==='ronda'){ detail = sRonda(p[1]); aside = asideRounds(p[1]); base = base==='inicio'||base==='resumen'?base:'rondas'; }
+  else if (p[0]==='diferencial'){ detail = sDif(p[1]); base = 'rondas'; }
   else if (p[0]==='hoyo'){ detail = sHoyo(p[1],p[2]); aside = asideHoles(p[1], p[2]); if (base!=='resumen') base='cancha'; segC = p[1]; }
   else if (p[0]==='vincular'){ detail = sVincular(); aside = asideAccount('vincular'); }
   else if (p[0]==='club'){ detail = sClub(p[1]); aside = asideAccount(p[1]); }
@@ -3311,7 +3442,7 @@ function render(keepScroll){
   else base = ['inicio','resumen','rondas','cancha','bolsa'].includes(p[0]) ? p[0] : 'inicio';
   const y = window.scrollY;
   if (detail){
-    const here = location.hash || '#/inicio', back = (GROUPISH(p[0]) && GG) ? GG.parent(here) : (p[0] === 'plan' && GP) ? GP.parent(here) : ((p[0] === 'partido' || p[0] === 'partidos') && GM) ? GM.parent(here) : (p[0] === 'metricas' && p[2]) ? `#/metricas/${metTab(p[1])}` : (BACK[here] || PARENT[p[0]] || '#/inicio');
+    const here = location.hash || '#/inicio', back = (GROUPISH(p[0]) && GG) ? GG.parent(here) : (p[0] === 'plan' && GP) ? GP.parent(here) : ((p[0] === 'partido' || p[0] === 'partidos') && GM) ? GM.parent(here) : (p[0] === 'metricas' && p[2]) ? `#/metricas/${metTab(p[1])}` : (p[0] === 'diferencial' && p[1]) ? (BACK[here] || `#/ronda/${p[1]}`) : (BACK[here] || PARENT[p[0]] || '#/inicio');
     detail = detail.replace(/<button class="close" data-close>[\s\S]*?<\/button>/g, '');
     view.dataset.v = 'd-' + p[0];
     view.innerHTML = `<div class="pg"><nav class="crumbs" aria-label="Volver"><a class="crumb-back" href="${esc(back)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1L3 6l5 5"/></svg>${esc(labelFor(back))}</a></nav>
@@ -3370,7 +3501,7 @@ function bind(p, isDetail){
   view.querySelectorAll('[data-sortl]').forEach(b=>b.onclick=()=>{ sortL=b.dataset.sortl; render(true); });
   view.querySelectorAll('[data-segc]').forEach(b=>b.onclick=()=>{ segC=b.dataset.segc; render(true); });
   document.querySelectorAll('[data-sync]').forEach(b=>b.onclick=e=>{ e.preventDefault(); doSync(b.dataset.sync, null, false); });
-  if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('.fields input[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; const id = p[1]; const gen = (notePending.get(id)?.gen || 0) + 1; const values = {}; view.querySelectorAll('.fields input[data-k]').forEach(inp => { values[inp.dataset.k] = inp.value.trim(); }); notePending.set(id, { gen, values, viewGen: VIEW_GEN }); queueNoteSave(id, values, gen, VIEW_GEN); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
+  if (p[0]==='ronda') { loadHoleMap(p[1]); paintRoundPartners(p[1]); view.querySelectorAll('.fields input[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; const id = p[1]; const gen = (notePending.get(id)?.gen || 0) + 1; const values = {}; view.querySelectorAll('.fields input[data-k]').forEach(inp => { values[inp.dataset.k] = inp.value.trim(); }); notePending.set(id, { gen, values, viewGen: VIEW_GEN }); queueNoteSave(id, values, gen, VIEW_GEN); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
   if (p[0]==='metrica') { const m = (p[1]||'').split('?')[0]; loadMetric(m); view.querySelectorAll('[data-mswitch]').forEach(b=>b.onclick=()=>{ const st = MQ[m]||{}; location.hash = mlink(b.dataset.mswitch, { scope: st.scope||'year', year: st.year||'', course: st.course||'all', sort: st.sort==='count'?'count':'date', order:'desc', range: st.range||'' }); }); }
   if (p[0]==='gps') loadGps(p[1]);
   if (p[0]==='palo') loadPalo(p[1], p[2]);
