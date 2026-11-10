@@ -1223,10 +1223,22 @@
       catch (e) { S.cmap = null; }
       S.cmapTried = true;
       if (!S.alive || S.busy || S.holdCam || S.moving) return;
+      const clubKey = () => `${S.club}|${S.clubChosen ? 1 : 0}|${S.clubAuto}`;
+      const prevClub = clubKey();
       if (S.clubAuto !== 'chosen') syncClubToOrigin();
-      if (S.panned || S.adjusted || (S.track.marks || []).some(m => m.countsStroke)) { render(); return; }
-      fitCam();
-      render();
+      const keepFrame = S.panned || S.adjusted || (S.track.marks || []).some(m => m.countsStroke);
+      const prevCam = { z: S.cam.z, cx: S.cam.cx, cy: S.cam.cy, hdg: S.cam.hdg || 0 };
+      if (!keepFrame) fitCam();
+      const camMoved = !keepFrame && (
+        S.cam.z !== prevCam.z || Math.abs(S.cam.cx - prevCam.cx) > 1e-9 || Math.abs(S.cam.cy - prevCam.cy) > 1e-9 || (S.cam.hdg || 0) !== prevCam.hdg
+      );
+      const source = cmapHole()?.green?.source || '';
+      if (clubKey() !== prevClub || camMoved || source === 'openstreetmap' || source === 'satellite_visual') { render(); return; }
+      const map = mapBox();
+      if (!map) return;
+      map.dataset.cmap = S.cmap ? '1' : '0';
+      const svg = map.querySelector('.tk-svg');
+      if (svg) svg.innerHTML = overlaySVG(map.clientWidth || innerWidth, map.clientHeight || innerHeight);
     };
     if (retro) {
       armRetro();

@@ -6,7 +6,15 @@
     "pass": 111,
     "skip": 0,
     "fail": 0,
-    "note": "Corrida en esta VM después del arreglo del deshacer, con Chrome. 111 pass no reemplaza la validación de archivo."
+    "note": "Corrida en esta VM con Chrome, después de dejar el ENTER quieto cuando el mapa de la cancha no cambia el palo ni la cámara. 111 pass no reemplaza la validación de archivo. shot-map aislado: 5/5."
+  },
+  "archive_b1b65de": {
+    "where": "validación independiente de b1b65de",
+    "total": 111,
+    "pass": 94,
+    "skip": 17,
+    "fail": 0,
+    "isolated_shot_map": "8 corridas, 4 pass y 4 fail. Node detached en #play-hit (Elegí un palo y bolsa vacía), no en el deshacer."
   },
   "archive_1e47c41": {
     "where": "/workspace/golflet-reference/release-1e47c41",
