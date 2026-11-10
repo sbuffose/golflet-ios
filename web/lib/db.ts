@@ -55,7 +55,13 @@ export async function withTransaction<T>(fn: (run: (text: string, params?: unkno
   }
 }
 
+type QueryRunner = (text: string, params: unknown[]) => Promise<any[]>;
+let queryRunner: QueryRunner | null = null;
+/** Test seam. Production leaves this unset and keeps using the Neon pool. */
+export function useQueryRunner(next: QueryRunner | null) { queryRunner = next; }
+
 export async function q<T = any>(text: string, params: unknown[] = []): Promise<T[]> {
+  if (queryRunner) return queryRunner(text, params) as Promise<T[]>;
   try {
     const r = await getPool().query(text, params as any[]);
     return r.rows as T[];
