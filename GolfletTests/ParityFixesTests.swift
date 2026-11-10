@@ -196,5 +196,13 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertTrue(TrackSession.onCup(meters: 0.4))
         XCTAssertEqual(TrackSession.puttFeet(meters: 3), 10)
         XCTAssertNil(TrackSession.puttFeet(meters: 40))
+
+        let onTheCup = TrackSession.enter(state, at: flag, club: "PW", onCup: true, putting: false)
+        XCTAssertFalse(onTheCup.holed)
+        let putt = TrackSession.enter(state, at: flag, club: "Pt", onCup: true, putting: true)
+        XCTAssertTrue(putt.holed)
+        XCTAssertEqual(GroupPeriod.parse("12m"), .year)
+        XCTAssertEqual(GroupPeriod.parse("3m"), .all)
+        XCTAssertEqual(GroupPeriod.parse("1w"), .week)
     }
 }

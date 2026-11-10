@@ -342,10 +342,55 @@ enum GroupChartKind: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+/// Periods for a group only. The rest of the app keeps StatsRange.
+enum GroupPeriod: String, CaseIterable, Hashable, Codable, Sendable, Identifiable {
+    case week = "1w"
+    case month = "1m"
+    case quarter = "3q"
+    case semester = "6s"
+    case year = "12y"
+    case all = "all"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .week: return "Semana"
+        case .month: return "Mes"
+        case .quarter: return "Trimestre"
+        case .semester: return "Semestre"
+        case .year: return "Año"
+        case .all: return "Histórico"
+        }
+    }
+
+    /// A saved 12m view stays on the year. 3m and 6m are not a quarter or a semester, so they fall back to histórico.
+    static func parse(_ raw: String?) -> GroupPeriod {
+        switch raw {
+        case "1w": return .week
+        case "1m": return .month
+        case "3q": return .quarter
+        case "6s": return .semester
+        case "12y", "12m": return .year
+        default: return .all
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = GroupPeriod.parse(raw)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var box = encoder.singleValueContainer()
+        try box.encode(rawValue)
+    }
+}
+
 struct GroupViewConfig: Hashable, Codable, Sendable {
     var metrics: [GroupMetricKind]
     var charts: [GroupChartKind]
-    var range: StatsRange
+    var range: GroupPeriod
     var courseFilter: String?
 
     static let `default` = GroupViewConfig(

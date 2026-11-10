@@ -134,6 +134,7 @@ struct HomeView: View {
     private func header(scroll: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center) {
+                CaddieMark(height: 36)
                 GOverline(text: model.clubs.first?.name ?? "Golflet")
                 Spacer()
                 if let club = model.clubs.first {

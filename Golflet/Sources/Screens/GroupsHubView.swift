@@ -76,10 +76,13 @@ struct GroupsHubView: View {
                             }
                         }
                     } else {
-                        Text("Todavía no hay grupos. Creá uno.")
-                            .font(GType.body)
-                            .foregroundStyle(p.ink2)
-                            .accessibilityIdentifier("hub-groups-empty")
+                        VStack(alignment: .leading, spacing: 8) {
+                            CaddieMark(height: 64)
+                            Text("Todavía no hay grupos. Creá uno.")
+                                .font(GType.body)
+                                .foregroundStyle(p.ink2)
+                        }
+                        .accessibilityIdentifier("hub-groups-empty")
                     }
                     Button { model.presentCreateGroup() } label: {
                         Text("+ Crear grupo")

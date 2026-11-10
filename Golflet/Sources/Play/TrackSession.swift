@@ -98,11 +98,11 @@ enum TrackSession {
     }
 
     /// ENTER confirms the cursor. `onCup` must already mean the cursor is on the flag.
-    static func enter(_ state: State, at point: TrackPoint, club: String?, onCup: Bool) -> EnterOutcome {
+    static func enter(_ state: State, at point: TrackPoint, club: String?, onCup: Bool, putting: Bool = false) -> EnterOutcome {
         var next = state
         switch state.phase {
         case .tracking:
-            let holed = onCup
+            let holed = onCup && putting
             let spot = holed ? (state.flag ?? point) : point
             next.marks.append(TrackMark(
                 id: next.nextID,

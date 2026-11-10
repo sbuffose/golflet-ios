@@ -345,6 +345,9 @@ struct PlayHoleView: View {
     private var dock: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
+                if track.marks.contains(where: \.holed) {
+                    CaddieMark(height: 48)
+                }
                 Text(statusLine)
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
@@ -376,7 +379,7 @@ struct PlayHoleView: View {
         case .tracking, .penaltyWhere:
             let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
             if TrackSession.onCup(meters: meters) { return "En el hoyo" }
-            if let feet = TrackSession.puttFeet(meters: meters) { return "\(feet) pies al hoyo" }
+            if meters > 1.2 && meters <= 25 { return "\(FormatAR.one(meters)) m al hoyo" }
             return "\(PlayMath.yards(from: playerCoord, to: cursor)) yd · \(track.prompt)"
         default:
             return track.prompt
@@ -494,7 +497,11 @@ struct PlayHoleView: View {
     private func confirmEnter() async {
         let point = TrackPoint(lat: cursor.lat, lng: cursor.lng)
         let onCup = TrackSession.onCup(meters: Double(PlayMath.meters(from: cursor, to: pinCoord)))
-        let outcome = TrackSession.enter(track, at: point, club: chosenClub, onCup: onCup)
+        let origin = track.ball.map { GPSCoord(lat: $0.lat, lng: $0.lng) } ?? teeCoord
+        let classified = HoleGeoMath.lie(course: course, hole: hole, at: origin)
+        let clubName = (chosenClub ?? "").lowercased()
+        let putting = classified == .green || clubName == "pt" || clubName == "putter"
+        let outcome = TrackSession.enter(track, at: point, club: chosenClub, onCup: onCup, putting: putting)
         guard outcome.recorded else { return }
         let penalty = outcome.state.marks.last?.penalty == true
         track = outcome.state
