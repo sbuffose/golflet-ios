@@ -5,6 +5,8 @@ struct BagView: View {
     @Environment(\.palette) private var p
     @State private var ironBrand = ""
     @State private var ironModel = ""
+    @State private var ironStatus = ""
+    @State private var savingIron = false
     private let ironCatalog = [
         "Titleist": ["T100", "T150", "T200", "T250", "T350"],
         "Callaway": ["Apex", "Apex Pro", "Paradym"],
@@ -50,6 +52,7 @@ struct BagView: View {
         }
         .accessibilityIdentifier("screen-bolsa")
         .safeAreaInset(edge: .top) { MetricBackBar() }
+        .onAppear(perform: restoreIron)
     }
 
     private var filled: Int {
@@ -101,6 +104,20 @@ struct BagView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .accessibilityIdentifier("iron-model")
+                Button {
+                    Task { await saveIron() }
+                } label: {
+                    Text(savingIron ? "Guardando…" : "Guardar el juego")
+                        .font(GType.headline)
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(ironBrand.isEmpty || ironModel.isEmpty || savingIron)
+                .accessibilityIdentifier("iron-save")
                 Text(ironNote)
                     .font(GType.label)
                     .foregroundStyle(p.ink3)
@@ -109,11 +126,35 @@ struct BagView: View {
         }
     }
 
-    private var ironNote: String {
-        if ironBrand.isEmpty || ironModel.isEmpty { return "Elegí marca y modelo. No invento un juego." }
-        if ironCatalog[ironBrand]?.contains(ironModel) == true {
-            return "\(ironBrand) \(ironModel). No lo guardé: esta pantalla todavía no manda el juego."
+    private func restoreIron() {
+        guard ironBrand.isEmpty, ironModel.isEmpty, let saved = IronSetStore.load() else { return }
+        ironBrand = saved.brand
+        ironModel = saved.model
+        ironStatus = "\(saved.brand) \(saved.model). Guardado en el teléfono."
+    }
+
+    private func saveIron() async {
+        guard ironCatalog[ironBrand]?.contains(ironModel) == true else {
+            ironStatus = "No lo creamos"
+            return
         }
+        savingIron = true
+        defer { savingIron = false }
+        IronSetStore.save(brand: ironBrand, model: ironModel)
+        do {
+            ironStatus = try await model.api.saveIronSet(brand: ironBrand, model: ironModel)
+        } catch {
+            let message = error.localizedDescription
+            ironStatus = message.localizedCaseInsensitiveContains("no lo creamos") || message.localizedCaseInsensitiveContains("no está")
+                ? "Quedó en el teléfono. En la cuenta: No lo creamos."
+                : "Guardado en el teléfono. \(ironBrand) \(ironModel)."
+        }
+    }
+
+    private var ironNote: String {
+        if !ironStatus.isEmpty { return ironStatus }
+        if ironBrand.isEmpty || ironModel.isEmpty { return "Elegí marca y modelo. No invento un juego." }
+        if ironCatalog[ironBrand]?.contains(ironModel) == true { return "\(ironBrand) \(ironModel)." }
         return "No lo creamos"
     }
 

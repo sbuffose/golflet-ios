@@ -24,6 +24,11 @@ struct RoundDetailView: View {
     @State private var revByHole: [Int: Int] = [:]
     @State private var accountReady = false
     @State private var accountMarks: [Int: HoleMark] = [:]
+    @State private var trackCards: [Int: TrackCard.Hole] = [:]
+    @State private var trackOwnedPutts: Set<Int> = []
+    @State private var trackOwnedGir: Set<Int> = []
+    @State private var trackOwnedDrive: Set<Int> = []
+    @State private var didFillTrack = false
     @State private var loadGen = 0
     @State private var queue = QuickWorkQueue()
     @State private var visit = RoundVisit()
@@ -368,6 +373,17 @@ struct RoundDetailView: View {
                 .font(GType.label)
                 .foregroundStyle(p.ink3)
                 .accessibilityIdentifier("round-stat-source")
+            if !round.holes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(round.holes) { hole in
+                        Text("Hoyo \(hole.number) · \(holeCaption(hole))")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("hole-source-\(hole.number)")
+                    }
+                }
+            }
             if let company = playedWith {
                 Text("Jugaste con \(company)")
                     .font(GType.body)
@@ -521,6 +537,83 @@ struct RoundDetailView: View {
                 }
             }
         }
+    }
+
+    private func holeCaption(_ hole: HoleScore) -> String {
+        let stored = accountMarks[hole.number]
+        let card = trackCards[hole.number]
+        func piece(_ name: String, filled: Bool, owned: Bool, state: String?) -> String {
+            if state == "na" { return "\(name): No aplica" }
+            if filled && !owned { return "\(name): Manual" }
+            if state == "track" || owned { return "\(name): Desde TRACK" }
+            return "\(name): Sin confirmar"
+        }
+        return [
+            piece("Putts", filled: stored?.putts != nil || trackOwnedPutts.contains(hole.number), owned: trackOwnedPutts.contains(hole.number), state: card?.putts.state),
+            piece("Green", filled: stored?.gir != nil || trackOwnedGir.contains(hole.number), owned: trackOwnedGir.contains(hole.number), state: card?.gir.state),
+            piece("Fairway", filled: (stored?.drive?.isEmpty == false) || trackOwnedDrive.contains(hole.number), owned: trackOwnedDrive.contains(hole.number), state: hole.par == 3 ? "na" : card?.drive.state),
+        ].joined(separator: ". ")
+    }
+
+    private func fillFromTrack(identity: QuickWorkIdentity) async {
+        guard QuickDispatch.visitStill(identity, model: model, visit: visit) else { return }
+        guard let setup = try? await model.api.reconstructionSetup() else { return }
+        guard let live = setup.saved.first(where: { $0.roundId == round.roundId }), !live.id.isEmpty else { return }
+        guard let shots = try? await model.api.reconstructionShots(liveRoundId: live.id) else { return }
+        guard QuickDispatch.visitStill(identity, model: model, visit: visit) else { return }
+        let grouped = Dictionary(grouping: shots, by: \.hole)
+        for hole in round.holes {
+            let card = TrackCard.derive(par: hole.par, shots: (grouped[hole.number] ?? []).map(TrackCard.fact))
+            trackCards[hole.number] = card
+            let stored = accountMarks[hole.number]
+            var putts: Int?
+            var gir: Bool?
+            var fairway: String?
+            if stored?.putts == nil, card.putts.state == "track" { putts = card.putts.value }
+            if stored?.gir == nil, card.gir.state == "track" { gir = card.gir.value }
+            if hole.par != 3, (stored?.drive ?? "").isEmpty, card.drive.state == "track" {
+                fairway = TrackCard.editorFairway(card.drive.value)
+            }
+            guard putts != nil || gir != nil || fairway != nil else { continue }
+            applyTrack(hole: hole.number, par: hole.par, putts: putts, gir: gir, fairway: fairway, identity: identity)
+        }
+    }
+
+    private func applyTrack(hole: Int, par: Int, putts: Int?, gir: Bool?, fairway: String?, identity: QuickWorkIdentity) {
+        if quickConflict || needsRetry { return }
+        var edit = pending[hole] ?? PendingHole(putts: nil, gir: nil, fairway: nil, touched: .init(putts: false, gir: false, drive: false))
+        if let putts {
+            edit.putts = putts
+            edit.touched.putts = true
+            trackOwnedPutts.insert(hole)
+        }
+        if let gir {
+            edit.gir = gir
+            edit.touched.gir = true
+            trackOwnedGir.insert(hole)
+        }
+        if let fairway {
+            edit.fairway = fairway
+            edit.touched.drive = true
+            trackOwnedDrive.insert(hole)
+        }
+        pending[hole] = edit
+        let current = extras[hole]
+        extras[hole] = HoleExtra(
+            roundId: round.roundId,
+            hole: hole,
+            putts: edit.touched.putts ? edit.putts : current?.putts,
+            gir: edit.touched.gir ? edit.gir : current?.gir,
+            fairway: par == 3 ? nil : (edit.touched.drive ? edit.fairway : current?.fairway)
+        )
+        markRev += 1
+        queue.enqueueMark(
+            identity: identity,
+            model: model,
+            visit: visit,
+            waitForAccount: { await self.ensureLoaded(identity: identity).value },
+            commit: { await self.commit(hole: hole, identity: identity) }
+        )
     }
 
     private var statSources: String {
@@ -892,6 +985,10 @@ struct RoundDetailView: View {
             accountReady = true
             quickError = ""
             quickConflict = false
+            if !didFillTrack {
+                didFillTrack = true
+                Task { await self.fillFromTrack(identity: identity) }
+            }
         }
     }
 }

@@ -161,6 +161,14 @@ struct LiveGolfletAPI: GolfletAPI {
         return LivePayloadMapper.parseBag(json["bag"])
     }
 
+    func saveIronSet(brand: String, model: String) async throws -> String {
+        let json = try await request("POST", "/api/my-clubs/iron-set", body: [
+            "brand": brand, "model": model, "confirm": true, "ack": true,
+        ])
+        guard json["saved"] as? Bool == true else { throw GolfletError.server("No lo creamos") }
+        return "Guardé \(brand) \(model)."
+    }
+
     func gpsCourses(lat: Double?, lng: Double?) async throws -> GPSCourseList {
         var query: [String] = []
         if let lat, let lng {

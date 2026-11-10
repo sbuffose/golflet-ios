@@ -102,6 +102,7 @@ enum ReconstructPayload {
             endLat: number(row["end_lat"]),
             endLng: number(row["end_lng"]),
             distanceM: number(row["distance_m"]),
+            lie: row["lie"] as? String,
             positionLabel: text(row["position_label"]),
             distanceLabel: text(row["distance_label"])
         )
@@ -113,6 +114,7 @@ enum ReconstructPayload {
         return ReconstructionShot(
             id: id, hole: shot.hole, club: shot.club, result: shot.result, penaltyStrokes: shot.penaltyStrokes,
             lat: shot.lat, lng: shot.lng, endLat: shot.endLat, endLng: shot.endLng, distanceM: meters,
+            lie: nil,
             positionLabel: placed ? "Marcado a mano" : "Sin ubicación",
             distanceLabel: meters != nil || (shot.lat != nil && shot.endLat != nil) ? "Distancia estimada" : "Sin distancia"
         )
