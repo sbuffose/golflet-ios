@@ -25,6 +25,7 @@ exports.yardNumber = yardNumber;
 exports.yardLabel = yardLabel;
 exports.shotDistanceLabel = shotDistanceLabel;
 exports.trackHoleSummary = trackHoleSummary;
+exports.deriveHoleCard = deriveHoleCard;
 exports.holeCloseText = holeCloseText;
 exports.emptyStatFill = emptyStatFill;
 exports.bagClubs = bagClubs;
@@ -366,6 +367,36 @@ function trackHoleSummary(par, shots) {
     if (!finished)
         lines.push("El hoyo sigue abierto.");
     return { finished, putts, fir: firApplies ? fir : null, gir, lines };
+}
+/** Per-hole card from TRACK shots. A missing lie stays unconfirmed. A par 3 has no fairway. Nothing here overwrites a manual mark. */
+function deriveHoleCard(par, shots) {
+    const sum = trackHoleSummary(par, shots);
+    const p = par == null || !Number.isFinite(Number(par)) ? null : Number(par);
+    const putts = sum.putts == null
+        ? { value: null, state: "unconfirmed" }
+        : { value: sum.putts, state: "track" };
+    let drive;
+    if (p === 3)
+        drive = { value: null, state: "na" };
+    else if (p !== 4 && p !== 5)
+        drive = { value: null, state: "unconfirmed" };
+    else {
+        const first = shots.find(s => !s.penalty && !s.lost);
+        if (!first)
+            drive = { value: null, state: "unconfirmed" };
+        else if (first.direction === "left" || first.direction === "right")
+            drive = { value: first.direction, state: "track" };
+        else if (first.endLie === "fairway" || first.direction === "center")
+            drive = { value: "fairway", state: "track" };
+        else if (first.endLie)
+            drive = { value: "other", state: "track" };
+        else
+            drive = { value: null, state: "unconfirmed" };
+    }
+    const gir = sum.gir == null
+        ? { value: null, state: "unconfirmed" }
+        : { value: sum.gir, state: "track" };
+    return { putts, drive, gir };
 }
 const VS_PAR = { [-2]: "Águila", [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Doble bogey", 3: "Triple bogey" };
 /** Closed-hole line. Putts stay unconfirmed when no shot is a putter or started on the green. */

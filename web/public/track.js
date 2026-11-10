@@ -519,7 +519,10 @@
       const gust = w.gust_kmh != null ? ` · ráfagas ${Math.round(Number(w.gust_kmh))} km/h` : '';
       const rain = Number(w.precip_mm) > 0 || w.condition === 'lluvia' || w.condition === 'tormenta' ? ' · lluvia' : '';
       const plan = window.GolfletPlanCore;
-      if (w.from_deg == null || !from || !to || !plan || !plan.windComp || !plan.distFactor) return `<small>Sin dirección de viento. No ajusto la distancia.${esc(gust)}${esc(rain)}</small>`;
+      if (w.from_deg == null || !from || !to || !plan || !plan.windComp || !plan.distFactor) {
+        const temp = w.temp_c != null ? ` · ${String(w.temp_c).replace('.', ',')}°C` : '';
+        return `<small>${Math.round(Number(w.kmh))} km/h${esc(temp)}. Sin dirección de viento. No ajusto la distancia.${esc(gust)}${esc(rain)}</small>`;
+      }
       const bearing = R().bearingDeg(from, to);
       const yards = yd(hav(from, to));
       if (bearing == null || yards == null) return `<small>Sin rumbo del golpe. No ajusto la distancia.${esc(gust)}</small>`;
@@ -533,10 +536,14 @@
     const windChip = () => {
       if (S.wxState === 'none') return `<span class="tk-chip">Clima no disponible</span>`;
       if (!S.wind || S.wind.kmh == null || (retro && S.wind.source && S.wind.source !== 'open-meteo-archive')) return '';
-      const b = S.track.tee && S.track.flag ? R().bearingDeg(S.track.tee, S.track.flag) : null;
-      const play = R().windPlay(S.hole, S.wind.from_deg, b, S.wind.kmh);
       const gust = S.wind.gust_kmh != null ? ` · ráfagas ${Math.round(Number(S.wind.gust_kmh))} km/h` : '';
       const rain = Number(S.wind.precip_mm) > 0 || S.wind.condition === 'lluvia' || S.wind.condition === 'tormenta' ? ' · lluvia' : '';
+      if (S.wind.from_deg == null) {
+        const temp = S.wind.temp_c != null ? ` · ${String(S.wind.temp_c).replace('.', ',')}°C` : '';
+        return `<span class="tk-chip">${Math.round(Number(S.wind.kmh))} km/h${esc(temp)}${esc(gust)}${esc(rain)}. Sin dirección. No ajusto las yardas.</span>`;
+      }
+      const b = S.track.tee && S.track.flag ? R().bearingDeg(S.track.tee, S.track.flag) : null;
+      const play = R().windPlay(S.hole, S.wind.from_deg, b, S.wind.kmh);
       return `<span class="tk-chip">${esc(play.text)}${esc(gust)}${esc(rain)}</span>`;
     };
 
@@ -637,7 +644,8 @@
           const landed = R().knownPoint(s.lat, s.lng);
           if (landed && prevKnown && hav(prevKnown, landed) > 3) prevKnown = landed;
         }
-        return { id: s.id, club: penalty ? 'Penalidad' : (clubLabel(s.club) || s.club), yards: label.text && label.kind !== 'penalty' ? label.text : '', unknown: label.kind === 'missing', n: i + 1 };
+        const lost = s.result === 'lost';
+        return { id: s.id, club: penalty ? 'Penalidad' : (lost ? 'perdida' : (clubLabel(s.club) || s.club)), yards: lost || penalty || !(label.text && label.kind !== 'penalty') ? '' : label.text, unknown: !lost && !penalty && label.kind === 'missing', n: i + 1 };
       });
       const railSource = savedRail.length ? savedRail : S.track.marks.filter(m => m.countsStroke).map((m, i) => {
         const prev = playingPoint(S.track.marks.slice(0, S.track.marks.indexOf(m)));
@@ -1255,10 +1263,11 @@
           };
           await keep(here, 'lost', from, club);
           await keep(from, 'penalty', from, null);
-          if (provisional) await keep(from, null, from, club);
+          if (provisional) await keep(here, null, from, club);
           S.track = R().trackLost(S.track, here, club || null);
-          if (provisional && from) {
-            S.track.marks.push({ id: S.track.nextID, lat: from.lat, lng: from.lng, club: club || null, countsStroke: true, holed: false, penalty: false, drop: false, provisional: true });
+          if (provisional && here) {
+            S.track.ball = { lat: here.lat, lng: here.lng };
+            S.track.marks.push({ id: S.track.nextID, lat: here.lat, lng: here.lng, club: club || null, countsStroke: true, holed: false, penalty: false, drop: false, provisional: true });
             S.track.nextID += 1;
           }
           S.lostPair = ids;
