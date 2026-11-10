@@ -87,11 +87,8 @@
     const verifiedTee = () => asLL(gpsHole()?.tee) || asLL(holeRec().tee) || asLL(cmapHole()?.line?.[0]) || asLL((cmapHole()?.tees || [])[0]?.center);
     const verifiedFlag = () => pinCoord();
     const axis = () => R().holeSpan(verifiedTee(), verifiedFlag());
-    const mapOk = () => {
-      const tee = verifiedTee(), flag = verifiedFlag();
-      if (tee && flag) return !!axis();
-      return !!(tee || flag);
-    };
+    const spanOk = () => !!(verifiedTee() && verifiedFlag() && axis());
+    const mapOk = () => !!(verifiedTee() || verifiedFlag());
     const teeCoord = () => S.track.tee || verifiedTee() || null;
     const cupLL = () => S.track.flag || pinCoord();
     const cmapHole = () => (S.cmap?.holes || []).find(h => h.hole === S.hole) || null;
@@ -152,11 +149,26 @@
       return pts;
     };
 
+    const cameraEnds = () => {
+      const flag = S.track.flag || verifiedFlag();
+      const chosen = S.track.tee && flag && R().holeSpan(S.track.tee, flag) ? S.track.tee : null;
+      const catalog = spanOk() ? verifiedTee() : null;
+      return { tee: chosen || catalog || null, flag: flag || null, loose: verifiedTee() || null };
+    };
+    const tightenOpen = (frame, ends, W, Hh) => {
+      if (!frame || ends.tee || !ends.flag || frame.bearing != null) return frame;
+      const tight = R().frameHole(null, ends.flag, 'flag', { width: W, height: Hh });
+      if (!tight) return frame;
+      return { ...frame, z: tight.z, cx: tight.cx, cy: tight.cy, bearing: null };
+    };
     const fitCam = () => {
       const map = mapBox();
       const W = map?.clientWidth || innerWidth, Hh = map?.clientHeight || innerHeight;
       const ball = S.track.ball && R().knownPoint(S.track.ball.lat, S.track.ball.lng);
-      const frame = R().frameHole(verifiedTee(), verifiedFlag(), S.frame || 'overview', { width: W, height: Hh }, ball);
+      const ends = cameraEnds();
+      let frame = R().frameHole(ends.tee, ends.flag, S.frame || 'overview', { width: W, height: Hh }, ball);
+      if (!frame && (ends.flag || ends.loose)) frame = R().frameHole(ends.flag ? null : ends.loose, ends.flag, 'point', { width: W, height: Hh });
+      frame = tightenOpen(frame, ends, W, Hh);
       S.axis = frame;
       if (!frame) return false;
       S.cam = { z: frame.z, cx: frame.cx, cy: frame.cy, hdg: frame.bearing || 0 };
@@ -251,10 +263,11 @@
     };
     const setMapButtons = on => {
       const allow = !!on && !S.busy && !S.moving;
+      const teeNeedsDrag = verifiedTee() && verifiedFlag() && !spanOk() && !S.panned && (S.track.phase === 'confirmTee' || S.track.phase === 'confirmFlag');
       for (const id of ['play-set', 'play-hit']) {
         const b = el.querySelector('#' + id);
         if (!b) continue;
-        b.disabled = !allow || (id === 'play-hit' && !!S.live?.ended_at);
+        b.disabled = !allow || (id === 'play-hit' && !!S.live?.ended_at) || (id === 'play-set' && teeNeedsDrag);
       }
     };
     const showMapBanner = (on, placeholder) => {
@@ -337,9 +350,10 @@
       S.club = R().teeClub ? R().teeClub(S.bag, par, '', fromTee) : '';
     };
     const armRetro = () => {
-      const tee = asLL(gpsHole()?.tee) || asLL(holeRec().tee);
+      const teeRaw = asLL(gpsHole()?.tee) || asLL(holeRec().tee);
       const read = flagRead();
       const pin = read.point;
+      const tee = teeRaw && (!pin || R().holeSpan(teeRaw, pin)) ? teeRaw : null;
       S.suggestedTee = tee;
       S.suggestedPin = pin;
       S.flagKind = read.kind;
@@ -466,7 +480,7 @@
         if (S.flagKind === 'pin' && cupOn) return `<b>En el hoyo</b><small>ENTER confirma</small>`;
         const travel = flown == null ? '' : `${flown} yd`;
         const left = yd(meters) == null ? '' : `${yd(meters)} yd`;
-        return `<b class="num">${travel || '—'}</b>${travel ? '<small>recorrido</small>' : ''}${left ? `<small class="num">${left} al hoyo</small>` : ''}`;
+        return `<b class="num">${travel || '—'}</b>${travel ? '<small>hasta la mira</small>' : ''}${left ? `<small class="num">${left} al hoyo</small>` : ''}`;
       }
       if (phase === 'confirmTee' || phase === 'confirmFlag' || phase === 'drop' || phase === 'penaltyWhere' || phase === 'relief') {
         return `<b>${esc(PROMPT[phase])}</b>${meters != null && phase !== 'confirmTee' ? `<small class="num">${(yd(meters) ?? '—')} yd al hoyo</small>` : ''}`;
@@ -497,10 +511,9 @@
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
       if (retro && !mapOk()) {
-        const both = verifiedTee() && verifiedFlag();
         el.innerHTML = `<div class="tk" id="play-track">
           <div class="tk-top"><button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button><b class="tk-cn">${name}</b></div>
-          <p class="tk-empty" id="rc-nogeo">${both ? 'La salida y la bandera de este hoyo no cierran. No invento el rumbo.' : 'Este hoyo no tiene geometría verificada. No marco un punto inventado.'}</p>
+          <p class="tk-empty" id="rc-nogeo">Este hoyo no tiene geometría verificada. No marco un punto inventado.</p>
           <div class="tk-dock"><div class="tk-nav">
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>
             <div class="tk-hn"><b>Hoyo ${S.hole}</b><span>Sin mapa verificado</span></div>
@@ -554,7 +567,7 @@
         const sum = R().trackHoleSummary(par || null, facts);
         S.derived = { putts: sum.putts, gir: sum.gir, fir: sum.fir };
         const canSave = sum.finished && typeof H.onStats === 'function' && R().emptyStatFill && R().emptyStatFill(S.storedMark || null, S.derived);
-        summary = `<div class="tk-sum" id="tk-sum">${sum.lines.map(l => `<span>${esc(l)}</span>`).join('')}${canSave ? `<button type="button" id="play-stats">Guardar lo que falta</button>` : ''}<p>No cambia la tarjeta ni el hándicap hasta que lo guardás.</p></div>`;
+        summary = `<div class="tk-sum" id="tk-sum"><span>${esc(sum.lines[0])}</span>${canSave ? `<button type="button" id="play-stats">Guardar lo que falta</button>` : ''}</div>`;
       }
       const setup = retro && (phase === 'confirmTee' || phase === 'confirmFlag');
       const marking = retro && phase === 'tracking' && !S.done && phase !== 'relief';
@@ -570,7 +583,7 @@
         <div class="tk-map" id="tkmap"></div>
         <div class="tk-maperr" id="tk-maperr" hidden><b>El mapa no cargó.</b><button type="button" id="tk-retry">Reintentar</button></div>
         <div class="tk-ret on ${pen ? 'pen' : ''}" id="play-reticle" data-cursor="${cursorKind}" aria-hidden="true"><i></i>${cursorKind === 'drop' ? `<b>${nextStroke}</b>` : ''}</div>
-        ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>${S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? `<p class="tk-scale">Imagen ampliada. El satélite real llega al zoom 17.</p>` : ''}${greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}${(cmapHole()?.green?.source === 'openstreetmap') ? `<p class="tk-osmnote">Contorno © OpenStreetMap contributors (ODbL) · Cancha Azul. No es el pin ni un relevamiento de caídas.</p>` : ''}${(cmapHole()?.green?.source === 'satellite_visual') ? `<p class="tk-osmnote">Contorno trazado sobre el satélite y aceptado en el admin. No es un relevamiento ni el pin.</p>` : ''}` : ''}
+        ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>${S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? `<p class="tk-scale">Satélite real hasta el zoom 17.</p>` : ''}${greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}${verifiedTee() && verifiedFlag() && !spanOk() ? `<p class="tk-opennote" id="rc-nogeo">La salida no cierra. No marco un rumbo.</p>` : ''}${(cmapHole()?.green?.source === 'openstreetmap') ? `<p class="tk-osmnote">Contorno © OpenStreetMap contributors (ODbL) · Cancha Azul. No es el pin ni un relevamiento de caídas.</p>` : ''}${(cmapHole()?.green?.source === 'satellite_visual') ? `<p class="tk-osmnote">Contorno trazado sobre el satélite y aceptado en el admin. No es un relevamiento ni el pin.</p>` : ''}` : ''}
         ${rail}
         <div class="tk-top">
           ${retro ? `<button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button>` : `<a class="tk-ib" href="#/inicio" aria-label="Inicio">⌂</a>`}
@@ -687,6 +700,7 @@
       map.dataset.flagKind = S.flagKind || '';
       map.dataset.frame = S.axis?.mode || '';
       map.dataset.bearing = S.axis?.bearing == null ? '' : String(S.axis.bearing);
+      map.dataset.span = spanOk() ? '1' : (verifiedTee() && verifiedFlag() ? '0' : '');
       map.dataset.aimLat = S.axis ? String(S.axis.aimLat) : '';
       map.dataset.aimLng = S.axis ? String(S.axis.aimLng) : '';
       map.dataset.hole = String(S.hole);
@@ -846,7 +860,9 @@
       const W = map?.clientWidth || innerWidth, Hh = map?.clientHeight || innerHeight;
       const ball = S.track.ball && R().knownPoint(S.track.ball.lat, S.track.ball.lng);
       const mode = S.done ? 'overview' : (S.frame || 'overview');
-      return R().frameHole(verifiedTee(), verifiedFlag(), mode, { width: W, height: Hh }, ball);
+      const ends = cameraEnds();
+      return tightenOpen(R().frameHole(ends.tee, ends.flag, mode, { width: W, height: Hh }, ball)
+        || ((ends.flag || ends.loose) ? R().frameHole(ends.flag ? null : ends.loose, ends.flag, 'point', { width: W, height: Hh }) : null), ends, W, Hh);
     };
     const lerpH = (a, b, t) => {
       const d = ((b - a + 540) % 360) - 180;

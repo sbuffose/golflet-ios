@@ -146,6 +146,15 @@ function clubsCard(){
 /* t135u: signed-in footer. '¿Sos profesor?' / '¿Sponsor o marca?' stay only on the login (logged-out) screen. */
 const CT_LINKS = `<nav class="ct-links" aria-label="Contacto"><a href="/feedback.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9.5L5 19.5v-4H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Feedback</a><a href="/contacto.html?tipo=contacto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 3.5h3l1.5 4-2 1.3a10 10 0 0 0 6.1 6.1l1.3-2 4 1.5v3c0 1.1-.9 2-2 2A16.5 16.5 0 0 1 4.6 5.5c0-1.1.9-2 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Contactar</a></nav>`;
 const reconEntry = () => `<a class="recon-entry" id="recon-start" href="#/reconstruir"><span class="rt-mark">TRACK</span><b>Cargar una vuelta ya jugada</b><span class="recon-go" aria-hidden="true">›</span></a>`;
+function hiBand(hi, d){
+  const dated = (hi || []).filter(h => h.hi != null).slice().sort((a, b) => a.date < b.date ? -1 : 1);
+  const last = dated.at(-1);
+  const when = last ? dmy(last.date) : '';
+  const from = d != null ? `${MES[+hi[0].date.slice(5, 7) - 1]}. ${hi[0].date.slice(0, 4)}` : '';
+  const arrow = d == null ? '' : (d < 0 ? '↓' : '↑');
+  const facts = `${when ? `<p class="hi-when"><span>Índice al</span> <b class="num">${when}</b></p>` : ''}${d != null ? `<p class="hi-evo"><b class="num">${arrow} ${f1(Math.abs(d))}</b> <span>desde ${from}</span></p>` : ''}`;
+  return `<div class="hi-strip">${facts ? `<div class="hi-facts">${facts}</div>` : ''}<a class="hi-ch-l" href="#/cambios">Cambios</a></div>`;
+}
 function vInicio(){
   const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
   const top = `<div class="top"><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
@@ -159,8 +168,7 @@ function vInicio(){
   return top + rangeSeg(prAll.length) + revealCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
     <div class="hi-avs"><div id="hiprofs" class="hi-profs nolab" hidden></div><div id="higroups" class="hi-grp" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a></div></div>
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
-    <div class="big num">${f1(hiNow)}</div></a>${(hi||[]).filter(h=>h.hi!=null).slice().sort((a,b)=>a.date<b.date?-1:1).at(-1) ? `<span class="delta">${dmy((hi||[]).filter(h=>h.hi!=null).slice().sort((a,b)=>a.date<b.date?-1:1).at(-1).date)}</span>` : ''}${d!=null?`<span class="delta">${d<0?'↓':'↑'} ${f1(Math.abs(d))} desde ${MES[+hi[0].date.slice(5,7)-1]}. ${hi[0].date.slice(0,4)}</span>`:''}
-    <a class="hi-ch-l" href="#/cambios">Cambios</a>
+    <div class="big num">${f1(hiNow)}</div></a>${hiBand(hi, d)}
     <div class="meta"><a href="${rlink('rounds',{scope:'all',course:'all',sort:'date',order:'desc'})}">Tarjetas<b class="num">${prAll.length}</b></a><a href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}">Mejor gross<b class="num">${bestR?bestR.gross:'—'}</b></a><a href="${rlink('average',{scope:'all',course:'all',sort:'date',order:'desc'})}">Promedio<b class="num">${f1(mean(pr.map(r=>r.gross)))}</b></a><a id="hcpimp" class="hi-imp" href="#/impacto${RANGE==='all'?'':'?range='+RANGE}">Impacto HCP<b class="num">…</b></a></div>
   </div></div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
@@ -1840,8 +1848,8 @@ function photoFace(){
 }
 function photoCopy(state){
   if (state === 'unavailable') return 'La foto de perfil todavía no se puede guardar: falta la migración 0045. No se guardó nada. Seguís con tus iniciales.';
-  if (state === 'ready') return 'Esta es la foto de tu cuenta. Al cambiarla, la anterior se reemplaza.';
-  return 'Sin foto. En la app se ven tus iniciales.';
+  if (state === 'ready') return 'Al cambiarla, se reemplaza.';
+  return 'Sin foto. Se ven tus iniciales.';
 }
 function bindPhoto(){
   const msg = $('#mephmsg'); if (!msg) return;
@@ -1870,10 +1878,18 @@ function bindPhoto(){
   const rm = $('#mephrm'); if (rm) rm.onclick = () => send('DELETE');
 }
 function sCuenta(){
-  return `<div class="bar"><span class="overline">Tu cuenta</span><span class="bar-r">${G.user?.role?`<a class="staff-l" href="${G.user.role==='admin'?'/admin':'/admin/strategy'}">${G.user.role==='admin'?'Admin':'Editor'}</a>`:''}<button class="close" data-close>${ICON.x}</button></span></div>
-  ${G.user?.call_name ? `<div class="stitle nick" id="nick">${nickView()}</div>` : `<div class="stitle">${esc(G.user?.name||'')}</div>`}<div style="font-size:calc(14px*var(--ts,1));color:var(--color-ink2);margin-top:4px">${esc(/@golfistics\.invalid$/.test(G.user?.email||'') ? 'Entrás con tu matrícula' : (G.user?.email||''))}</div>
-  <div class="me-photo">${photoFace()}<div><label class="btn ghost sm">Elegir foto<input type="file" accept="image/*" id="meph" hidden></label>${G.user?.photo_url ? '<button type="button" class="btn ghost sm" id="mephrm">Quitar</button>' : ''}<p class="foot" id="mephmsg"></p></div></div>
-  ${G.player?.name?`<div class="chips"><span class="badge">${esc(title(G.player.name))}</span>${G.player.handicap_index!=null?`<span class="badge gold">HI ${f1(G.player.handicap_index)}</span>`:''}</div>`:''}
+  const roleHref = G.user?.role === 'admin' ? '/admin' : '/admin/strategy';
+  const role = G.user?.role ? `<a class="me-role" href="${roleHref}">${G.user.role === 'admin' ? 'Admin' : 'Editor'}</a>` : '';
+  const mail = /@golfistics\.invalid$/.test(G.user?.email || '') ? 'Entrás con tu matrícula' : (G.user?.email || '');
+  const name = G.user?.call_name ? `<div class="stitle me-name nick" id="nick">${nickView()}</div>` : `<div class="stitle me-name">${esc(G.user?.name || '')}</div>`;
+  const who = G.player?.name ? `<span class="badge">${esc(title(G.player.name))}</span>${G.player.handicap_index != null ? `<span class="badge gold">HI ${f1(G.player.handicap_index)}</span>` : ''}` : '';
+  const chips = (who || role) ? `<div class="me-chips">${who}${role}</div>` : '';
+  return `<div class="bar"><span class="overline">Tu cuenta</span><span class="bar-r"><button class="close" data-close>${ICON.x}</button></span></div>
+  <section class="me-id">
+    <div class="me-id-main">${photoFace()}<div class="me-id-copy">${name}<p class="me-mail" title="${esc(mail)}">${esc(mail)}</p>${chips}</div></div>
+    <div class="me-acts"><label class="me-change">${G.user?.photo_url ? 'Cambiar' : 'Elegir foto'}<input type="file" accept="image/*" id="meph" hidden></label>${G.user?.photo_url ? '<button type="button" class="me-remove" id="mephrm">Quitar</button>' : ''}</div>
+    <p class="me-note" id="mephmsg"></p>
+  </section>
   <a class="card gg-home nt-home" href="#/notificaciones"><span class="gg-home-ic">${NT_BELL}</span><div><b>Notificaciones</b><p>Invitaciones a grupos y mensajes de tus clubes.</p></div><span class="nt-home-r">${NBADGE}${ICON.chev}</span></a>
   ${G.user?.call_name ? '' : `<div class="section"><h2>Cómo te llamamos</h2></div>
   <form class="card vx-callname" id="cnf"><label for="cn">Nombre para el saludo</label><div class="vx-cn-row"><input id="cn" name="cn" maxlength="40" autocomplete="given-name" value="${esc(G.user?.call_name||'')}" placeholder="${esc(G.user?.first_name||'')}"><button class="btn" type="submit">Guardar</button></div><p class="foot" id="cnmsg">Así te saludamos en Inicio. Si lo dejás vacío usamos el nombre de tu ficha del club.</p></form>`}

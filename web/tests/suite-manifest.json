@@ -2,11 +2,11 @@
   "suite": "web/tests/*.test.ts",
   "how_to_read": "El reporter de node:test imprime tests, pass, fail y skipped. El total es la suma. Un skip no es un pass. Con Chrome instalado los tests de navegador corren y el skip baja. Sin Chrome esos mismos tests se omiten.",
   "agent_vm_with_chrome": {
-    "total": 111,
-    "pass": 111,
+    "total": 112,
+    "pass": 112,
     "skip": 0,
     "fail": 0,
-    "note": "Corrida en esta VM con Chrome, después de dejar el ENTER quieto cuando el mapa de la cancha no cambia el palo ni la cámara. 111 pass no reemplaza la validación de archivo. shot-map aislado: 5/5."
+    "note": "Corrida en esta VM con Chrome el 2026-11-10, después de mostrar el satélite cuando la salida no cierra y de la franja de hándicap. 112 pass no es validación de archivo ni paridad con WhyGolf. El test nuevo es el de Cancha Vieja con green verificado. shot-map, track-putt y ui-browser quedaron en verde en la misma corrida."
   },
   "archive_b1b65de": {
     "where": "validación independiente de b1b65de",

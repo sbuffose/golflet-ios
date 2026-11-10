@@ -255,7 +255,25 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     assert.ok(big.ratio >= 3, `index ${big.ratio}`);
     assert.equal(await page.$eval(".hero .hi-ch-l", el => el.getAttribute("href")), "#/cambios");
     assert.equal(await page.$eval(".hero .hp-prac", el => el.getAttribute("href")), "#/jugar");
+    const hiText = await page.$eval(".hero", el => el.textContent || "");
+    assert.match(hiText, /Índice al/);
+    assert.match(hiText, /5 nov 2026/);
+    assert.match(hiText, /↓ 6,9/);
+    assert.match(hiText, /desde oct\. 2023/);
+    assert.equal(await page.$(".hero .delta"), null);
+    const hiBox = await page.evaluate(() => {
+      const evo = document.querySelector(".hi-evo") as HTMLElement;
+      const link = document.querySelector(".hero .hi-ch-l") as HTMLElement;
+      const bg = getComputedStyle(evo).backgroundColor;
+      const r = link.getBoundingClientRect();
+      return { bg, h: r.height, w: r.width, wide: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1 };
+    });
+    assert.equal(hiBox.bg.includes("200, 16, 46"), false);
+    assert.ok(hiBox.h >= 44 && hiBox.w >= 44, JSON.stringify(hiBox));
+    assert.equal(hiBox.wide, true);
     await page.screenshot({ path: `${ART}/hero-navy.png` });
+    await page.click(".hero .hi-ch-l");
+    await page.waitForFunction(() => location.hash === "#/cambios" && (document.body.innerText || "").includes("Cambios"));
     note("foto");
     await page.goto(`http://127.0.0.1:${port}/#/grupo/g1/ajustes`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#ggph", { timeout: 8000 });

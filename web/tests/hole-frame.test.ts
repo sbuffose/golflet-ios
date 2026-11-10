@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
 import { ESRI_BLANK_TILE_SHA256, frameHole, holeSpan, IMAGERY_ZOOM_MAX, knownPoint, screenOf, VISUAL_ZOOM_MAX, worldTile } from "../lib/play-rules";
+import { COLORADA_GREEN_AXIS, VIEJA_GREEN_AXIS } from "../lib/golfistics-axis";
+import { azulOsmHoles } from "../lib/azul-osm";
 
 const VIEW = { width: 390, height: 844 };
 
@@ -45,7 +47,28 @@ test("a new hole frames the flag, and a missing or absurd end is not invented", 
   assert.equal(knownPoint(0, 0), null);
   assert.equal(holeSpan(tee, { lat: tee.lat - 2, lng: tee.lng }), null);
   assert.equal(frameHole(tee, { lat: tee.lat - 2, lng: tee.lng }, "overview", VIEW), null);
+  const absurd = { lat: tee.lat - 2, lng: tee.lng };
+  const shown = frameHole(null, absurd, "seek", VIEW);
+  assert.equal(shown?.bearing, null);
+  assert.equal(shown?.aimLat, absurd.lat);
   assert.equal(holeSpan(flag, flag), null);
+  for (const axis of [...VIEJA_GREEN_AXIS, ...COLORADA_GREEN_AXIS]) {
+    const shown = frameHole(null, axis.center, "seek", VIEW);
+    assert.equal(shown?.bearing, null, `hoyo ${axis.hole}`);
+    assert.equal(shown?.aimLat, axis.center.lat);
+    const far = { lat: axis.center.lat - 2, lng: axis.center.lng };
+    assert.equal(holeSpan(far, axis.center), null);
+    assert.equal(frameHole(far, axis.center, "overview", VIEW), null);
+  }
+  const azul = azulOsmHoles();
+  assert.equal(azul.length, 18);
+  for (const h of azul) {
+    const flag = h.green.center;
+    assert.ok(flag, `azul ${h.hole}`);
+    const tee = h.line[0] || null;
+    if (tee && holeSpan(tee, flag)) assert.ok(frameHole(tee, flag, "overview", VIEW)?.bearing != null);
+    else assert.equal(frameHole(null, flag, "seek", VIEW)?.bearing, null);
+  }
 });
 
 test("Cancha Vieja hole 1 sits on the club and zoom 17 is real imagery", { timeout: 30_000 }, async () => {

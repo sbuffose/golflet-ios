@@ -2429,9 +2429,21 @@ html.gp-fix #view .tk-host,html.gp-fix #jugbody.tk-host{flex:1 1 auto;min-height
 .tk-tiles{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none}
 .tk-tiles[data-pending="1"]{opacity:0}
 .tk-tile{position:absolute;display:block;width:256px;height:256px;max-width:none;pointer-events:none;user-select:none}
-.me-photo{display:flex;align-items:center;gap:14px;margin:14px 0 4px}
-.me-face{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:#0B2545;color:#fff;font-weight:650;overflow:hidden;flex:none}
+.me-face{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:#0B2545;color:#fff;font-weight:650;overflow:hidden;flex:none}
 img.me-face{object-fit:cover;padding:0}
+.me-id{margin:2px 0 8px;min-width:0}
+.me-id-main{display:flex;align-items:flex-start;gap:14px;min-width:0}
+.me-id .me-face{margin-top:4px}
+.me-id-copy{flex:1;min-width:0}
+.me-id .me-name{margin:0}
+.me-id .nick-ed{width:44px;height:44px;flex:none}
+.me-mail{margin:2px 0 0;color:var(--color-ink2);font-size:calc(13.5px*var(--ts,1));line-height:1.35;overflow-wrap:anywhere}
+.me-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+.me-role{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;color:var(--color-ink3);font-size:calc(13px*var(--ts,1));font-weight:650;text-decoration:none}
+.me-acts{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;margin-top:10px}
+.me-change{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:44px;padding:0 16px;border-radius:999px;background:#0B2545;color:#F6F7F9;font-size:calc(14px*var(--ts,1));font-weight:650;cursor:pointer;width:auto}
+.me-remove{box-sizing:border-box;min-height:44px;padding:0 12px;border:0;background:transparent;color:var(--color-ink3);font:inherit;font-size:calc(14px*var(--ts,1));font-weight:650;cursor:pointer}
+.me-note{margin:2px 0 0;color:var(--color-ink3);font-size:calc(13px*var(--ts,1));line-height:1.35}
 .tk-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .tk-f{fill:rgba(141,190,115,.22);stroke:rgba(247,245,240,.35);stroke-width:1}
 .tk-b{fill:rgba(200,168,106,.28);stroke:rgba(200,168,106,.8);stroke-width:1}
@@ -2501,8 +2513,12 @@ img.me-face{object-fit:cover;padding:0}
 /* Home handicap card only. Navy field, white type, red actions. Score marks and maps are not restyled here. */
 .hero{background:#0B2545;color:#F6F7F9}
 .hero .overline{color:#F6F7F9}
-.hero .delta{background:#C8102E;color:#FFFFFF;max-width:100%}
-.hero .hi-ch-l{color:#FFFFFF;text-decoration:underline;text-underline-offset:3px}
+.hero .hi-strip{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 12px;margin-top:14px;min-width:0}
+.hero .hi-facts{min-width:0;display:flex;flex-direction:column;gap:2px}
+.hero .hi-when,.hero .hi-evo{margin:0;color:#F6F7F9;font-size:calc(13.5px*var(--ts,1));line-height:1.35;font-weight:500}
+.hero .hi-when span,.hero .hi-evo span{font-weight:500}
+.hero .hi-when b,.hero .hi-evo b{font-weight:650;font-variant-numeric:tabular-nums}
+.hero .hi-ch-l{flex:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:44px;min-width:44px;margin:0;padding:0 14px;border:1.5px solid rgba(246,247,249,.72);border-radius:12px;background:transparent;color:#F6F7F9;font-size:calc(14px*var(--ts,1));font-weight:650;text-decoration:none}
 .hero .hp-prac{background:#C8102E;color:#FFFFFF;box-shadow:none}
 .hero .hp-av{background:#13315C;color:#FFFFFF;border:2px solid #F6F7F9;box-shadow:none}
 .hero .hi-profs .hp-av{border-color:#9CC6EA}
@@ -2607,7 +2623,7 @@ html.rc-map .tk-dock{background:transparent;color:#F6F7F9;max-height:none;overfl
 html.rc-map .tk-nav,html.rc-map .tk-acts,html.rc-map .tk-club,html.rc-map .tk-msg,html.rc-map .tk-water{pointer-events:auto}
 html.rc-map .tk-hn b,html.rc-map .tk-hn span,html.rc-map .tk-msg{color:#F6F7F9;text-shadow:0 1px 6px rgba(0,0,0,.55)}
 html.rc-map .tk-nav{margin:0}
-html.rc-map .tk-acts{margin:6px 0 0;flex-wrap:wrap;align-items:center}
+html.rc-map .tk-acts{margin:4px 0 0;flex-wrap:wrap;align-items:center;gap:6px}
 html.rc-map .tk-acts>*{flex:0 0 auto}
 html.rc-map .tk-acts .tk-enter,html.rc-map .tk-acts .tk-next{flex:1 0 92px;min-width:92px;min-height:44px}
 html.rc-map .tk-acts .tk-ghost{min-height:44px}
@@ -2617,8 +2633,12 @@ html.rc-map .tk-ro.tk-setup{white-space:normal;max-width:min(280px,calc(100% - 8
 html.rc-map .tk-ro b,html.rc-map .tk-ro small{display:inline}
 html.rc-map .tk-ro small{margin-left:6px}
 html.rc-map .tk-club{background:rgba(255,255,255,.94);border-radius:12px;padding:4px 6px;color:#0B2545}
-html.rc-map .tk-scale{position:absolute;right:max(10px,env(safe-area-inset-right));top:calc(62% + 104px);z-index:4;width:128px;margin:0;color:#F6F7F9;font-size:11px;line-height:1.3;text-align:right;text-shadow:0 1px 4px rgba(0,0,0,.65)}
-html.rc-map .tk-axisnote{position:absolute;left:12px;right:148px;top:calc(62% + 104px);z-index:4;margin:0;color:#F6F7F9;font-size:11px;line-height:1.3;text-shadow:0 1px 4px rgba(0,0,0,.65);pointer-events:none}
+html.rc-map .tk-scale{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 78px);top:auto;z-index:4;width:148px;margin:0;color:#F6F7F9;font-size:11px;line-height:1.3;text-align:right;text-shadow:0 1px 4px rgba(0,0,0,.65)}
+html.rc-map .tk-axisnote,html.rc-map .tk-opennote{position:absolute;left:16px;right:16px;z-index:4;margin:0;color:#F6F7F9;font-size:11px;line-height:1.3;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.65);pointer-events:none}
+html.rc-map .tk-axisnote{top:calc(env(safe-area-inset-top) + 72px)}
+html.rc-map .tk-opennote{top:calc(env(safe-area-inset-top) + 88px)}
+html.rc-map .tk-sum{background:transparent;color:#F6F7F9;margin:0;padding:0;border-radius:0;box-shadow:none;font-size:12px;line-height:1.3;text-shadow:0 1px 4px rgba(0,0,0,.65);max-height:20px;overflow:hidden}
+html.rc-map .tk-sum button{margin-top:0;min-height:44px}
 html.rc-map,html.rc-map .tk,html.rc-map .tk-map,html.rc-map .tk-ro,html.rc-map .tk-shot,html.rc-map .tk-hn,html.rc-map .tk-axisnote,html.rc-map .tk-scale,html.rc-map button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 html.rc-map input,html.rc-map textarea,html.rc-map select{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 html.rc-map .tk-putt{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.94);color:#0B2545;border-radius:12px;padding:4px 8px;font-size:12px;pointer-events:auto}
