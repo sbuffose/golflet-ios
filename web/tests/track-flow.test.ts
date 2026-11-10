@@ -161,8 +161,8 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-putting")), "0");
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-putter-off.png" });
     await page.select("#play-club", "Driver");
-    const driven = await aim(page, -38.0362);
-    assert.ok(driven < -38.0358 && driven > -38.0366, String(driven));
+    const driven = await aim(page, -38.03482);
+    assert.ok(driven < -38.03455 && driven > -38.0351, String(driven));
     assert.equal((await page.$eval("#tkro", el => el.textContent || "")).includes("En el hoyo"), false);
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-driver.png" });
     await ready(page);
@@ -178,8 +178,8 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-history.png" });
     await ready(page);
     await page.select("#play-club", "PW");
-    const approach = await aim(page, -38.03415);
-    assert.ok(approach > -38.0344 && approach < -38.03395, String(approach));
+    const approach = await aim(page, -38.03395);
+    assert.ok(approach > -38.0342 && approach < -38.03375, String(approach));
     assert.equal((await page.$eval("#tkro", el => el.textContent || "")).includes("En el hoyo"), false);
     await ready(page);
     const beforeZoom = Number(await page.$eval("#tkmap", el => el.getAttribute("data-z")));
@@ -187,6 +187,12 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("PW"));
     assert.equal(posts[1].club, "PW");
     assert.equal(posts[1].lie ?? null, null);
+    assert.ok(Math.abs(Number(posts[1].lat) - Number(posts[0].end_lat)) < 1e-4, "el PW sale de donde terminó el driver");
+    assert.ok(Number(posts[1].distance_m) > 50 && Number(posts[1].distance_m) < 160, `PW ${posts[1].distance_m} m`);
+    const approachRail = await page.$eval("#rc-shots", el => el.textContent || "");
+    assert.match(approachRail, /PW · (\d+) yd/);
+    const pwYd = Number((approachRail.match(/PW · (\d+) yd/) || [])[1]);
+    assert.ok(pwYd > 50 && pwYd < 175, approachRail);
     await page.click("#play-lie");
     await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-putting") === "1" && document.querySelector("#tkmap")?.getAttribute("data-moving") === "0");
     const onGreen = await page.evaluate(() => ({
@@ -231,7 +237,10 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-map")), "ready");
     assert.equal(await page.$("#play-hit"), null);
     assert.equal(posts[3].result, "holed");
-    assert.match(await page.$eval("#tk-sum", el => el.textContent || ""), /Putts: /);
+    const closed = await page.$eval("#tkro", el => el.textContent || "");
+    assert.match(closed, /putts/i);
+    assert.equal(closed.includes("Solo putts"), false);
+    assert.equal(await page.$("#tk-sum span"), null);
     await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(null)))));
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-holed.png" });
     const holedBg = mapBackgroundFraction("/opt/cursor/artifacts/track-390-holed.png", 0.12, 0.36);

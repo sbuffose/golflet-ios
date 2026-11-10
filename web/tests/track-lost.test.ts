@@ -25,8 +25,14 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     if (url.pathname.startsWith("/api/")) {
       let raw = "";
       for await (const chunk of req) raw += chunk;
-      if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [], bag: [{ club: "Driver", carry: 250, total: 260 }] });
-      if (url.pathname === "/api/bag") return json([{ club: "Driver", carry: 250, total: 260 }]);
+      const bag = [
+        { club: "Driver", carry: 250, total: 260 }, { club: "3W", carry: 220, total: 230 }, { club: "5W", carry: 200, total: 210 },
+        { club: "4i", carry: 190, total: 195 }, { club: "5i", carry: 175, total: 180 }, { club: "6i", carry: 165, total: 170 },
+        { club: "7i", carry: 150, total: 155 }, { club: "8i", carry: 140, total: 145 }, { club: "9i", carry: 125, total: 130 },
+        { club: "PW", carry: 110, total: 115 }, { club: "GW", carry: 95, total: 100 }, { club: "SW", carry: 80, total: 85 },
+      ];
+      if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [], bag });
+      if (url.pathname === "/api/bag") return json(bag);
       if (url.pathname === "/api/club-stats") return json({ clubs: [{ club: "Dr", label: "Driver", tee_shots: { n: 6, avg_yd: 241 } }] });
       if (url.pathname === "/api/reconstructions" && req.method === "GET") return json({ rounds: [], reconstructions: [{ id: "live-vieja", current_hole: 1, club_code: "209", vm_course: "Cancha Vieja", course: "Cancha Vieja", round_id: null }] });
       if (url.pathname === "/api/gps/courses/209-cancha-vieja") return json({ course: { club_code: "209", course: "Cancha Vieja", holes: vieja } });
@@ -82,8 +88,17 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     assert.ok(hidden.w <= 1 && hidden.h <= 1 && hidden.opacity === "0");
     await page.click("#play-club-tile");
     await page.waitForSelector("#play-club-list:not([hidden])");
-    const sheet = await page.$eval("#play-club-sheet", el => getComputedStyle(el).display);
-    assert.notEqual(sheet, "none");
+    const sheetBox = await page.$eval("#play-club-sheet", el => {
+      const box = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      const names = [...el.querySelectorAll("button[data-club] b")].map(node => node.textContent || "");
+      const behind = document.querySelector("#play-hit") as HTMLElement | null;
+      return { display: style.display, w: box.width, h: box.height, names, hit: behind ? behind.getBoundingClientRect().top : 0 };
+    });
+    assert.equal(sheetBox.display, "flex");
+    assert.ok(sheetBox.w >= 390 && sheetBox.h >= 800, JSON.stringify(sheetBox));
+    assert.ok(sheetBox.names.length >= 12, sheetBox.names.join(","));
+    assert.equal(sheetBox.names.some(name => /^\d{2,}/.test(name.trim())), false);
     await page.screenshot({ path: "/opt/cursor/artifacts/palos-390.png" });
     await page.click("#play-club-close");
     await page.mouse.move(195, 340);
@@ -91,7 +106,10 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     await page.mouse.move(195, 420, { steps: 4 });
     await page.mouse.up();
     await ready(page);
-    await page.$eval("#play-lost-prov", el => (el as HTMLButtonElement).click());
+    await page.click("#play-penalty");
+    await page.waitForSelector("#play-pen-menu:not([hidden])");
+    await page.screenshot({ path: "/opt/cursor/artifacts/perdida-antes-390.png" });
+    await page.click("#play-lost-prov");
     await page.waitForFunction(() => document.querySelectorAll("#rc-shots button").length === 3, { timeout: 15000 });
     assert.equal(posts.length, 3);
     assert.equal(posts[0].result, "lost");
@@ -106,6 +124,9 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     assert.equal(rail[0].includes("yd"), false);
     assert.match(rail[1], /^2\. Penalidad/);
     assert.match(rail[2], /^3\./);
+    const aimRead = await page.$eval("#tkro", el => el.textContent || "");
+    assert.equal(/^0 yd/.test(aimRead.trim()), false, aimRead);
+    assert.match(aimRead, /hasta la mira/);
     await page.screenshot({ path: "/opt/cursor/artifacts/perdida-390.png" });
     await ready(page);
     await page.click("#play-hit");
