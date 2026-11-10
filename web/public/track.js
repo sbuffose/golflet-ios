@@ -64,7 +64,7 @@
       track: R().trackNew(), cam: { z: 17, cx: 0.5, cy: 0.5, hdg: 0 }, frame: 'overview', axis: null, mapReady: false, mapGen: 0, tileCache: new Map(), tileFlight: new Map(),
       more: false, history: false, saved: H.shots || [],
       alive: true, done: false, suggestedTee: null, suggestedPin: null, flagKind: 'none', adjusted: false, clubChosen: false, cmapTried: false,
-      playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false,
+      playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false, undoing: false,
     };
 
     const holeRec = () => S.holes.find(h => h.hole === S.hole || h.number === S.hole) || S.holes[S.hole - 1] || {};
@@ -1023,7 +1023,7 @@
     };
 
     const undoLast = async () => {
-      if (!S.alive || !S.track.marks.length) return;
+      if (!S.alive || S.undoing || !S.track.marks.length) return;
       const last = S.track.marks[S.track.marks.length - 1];
       const marks = S.track.marks.slice(0, -1);
       const ball = playingPoint(marks);
@@ -1033,25 +1033,34 @@
         render();
         return;
       }
-      S.track = { ...S.track, marks, ball: ball ? { ...ball } : null, phase: 'tracking' };
-      S.done = marks.some(m => m.holed);
-      S.holeIntent = false;
-      S.puttDraft = '';
-      S.clubAuto = '';
-      if (!originOnGreen()) { S.playerLie = ''; S.lieBall = null; }
-      syncClubToOrigin();
-      S.panned = false;
-      S.adjusted = false;
-      fitCam();
+      const apply = failed => {
+        if (!S.alive) return;
+        if (S.track.marks[S.track.marks.length - 1] !== last) return;
+        S.msg = failed || '';
+        S.track = { ...S.track, marks, ball: ball ? { ...ball } : null, phase: 'tracking' };
+        S.done = marks.some(m => m.holed);
+        S.holeIntent = false;
+        S.puttDraft = '';
+        S.clubAuto = '';
+        if (!originOnGreen()) { S.playerLie = ''; S.lieBall = null; }
+        syncClubToOrigin();
+        S.panned = false;
+        S.adjusted = false;
+        fitCam();
+        render();
+      };
       const savedId = (S.saved || []).filter(s => Number(s.hole) === Number(S.hole)).slice(-1)[0]?.id;
-      if (!savedId || typeof H.onUndo !== 'function') { render(); return; }
+      if (!savedId || typeof H.onUndo !== 'function') { apply(''); return; }
+      S.undoing = true;
       try {
         const shots = await H.onUndo(savedId);
         if (!S.alive || shots == null) return;
         if (Array.isArray(shots)) S.saved = shots;
-      } catch (e) { if (!S.alive) return; S.msg = e.message || 'No se pudo deshacer el golpe.'; }
-      if (!S.alive) return;
-      render();
+        apply('');
+      } catch (e) {
+        if (!S.alive) return;
+        apply(e.message || 'No se pudo deshacer el golpe.');
+      } finally { S.undoing = false; }
     };
 
     const wire = () => {

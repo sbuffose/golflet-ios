@@ -6,7 +6,15 @@
     "pass": 111,
     "skip": 0,
     "fail": 0,
-    "note": "Corrida en esta VM, que tiene Chrome. No reemplaza la validación de archivo."
+    "note": "Corrida en esta VM después del arreglo del deshacer, con Chrome. 111 pass no reemplaza la validación de archivo."
+  },
+  "archive_1e47c41": {
+    "where": "/workspace/golflet-reference/release-1e47c41",
+    "total": 111,
+    "pass": 93,
+    "skip": 17,
+    "fail": 1,
+    "fail_test": "web/tests/shot-map.test.ts penalty, drop and the next shot keep separate origins. Node detached en el segundo #play-undo. A/B de public/track.js contra 62a7595."
   },
   "archive_commit": "3cf581596f67fdb84656252a85b39aef392b6fad",
   "archive_validation": {
@@ -30,6 +38,6 @@
   },
   "relevant_regressions_already_in_this_suite": [
     "inherited-pass: grupo que no se borra, águila distinta de birdie, eje Golfistics de Vieja y Colorada sin polígono ni u/v, foto sin 0045, juego de hierros, Azul OSM",
-    "track-flow, track-putt, track-yard, derived-play, round-context, map-ready, round-track"
+    "track-flow, track-putt, track-yard, derived-play, round-context, map-ready, round-track, shot-map"
   ]
 }
