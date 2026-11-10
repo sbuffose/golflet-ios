@@ -102,6 +102,7 @@ final class AppModel {
     private var reopenClubsAfterFailure = false
     /// Bumped on sign-in and sign-out. Same user id is a new generation.
     private var snapshotEpoch = 0
+    private var notificationsEpoch = 0
     var sessionEpoch: Int { snapshotEpoch }
 
     func sessionStill(_ epoch: Int) -> Bool {
@@ -726,16 +727,22 @@ final class AppModel {
 
     func refreshNotifications() async {
         guard isSignedIn else { return }
+        notificationsEpoch += 1
+        let epoch = notificationsEpoch
         do {
             async let loadedUnread = api.unreadNotifications()
             async let loadedInbox = api.notifications()
             let unread = try await loadedUnread
             let inbox = try await loadedInbox
+            // A decline can finish while bootstrap is still refreshing. The older
+            // response must not put the invitation back.
+            guard epoch == notificationsEpoch else { return }
             notifications = inbox.items
             unreadNotificationCount = unread.unreadCount
             unreadBadge = unread.badge ?? inbox.badge
             notificationsAvailable = true
         } catch {
+            guard epoch == notificationsEpoch else { return }
             notifications = []
             unreadNotificationCount = 0
             unreadBadge = nil
