@@ -335,11 +335,30 @@
       const phase = S.track.phase;
       const ball = S.track.ball && R().knownPoint(S.track.ball.lat, S.track.ball.lng);
       if (phase === 'tracking' && !S.done && cursor && ball && hav(ball, cursor) > 0.4) line([ball, cursor], 'tk-live');
-      if (ball) {
+      const placed = [];
+      const reserve = (x, y) => { placed.push([x, y]); };
+      const nudge = (x, y) => {
+        let nx = x, ny = y, n = 0;
+        while (placed.some(p => Math.hypot(p[0] - nx, p[1] - ny) < 26) && n < 8) {
+          const ang = Math.PI + n * (Math.PI / 4);
+          nx = x + Math.cos(ang) * 28;
+          ny = y + Math.sin(ang) * 28;
+          n += 1;
+        }
+        placed.push([nx, ny]);
+        return [nx, ny];
+      };
+      if (pin) { const ps = toScreen(pin, W, H); if (ps) reserve(ps[0], ps[1]); }
+      if (ball && !S.done) {
         const s = toScreen(ball, W, H);
         const n = S.track.marks.filter(m => m.countsStroke).length + 1;
-        if (s && phase === 'tracking' && !S.done) o += `<g class="tk-origin" data-n="${n}" data-lat="${ball.lat}" data-lng="${ball.lng}"><circle cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-aim-n" x="${s[0]}" y="${s[1] - 18}">${n}</text></g>`;
-        else if (s) o += `<g class="tk-origin" data-lat="${ball.lat}" data-lng="${ball.lng}"><circle cx="${s[0]}" cy="${s[1]}" r="8"/></g>`;
+        if (s && phase === 'tracking') {
+          reserve(s[0], s[1]);
+          o += `<g class="tk-origin" data-n="${n}" data-lat="${ball.lat}" data-lng="${ball.lng}"><circle cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-aim-n" x="${s[0]}" y="${s[1] - 18}">${n}</text></g>`;
+        } else if (s) {
+          reserve(s[0], s[1]);
+          o += `<g class="tk-origin" data-lat="${ball.lat}" data-lng="${ball.lng}"><circle cx="${s[0]}" cy="${s[1]}" r="8"/></g>`;
+        }
       }
       if (phase === 'penaltyWhere' && cursor) {
         const from = S.track.ball && R().knownPoint(S.track.ball.lat, S.track.ball.lng) || (tee && R().knownPoint(tee.lat, tee.lng));
@@ -355,15 +374,38 @@
         const lost = [...known].reverse().find(m => m.penalty);
         if (lost) line([lost.at, cursor], 'tk-drop-line');
       }
+      const isPutt = m => m.countsStroke && !m.penalty && !m.lost && !m.drop && (m.putt || /putt|^pt$/i.test(String(m.club || '')));
+      const drawStroke = (m, label) => {
+        const s = toScreen(m.at, W, H);
+        if (!s) return;
+        const [x, y] = nudge(s[0], s[1]);
+        const lost = m.lost ? ' tk-lost-shot' : '';
+        const r = String(label).length > 2 ? 16 : 11;
+        o += `<g class="tk-shot-mark${lost}" data-n="${m.n}" data-lost="${m.lost ? '1' : '0'}" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><circle class="tk-dot" cx="${x}" cy="${y}" r="${r}"/><text class="tk-shot-n" x="${x}" y="${y}">${label}</text></g>`;
+      };
       for (const m of known) {
+        if (!m.penalty) continue;
         const s = toScreen(m.at, W, H);
         if (!s) continue;
-        if (m.penalty) {
-          o += `<g class="tk-lost" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><line x1="${s[0] - 7}" y1="${s[1] - 7}" x2="${s[0] + 7}" y2="${s[1] + 7}"/><line x1="${s[0] + 7}" y1="${s[1] - 7}" x2="${s[0] - 7}" y2="${s[1] + 7}"/></g>`;
-        } else if (m.countsStroke) {
-          const lost = m.lost ? ' tk-lost-shot' : '';
-          o += `<g class="tk-shot-mark${lost}" data-n="${m.n}" data-lost="${m.lost ? '1' : '0'}" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><circle class="tk-dot" cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-shot-n" x="${s[0]}" y="${s[1]}">${m.n}</text></g>`;
+        const [x, y] = nudge(s[0], s[1]);
+        o += `<g class="tk-lost" data-lat="${m.at.lat}" data-lng="${m.at.lng}"><line x1="${x - 7}" y1="${y - 7}" x2="${x + 7}" y2="${y + 7}"/><line x1="${x + 7}" y1="${y - 7}" x2="${x - 7}" y2="${y + 7}"/></g>`;
+      }
+      const strokes = known.filter(m => m.countsStroke && !m.penalty);
+      const runs = [];
+      if (S.done) {
+        let i = 0;
+        while (i < strokes.length) {
+          const closePutt = j => isPutt(strokes[j]) && hav(strokes[j - 1].at, strokes[j].at) != null && hav(strokes[j - 1].at, strokes[j].at) < 30;
+          if (!isPutt(strokes[i])) { runs.push([strokes[i]]); i += 1; continue; }
+          let j = i + 1;
+          while (j < strokes.length && closePutt(j)) j += 1;
+          runs.push(strokes.slice(i, j));
+          i = j;
         }
+      } else strokes.forEach(m => runs.push([m]));
+      for (const run of runs) {
+        if (run.length === 1) drawStroke(run[0], String(run[0].n));
+        else drawStroke(run[run.length - 1], `${run[0].n}–${run[run.length - 1].n}`);
       }
       return o;
     };
@@ -499,19 +541,23 @@
         }
         if (putting()) {
           if (cupOn) return `<b>En el hoyo</b>`;
-          const left = meters == null ? '' : `${fmtM(meters)} m al hoyo`;
-          return `<b class="num">${left || '—'}</b><small>estimada en el mapa</small>`;
+          const left = meters == null ? '—' : `${fmtM(meters)} m al hoyo`;
+          return `<b class="num">${left}</b><small>estimada en el mapa</small>`;
         }
         if (S.flagKind === 'pin' && cupOn) return `<b>En el hoyo</b><small>ENTER confirma</small>`;
         const travel = flown == null ? '' : `${flown} yd`;
         const left = yd(meters) == null ? '' : `${yd(meters)} yd al hoyo`;
-        return `<b class="num">${travel || '—'}</b>${travel ? '<small>hasta la mira</small>' : ''}${left ? `<small class="num">${left}</small>` : ''}<small>Arrastrá hasta donde terminó el golpe</small>${flightWind(ball, here)}`;
+        return aimChip(travel, left, ball, here);
       }
       if (phase === 'confirmTee' || phase === 'confirmFlag' || phase === 'drop' || phase === 'penaltyWhere' || phase === 'relief') {
         return `<b>${esc(PROMPT[phase])}</b>${meters != null && phase !== 'confirmTee' ? `<small class="num">${(yd(meters) ?? '—')} yd al hoyo</small>` : ''}`;
       }
       if (S.flagKind === 'pin' && cupOn) return `<b>En el hoyo</b><small>ENTER confirma</small>`;
-      return `<b class="num">${flown ?? '—'} yd</b><small>${meters == null ? '' : (yd(meters) + ' yd al hoyo')}</small><small>Arrastrá hasta donde terminó el golpe</small>${flightWind(ball, here)}`;
+      return aimChip(flown == null ? '' : `${flown} yd`, meters == null ? '' : `${yd(meters)} yd al hoyo`, ball, here);
+    };
+    const aimChip = (travel, left, ball, here) => {
+      const first = !((S.track.marks || []).some(m => m.countsStroke)) && !S.panned;
+      return `<b class="num">${travel || '—'}</b>${left ? `<small>${left}</small>` : ''}${first ? '<small>Arrastrá hasta donde terminó el golpe</small>' : ''}${flightWind(ball, here)}`;
     };
     const flightWind = (from, to) => {
       const w = S.wind;
@@ -581,10 +627,17 @@
       }
       const clubBlank = S.club ? '' : '<option value="">Elegir palo</option>';
       const picked = clubChoices.find(c => c.id === S.club);
+      const bagRow = id => (S.bag || []).find(b => b && (b.id === id || b.code === id || b.club === id || b.label === id));
       const carryOf = id => {
-        const row = (S.bag || []).find(b => b && (b.id === id || b.code === id || b.club === id || b.label === id));
+        const row = bagRow(id);
         const n = row && (row.total || row.carry);
         return n ? String(n) : '';
+      };
+      const tileYards = c => {
+        if (R().isPutterClub && R().isPutterClub(c.id, c.label)) return '';
+        const row = bagRow(c.id);
+        const n = row && (row.carry || row.total);
+        return n ? `${n} yd` : '';
       };
       S.suggest = '';
       if (showClub && !putting() && !S.done) {
@@ -603,7 +656,7 @@
           if (best) S.suggest = best;
         }
       }
-      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="Palo"><b>${esc(shortClub(picked?.label || ''))}</b><small>CLUB</small></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => { const on = c.id === S.club ? ' on' : ''; const sug = c.id === S.suggest ? ' sug' : ''; return `<li><button type="button" data-club="${esc(c.id)}" class="${(on + sug).trim()}"><b>${esc(shortClub(c.label))}</b>${c.id === S.suggest ? '<i>Sugerido</i>' : ''}</button></li>`; }).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>` : '';
+      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="Palo"><b>${esc(shortClub(picked?.label || ''))}</b><small>CLUB</small></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => { const on = c.id === S.club ? ' on' : ''; const sug = c.id === S.suggest ? ' sug' : ''; const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}" class="${(on + sug).trim()}"><b>${esc(shortClub(c.label))}</b>${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>` : '';
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
@@ -645,16 +698,21 @@
           if (landed && prevKnown && hav(prevKnown, landed) > 3) prevKnown = landed;
         }
         const lost = s.result === 'lost';
-        return { id: s.id, club: penalty ? 'Penalidad' : (lost ? 'perdida' : (clubLabel(s.club) || s.club)), yards: lost || penalty || !(label.text && label.kind !== 'penalty') ? '' : label.text, unknown: !lost && !penalty && label.kind === 'missing', n: i + 1 };
+        return { id: s.id, club: penalty ? 'Penalidad' : (lost ? 'Perdida' : (clubLabel(s.club) || s.club)), yards: lost || penalty || !(label.text && label.kind !== 'penalty') ? '' : label.text, unknown: !lost && !penalty && label.kind === 'missing', n: i + 1 };
       });
       const railSource = savedRail.length ? savedRail : S.track.marks.filter(m => m.countsStroke).map((m, i) => {
         const prev = playingPoint(S.track.marks.slice(0, S.track.marks.indexOf(m)));
         const meters = prev ? hav(prev, { lat: m.lat, lng: m.lng }) : null;
         const putt = !m.penalty && !m.lost && (m.putt || /putt/i.test(String(m.club || '')));
-        return { id: m.id, club: m.lost ? 'perdida' : m.penalty ? 'Penalidad +1' : (putt ? `Putt ${i + 1}` : (clubLabel(m.club) || m.club)), yards: m.penalty || m.lost ? '' : (putt && meters != null ? `${fmtM(meters)} m` : (meters == null ? '' : `${yd(meters)} yd`)), unknown: !m.penalty && !m.lost && !R().knownPoint(m.lat, m.lng), n: m.n || i + 1, sacada: !!m.recovery };
+        return { id: m.id, club: m.lost ? 'Perdida' : m.penalty ? 'Penalidad +1' : (putt ? `Putt ${i + 1}` : (clubLabel(m.club) || m.club)), yards: m.penalty || m.lost ? '' : (putt && meters != null ? `${fmtM(meters)} m` : (meters == null ? '' : `${yd(meters)} yd`)), unknown: !m.penalty && !m.lost && !R().knownPoint(m.lat, m.lng), n: m.n || i + 1, sacada: !!m.recovery };
       });
-      const rail = retro && railSource.length ? `<div class="tk-shots-rail" id="rc-shots" aria-label="Golpes">${railSource.map((s, i) => `<button type="button" class="tk-shot" id="play-shot-${i}">${s.n}. ${esc(s.club || '—')}${s.yards ? ` · ${esc(s.yards)}` : s.unknown ? ' · Sin ubicación' : ''}</button>`).join('')}</div>` : (!retro ? `<div class="tk-shots-rail" aria-label="Golpes">${marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? 'Drop' : m.penalty ? 'P' : m.holed ? 'Hoyo' : (m.club ? esc(clubLabel(m.club)) : (i + 1))}</span>`).join('')}</div>` : '');
-      let summary = '';
+      const railOpen = S.railHole === S.hole && !!S.railOpen;
+      const railMany = railSource.length > 3;
+      const railKeep = railMany && !railOpen ? new Set(railSource.slice(-3).map(s => s.n)) : null;
+      const railMore = railMany ? `<button type="button" class="tk-shot tk-more" id="play-shots-more">${railOpen ? 'Menos' : `+${railSource.length - 3}`}</button>` : '';
+      const railBtn = s => `<button type="button" class="tk-shot" id="play-shot-${s.n}"${railKeep && !railKeep.has(s.n) ? ' hidden' : ''}>${s.n}. ${esc(s.club || '—')}${s.yards ? ` · ${esc(s.yards)}` : s.unknown ? ' · Sin ubicación' : ''}</button>`;
+      const rail = retro && railSource.length ? `<div class="tk-shots-rail" id="rc-shots" aria-label="Golpes">${railMore}${railSource.map(railBtn).join('')}</div>` : (!retro ? `<div class="tk-shots-rail" aria-label="Golpes">${marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? 'Drop' : m.penalty ? 'P' : m.holed ? 'Hoyo' : (m.club ? esc(clubLabel(m.club)) : (i + 1))}</span>`).join('')}</div>` : '');
+      let saveBtn = '';
       if (retro && savedRows.length && R().trackHoleSummary) {
         const facts = savedRows.map(s => {
           const end = R().knownPoint(s.end_lat, s.end_lng);
@@ -666,7 +724,7 @@
         const sum = R().trackHoleSummary(par || null, facts);
         S.derived = { putts: sum.putts, gir: sum.gir, fir: sum.fir };
         const canSave = sum.finished && typeof H.onStats === 'function' && R().emptyStatFill && R().emptyStatFill(S.storedMark || null, S.derived);
-        summary = canSave ? `<div class="tk-sum" id="tk-sum"><button type="button" id="play-stats">Guardar lo que falta</button></div>` : '';
+        saveBtn = canSave ? `<button type="button" class="tk-nextsub" id="play-stats">Guardar lo que falta</button>` : '';
       }
       const setup = retro && (phase === 'confirmTee' || phase === 'confirmFlag');
       const marking = retro && phase === 'tracking' && !S.done && phase !== 'relief';
@@ -682,7 +740,7 @@
         <div class="tk-map" id="tkmap"></div>
         <div class="tk-maperr" id="tk-maperr" hidden><b>El mapa no cargó.</b><button type="button" id="tk-retry">Reintentar</button></div>
         <div class="tk-ret on ${pen ? 'pen' : ''}" id="play-reticle" data-cursor="${cursorKind}" aria-hidden="true"><i></i>${cursorKind === 'drop' ? `<b>${nextStroke}</b>` : ''}</div>
-        ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>${S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? `<p class="tk-scale">Satélite real hasta el zoom 17.</p>` : ''}` : ''}
+        ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>` : ''}
         ${rail}
         <div class="tk-top">
           ${retro ? `<button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button>` : `<a class="tk-ib" href="#/inicio" aria-label="Inicio">⌂</a>`}
@@ -690,21 +748,20 @@
         </div>
         ${setup ? holeChip : ''}
         <div class="tk-chips">${windChip()}</div>
-        <p class="tk-driver" id="tk-driver" hidden></p>
-        ${read ? `<div class="tk-ro${setup ? ' tk-setup' : ''}" id="tkro">${read}</div>` : ''}
+        <div class="tk-notes"><p class="tk-driver" id="tk-driver" hidden></p>${retro && S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? `<p class="tk-scale">Satélite real hasta el zoom 17.</p>` : ''}</div>
+        ${read ? `<div class="tk-ro${setup ? ' tk-setup' : ''}${retro && S.done ? ' tk-done' : ''}" id="tkro">${read}</div>` : ''}
         ${hs ? `<a class="tk-strat" id="strategy-compact" href="#/estrategia/${encodeURIComponent(S.strat.course_key || S.course?.course_key || '')}">${esc(hs.plan_title || 'Plan del hoyo')}</a>` : ''}
         <div class="tk-dock">
           ${retro && greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}
           ${retro && verifiedTee() && verifiedFlag() && !spanOk() ? `<p class="tk-opennote" id="rc-nogeo">La salida no cierra. No marco un rumbo.</p>` : ''}
           ${retro && cmapHole()?.green?.source === 'openstreetmap' ? `<p class="tk-osmnote" title="Contorno © OpenStreetMap contributors (ODbL). No es el pin.">Contorno OSM. No es el pin.</p>` : ''}
           ${retro && cmapHole()?.green?.source === 'satellite_visual' ? `<p class="tk-osmnote" title="Contorno aceptado en el admin. No es un relevamiento ni el pin.">Contorno del admin. No es el pin.</p>` : ''}
-          ${retro && S.done ? `<button type="button" class="tk-nextwide" id="play-next">Siguiente hoyo ›</button>` : ''}
+          ${retro && S.done ? `<div class="tk-nextblock"><button type="button" class="tk-nextwide" id="play-next">Siguiente hoyo ›</button>${saveBtn}</div>` : ''}
           ${setup ? '' : `<div class="tk-nav">
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>
             <div class="tk-hn"><b>Hoyo ${S.hole}</b><span>${`Par ${par || '—'}${cardYd ? ` · ${cardYd}` : ''}${hcp != null && hcp !== '' && Number.isFinite(Number(hcp)) ? ` · Hcp ${hcp}` : ''}`}</span></div>
             <button type="button" id="tknext" ${S.hole >= 18 ? 'disabled' : ''} aria-label="Hoyo siguiente">›</button>
           </div>`}
-          ${summary}
           ${S.teeSource === 'jugador' ? `<p class="tk-player" id="tk-player">Salida confirmada por vos. No es una medida.</p>` : ''}
           ${S.flagSource === 'jugador' ? `<p class="tk-player" id="tk-flag-player">Hoyo confirmado por vos. No es una medida.</p>` : ''}
           ${S.msg ? `<p class="tk-msg">${esc(S.msg)}</p>` : ''}
@@ -1307,6 +1364,8 @@
         paintMap();
       };
       const more = el.querySelector('#play-more'); if (more) more.onclick = () => { S.more = !S.more; render(); };
+      const shotsMore = el.querySelector('#play-shots-more');
+      if (shotsMore) shotsMore.onclick = () => { S.railOpen = !(S.railHole === S.hole && S.railOpen); S.railHole = S.hole; render(); };
       const hist = el.querySelector('#play-history'); if (hist) hist.onclick = () => { S.history = !S.history; render(); };
       const zoomBy = d => {
         stopCam();
