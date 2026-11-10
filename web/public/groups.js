@@ -14,7 +14,7 @@
   ];
   const MT = Object.fromEntries(MET.map(m => [m[0], m]));
   const SECTIONS = [['table', 'Tabla'], ['trend', 'Evolución'], ['holes', 'Hoyo por hoyo'], ['vs', 'Mano a mano'], ['clubs', 'Distancias por palo']];
-  const RANGES = [['1w', 'Semana'], ['1m', 'Mes'], ['3q', 'Trimestre'], ['6s', 'Semestre'], ['12y', 'Año'], ['all', 'Histórico']];
+  const RANGES = [['1w', 'Sem', 'Semana'], ['1m', 'Mes', 'Mes'], ['3q', 'Trim', 'Trimestre'], ['6s', 'Sem.', 'Semestre'], ['12y', 'Año', 'Año'], ['all', 'Todo', 'Histórico']];
   const MIN_FALLBACK = { '1w': 1, '1m': 2, '3q': 3, '6s': 4, '12y': 4, all: 3 };
   /* which "Qué comparto" category hides each metric */
   const CAT = k => { const t = MT[k][2]; return t === 't' ? 'score_types' : t === 'p' ? 'holes' : t === 'u' ? 'putting' : t === 'g' || t === 'r' ? 'gir_fir' : t === 'h' ? 'handicap' : 'scores'; };
@@ -167,13 +167,12 @@
 
   function filters(id, d, qs, base) {
     const y = d.filters.year || '', c = d.filters.course || '', r = y ? '' : (d.filters.range || 'all');
-    const yr = `<div class="seg vx-seg rng-seg gg-rng" role="tablist" aria-label="Período">${RANGES.map(([v, l]) => `<a role="tab" aria-selected="${v === r}" class="${v === r ? 'on' : ''}" href="${base}${keepQs(qs, { range: v, year: null })}">${l}</a>`).join('')}${y ? `<a class="on" href="${base}${keepQs(qs, { year: null, range: 'all' })}">${y} ✕</a>` : ''}</div>`;
+    const yr = `<div class="seg vx-seg rng-seg gg-rng" role="tablist" aria-label="Período">${RANGES.map(([v, short, full]) => `<a role="tab" aria-selected="${v === r}" aria-label="${full}" class="${v === r ? 'on' : ''}" href="${base}${keepQs(qs, { range: v, year: null })}">${short}</a>`).join('')}${y ? `<a class="on" href="${base}${keepQs(qs, { year: null, range: 'all' })}" aria-label="${y}">${y} ✕</a>` : ''}</div>`;
     const courses = d.filters.courses || [];
-    if (!courses.length) return yr;
     const current = courses.find(x => x.key === c);
     const opts = [['all', 'Todas las canchas'], ...courses.map(x => [x.key, x.label])];
-    const cs = `<details class="gg-course"><summary>${H.esc(current ? current.label : 'Todas las canchas')} ▾</summary><div>${opts.map(([v, l]) => `<a class="${v === (c || 'all') ? 'on' : ''}" href="${base}${keepQs(qs, { course: v })}">${H.esc(l)}</a>`).join('')}</div></details>`;
-    return yr + cs;
+    const cs = courses.length ? `<details class="gg-course"><summary>${H.esc(current ? current.label : 'Canchas')} ▾</summary><div>${opts.map(([v, l]) => `<a class="${v === (c || 'all') ? 'on' : ''}" href="${base}${keepQs(qs, { course: v })}">${H.esc(l)}</a>`).join('')}</div></details>` : '';
+    return `<div class="gg-filters">${yr}${cs}</div>`;
   }
   function trendSvg(ms, link) {
     const pts = ms.flatMap(m => (m.trend || []).map(t => ({ m, ...t })).filter(t => t.avg_gross != null));
@@ -192,6 +191,7 @@
   function legend(ms) { return `<div class="gg-legend">${ms.map(m => `<span>${dot(m.color)}${H.esc(m.name)}${m.is_me ? ' (vos)' : ''}${m.is_admin ? '<span class="gg-adm">admin</span>' : ''}</span>`).join('')}</div>`; }
 
   const CHEV = '<svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l6 6-6 6"/></svg>';
+  const SEAL = '<span class="gg-seal" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M9 3h5l2 7 2-7h5l-4 12H13z" fill="#0B2545"/><circle cx="16" cy="21" r="8" fill="#C8A86A"/><circle cx="16" cy="21" r="3.5" fill="none" stroke="#0B2545" stroke-width="1.4"/></svg></span>';
   function drawGroup(el, id, d, qs, isVs) {
     const ms = d.members, base = isVs ? location.hash.split('?')[0] : `#/grupo/${id}`, V = d.view || {};
     const order = (V.metrics && V.metrics.length ? V.metrics : MET.map(m => m[0])).filter(k => MT[k]);
@@ -211,13 +211,13 @@
       vs: () => !isVs && ms.length > 2 ? `<div class="section"><h2>Mano a mano</h2></div><div class="card gg-vs">${ms.filter(m => !m.is_me).map(m => { const me = ms.find(x => x.is_me); return me ? `<a class="vx-chip" href="#/grupo/${id}/vs/${me.member_id}/${m.member_id}${keepQs(qs, { members: null })}">${dot(m.color)}Vos vs ${H.esc(m.name)}</a>` : ''; }).join('')}</div>` : '',
     };
     const gear = !isVs ? `<details class="gg-gear"><summary aria-label="Ajustes del grupo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></summary><div><a href="#/grupo/${id}/vista">Personalizar mi vista</a>${d.group.is_admin ? `<a href="#/grupo/${id}/ajustes">Cambiar foto</a><a href="#/grupo/${id}/ajustes">Ajustes y link de invitación</a>` : ''}</div></details>` : '';
-    const sampleOf = m => { const n = m.cards_18 ?? m.rounds; const nine = m.cards_9 || 0; return nine ? `${n} de 18 · ${nine} de 9` : `${n == null ? '' : n + ' tarjetas'}`; };
+    const cardsLine = m => { const eighteen = Number(m.cards_18 ?? m.rounds ?? 0), nine = Number(m.cards_9 || 0), total = eighteen + nine; if (!total) return ''; return nine ? `${total} tarjetas (${eighteen} de 18 y ${nine} de 9)` : (total === 1 ? '1 tarjeta' : `${total} tarjetas`); };
     const rankOf = (key, title) => {
       const rows = ms.map(m => ({ m, v: val(m, key), hidden: hid(m, key) })).filter(x => !x.hidden && x.v != null);
       rows.sort((a, b) => (MT[key][3] ? a.v - b.v : b.v - a.v));
       if (!rows.length) return `<section class="gg-rank" id="gg-${key}"><h2>${title}</h2><p class="foot">Sin tarjetas compartidas para este número.</p></section>`;
-      const pod = rows.slice(0, 3).map((x, i) => `<a class="gg-pod" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><i class="num">${i + 1}</i>${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="num">${fmt(key, x.v)}</span><small>${H.esc(sampleOf(x.m))}</small></a>`).join('');
-      const rest = rows.slice(3).map(x => `<a class="gg-rankrow" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span>${H.esc(x.m.name)}</span><b class="num">${fmt(key, x.v)}</b><small>${H.esc(sampleOf(x.m))}</small></a>`).join('');
+      const pod = rows.slice(0, 3).map((x, i) => `<a class="gg-pod" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><i class="num">${i + 1}</i>${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="num">${fmt(key, x.v)}</span><small>${H.esc(String(x.m.cards_18 ?? x.m.rounds ?? ''))}</small></a>`).join('');
+      const rest = rows.slice(3).map(x => `<a class="gg-rankrow" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span>${H.esc(x.m.name)}</span><b class="num">${fmt(key, x.v)}</b><small>${H.esc(String(x.m.cards_18 ?? x.m.rounds ?? ''))}</small></a>`).join('');
       const rate = rows[0] && per(rows[0].m, key) != null ? `<p class="foot">El primero: ${H.f1(per(rows[0].m, key))} por ronda de 18. Una tarjeta de 9 entra por hoyo, no en el promedio de golpes.</p>` : `<p class="foot">Una tarjeta de 9 entra por hoyo. El promedio de golpes usa solo las de 18.</p>`;
       return `<section class="gg-rank" id="gg-${key}"><h2>${title}</h2><div class="gg-podium">${pod}</div>${rest ? `<div class="gg-rest">${rest}</div>` : ''}${rate}</section>`;
     };
@@ -225,8 +225,10 @@
       const live = rows.filter(x => x.v != null);
       if (!live.length) return '';
       live.sort((a, b) => a.low ? a.v - b.v : b.v - a.v);
-      const pod = live.slice(0, 3).map((x, i) => `<a class="gg-pod" href="${href}"><i class="num">${i + 1}</i>${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="num">${x.text}</span><small>${x.n} tarjetas</small></a>`).join('');
-      return `<section class="gg-rank"><h2>${title}</h2><div class="gg-podium">${pod}</div><p class="foot">${xNote(title)}</p></section>`;
+      const n = Math.min(live.length, 3);
+      const order = n >= 3 ? [1, 0, 2] : n === 2 ? [1, 0] : [0];
+      const pod = order.map(i => { const x = live[i], place = i + 1; return `<a class="gg-step p${place}" href="${href}"><span class="gg-place">${place}º</span>${place === 1 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="num">${x.text}</span><small>${x.n} tarjetas</small></a>`; }).join('');
+      return `<section class="gg-rank"><h2>${title}</h2><div class="gg-steps n${n}">${pod}</div><p class="foot">${xNote(title)}</p></section>`;
     };
     const xNote = t => t.startsWith('Consistencia') ? 'Desvío del gross en tarjetas de 18. Menos es más parejo. Hacen falta 3.' : 'Rondas de 18 seguidas en el par o mejor. Una de 9 no corta ni suma la racha.';
     const consist = extraRank('Consistencia', ms.filter(m => !(m.hidden || []).includes('scores')).map(m => ({ m, v: m.consistency?.sd ?? null, n: m.consistency?.n || 0, text: m.consistency?.sd == null ? '' : String(m.consistency.sd).replace('.', ','), low: true })), `#/grupo/${id}/m/avg_gross${keepQs(qs)}`);
@@ -246,18 +248,18 @@
     };
     const rankCard = (key, title) => {
       const rows = ranked(key);
-      if (!rows.length) return `<section class="gg-rank gg-slide" id="gg-${key}"><h2>${H.esc(title)}</h2><p class="foot">Sin tarjetas compartidas para este número.</p></section>`;
-      const top = Math.max(...rows.filter(x => !shy(key, x)).map(x => Math.abs(x.v)), 1);
-      const pod = rows.slice(0, 3).map((x, i) => {
-        const quiet = shy(key, x);
+      if (!rows.length) return `<div class="gg-rank" id="gg-${key}"><p class="foot">Sin tarjetas compartidas para este número.</p></div>`;
+      const n = Math.min(rows.length, 3);
+      const order = n >= 3 ? [1, 0, 2] : n === 2 ? [1, 0] : [0];
+      const steps = order.map(i => {
+        const x = rows[i], place = i + 1, quiet = shy(key, x), rate = per(x.m, key);
         const num = quiet ? '<span class="gg-few">Pocas rondas</span>' : `<span class="num gg-count" data-n="${x.v}">${fmt(key, x.v)}</span>`;
-        const sub = quiet ? `${x.n} de ${minN}` : sampleOf(x.m);
-        return `<a class="gg-pod${i === 0 ? ' is-1' : ''}" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><i class="num">${i + 1}</i>${i === 0 ? '<img class="cad xs" src="/brand/caddie.png" alt="">' : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b>${num}<small>${H.esc(sub)}</small>${meter(quiet ? 0 : Math.abs(x.v) / top * 100)}</a>`;
+        const rateLine = !quiet && rate != null ? `<small>${H.f1(rate)} por ronda</small>` : '';
+        const gap = place === 1 ? gapLine(key, rows) : '';
+        return `<a class="gg-step p${place}" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span class="gg-place">${place}º</span>${place === 1 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b>${num}${rateLine}${gap ? `<small class="gg-gap">${H.esc(gap)}</small>` : ''}</a>`;
       }).join('');
-      const rest = rows.slice(3).map(x => `<a class="gg-rankrow" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span>${H.esc(x.m.name)}</span><b class="num">${shy(key, x) ? 'Pocas rondas' : fmt(key, x.v)}</b><small>${H.esc(sampleOf(x.m))}</small></a>`).join('');
-      const rate = per(rows[0].m, key);
-      const note = rows[0].n < minN && ['avg_gross', 'avg_net'].includes(key) ? `Hacen falta ${minN} tarjetas de 18 para el promedio.` : (rate != null && rows[0].n >= minN ? `${H.f1(rate)} por ronda de 18.` : 'Una tarjeta de 9 entra por hoyo, no en el promedio de golpes.');
-      return `<section class="gg-rank gg-slide" id="gg-${key}"><h2>${H.esc(title)}</h2><div class="gg-podium">${pod}</div>${gapLine(key, rows) ? `<p class="gg-gap">${H.esc(gapLine(key, rows))}</p>` : ''}${rest ? `<div class="gg-rest">${rest}</div>` : ''}<p class="foot">${note}</p></section>`;
+      const rest = rows.slice(3).map((x, i) => `<a class="gg-rankrow" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span>${i + 4}º ${H.esc(x.m.name)}</span><b class="num">${shy(key, x) ? 'Pocas rondas' : fmt(key, x.v)}</b></a>`).join('');
+      return `<div class="gg-rank" id="gg-${key}"><div class="gg-steps n${n}">${steps}</div>${rest ? `<div class="gg-rest">${rest}</div>` : ''}</div>`;
     };
     const place = () => {
       const rows = ranked('birdies');
@@ -270,19 +272,20 @@
         const prevI = prev.findIndex(x => x.id === me.member_id);
         if (prevI >= 0) {
           const delta = (prevI + 1) - (i + 1);
-          arrow = delta > 0 ? `<b class="gg-up">↑ ${delta}</b>` : delta < 0 ? `<b class="gg-dn">↓ ${-delta}</b>` : '<b class="gg-eq">＝</b>';
+          arrow = delta > 0 ? `<p class="gg-move"><b class="gg-up">↑ ${delta}</b></p>` : delta < 0 ? `<p class="gg-move"><b class="gg-dn">↓ ${-delta}</b></p>` : '';
         }
       }
-      return `<section class="gg-me"><span>Tu puesto en birdies</span><b class="num gg-count" data-n="${i + 1}">${i + 1}</b>${arrow}<small>${H.esc(sampleOf(me))}</small></section>`;
+      const cards = cardsLine(me);
+      return `<section class="gg-hero"><p class="gg-kicker">Tu puesto</p><b class="gg-ranknum"><span class="num gg-count" data-n="${i + 1}">${i + 1}</span>º</b>${arrow}<span class="gg-where">en birdies</span>${cards ? `<p class="gg-cards">${H.esc(cards)}</p>` : ''}</section>`;
     };
     const trophy = (title, rows) => {
       const live = rows.filter(x => x.v != null);
       if (!live.length || (!live[0].low && live.every(x => x.v === 0))) return '';
       const best = live[0].low ? Math.min(...live.map(x => x.v)) : Math.max(...live.map(x => x.v));
-      const names = live.filter(x => x.v === best).map(x => x.m.name);
-      return `<span class="gg-badge">${H.esc(title)}<small>${H.esc(names.join(', '))}</small></span>`;
+      const winners = live.filter(x => x.v === best);
+      return `<article class="gg-trophy"><span class="gg-medal">${SEAL}</span><b>${H.esc(title)}</b><span class="gg-tw">${photo(winners[0].m, 'gg-av sm')}<span>${H.esc(winners.map(x => x.m.name).join(', '))}</span></span></article>`;
     };
-    const badges = !isVs ? `<div class="gg-badges">${[
+    const badges = !isVs ? `<div class="section"><h2>Trofeos</h2></div><div class="gg-trophies">${[
       trophy('Rey del birdie', ranked('birdies')),
       trophy('Más pares', ranked('pars')),
       trophy('Mejor neto', ranked('best_net').map(x => ({ ...x, low: true }))),
@@ -294,17 +297,21 @@
     const me = ms.find(m => m.is_me);
     const challenge = !isVs && goal && me && !(me.hidden || []).includes('scores') ? `<section class="gg-rank gg-goal"><h2>${goal[1]}</h2>${meter(Math.round(Math.min(1, (me.cards_18 ?? 0) / goal[0]) * 100))}<p class="foot">${me.cards_18 ?? 0} de ${goal[0]} tarjetas de 18. Una de 9 no cuenta como ronda completa.</p></section>` : '';
     const secs = (V.sections && V.sections.length ? V.sections : SECTIONS.map(x => x[0])).filter(k => sec[k]);
-    const cards = [['birdies', 'Birdies'], ['pars', 'Pares'], ['eagles', 'Águilas'], ['aces', 'Hoyos en uno'], ['max_birdies', 'Máximo de birdies'], ['rounds', 'Rondas'], ['best_net', 'Mejor neto'], ['avg_net', 'Promedio neto']].map(([k, t]) => rankCard(k, t)).join('');
-    const slides = !isVs ? `<div class="gg-carousel" aria-label="Rankings">${cards}</div>` : '';
+    const CATS = [['birdies', 'Birdies'], ['pars', 'Pares'], ['eagles', 'Águilas'], ['aces', 'Hoyos en uno'], ['max_birdies', 'Máximo de birdies'], ['rounds', 'Rondas'], ['best_net', 'Mejor neto'], ['avg_net', 'Promedio neto']];
+    const slides = !isVs ? `<div class="section"><h2>Ranking</h2></div><div class="gg-cats" role="tablist" aria-label="Categoría">${CATS.map(([k, t], i) => `<button type="button" role="tab" data-cat="${k}" aria-selected="${i ? 'false' : 'true'}" class="${i ? '' : 'on'}">${t}</button>`).join('')}</div><div class="gg-stages">${CATS.map(([k, t], i) => `<div class="gg-stage" data-cat="${k}"${i ? ' hidden' : ''}>${rankCard(k, t)}</div>`).join('')}</div>` : '';
     const fullTable = !isVs && secs.includes('table') ? `<details class="gg-full"><summary>Ver tabla completa</summary>${sec.table()}</details>` : '';
     el.innerHTML = `${isVs ? bar(ms.map(m => m.name).join(' vs '), 'Mano a mano') : `<div class="gg-top"><div class="bar"><span class="overline">Grupo</span></div>${gear}</div><div class="gg-head">${photo(d.group, 'gg-hph')}<div class="stitle">${H.esc(d.group.name)}</div></div>`}
       ${legend(ms)}${filters(id, d, qs, base)}
-      ${!isVs ? place() : ''}${badges}${challenge}${slides}
+      ${!isVs ? place() : ''}${slides}${badges}${challenge}
       ${!isVs ? `${worst}${consist}${racha}` : ''}
       ${fullTable}
       ${ms.length < 2 ? `<div class="msg"><img class="cad" src="/brand/caddie.png" alt="">Todavía sos el único en el grupo. ${d.group.is_admin ? `<a class="link" href="#/grupo/${id}/ajustes">Compartí el link por WhatsApp</a> o invitá por matrícula.` : 'Cuando alguien más se sume, acá ves la comparación.'}</div>` : ''}
       ${secs.filter(k => k !== 'table').map(k => sec[k]()).join('')}
       ${!isVs ? `<div class="section"><h2>Jugadores</h2></div><a class="card gg-list row" href="#/grupo/${id}/miembros"><div class="gg-t"><b>${d.group.is_admin ? 'Jugadores, admins e invitaciones' : 'Ver jugadores y salir del grupo'}</b><span>${ms.length} en el grupo · ${d.group.admins} admin${d.group.admins === 1 ? '' : 's'}${d.pending.length ? ` · ${d.pending.length} pendiente${d.pending.length === 1 ? '' : 's'}` : ''}</span></div>${CHEV}</a>` : ''}`;
+    el.querySelectorAll('.gg-cats button').forEach(b => b.onclick = () => {
+      el.querySelectorAll('.gg-cats button').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); });
+      el.querySelectorAll('.gg-stage').forEach(s => { s.hidden = s.dataset.cat !== b.dataset.cat; });
+    });
     if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     el.querySelectorAll('.gg-count').forEach(node => {
       const to = Number(node.dataset.n);
