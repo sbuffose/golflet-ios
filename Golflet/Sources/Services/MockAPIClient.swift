@@ -313,6 +313,7 @@ struct MockAPIClient: GolfletAPI {
     }
 
     func saveBag(_ items: [BagClub]) async throws -> [BagClub] { items }
+    func saveIronSet(brand: String, model: String) async throws -> String { "Guardé \(brand) \(model)." }
 
     private var isLinked: Bool {
         Self.sessionLock.lock()

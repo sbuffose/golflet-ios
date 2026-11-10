@@ -58,6 +58,7 @@ struct ReconstructionShot: Identifiable, Equatable, Sendable {
     var endLat: Double?
     var endLng: Double?
     var distanceM: Double?
+    var lie: String?
     var positionLabel: String
     var distanceLabel: String
 

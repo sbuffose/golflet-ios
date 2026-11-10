@@ -549,10 +549,6 @@ struct PlayHoleView: View {
                                     .font(GType.label)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
-                                if let carry = club.carry, !isPutter(club.name) {
-                                    Text("\(carry)")
-                                        .font(GFont.ui(11, weight: .semibold))
-                                }
                                 if suggestedName == club.name {
                                     Text("Sugerido")
                                         .font(GFont.ui(9, weight: .semibold))

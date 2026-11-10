@@ -218,6 +218,25 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertEqual(TrackSession.holeClose(par: 4, strokes: 5, putts: 2), "5 golpes · 2 putts · Bogey")
         XCTAssertEqual(TrackSession.holeClose(par: 4, strokes: 5, putts: nil), "5 golpes · Putts sin confirmar · Bogey")
         XCTAssertEqual(TrackSession.suggest(yards: 150, bag: [("Driver", 230), ("7i", 155), ("Putter", nil)]), "7i")
+        let open = TrackCard.derive(par: 4, shots: [TrackCard.Fact(putt: true, originGreen: true)])
+        XCTAssertEqual(open.putts.state, "unconfirmed")
+        let closed = TrackCard.derive(par: 4, shots: [
+            TrackCard.Fact(endLie: "fairway", direction: "center"),
+            TrackCard.Fact(holed: true, putt: true, originGreen: true, endLie: "green"),
+        ])
+        XCTAssertEqual(closed.putts, TrackCard.Slot(value: 1, state: "track"))
+        XCTAssertEqual(closed.drive, TrackCard.Slot(value: "fairway", state: "track"))
+        XCTAssertEqual(closed.gir, TrackCard.Slot(value: true, state: "track"))
+        XCTAssertEqual(TrackCard.derive(par: 3, shots: [TrackCard.Fact(holed: true)]).drive.state, "na")
+        XCTAssertEqual(TrackCard.derive(par: 4, shots: [TrackCard.Fact(holed: true)]).drive.state, "unconfirmed")
+        XCTAssertEqual(TrackCard.editorFairway("fairway"), "hit")
+        let suite = "iron-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        IronSetStore.save(brand: "Titleist", model: "T100", defaults: defaults)
+        XCTAssertEqual(IronSetStore.load(defaults: defaults), IronSetStore.Saved(brand: "Titleist", model: "T100"))
+        IronSetStore.clear(defaults: defaults)
+        XCTAssertNil(IronSetStore.load(defaults: defaults))
+        defaults.removePersistentDomain(forName: suite)
         XCTAssertEqual(HoleWind.shotNote(kmh: nil, tempC: nil, rainMm: nil, from: nil), "Clima no disponible")
         XCTAssertFalse(HoleWind.shotNote(kmh: 18, tempC: 21, rainMm: 1, from: nil).contains("yd"))
         XCTAssertTrue(HoleWind.shotNote(kmh: 18, tempC: 21, rainMm: 1, from: nil).contains("18 km/h"))
