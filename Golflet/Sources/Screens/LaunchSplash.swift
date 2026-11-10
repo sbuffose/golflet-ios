@@ -1,35 +1,22 @@
 import SwiftUI
 
-/// Cold-launch mark. The caddie and the red 18 flag play every time the app
-/// opens, then the root fades into onboarding or home. Reduce Motion holds
-/// a still frame instead of moving the caddie.
+/// Cold-launch mark. The drawing already carries the 18 flag, so the splash
+/// does not paint a second one. Reduce Motion holds a still frame.
 struct LaunchSplash: View {
     var firstLaunch: Bool
     var reduceMotion: Bool
     var onFinish: () -> Void
 
     @State private var shown = false
-    @State private var flag = false
 
     var body: some View {
         ZStack {
             Color(hex: BrandHex.navy)
                 .ignoresSafeArea()
             VStack(spacing: 18) {
-                ZStack(alignment: .topTrailing) {
-                    Image("OnboardingCaddie")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: firstLaunch ? 240 : 200)
-                        .offset(y: shown || reduceMotion ? 0 : 28)
-                        .opacity(shown || reduceMotion ? 1 : 0)
-                        .accessibilityHidden(true)
-                    LaunchFlag()
-                        .frame(width: 72, height: 54)
-                        .rotationEffect(.degrees(flag || reduceMotion ? 0 : -8))
-                        .offset(x: 18, y: 8)
-                        .opacity(flag || reduceMotion ? 1 : 0)
-                }
+                CaddieMark(height: firstLaunch ? 240 : 200)
+                    .offset(y: shown || reduceMotion ? 0 : 28)
+                    .opacity(shown || reduceMotion ? 1 : 0)
                 Text("Golflet")
                     .font(GFont.ui(28, weight: .semibold))
                     .foregroundStyle(Color(hex: BrandHex.white))
@@ -51,7 +38,6 @@ struct LaunchSplash: View {
             let move = reduceMotion ? 0.0 : 0.45
             withAnimation(.easeOut(duration: move)) {
                 shown = true
-                flag = true
             }
             let hold = LaunchSplash.hold(firstLaunch: firstLaunch, reduceMotion: reduceMotion)
             Task {
@@ -67,30 +53,5 @@ struct LaunchSplash: View {
         if RuntimeFlags.isUITesting { return 0.05 }
         if reduceMotion { return 0.45 }
         return firstLaunch ? 1.5 : 1.1
-    }
-}
-
-struct LaunchFlag: View {
-    var body: some View {
-        Canvas { context, size in
-            var pole = Path()
-            pole.move(to: CGPoint(x: 6, y: 2))
-            pole.addLine(to: CGPoint(x: 6, y: size.height))
-            context.stroke(pole, with: .color(Color(hex: BrandHex.white)), lineWidth: 2)
-            var cloth = Path()
-            cloth.move(to: CGPoint(x: 8, y: 4))
-            cloth.addLine(to: CGPoint(x: size.width - 2, y: 10))
-            cloth.addLine(to: CGPoint(x: 8, y: 28))
-            cloth.closeSubpath()
-            context.fill(cloth, with: .color(Color(hex: BrandHex.red)))
-        }
-        .overlay(alignment: .topLeading) {
-            Text("18")
-                .font(GFont.ui(13, weight: .bold))
-                .foregroundStyle(Color(hex: BrandHex.white))
-                .padding(.leading, 14)
-                .padding(.top, 2)
-        }
-        .accessibilityHidden(true)
     }
 }

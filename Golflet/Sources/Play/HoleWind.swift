@@ -59,6 +59,20 @@ enum HoleWind {
         }
     }
 
+    /// Numbers without a direction stay numbers. Yards are not estimated.
+    static func shotNote(kmh: Int?, tempC: Int?, rainMm: Double?, from: String?) -> String {
+        var bits: [String] = []
+        if let kmh { bits.append("\(kmh) km/h") }
+        if let tempC { bits.append("\(tempC)°C") }
+        if let rainMm, rainMm > 0 { bits.append("lluvia") }
+        guard !bits.isEmpty else { return "Clima no disponible" }
+        let head = bits.joined(separator: " · ")
+        if degrees(from: from) == nil {
+            return "\(head). Sin dirección de viento. No ajusto la distancia."
+        }
+        return "\(head). Sin rumbo verificado del hoyo. No ajusto la distancia."
+    }
+
     /// `bearingDeg` is the direction of play, tee toward the green.
     /// Wind FROM that same direction is into the face (en contra).
     static func relative(windFromDeg: Double?, bearingDeg: Double?) -> Relative {

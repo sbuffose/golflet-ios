@@ -10,7 +10,6 @@ import { allUserShots, userClubs } from "./live";
 import { clubStats } from "./shots-calc";
 import { callName, titleWord } from "./person-name";
 import { effectiveShare, getView, linkInfo, newToken, type Share } from "./group-share";
-import { rangeSince, parseRange } from "./metrics";
 import { createGroupAtomic } from "./group-create-tx";
 
 export const MAX_MEMBERS = 12, INVITES_PER_DAY = 20, GROUPS_PER_DAY = 10;
@@ -68,6 +67,19 @@ export async function loadGroup(groupId: string, viewerId: string, need: "member
   if ((need === "owner" || need === "admin") && !isAdmin) throw new HttpError(403, "Solo los admins del grupo pueden hacer esto.");
   return { group: g, members, me: me ?? null, isOwner: isAdmin, isAdmin };
 }
+/** JPEG of an accepted member, only when that member shares the profile. Otherwise 404. */
+export async function memberProfilePhoto(groupId: string, viewerId: string, memberId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(memberId || "")) throw new HttpError(404, "Sin foto");
+  const { members } = await loadGroup(groupId, viewerId, "member");
+  const row = members.find(m => m.member_id === memberId && m.status === "accepted" && m.user_id);
+  if (!row?.user_id) throw new HttpError(404, "Sin foto");
+  const share = (await effectiveShare(groupId, [row.user_id])).get(row.user_id);
+  if (!share?.profile) throw new HttpError(404, "Sin foto");
+  const { readProfilePhoto } = await import("./profile-photo");
+  const photo = await readProfilePhoto(row.user_id);
+  if (!photo) throw new HttpError(404, "Sin foto");
+  return photo;
+}
 export const photoUrl = (g: { id: string; has_photo?: boolean; photo_updated_at?: string | null }) =>
   g.has_photo ? `/api/groups/${g.id}/photo?v=${g.photo_updated_at ? new Date(g.photo_updated_at).getTime() : 0}` : null;
 
@@ -121,25 +133,31 @@ export async function respond(userId: string, groupId: string, accept: boolean) 
   await q(`insert into notification_read (user_id, item_key) values ($1, $2) on conflict do nothing`, [userId, `group_invite:${me!.member_id}`]).catch(() => {});  // t154u
   return { ok: true, status: accept ? "accepted" : "declined" };
 }
-/** Any member can leave. If the last admin leaves, the oldest remaining member becomes admin; the last member leaving deletes the group. */
+export type LeaveSeat = { member_id: string; status: string; role: string; responded_at?: string | null; invited_at?: string | null };
+/** The last accepted member leaves a dormant group. The row stays. Nobody else's cards are removed. */
+export function leavePlan(meId: string, members: LeaveSeat[]) {
+  const others = members.filter(m => m.status === "accepted" && m.member_id !== meId);
+  if (!others.length) return { deleted: false as const, dormant: true as const, remaining: 0, promoted_member_id: null as string | null };
+  const promoted = others.some(m => m.role === "admin") ? null
+    : others.slice().sort((a, b) => String(a.responded_at || a.invited_at).localeCompare(String(b.responded_at || b.invited_at)))[0].member_id;
+  return { deleted: false as const, dormant: false as const, remaining: others.length, promoted_member_id: promoted };
+}
+/** Any member can leave. The group is never deleted here. A sole admin hands the role to the oldest remaining member. */
 export async function leave(userId: string, groupId: string) {
   const { me, members } = await loadGroup(groupId, userId, "member");
-  const others = members.filter(m => m.status === "accepted" && m.member_id !== me!.member_id);
-  if (!others.length) { await q(`delete from cmp_group where id=$1`, [groupId]); await event(userId, "group.delete", groupId); return { ok: true, deleted: true }; }
+  const plan = leavePlan(me!.member_id, members);
   await q(`update cmp_member set status='left', role='member', responded_at=now() where id=$1`, [me!.member_id]);
   await event(userId, "leave", groupId, me!.member_id);
-  let promoted: string | null = null;
-  if (!others.some(m => m.role === "admin")) {
-    const oldest = others.slice().sort((a, b) => String(a.responded_at || a.invited_at).localeCompare(String(b.responded_at || b.invited_at)))[0];
-    await q(`update cmp_member set role='admin' where id=$1`, [oldest.member_id]); promoted = oldest.member_id;
-    await event(userId, "role.auto_admin", groupId, oldest.member_id);
+  if (plan.promoted_member_id) {
+    await q(`update cmp_member set role='admin' where id=$1`, [plan.promoted_member_id]);
+    await event(userId, "role.auto_admin", groupId, plan.promoted_member_id);
   }
-  return { ok: true, remaining: others.length, promoted_member_id: promoted };
+  return { ok: true, deleted: false, dormant: plan.dormant, remaining: plan.remaining, promoted_member_id: plan.promoted_member_id };
 }
-/** Delete the group for everyone (admins). */
+/** A group is not deleted. Each player leaves. Admin check stays so a guest still gets 403, then 409. */
 export async function deleteGroup(userId: string, groupId: string) {
   await loadGroup(groupId, userId, "admin");
-  await q(`delete from cmp_group where id=$1`, [groupId]); await event(userId, "group.delete", groupId); return { ok: true, deleted: true };
+  throw new HttpError(409, "Un grupo no se borra. Cada jugador sale por su cuenta. El grupo y las tarjetas de los demás se quedan.");
 }
 /** Admins: make an accepted member admin or remove admin status. A group always keeps at least one admin. */
 export async function setRole(userId: string, groupId: string, memberId: string, role: unknown) {
@@ -171,7 +189,7 @@ export async function renameGroup(userId: string, groupId: string, name: unknown
 }
 
 /* ---------------- comparison (aggregates only) ---------------- */
-import { memberStats, shareMember, type NR } from "./group-stats";
+import { groupWindow, inWindow, memberStats, shareMember, worstHoles, type NR } from "./group-stats";
 export { memberStats, shareMember };
 const r1 = (x: number | null) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
 const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
@@ -180,8 +198,9 @@ export async function memberRounds(userId: string): Promise<{ rounds: NR[]; hi: 
   const d: any = await buildData(userId);
   const courses = new Map<string, { label: string; par: number | null; holes: any[] }>();
   for (const c of d.courses || []) courses.set(c.key, { label: c.course && c.club_name ? (c.label || c.course) : c.label, par: c.par ?? null, holes: (c.holes || []).map((h: any) => ({ hole: h.hole, par: h.par, hcp: h.hcp })) });
-  const rounds: NR[] = (d.rounds || []).filter((r: any) => r.valid_card && !r.is_9_holes && r.gross).map((r: any) => ({
+  const rounds: NR[] = (d.rounds || []).filter((r: any) => r.valid_card && r.gross).map((r: any) => ({
     date: r.date, year: String(r.date).slice(0, 4), course_key: r.course_key, course_label: r.course_label || courses.get(r.course_key)?.label || r.course,
+    nine: !!r.is_9_holes,
     gross: Number(r.gross) || null, net: r.net != null ? Number(r.net) : null, holes: Array.isArray(r.holes) ? r.holes : [],
     putts: r.putts ?? null, gir: r.gir ?? null, fir: r.fir ?? null, round_id: String(r.round_id),
     par: (() => { const hs = Array.isArray(r.holes) ? r.holes : []; const ok = hs.filter((h: any) => h && h[1]); return ok.length === 18 ? ok.reduce((n: number, h: any) => n + Number(h[1]), 0) : (courses.get(r.course_key)?.par ?? null); })() }));
@@ -205,13 +224,35 @@ export async function groupCompare(groupId: string, viewerId: string, f: { year?
   const data = await Promise.all(acc.map(async m => ({ m, sh: share.get(m.user_id!)!, ...(await memberRounds(m.user_id!)) })));
   const allYears = new Set<string>(), courseMembers = new Map<string, { label: string; members: Set<string> }>();
   for (const d of data) if (d.sh.scores || d.sh.holes) for (const r of d.rounds) { allYears.add(r.year); const c = courseMembers.get(r.course_key) || { label: r.course_label, members: new Set() }; c.members.add(d.m.member_id); courseMembers.set(r.course_key, c); }
-  const range = parseRange(f.range), since = range ? rangeSince(range) : null;
-  const filt = (rs: NR[]) => rs.filter(r => (!f.year || r.year === f.year) && (!since || r.date >= since) && (!f.course || r.course_key === f.course));
+  const win = f.year ? { key: null as string | null, since: null, until: null, prevSince: null, prevUntil: null, min: 3 } : groupWindow(f.range);
+  const since = win.since, range = win.key;
+  const filt = (rs: NR[]) => rs.filter(r => (!f.year || r.year === f.year) && (f.year || inWindow(r.date, win.since, win.until)) && (!f.course || r.course_key === f.course));
+  const prevOf = (rs: NR[]) => win.prevSince ? rs.filter(r => inWindow(r.date, win.prevSince, win.prevUntil) && (!f.course || r.course_key === f.course)) : [];
   const out = data.map((d, i) => {
     const rs = filt(d.rounds);
     const byCourse = Object.entries(rs.reduce((a: any, r) => { a[r.course_key] = (a[r.course_key] || 0) + 1; return a; }, {})).map(([key, n]) => ({ key, label: courseMembers.get(key)?.label || key, rounds: n }));
-    return shareMember({ member_id: d.m.member_id, name: names.get(d.m.user_id!) || "Jugador", color: colorOf(members, d.m.member_id, i),
+    const shared = shareMember({ member_id: d.m.member_id, name: names.get(d.m.user_id!) || "Jugador", color: colorOf(members, d.m.member_id, i),
       is_me: d.m.user_id === viewerId, is_admin: d.m.role === "admin", is_owner: d.m.role === "admin" }, memberStats(rs), d.sh, { hi: d.hi, by_course: byCourse });
+    const prevRs = prevOf(d.rounds);
+    if (prevRs.length && (d.sh.scores || d.sh.score_types)) {
+      const p = memberStats(prevRs);
+      shared.prev = {
+        ...(d.sh.scores ? { rounds: p.rounds, best_net: p.best_net, avg_gross: p.rounds >= win.min ? p.avg_gross : null } : {}),
+        ...(d.sh.score_types ? { birdies: p.types.birdies.total, pars: p.types.pars.total, eagles: p.types.eagles.total } : {}),
+      };
+    }
+    return shared;
+  });
+  let pics = new Set<string>();
+  try {
+    const { profilePhotos } = await import("./profile-photo");
+    pics = await profilePhotos(data.map(d => d.m.user_id).filter((id): id is string => !!id));
+  } catch (e) {
+    console.error("[groups] fotos de perfil omitidas:", e instanceof Error ? e.message : e);
+  }
+  out.forEach((o: any, i: number) => {
+    const uid = data[i].m.user_id;
+    if (uid && data[i].sh.profile && pics.has(uid)) o.photo_url = `/api/groups/${groupId}/members/${data[i].m.member_id}/photo`;
   });
   // t74u: pelota only for members sharing "ball" (omitted otherwise, never null-filled)
   { const ids = acc.filter(m => share.get(m.user_id!)?.ball).map(m => m.user_id!); if (ids.length) { const bm = await (await import("./ball")).ballsFor(ids);
@@ -226,17 +267,18 @@ export async function groupCompare(groupId: string, viewerId: string, f: { year?
     group: { id: group.id, name: group.name, is_admin: isAdmin, is_owner: isAdmin, created_at: group.created_at, photo_url: photoUrl(group), admins: members.filter(m => m.status === "accepted" && m.role === "admin").length,
       ...(isAdmin ? { link: linkInfo(group) } : {}) },
     view: mine.view, share_override: mine.share_override,
-    filters: { year: f.year || null, range: range || null, since, course: f.course || null, years: [...allYears].sort().reverse(),
+    filters: { year: f.year || null, range: f.year ? null : (range || "all"), since, until: f.year ? null : win.until, min: win.min, course: f.course || null, years: [...allYears].sort().reverse(),
       courses: [...courseMembers.entries()].map(([key, c]) => ({ key, label: c.label, members: c.members.size, shared: c.members.size >= 2 })).sort((a, b) => b.members - a.members) },
     members: out, pending,
     clubs: [...clubMap.values()].filter(c => c.members.length >= 2),
+    worst_holes: f.course ? worstHoles(data.filter(d => d.sh.holes).flatMap(d => filt(d.rounds))) : null,
   };
 }
 
 /** Per-hole head-to-head on one shared course (18-hole heatmap). */
 export async function groupHoles(groupId: string, viewerId: string, course: string, year?: string | null, memberFilter?: string[] | null, range?: string | null) {
   if (range === undefined && !year) range = (await getView(groupId, viewerId)).view.range;
-  range = parseRange(range);
+  const win = year ? null : groupWindow(range);
   const { members } = await loadGroup(groupId, viewerId, "member");
   let acc = members.filter(m => m.status === "accepted" && m.user_id);
   if (memberFilter?.length) acc = acc.filter(m => memberFilter.includes(m.member_id));
@@ -244,10 +286,10 @@ export async function groupHoles(groupId: string, viewerId: string, course: stri
   const share = await effectiveShare(groupId, acc.map(m => m.user_id!));
   const data = await Promise.all(acc.map(async m => ({ m, sh: share.get(m.user_id!)!, ...(await memberRounds(m.user_id!)) })));
   const def = data.map(d => d.courses.get(course)).find(Boolean);
-  const since = range ? rangeSince(range as any) : null;
+  const since = win?.since ?? null, until = win?.until ?? null;
   const label = def?.label || data.flatMap(d => d.rounds).find(r => r.course_key === course)?.course_label || course;
   const holeNums = def?.holes?.length ? def.holes.map((h: any) => h.hole) : Array.from({ length: 18 }, (_, i) => i + 1);
-  const per = data.map(d => ({ d, rs: d.sh.holes ? d.rounds.filter(r => r.course_key === course && (!year || r.year === year) && (!since || r.date >= since)) : [] }));
+  const per = data.map(d => ({ d, rs: d.sh.holes ? d.rounds.filter(r => r.course_key === course && (!year || r.year === year) && (year || inWindow(r.date, since, until))) : [] }));
   const withData = per.filter(p => p.rs.length);
   const holes = holeNums.map((n: number) => {
     const hd = def?.holes?.find((h: any) => h.hole === n);
@@ -255,7 +297,7 @@ export async function groupHoles(groupId: string, viewerId: string, course: stri
       const sc = rs.map(r => r.holes.find(h => h[0] === n)).filter((h): h is [number, number, number] => !!h && !!h[2]);
       const par = hd?.par ?? sc[0]?.[1] ?? null;
       const tp = sc.map(h => h[2] - h[1]);
-      return { member_id: d.m.member_id, n: sc.length, avg: r1(mean(sc.map(h => h[2]))), avg_to_par: r1(mean(tp)), birdies: tp.filter(x => x <= -1).length, pars: tp.filter(x => x === 0).length,
+      return { member_id: d.m.member_id, n: sc.length, avg: r1(mean(sc.map(h => h[2]))), avg_to_par: r1(mean(tp)), birdies: tp.filter(x => x === -1).length, eagles: tp.filter(x => x <= -2).length, pars: tp.filter(x => x === 0).length,
         bogeys: tp.filter(x => x === 1).length, doubles: tp.filter(x => x >= 2).length, best: sc.length ? Math.min(...sc.map(h => h[2])) : null, par };
     });
     const live = ms.filter(x => x.n);
@@ -265,7 +307,7 @@ export async function groupHoles(groupId: string, viewerId: string, course: stri
       leaders: { avg: bestAvg == null ? [] : live.filter(x => x.avg_to_par === bestAvg).map(x => x.member_id), birdies: lead("birdies"), pars: lead("pars") } };
   });
   return { course: { key: course, label, par: def?.par ?? null }, year: year || null, shared: withData.length >= 2,
-    range: range || null, members: per.map(({ d, rs }) => ({ member_id: d.m.member_id, name: names.get(d.m.user_id!) || "Jugador", ...(d.sh.holes ? { rounds: rs.length } : { hidden: ["holes"] }),
+    range: win?.key || null, members: per.map(({ d, rs }) => ({ member_id: d.m.member_id, name: names.get(d.m.user_id!) || "Jugador", ...(d.sh.holes ? { rounds: rs.length } : { hidden: ["holes"] }),
       color: colorOf(members, d.m.member_id), is_me: d.m.user_id === viewerId })), holes: holes.map((h: any) => ({ ...h, members: h.members.filter((x: any) => share.get(acc.find(a => a.member_id === x.member_id)!.user_id!)?.holes) })) };
 }
 

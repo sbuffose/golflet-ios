@@ -50,13 +50,13 @@ export async function effectiveShare(groupId: string, userIds: string[]): Promis
 }
 
 /* ---- per-member view of a group (only the member edits it) ---- */
-export const VIEW_METRICS = ["rounds", "avg_gross", "best_gross", "avg_net", "best_net", "handicap", "eagles", "birdies", "pars", "bogeys", "doubles", "par3", "par4", "par5", "putts", "gir", "fir"] as const;
+export const VIEW_METRICS = ["rounds", "avg_gross", "best_gross", "avg_net", "best_net", "handicap", "eagles", "birdies", "max_birdies", "pars", "bogeys", "doubles", "par3", "par4", "par5", "putts", "gir", "fir"] as const;
 export const VIEW_SECTIONS = ["table", "trend", "holes", "vs", "clubs"] as const;
 export const VIEW_DEFAULT = { metrics: [...VIEW_METRICS], sections: [...VIEW_SECTIONS], range: "all", course: null as string | null };
 export function cleanView(v: any) {
   const pick = (a: any, allowed: readonly string[]) => Array.isArray(a) ? [...new Set(a.filter((x: any) => typeof x === "string" && allowed.includes(x)))] as string[] : null;
   const metrics = pick(v?.metrics, VIEW_METRICS), sections = pick(v?.sections, VIEW_SECTIONS);
-  const range = ["1m", "3m", "6m", "12m", "all"].includes(v?.range) ? v.range : null;
+  const range = ["1w", "1m", "3q", "6s", "12y", "3m", "6m", "12m", "all"].includes(v?.range) ? v.range : null;
   const course = typeof v?.course === "string" && v.course.length <= 200 ? v.course : v?.course === null ? null : undefined;
   return { ...(metrics ? { metrics } : {}), ...(sections ? { sections } : {}), ...(range ? { range } : {}), ...(course !== undefined ? { course } : {}) };
 }

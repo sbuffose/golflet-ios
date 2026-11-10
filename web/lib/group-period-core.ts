@@ -47,6 +47,7 @@ export const STATS: StatDef[] = [
   { key: "hi_change", label: "Cambio de hándicap", short: "Hándicap", cat: "handicap", low: true, fmt: "hi", min: null, desc: "Hándicap Index al final del período menos el del inicio. Negativo es mejor." },
   { key: "eagles", label: "Águilas o mejor", short: "Águilas", cat: "score_types", low: false, fmt: "n", min: null, desc: "Hoyos en dos o más golpes bajo el par." },
   { key: "birdies", label: "Birdies", short: "Birdies", cat: "score_types", low: false, fmt: "n", min: null, desc: "Hoyos en un golpe bajo el par." },
+  { key: "max_birdies", label: "Máximo de birdies en una vuelta", short: "Máx. birdies", cat: "score_types", low: false, fmt: "n", min: null, desc: "La vuelta del período con más hoyos en exactamente un golpe bajo el par. Un águila no suma. Solo tarjetas con score hoyo por hoyo." },
   { key: "birdie_pct", label: "Birdie o mejor (% de hoyos)", short: "Birdie o mejor", cat: "score_types", low: false, fmt: "p", min: "r", desc: "Porcentaje de hoyos jugados en birdie o mejor, como en el PGA Tour." },
   { key: "pars", label: "Pares", short: "Pares", cat: "score_types", low: false, fmt: "n", min: null, desc: "Hoyos jugados en el par." },
   { key: "bogey_avoid", label: "Bogey o peor (% de hoyos)", short: "Bogey o peor", cat: "score_types", low: true, fmt: "p", min: "r", desc: "Bogey avoidance: porcentaje de hoyos en bogey o peor. Menos es mejor." },
@@ -80,6 +81,9 @@ export type SV = { v: number | null; n: number; extra?: Record<string, any> };
 /** Raw per-member stats (before sharing). */
 export function periodStats(x: PInput): Record<string, SV & { min_n: Partial<Record<Exclude<Min, null>, number>> }> | any {
   const rs = x.rounds, holes = rs.flatMap(r => r.holes.filter(h => h[1] && h[2]));
+  const withCards = rs.filter(r => r.holes.some(h => h[1] && h[2]));
+  const birdiesOf = (r: PRound) => r.holes.filter(h => h[1] && h[2] && h[2] - h[1] === -1).length;
+  const maxBirdies = withCards.length ? Math.max(...withCards.map(birdiesOf)) : null;
   const tp = holes.map(h => h[2] - h[1]), cnt = (f: (d: number) => boolean) => tp.filter(f).length;
   const best = (k: "gross" | "net") => { const c = rs.filter(r => r[k] != null && r.par).map(r => ({ tp: r[k]! - r.par!, score: r[k]!, date: r.date, course: r.course_label, round_id: r.round_id }));
     if (!c.length) return { v: null, n: 0 }; const b = c.reduce((a, z) => (z.tp < a.tp ? z : a)); return { v: b.tp, n: c.length, extra: { score: b.score, date: b.date, course: b.course } }; };
@@ -101,7 +105,8 @@ export function periodStats(x: PInput): Record<string, SV & { min_n: Partial<Rec
     avg_gross: { v: r1(mean(g.map(r => r.gross!))), n: g.length, extra: { to_par: gp.length ? r1(mean(gp.map(r => r.gross! - r.par!))) : null } },
     hi_change: { v: x.hiStart != null && x.hiEnd != null ? r1(x.hiEnd - x.hiStart) : null, n: x.hiStart != null && x.hiEnd != null ? 1 : 0, extra: { from: x.hiStart, to: x.hiEnd } },
     eagles: { v: holes.length ? cnt(d => d <= -2) : null, n: holes.length, extra: { per_round: rs.length ? r1(cnt(d => d <= -2) / rs.length) : null } },
-    birdies: { v: holes.length ? cnt(d => d === -1) : null, n: holes.length, extra: { per_round: rs.length ? r1(cnt(d => d === -1) / rs.length) : null } },
+    birdies: { v: holes.length ? cnt(d => d === -1) : null, n: holes.length, extra: { per_round: rs.length ? r1(cnt(d => d === -1) / rs.length) : null, max_round: maxBirdies } },
+    max_birdies: { v: maxBirdies, n: withCards.length },
     birdie_pct: { v: pct(cnt(d => d <= -1), holes.length), n: holes.length, extra: { count: cnt(d => d <= -1) } },
     pars: { v: holes.length ? cnt(d => d === 0) : null, n: holes.length, extra: { per_round: rs.length ? r1(cnt(d => d === 0) / rs.length) : null } },
     bogey_avoid: { v: pct(cnt(d => d >= 1), holes.length), n: holes.length, extra: { count: cnt(d => d >= 1) } },

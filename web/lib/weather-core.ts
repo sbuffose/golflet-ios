@@ -55,6 +55,140 @@ export function weatherGroups(rs: WxRound[]) {
 export function bucketOf(dim: string, r: WxRound): string | null {
   return dim === "lluvia" ? (isWet(r.wx) ? "lluvia" : "seco") : dim === "temperatura" ? tempBand(r.wx.temp_c) : dim === "viento" ? windBand(r.wx.wind_kmh) : null;
 }
+
+export type Tally = { eagles: number; birdies: number; pars: number; bogeys: number; doubles: number; holes: number; nine: boolean };
+export type PlayRound = WxRound & { holes?: unknown; tee?: string | null; nine?: boolean };
+
+/** 9 or 18 holes with par and strokes. A partial card is not a rate. */
+export function tallyHoles(holes: unknown, nine = false): Tally | null {
+  if (!Array.isArray(holes)) return null;
+  const rows: { par: number; strokes: number }[] = [];
+  for (const h of holes) {
+    if (!Array.isArray(h) || h.length < 3 || h[1] == null || h[2] == null) continue;
+    const par = Number(h[1]), strokes = Number(h[2]);
+    if (!Number.isFinite(par) || !Number.isFinite(strokes)) continue;
+    rows.push({ par, strokes });
+  }
+  if (rows.length !== 9 && rows.length !== 18) return null;
+  const out: Tally = { eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0, holes: rows.length, nine: rows.length === 9 || nine };
+  for (const h of rows) {
+    const d = h.strokes - h.par;
+    if (d <= -2) out.eagles++;
+    else if (d === -1) out.birdies++;
+    else if (d === 0) out.pars++;
+    else if (d === 1) out.bogeys++;
+    else out.doubles++;
+  }
+  return out;
+}
+
+export type Rate = { per_hole: number; per_18: number };
+export type Mix = { cards: number; holes: number; nine: number; eagles: Rate; birdies: Rate; pars: Rate; bogeys: Rate; doubles: Rate };
+const rate = (n: number, holes: number): Rate => ({ per_hole: holes ? Math.round((n / holes) * 1000) / 1000 : 0, per_18: holes ? Math.round((n / holes) * 18 * 100) / 100 : 0 });
+export function mixOf(tallies: Tally[]): Mix | null {
+  if (!tallies.length) return null;
+  const holes = tallies.reduce((s, t) => s + t.holes, 0);
+  const sum = (k: keyof Tally) => tallies.reduce((s, t) => s + Number(t[k]), 0);
+  return {
+    cards: tallies.length, holes, nine: tallies.filter(t => t.nine).length,
+    eagles: rate(sum("eagles"), holes), birdies: rate(sum("birdies"), holes), pars: rate(sum("pars"), holes),
+    bogeys: rate(sum("bogeys"), holes), doubles: rate(sum("doubles"), holes),
+  };
+}
+
+export type PlayBucket = {
+  key: string; label: string; n: number; avg_diff: number | null; vs_overall: number | null;
+  mix: Mix | null; base: Mix | null; courses: string[]; tees: string[]; comparable: boolean; note: string | null; sentence: string | null;
+};
+
+function bucketNote(courses: string[], tees: string[], n: number): { comparable: boolean; note: string | null } {
+  const courseSet = [...new Set(courses.filter(Boolean))];
+  const teeSet = [...new Set(tees.filter(Boolean))];
+  const missingTee = tees.some(t => !t);
+  if (n < MIN_GROUP) return { comparable: false, note: `Hacen falta ${MIN_GROUP} tarjetas en el grupo para comparar. Hay ${n}.` };
+  if (courseSet.length > 1) return { comparable: false, note: `Estas tarjetas son de ${courseSet.join(" y ")}. No las comparo entre sí.` };
+  if (teeSet.length > 1 || missingTee) return { comparable: false, note: missingTee ? "No todas las tarjetas dicen la salida. No comparo el resultado." : `Las salidas son ${teeSet.join(" y ")}. No las comparo entre sí.` };
+  return { comparable: true, note: null };
+}
+
+function sentenceFor(label: string, mix: Mix, base: Mix): string | null {
+  const birdie = mix.birdies.per_18 - base.birdies.per_18;
+  const bogey = (mix.bogeys.per_18 + mix.doubles.per_18) - (base.bogeys.per_18 + base.doubles.per_18);
+  if (birdie >= 0.4) return `En tus vueltas ${label} hubo más birdies por vuelta que en el resto con clima.`;
+  if (bogey >= 0.4) return `En tus vueltas ${label} hubo más bogeys o peor por vuelta que en el resto con clima.`;
+  if (birdie <= -0.4) return `En tus vueltas ${label} hubo menos birdies por vuelta que en el resto con clima.`;
+  return null;
+}
+
+/** Rates per valid hole, also shown as an 18-hole average. The comparator is the rate, never the sum of scores. */
+export function weatherPlay(rounds: PlayRound[]) {
+  const scored = rounds.map(r => ({ r, tally: tallyHoles(r.holes, !!r.nine) })).filter((x): x is { r: PlayRound; tally: Tally } => !!x.tally);
+  const base = mixOf(scored.map(x => x.tally));
+  const overallDiffs = rounds.filter(r => r.differential != null).map(r => r.differential!);
+  const overall = overallDiffs.length ? Math.round(overallDiffs.reduce((a, b) => a + b, 0) / overallDiffs.length * 10) / 10 : null;
+  const mean = (a: number[]) => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : null;
+  const build = (dim: string, buckets: readonly (readonly [string, string])[], of: (r: PlayRound) => string | null): PlayBucket[] => buckets.map(([key, label]) => {
+    const g = scored.filter(x => of(x.r) === key);
+    const diffs = g.map(x => x.r.differential).filter((d): d is number => d != null);
+    const mix = mixOf(g.map(x => x.tally));
+    const courses = [...new Set(g.map(x => x.r.course || "").filter(Boolean))];
+    const tees = g.map(x => x.r.tee || "");
+    const gate = bucketNote(courses, tees, g.length);
+    const others = mixOf(scored.filter(x => of(x.r) !== key).map(x => x.tally));
+    const sentence = gate.comparable && mix && others && g.length >= MIN_GROUP ? sentenceFor(label.toLowerCase(), mix, others) : null;
+    const avg = mean(diffs);
+    return { key, label, n: g.length, avg_diff: avg, vs_overall: avg != null && overall != null && gate.comparable ? Math.round((avg - overall) * 10) / 10 : null, mix, base, courses, tees: [...new Set(tees.filter(Boolean))], comparable: gate.comparable, note: gate.note, sentence };
+  });
+  return {
+    cards: scored.length, holes: scored.reduce((s, x) => s + x.tally.holes, 0), base, min_group: MIN_GROUP,
+    lluvia: build("lluvia", [["lluvia", "Con lluvia"], ["seco", "En seco"]], r => isWet(r.wx) ? "lluvia" : "seco"),
+    temperatura: build("temperatura", TEMP_BANDS.map(([k, label]) => [k, label] as const), r => tempBand(r.wx.temp_c)),
+    viento: build("viento", WIND_BANDS.map(([k, label]) => [k, label] as const), r => windBand(r.wx.wind_kmh)),
+  };
+}
+
+/** Archive is the observed source. The forecast model is never treated as observed. */
+export const ARCHIVE_SOURCE = "open-meteo-archive";
+export const FORECAST_SOURCE = "open-meteo-forecast";
+/** Same cutoff as the hourly reader: a day more than 6 days before today can use the archive directly. */
+export const ARCHIVE_AFTER_DAYS = 6;
+export const FORECAST_TTL_MS = 3600e3;
+export const MISS_TTL_MS = 15 * 60e3;
+
+export function daysBefore(date: string, today: string): number {
+  return Math.round((Date.parse(today + "T12:00:00Z") - Date.parse(date + "T12:00:00Z")) / 864e5);
+}
+
+/**
+ * What a round date may ask Open-Meteo.
+ * The archive does not include the local day. Recent days often are not in the archive yet:
+ * a forecast fill-in stays labeled forecast and must not enter Clima y juego.
+ */
+export function roundWeatherPlan(date: string, today: string):
+  | { action: "skip"; reason: "not_played" }
+  | { action: "forecast" }
+  | { action: "archive"; forecastFallback: boolean } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return { action: "skip", reason: "not_played" };
+  if (date > today) return { action: "skip", reason: "not_played" };
+  if (date === today) return { action: "forecast" };
+  return { action: "archive", forecastFallback: daysBefore(date, today) <= ARCHIVE_AFTER_DAYS };
+}
+
+export function countsAsObserved(source: string | null | undefined): boolean {
+  return source === ARCHIVE_SOURCE;
+}
+
+/** Final archive rows stay. Forecast and misses are retried. An explicit retry still keeps a final archive row. */
+export function weatherCacheFresh(row: { status?: string | null; source?: string | null; fetched_at?: string | Date | null }, now = Date.now(), retry = false): boolean {
+  if (!row?.fetched_at) return false;
+  const source = row.source || ARCHIVE_SOURCE;
+  const age = now - new Date(row.fetched_at).getTime();
+  if (!Number.isFinite(age) || age < 0) return false;
+  if (row.status === "ok" && source === ARCHIVE_SOURCE) return true;
+  if (retry) return false;
+  if (row.status === "ok" && source === FORECAST_SOURCE) return age < FORECAST_TTL_MS;
+  return age < MISS_TTL_MS;
+}
 /** "Jockey Club Buenos Aires" + "Colorada" → the vm_course whose name ends with the course and shares a club token. */
 export function matchCourse(clubPlayed: string | null, course: string | null, vm: { vm_course: string; lat: number; lng: number }[]) {
   const n = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();

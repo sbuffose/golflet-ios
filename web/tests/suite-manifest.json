@@ -1,0 +1,51 @@
+{
+  "suite": "web/tests/*.test.ts",
+  "how_to_read": "El reporter de node:test imprime tests, pass, fail y skipped. El total es la suma. Un skip no es un pass. Con Chrome instalado los tests de navegador corren y el skip baja. Sin Chrome esos mismos tests se omiten.",
+  "agent_vm_with_chrome": {
+    "total": 130,
+    "pass": 130,
+    "skip": 0,
+    "fail": 0,
+    "note": "Corrida en esta VM con Chrome el 2026-11-10. 130 pass, 0 skip, 0 fail. No es validación de archivo ni paridad con WhyGolf. Incluye la tarjeta derivada de TRACK, la pelota perdida con provisional y el clima sin dirección. La Vieja abre en la salida del mapa y los hoyos 7 y 16 siguen sin salida."
+  },
+  "archive_b1b65de": {
+    "where": "validación independiente de b1b65de",
+    "total": 111,
+    "pass": 94,
+    "skip": 17,
+    "fail": 0,
+    "isolated_shot_map": "8 corridas, 4 pass y 4 fail. Node detached en #play-hit (Elegí un palo y bolsa vacía), no en el deshacer."
+  },
+  "archive_1e47c41": {
+    "where": "/workspace/golflet-reference/release-1e47c41",
+    "total": 111,
+    "pass": 93,
+    "skip": 17,
+    "fail": 1,
+    "fail_test": "web/tests/shot-map.test.ts penalty, drop and the next shot keep separate origins. Node detached en el segundo #play-undo. A/B de public/track.js contra 62a7595."
+  },
+  "archive_commit": "3cf581596f67fdb84656252a85b39aef392b6fad",
+  "archive_validation": {
+    "where": "/workspace/golflet-reference/release-3cf5815",
+    "total": 111,
+    "pass": 94,
+    "skip": 17,
+    "fail": 0,
+    "not": "No fue 111 pass."
+  },
+  "not_a_general_pass": {
+    "label": "restored serial",
+    "reported": "359/338/4",
+    "why": "Deriva de STATS de 18 a 19 (entra max_birdies), una ruta de fixture y un flake. No cuenta como pass general. STATS.length queda fijado en 19 dentro de inherited-pass, sin un archivo de tests nuevo."
+  },
+  "fixtures": {
+    "azul_full": "Golflet/Resources/Fixtures/hoyos-azul.json. Lo leen web/lib/azul-osm.ts y los tests que arman la Cancha Azul. Hace falta el repo completo, no el tar solo de web/.",
+    "web_package": "El tar de web/ no incluye Golflet/Resources. Ahí no corre la geometría OSM.",
+    "browser": "Puppeteer se omite si no hay Chrome. No suma como pass.",
+    "postgres": "quick-two-devices y una nota de quick-note-fence piden Postgres local. Sin eso se omiten."
+  },
+  "relevant_regressions_already_in_this_suite": [
+    "inherited-pass: grupo que no se borra, águila distinta de birdie, eje Golfistics de Vieja y Colorada sin polígono ni u/v, foto sin 0045, juego de hierros, Azul OSM",
+    "track-flow, track-putt, track-yard, derived-play, round-context, map-ready, round-track, shot-map"
+  ]
+}

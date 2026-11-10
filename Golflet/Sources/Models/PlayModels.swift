@@ -108,6 +108,7 @@ struct ShotDraft: Hashable, Sendable {
     var length: String?
     var mishit: Bool
     var liveRoundId: String
+    var intent: String? = nil
 }
 
 struct LiveRoundDetail: Hashable, Sendable {

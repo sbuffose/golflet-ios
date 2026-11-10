@@ -23,6 +23,18 @@ final class ParityFixesTests: XCTestCase {
         )
     }
 
+    func testRoundTrackMatchesThisCourseAndDoesNotGuess() {
+        let azul = Course(clubCode: "118", clubName: "Jockey", name: "Azul", holes: [])
+        let colorado = Course(clubCode: "118", clubName: "Jockey", name: "Colorado", holes: [])
+        let other = Course(clubCode: "200", clubName: "Otro", name: "Azul", holes: [])
+        let matched = RoundTrackCourse.match(courses: [azul, colorado, other], clubCode: "118", name: "Azul")
+        XCTAssertEqual(matched?.name, "Azul")
+        XCTAssertEqual(matched?.clubCode, "118")
+        XCTAssertNil(RoundTrackCourse.match(courses: [azul, other], clubCode: "", name: "Azul"))
+        XCTAssertEqual(RoundTrackCourse.match(courses: [colorado], clubCode: "", name: "colorado")?.clubCode, "118")
+        XCTAssertNil(RoundTrackCourse.match(courses: [other], clubCode: "118", name: "Azul"))
+    }
+
     func testWindFromConventionAndMissingBearing() {
         XCTAssertEqual(HoleWind.degrees(from: "N"), 0)
         XCTAssertEqual(HoleWind.degrees(from: "sur"), 180)
@@ -184,5 +196,49 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertTrue(TrackSession.onCup(meters: 0.4))
         XCTAssertEqual(TrackSession.puttFeet(meters: 3), 10)
         XCTAssertNil(TrackSession.puttFeet(meters: 40))
+
+        let onTheCup = TrackSession.enter(state, at: flag, club: "PW", onCup: true, putting: false)
+        XCTAssertFalse(onTheCup.holed)
+        let putt = TrackSession.enter(state, at: flag, club: "Pt", onCup: true, putting: true)
+        XCTAssertTrue(putt.holed)
+        XCTAssertEqual(GroupPeriod.parse("12m"), .year)
+        XCTAssertEqual(GroupPeriod.parse("3m"), .all)
+        XCTAssertEqual(GroupPeriod.parse("1w"), .week)
+
+        var played = TrackSession.set(TrackSession.State(), at: TrackPoint(lat: 1, lng: 1))
+        played = TrackSession.set(played, at: TrackPoint(lat: 1.01, lng: 1.01))
+        let lost = TrackSession.lostBall(played, at: TrackPoint(lat: 1.004, lng: 1.004), club: "Dr", provisional: true)
+        XCTAssertEqual(lost.strokeCount, 3)
+        XCTAssertEqual(lost.marks.map(\.lost), [true, false, false])
+        XCTAssertEqual(lost.marks[1].penalty, true)
+        XCTAssertEqual(lost.marks[2].provisional, true)
+        XCTAssertEqual(lost.ball, TrackPoint(lat: 1.004, lng: 1.004))
+        XCTAssertEqual(TrackSession.undoSpan(lost), 3)
+        XCTAssertEqual(TrackSession.undo(lost).strokeCount, 0)
+        XCTAssertEqual(TrackSession.holeClose(par: 4, strokes: 5, putts: 2), "5 golpes · 2 putts · Bogey")
+        XCTAssertEqual(TrackSession.holeClose(par: 4, strokes: 5, putts: nil), "5 golpes · Putts sin confirmar · Bogey")
+        XCTAssertEqual(TrackSession.suggest(yards: 150, bag: [("Driver", 230), ("7i", 155), ("Putter", nil)]), "7i")
+        let open = TrackCard.derive(par: 4, shots: [TrackCard.Fact(putt: true, originGreen: true)])
+        XCTAssertEqual(open.putts.state, "unconfirmed")
+        let closed = TrackCard.derive(par: 4, shots: [
+            TrackCard.Fact(endLie: "fairway", direction: "center"),
+            TrackCard.Fact(holed: true, putt: true, originGreen: true, endLie: "green"),
+        ])
+        XCTAssertEqual(closed.putts, TrackCard.Slot(value: 1, state: "track"))
+        XCTAssertEqual(closed.drive, TrackCard.Slot(value: "fairway", state: "track"))
+        XCTAssertEqual(closed.gir, TrackCard.Slot(value: true, state: "track"))
+        XCTAssertEqual(TrackCard.derive(par: 3, shots: [TrackCard.Fact(holed: true)]).drive.state, "na")
+        XCTAssertEqual(TrackCard.derive(par: 4, shots: [TrackCard.Fact(holed: true)]).drive.state, "unconfirmed")
+        XCTAssertEqual(TrackCard.editorFairway("fairway"), "hit")
+        let suite = "iron-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        IronSetStore.save(brand: "Titleist", model: "T100", defaults: defaults)
+        XCTAssertEqual(IronSetStore.load(defaults: defaults), IronSetStore.Saved(brand: "Titleist", model: "T100"))
+        IronSetStore.clear(defaults: defaults)
+        XCTAssertNil(IronSetStore.load(defaults: defaults))
+        defaults.removePersistentDomain(forName: suite)
+        XCTAssertEqual(HoleWind.shotNote(kmh: nil, tempC: nil, rainMm: nil, from: nil), "Clima no disponible")
+        XCTAssertFalse(HoleWind.shotNote(kmh: 18, tempC: 21, rainMm: 1, from: nil).contains("yd"))
+        XCTAssertTrue(HoleWind.shotNote(kmh: 18, tempC: 21, rainMm: 1, from: nil).contains("18 km/h"))
     }
 }

@@ -68,6 +68,45 @@ struct ScoreCounts: Hashable, Sendable {
     }
 }
 
+enum ScoreLegend {
+    struct Item: Equatable, Identifiable, Sendable {
+        var id: HoleResult { result }
+        var result: HoleResult
+        var label: String
+        var spoken: String
+        var count: Int
+    }
+
+    static func items(holes: [HoleScore], counts: ScoreCounts) -> [Item] {
+        let rows: [(HoleResult, String, String)] = [
+            (.eagleOrBetter, "Águilas", "águilas"),
+            (.birdie, "Birdies", "birdies"),
+            (.par, "Pares", "pares"),
+            (.bogey, "Bogeys", "bogeys"),
+            (.doubleOrWorse, "Doble +", "doble o peor"),
+        ]
+        return rows.map { result, label, spoken in
+            Item(result: result, label: label, spoken: spoken, count: count(result, holes: holes, counts: counts))
+        }
+    }
+
+    static func count(_ result: HoleResult, holes: [HoleScore], counts: ScoreCounts) -> Int {
+        let known = holes.filter { $0.strokes != nil && $0.result != .unknown }
+        if !known.isEmpty {
+            return known.filter { $0.result == result }.count
+        }
+        switch result {
+        case .eagleOrBetter:
+            return ScoreCounts.resolvedEagles(reported: counts.eagles, holes: holes)
+        case .birdie: return counts.birdies
+        case .par: return counts.pars
+        case .bogey: return counts.bogeys
+        case .doubleOrWorse: return counts.doubles + counts.triples + counts.worse
+        case .unknown: return 0
+        }
+    }
+}
+
 enum ScorecardSummary {
     static func line(eagles: Int, birdies: Int, pars: Int, bogeys: Int, doubles: Int, differentialNote: String) -> String {
         var parts = ["\(birdies) birdies", "\(pars) pares", "\(bogeys) bogeys", "\(doubles) dobles"]

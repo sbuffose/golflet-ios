@@ -11,9 +11,22 @@ export function haversine(a: LatLng, b: LatLng): number {
 export const toYards = (m: number) => m / 0.9144;
 export const round1 = (x: number) => Math.round(x * 10) / 10;
 
+/** A coordinate that was actually stored. Null, blank and non-numeric stay unknown.
+ *  Zero is a real latitude or longitude. The pair (0, 0) is not a saved point. */
+function finiteCoord(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text || !/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(text)) return null;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 export function validLatLng(lat: unknown, lng: unknown): LatLng | null {
-  const a = Number(lat), b = Number(lng);
-  if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a) > 90 || Math.abs(b) > 180 || (a === 0 && b === 0)) return null;
+  const a = finiteCoord(lat), b = finiteCoord(lng);
+  if (a == null || b == null || Math.abs(a) > 90 || Math.abs(b) > 180 || (a === 0 && b === 0)) return null;
   return { lat: a, lng: b };
 }
 
