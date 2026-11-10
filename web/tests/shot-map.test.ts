@@ -36,6 +36,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
   const shots: Record<string, unknown>[] = [];
   const posts: unknown[] = [];
   const deleted: string[] = [];
+  const shotApi: string[] = [];
   const bagRows: unknown[] = [
     { club: "Driver", carry: 300, total: 300 },
     { club: "7i", carry: 165, total: 165 },
@@ -48,6 +49,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     if (url.pathname.startsWith("/api/")) {
       let raw = "";
       for await (const chunk of req) raw += chunk;
+      if (url.pathname.includes("/shots")) shotApi.push(`${req.method} ${url.pathname}${url.search}`);
       if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [] });
       if (url.pathname === "/api/bag") return json(bagRows);
       if (url.pathname === "/api/gps/courses/fx-forma-fixture") return json({ course: { club_code: "fx", course: "Forma Fixture", holes: shaped } });
@@ -214,6 +216,52 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     assert.equal(deleted.length, 1);
     assert.equal(shots.length, 2);
     assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-phase")), "relief");
+
+    const postsAtRelief = posts.length;
+    const deletedAtRelief = deleted.length;
+    await page.click("#play-reload");
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-phase") === "tracking");
+    assert.equal(posts.length, postsAtRelief);
+    assert.equal(deleted.length, deletedAtRelief);
+    await page.click("#play-penalty");
+    await page.waitForFunction(() => document.querySelector("#play-reticle")?.getAttribute("data-cursor") === "penalty");
+    await ready(page);
+    await page.click("#play-hit");
+    await page.waitForSelector("#play-drop");
+    assert.equal(posts.length, postsAtRelief + 1);
+    assert.equal((posts.at(-1) as { penalty_strokes: number; result: string }).penalty_strokes, 1);
+    assert.equal((posts.at(-1) as { result: string }).result, "penalty");
+    await page.click("#play-drop");
+    await page.waitForFunction(() => document.querySelector("#play-reticle")?.getAttribute("data-cursor") === "drop");
+    const postsBeforeSecondSet = posts.length;
+    await ready(page);
+    await page.click("#play-set");
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-phase") === "tracking");
+    assert.equal(posts.length, postsBeforeSecondSet);
+    await ready(page);
+    await page.click("#play-hit");
+    await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 2);
+    await page.click("#play-undo");
+    await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 1);
+    assert.equal(deleted.length, deletedAtRelief + 1);
+    assert.equal(shots.length, 3);
+    await page.click("#play-undo");
+    await page.waitForSelector("#play-drop");
+    assert.equal(deleted.length, deletedAtRelief + 1);
+    assert.equal(shots.length, 3);
+    assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-phase")), "relief");
+    assert.deepEqual(shotApi.filter(line => line.includes("/live-map/shots")), [
+      "GET /api/reconstructions/live-map/shots",
+      "POST /api/reconstructions/live-map/shots",
+      "POST /api/reconstructions/live-map/shots",
+      "POST /api/reconstructions/live-map/shots",
+      "DELETE /api/reconstructions/live-map/shots?shot=s3",
+      "GET /api/reconstructions/live-map/shots",
+      "POST /api/reconstructions/live-map/shots",
+      "POST /api/reconstructions/live-map/shots",
+      "DELETE /api/reconstructions/live-map/shots?shot=s4",
+      "GET /api/reconstructions/live-map/shots",
+    ]);
 
     await page.click("#tknext");
     await page.waitForFunction(() => document.querySelector(".tk-hn b")?.textContent === "Hoyo 2");
