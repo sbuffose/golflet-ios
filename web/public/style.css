@@ -2736,7 +2736,7 @@ html[data-ts] .bagtable .baghdr,html[data-ts] .bagtable .bagrow{grid-template-co
 html.rc-map,html.rc-map body{overflow:hidden;height:100%;touch-action:none}
 html.rc-map .tk-map{touch-action:none}
 html.rc-map .tk-dock{position:absolute;left:10px;right:68px;bottom:calc(8px + env(safe-area-inset-bottom));background:transparent;color:#F6F7F9;max-height:none;overflow:visible;border-radius:0;box-shadow:none;padding:0;pointer-events:none;display:flex;flex-direction:column;align-items:flex-start}
-html.rc-map .tk-nav,html.rc-map .tk-acts,html.rc-map .tk-play,html.rc-map .tk-rounds,html.rc-map .tk-club,html.rc-map .tk-msg,html.rc-map .tk-water,html.rc-map .tk-clublist,html.rc-map .tk-nextwide,html.rc-map .tk-sheet,html.rc-map .tk-penmenu{pointer-events:auto}
+html.rc-map .tk-nav,html.rc-map .tk-acts,html.rc-map .tk-play,html.rc-map .tk-rounds,html.rc-map .tk-club,html.rc-map .tk-msg,html.rc-map .tk-water,html.rc-map .tk-clublist,html.rc-map .tk-nextwide,html.rc-map .tk-nextblock,html.rc-map .tk-nextsub,html.rc-map .tk-sheet,html.rc-map .tk-penmenu,html.rc-map .tk-shots-rail{pointer-events:auto}
 html.rc-map .tk-msg{color:#F6F7F9;text-shadow:0 1px 6px rgba(0,0,0,.55)}
 html.rc-map .tk-nav{order:5;margin:8px 0 0;align-self:stretch;background:#fff;color:#0B2545;border-radius:999px;padding:2px 4px;box-shadow:0 4px 14px rgba(0,0,0,.28)}
 html.rc-map .tk-acts{order:1}
@@ -2762,7 +2762,8 @@ html.rc-map .tk-clublist[hidden]{display:none!important}
 html.rc-map .tk-clublist button{background:#fff;color:#0B2545;border:1px solid #E6E2D8;border-radius:12px;width:100%;aspect-ratio:1;min-height:52px;height:auto;text-align:center;padding:4px;font:700 15px/1.1 Geist,system-ui,sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
 html.rc-map .tk-clublist button.on{background:#0B2545;color:#fff}
 html.rc-map .tk-clublist button.sug{box-shadow:inset 0 0 0 3px #C8A86A}
-html.rc-map .tk-clublist button i{font-style:normal;font-size:10px;font-weight:650;letter-spacing:.01em}
+html.rc-map .tk-clublist button i,html.rc-map .tk-clublist button small{font-style:normal;font-size:10px;font-weight:650;letter-spacing:0;line-height:1.1;color:#3E4C62}
+html.rc-map .tk-clublist button.on small,html.rc-map .tk-clublist button.on i{color:#fff}
 html.rc-map .tk-penwrap{position:relative}
 html.rc-map .tk-penmenu{position:absolute;left:0;bottom:52px;z-index:40;display:flex;flex-direction:column;gap:6px;width:min(280px,calc(100vw - 96px));padding:8px;background:#fff;color:#0B2545;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
 html.rc-map .tk-penmenu[hidden]{display:none!important}
@@ -2777,23 +2778,32 @@ html.rc-map #play-penalty{color:#C8102E;font-weight:700}
 html.rc-map #play-reload,html.rc-map #play-drop{min-height:44px;border-radius:12px;padding:8px 12px;background:#fff;color:#0B2545}
 html.rc-map #play-drop{background:#C8102E;color:#fff}
 html.rc-map .tk-side,html.rc-map #play-recovery{position:static;width:auto;min-width:44px;height:44px;min-height:44px;border-radius:999px;padding:0 12px;white-space:nowrap;font:650 13px/1 Geist,system-ui,sans-serif;background:#fff;color:#0B2545;box-shadow:0 4px 12px rgba(0,0,0,.28)}
-html.rc-map .tk-ro{background:transparent;color:#fff;border-radius:0;box-shadow:none;text-shadow:0 2px 8px rgba(0,0,0,.8);white-space:normal;max-width:min(280px,calc(100% - 24px));overflow:visible;padding:0;top:22%}
-html.rc-map .tk-ro b{display:block;font-size:22px;font-weight:700;color:#fff;line-height:1.15;white-space:normal}
-html.rc-map .tk-ro b.num{font-size:36px;line-height:1.05}
-html.rc-map .tk-ro small{display:block;margin:2px 0 0;color:#fff;font-size:15px;font-weight:650}
-html.rc-map .tk-scale{position:absolute;left:12px;top:52px;right:auto;bottom:auto;z-index:4;width:auto;max-width:46%;margin:0;color:#F6F7F9;font-size:11px;line-height:1.3;text-align:left;text-shadow:0 1px 4px rgba(0,0,0,.65)}
-html.rc-map .tk-nextwide{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;margin:0 0 8px;border:0;border-radius:14px;background:#0B2545;color:#fff;font:700 16px/1 Geist,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
+html.rc-map .tk-ro{top:60px;left:auto;right:12px;transform:none;background:rgba(11,37,69,.94);color:#fff;border-radius:16px;box-shadow:0 6px 16px rgba(0,0,0,.4);text-shadow:none;white-space:normal;max-width:168px;overflow:visible;padding:6px 12px 8px}
+html.rc-map .tk-ro.tk-setup{left:50%;right:auto;transform:translateX(-50%);top:112px}
+html.rc-map .tk-ro.tk-done{top:58px;left:50%;right:auto;transform:translateX(-50%);max-width:210px}
+html.rc-map .tk-ro.tk-done .cad.hole{width:28px;height:36px;margin:0 auto 2px}
+html.rc-map .tk-ro b{display:block;font-size:15px;font-weight:700;color:#fff;line-height:1.15;white-space:normal;font-style:normal}
+html.rc-map .tk-ro b.num{font-size:28px;line-height:1}
+html.rc-map .tk-ro small{display:block;margin:2px 0 0;color:#fff;font-size:12px;font-weight:650;font-style:normal}
+html.rc-map .tk-notes{position:absolute;left:12px;top:60px;z-index:5;display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:158px;pointer-events:none}
+html.rc-map:has(.tk-ro.tk-done) .tk-notes{top:148px}
+html.rc-map .tk-scale{position:static;left:auto;top:auto;right:auto;bottom:auto;z-index:auto;width:auto;max-width:158px;margin:0;padding:4px 8px;background:rgba(11,37,69,.92);color:#fff;border-radius:10px;font-size:11px;line-height:1.25;text-align:left;text-shadow:none}
+html.rc-map .tk-nextblock{order:0;align-self:stretch;display:flex;flex-direction:column;gap:6px;margin:0 0 8px;padding:8px;background:#fff;border-radius:16px;box-shadow:0 4px 14px rgba(0,0,0,.28)}
+html.rc-map .tk-nextwide{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;margin:0;border:0;border-radius:14px;background:#0B2545;color:#fff;font:700 16px/1 Geist,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
+html.rc-map .tk-nextsub{min-height:40px;border:0;border-radius:12px;background:#F6F7F9;color:#0B2545;font:650 14px/1 Geist,system-ui,sans-serif;cursor:pointer}
 html.rc-map .tk-round{width:44px;height:44px;min-width:44px;border:0;border-radius:50%;background:#fff;color:#0B2545;display:grid;place-items:center;font:700 12px/1 Geist,system-ui,sans-serif;box-shadow:var(--shadow-card);cursor:pointer}
 html.rc-map .tk-round.tk-pen{color:#C8102E}
 html.rc-map .tk-round.on{box-shadow:0 0 0 2px #0B2545}
 html.rc-map .tk-dock .tk-axisnote,html.rc-map .tk-dock .tk-opennote,html.rc-map .tk-dock .tk-osmnote{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-html.rc-map .tk-driver{position:absolute;left:12px;right:72px;top:54px;margin:0;padding:0;background:transparent;color:#fff;font-size:12px;line-height:1.3;text-shadow:0 1px 4px rgba(0,0,0,.7);pointer-events:none}
+html.rc-map .tk-driver{position:static;left:auto;right:auto;top:auto;margin:0;padding:4px 8px;background:rgba(11,37,69,.92);color:#fff;border-radius:10px;font-size:11px;line-height:1.25;text-shadow:none;pointer-events:none}
 html.rc-map .tk-driver[hidden]{display:none!important}
 html.rc-map .tk-player{margin:0 0 4px;color:#fff;font-size:12px;text-shadow:0 1px 4px rgba(0,0,0,.7)}
 html.rc-map .tk-sum{background:transparent;color:#0B2545;margin:0 0 8px;padding:0;border-radius:0;box-shadow:none;font-size:14px;line-height:1.3}
 html.rc-map .tk-sum button{margin-top:0;min-height:44px;background:#fff;color:#0B2545;border-radius:12px;padding:8px 12px;font:650 14px/1 Geist,system-ui,sans-serif}
-html.rc-map .tk-shots-rail{left:12px;right:72px;top:auto;bottom:248px;max-height:26%;z-index:6}
-html.rc-map .tk-shots-rail .tk-shot,html.rc-map .tk-shots-rail span{background:#fff;color:#0B2545;border:1px solid rgba(11,37,69,.18);border-radius:12px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.28)}
+html.rc-map .tk-shots-rail{left:10px;right:auto;top:auto;bottom:176px;width:max-content;max-width:148px;max-height:132px;gap:4px;align-items:flex-start;z-index:6}
+html.rc-map .tk-shots-rail .tk-shot,html.rc-map .tk-shots-rail span{width:auto;max-width:148px;background:#fff;color:#0B2545;border:1px solid rgba(11,37,69,.18);border-radius:999px;padding:4px 10px;font-size:12px;line-height:1.2;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 12px rgba(0,0,0,.28)}
+html.rc-map .tk-shots-rail .tk-shot[hidden]{display:none!important}
+html.rc-map .tk-shots-rail .tk-more{background:#0B2545;color:#fff;border-color:#0B2545}
 html.rc-map,html.rc-map .tk,html.rc-map .tk-map,html.rc-map .tk-ro,html.rc-map .tk-shot,html.rc-map .tk-hn,html.rc-map .tk-axisnote,html.rc-map .tk-scale,html.rc-map button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 html.rc-map input,html.rc-map textarea,html.rc-map select{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 html.rc-map .tk-putt{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.94);color:#0B2545;border-radius:12px;padding:4px 8px;font-size:12px;pointer-events:auto}
