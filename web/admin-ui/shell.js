@@ -473,12 +473,12 @@ async function trazosView() {
     return `<a class="hbtn ${seb ? 'player' : h.state === 'listo' ? 'club' : ''}" data-nav href="/admin/trazos/${c.club_code}/${encodeURIComponent(c.course)}/${h.hole}"><b class="num">${h.hole}</b><small>${label}</small></a>`;
   };
   const seb = d.courses.flatMap(c => c.holes.filter(h => h.audience === 'sebastian').map(h => ({ ...h, club_code: c.club_code, course: c.course, title: c.title })));
-  main(`<p class="meta" style="margin:0 0 14px">${esc(d.scope)} La foto es el satélite que ya usa TRACK (Esri, zoom 17). Un hoyo sin lat/lng no se centra en un punto inventado y su guía u/v no es un polígono.</p>
+  main(`<p class="meta" style="margin:0 0 14px">${esc(d.scope)} La foto es el satélite que ya usa TRACK (Esri, zoom 17). Si hay eje de Golfistics, la foto abre ahí. La guía u/v no es un polígono y no se proyecta. Un hoyo sin eje no se centra en un punto inventado.</p>
   ${d.courses.map(c => `<div class="card"><div class="ov"><div><b>${esc(c.title)}</b><div class="meta">${esc(c.source)} · ${esc(c.note)}</div></div><div>${chip(c.listo, 'listos')} ${chip(c.revisar, 'a revisar')} ${chip(c.ayuda, 'necesito una mano')}</div></div>
     <div class="hgrid" style="margin-top:12px">${c.holes.map(h => btn(c, h)).join('')}</div></div>`).join('')}
-  <div class="card"><h3 style="margin-top:0">Para Sebastián: sin lat/lng</h3>
-  <p class="meta">Estos hoyos no se dibujan sobre el satélite. La guía esquemática no es un polígono.</p>
-  ${seb.length ? seb.map(h => `<p class="meta"><a data-nav href="/admin/trazos/${h.club_code}/${encodeURIComponent(h.course)}/${h.hole}">${esc(h.title)} · hoyo ${h.hole}</a> — ${esc(h.detail)}</p>`).join('') : '<p class="meta">Ninguno.</p>'}</div>`);
+  <div class="card"><h3 style="margin-top:0">Sin eje para abrir el satélite</h3>
+  <p class="meta">Estos hoyos no tienen lat/lng en las fuentes que ya tenemos. No se centra la foto en un punto inventado y la guía u/v no es un polígono.</p>
+  ${seb.length ? seb.map(h => `<p class="meta"><a data-nav href="/admin/trazos/${h.club_code}/${encodeURIComponent(h.course)}/${h.hole}">${esc(h.title)} · hoyo ${h.hole}</a> — ${esc(h.detail)}</p>`).join('') : '<p class="meta">Ninguno. Cancha Vieja y Colorada abren sobre el eje de green de Golfistics. Falta el contorno, no la coordenada.</p>'}</div>`);
 }
 async function trazosHole(club, course, hole) {
   const d = await api(`/api/admin/trazos/${club}/${encodeURIComponent(course)}`);
@@ -489,7 +489,8 @@ async function trazosHole(club, course, hole) {
   const canDraw = !forSebastian && !hasRing && !!h.anchor;
   main(`<div class="crumbs"><a data-nav href="/admin/trazos">← Trazos</a></div>
   <p class="meta">${esc(h.detail)}</p>
-  ${forSebastian ? '<p class="meta">Esto no es un polígono. No ancla el satélite. Queda para Sebastián. No se guarda un trazado.</p>' : ''}
+  ${forSebastian ? '<p class="meta">No hay lat/lng de este hoyo en las fuentes que ya tenemos. No centro el satélite en un punto inventado. La guía u/v no es un polígono.</p>' : ''}
+  ${!forSebastian && h.axis && !hasRing ? '<p class="meta">El eje no es un polígono. La guía u/v no se proyecta. Sebastián marca el contorno y la salida sobre la foto. Guardar sigue en pausa hasta la migración 0046.</p>' : ''}
   ${hasRing ? '<p class="meta">TRACK ya usa este contorno. Un trazado sobre el satélite no lo reemplaza.</p>' : ''}
   <div id="trhost"></div>
   ${forSebastian ? '' : `<label class="meta" for="trnotein">Nota de procedencia</label>
