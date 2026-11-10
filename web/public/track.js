@@ -83,7 +83,8 @@
     const gpsHole = () => (S.course?.holes || []).find(h => h.number === S.hole || h.hole === S.hole) || null;
     const asLL = p => {
       if (!p || !R()) return null;
-      if (Array.isArray(p)) return R().knownPoint(p[0], p[1]);
+      // course_map_hole stores [lng, lat], the same order the strategy map uses.
+      if (Array.isArray(p)) return R().knownPoint(p[1], p[0]);
       return R().knownPoint(p.lat, p.lng);
     };
     const flagRead = () => {
@@ -91,12 +92,13 @@
       const pin = asLL(rec.day_pin);
       if (pin) return { point: pin, kind: 'pin' };
       const mapGreen = cmapHole()?.green || {};
-      const mapped = mapGreen.confidence === 'schematic' || mapGreen.confidence === 'satellite_visual_draft' ? null : asLL(mapGreen.center);
-      const center = asLL(g.center) || asLL(g.front) || mapped;
+      const mapped = mapGreen.confidence === 'schematic' || mapGreen.confidence === 'satellite_visual_draft' ? null : (asLL(mapGreen.center) || asLL(mapGreen.front));
+      if (mapped) return { point: mapped, kind: 'green' };
+      const center = asLL(g.center) || asLL(g.front);
       return { point: center, kind: center ? 'green' : 'none' };
     };
     const pinCoord = () => flagRead().point;
-    const verifiedTee = () => asLL(gpsHole()?.tee) || asLL(holeRec().tee) || asLL(cmapHole()?.line?.[0]) || asLL((cmapHole()?.tees || [])[0]?.center);
+    const verifiedTee = () => asLL((cmapHole()?.tees || [])[0]?.center) || asLL(cmapHole()?.line?.[0]) || asLL(gpsHole()?.tee) || asLL(holeRec().tee) || asLL(cmapHole()?.tee);
     const verifiedFlag = () => pinCoord();
     const axis = () => R().holeSpan(verifiedTee(), verifiedFlag());
     const spanOk = () => !!(verifiedTee() && verifiedFlag() && axis());
@@ -169,7 +171,7 @@
     };
     const tightenOpen = (frame, ends, W, Hh) => {
       if (!frame || ends.tee || !ends.flag || frame.bearing != null) return frame;
-      const tight = R().frameHole(null, ends.flag, 'flag', { width: W, height: Hh });
+      const tight = R().frameHole(null, ends.flag, 'point', { width: W, height: Hh });
       if (!tight) return frame;
       return { ...frame, z: tight.z, cx: tight.cx, cy: tight.cy, bearing: null };
     };
@@ -362,7 +364,7 @@
       S.club = R().teeClub ? R().teeClub(S.bag, par, '', fromTee) : '';
     };
     const armRetro = () => {
-      const teeRaw = asLL(gpsHole()?.tee) || asLL(holeRec().tee);
+      const teeRaw = verifiedTee();
       const read = flagRead();
       const pin = read.point;
       const tee = teeRaw && (!pin || R().holeSpan(teeRaw, pin)) ? teeRaw : null;
@@ -1300,7 +1302,10 @@
       try { S.cmap = await api(`/api/course-maps/${encodeURIComponent(club)}/${encodeURIComponent(course)}`); }
       catch (e) { S.cmap = null; }
       S.cmapTried = true;
-      if (!S.alive || S.busy || S.holdCam || S.moving) return;
+      if (!S.alive || S.busy || S.holdCam) return;
+      const fresh = !S.panned && !S.adjusted && S.teeSource !== 'jugador' && !(S.track.marks || []).some(m => m.countsStroke);
+      if (S.moving && !fresh) return;
+      if (fresh) armRetro();
       const clubKey = () => `${S.club}|${S.clubChosen ? 1 : 0}|${S.clubAuto}`;
       const prevClub = clubKey();
       if (S.clubAuto !== 'chosen') syncClubToOrigin();
@@ -1311,7 +1316,7 @@
         S.cam.z !== prevCam.z || Math.abs(S.cam.cx - prevCam.cx) > 1e-9 || Math.abs(S.cam.cy - prevCam.cy) > 1e-9 || (S.cam.hdg || 0) !== prevCam.hdg
       );
       const source = cmapHole()?.green?.source || '';
-      if (clubKey() !== prevClub || camMoved || source === 'openstreetmap' || source === 'satellite_visual') { render(); return; }
+      if (fresh || clubKey() !== prevClub || camMoved || source === 'openstreetmap' || source === 'satellite_visual' || source === 'course_map') { render(); return; }
       const map = mapBox();
       if (!map) return;
       map.dataset.cmap = S.cmap ? '1' : '0';
