@@ -364,6 +364,18 @@ enum GroupPeriod: String, CaseIterable, Hashable, Codable, Sendable, Identifiabl
         }
     }
 
+    /// One row on a phone. The full name stays in the accessibility label.
+    var short: String {
+        switch self {
+        case .week: return "Sem"
+        case .month: return "Mes"
+        case .quarter: return "Trim"
+        case .semester: return "Sem."
+        case .year: return "Año"
+        case .all: return "Todo"
+        }
+    }
+
     /// A saved 12m view stays on the year. 3m and 6m are not a quarter or a semester, so they fall back to histórico.
     static func parse(_ raw: String?) -> GroupPeriod {
         switch raw {
@@ -424,6 +436,8 @@ struct MemberMetricValue: Identifiable, Hashable, Sendable {
     var shared: Bool
     var value: Double?
     var text: String?
+    var photoURL: String? = nil
+    var perRound: Double? = nil
 
     static let hiddenLabel = "No compartido"
 
@@ -454,10 +468,16 @@ struct GroupComparisonRow: Identifiable, Hashable, Sendable {
     }
 }
 
+struct GroupHero: Hashable, Sendable {
+    var rank: Int
+    var cards: String?
+}
+
 struct GroupComparison: Hashable, Sendable {
     var groupID: String
     var config: GroupViewConfig
     var rows: [GroupComparisonRow]
+    var hero: GroupHero? = nil
 }
 
 enum PendingInviteStore {

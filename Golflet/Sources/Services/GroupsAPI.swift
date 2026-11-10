@@ -233,7 +233,84 @@ enum GroupsParser {
             }
             return GroupComparisonRow(metric: metric, values: values)
         }
-        return GroupComparison(groupID: groupID, config: config, rows: rows)
+        let members = (blob["members"] as? [Any] ?? json["members"] as? [Any] ?? []).compactMap { $0 as? [String: Any] }
+        let built = rows.isEmpty ? memberRows(members) : rows
+        return GroupComparison(groupID: groupID, config: config, rows: built, hero: hero(from: members))
+    }
+
+    /// The web group payload is members with card totals, not a rows array. Same numbers, no invented ranks.
+    private static func memberRows(_ members: [[String: Any]]) -> [GroupComparisonRow] {
+        func row(_ metric: GroupMetricKind, pick: ([String: Any]) -> (Double?, Double?)?) -> GroupComparisonRow? {
+            let values = members.compactMap { map -> MemberMetricValue? in
+                let id = string(map["member_id"] ?? map["id"])
+                guard !id.isEmpty else { return nil }
+                let name = string(map["name"])
+                let pair = pick(map)
+                let number = pair?.0 ?? nil
+                return MemberMetricValue(
+                    memberID: id,
+                    memberName: name.isEmpty ? "Jugador" : name,
+                    initials: initials(name),
+                    shared: number != nil,
+                    value: number,
+                    text: nil,
+                    photoURL: optionalString(map["photo_url"]),
+                    perRound: pair?.1 ?? nil
+                )
+            }
+            guard values.contains(where: { $0.value != nil }) else { return nil }
+            return GroupComparisonRow(metric: metric, values: values)
+        }
+        func type(_ key: String) -> ([String: Any]) -> (Double?, Double?)? {
+            { map in
+                guard let types = map["types"] as? [String: Any] else { return nil }
+                guard let bag = types[key] as? [String: Any] else { return (nil, nil) }
+                return (JSONFlex.double(from: bag["total"]), JSONFlex.double(from: bag["per_round"]))
+            }
+        }
+        return [
+            row(.birdies, pick: type("birdies")),
+            row(.pars, pick: type("pars")),
+            row(.eagles, pick: type("eagles")),
+            row(.net, pick: { map in
+                guard map.keys.contains("best_net") else { return nil }
+                return (JSONFlex.double(from: map["best_net"]), nil)
+            }),
+            row(.gross, pick: { map in
+                guard map.keys.contains("best_gross") else { return nil }
+                return (JSONFlex.double(from: map["best_gross"]), nil)
+            }),
+        ].compactMap { $0 }
+    }
+
+    private static func hero(from members: [[String: Any]]) -> GroupHero? {
+        let scored: [(id: String, total: Double, cards: String?)] = members.compactMap { map in
+            guard JSONFlex.bool(from: map["is_me"]) == true,
+                  let types = map["types"] as? [String: Any],
+                  let bag = types["birdies"] as? [String: Any],
+                  let total = JSONFlex.double(from: bag["total"]) else { return nil }
+            let id = string(map["member_id"] ?? map["id"])
+            guard !id.isEmpty else { return nil }
+            return (id, total, cardsLine(map))
+        }
+        guard let mine = scored.first else { return nil }
+        let better = members.filter { map in
+            guard let types = map["types"] as? [String: Any],
+                  let bag = types["birdies"] as? [String: Any],
+                  let total = JSONFlex.double(from: bag["total"]) else { return false }
+            return total > mine.total
+        }.count
+        return GroupHero(rank: better + 1, cards: mine.cards)
+    }
+
+    private static func cardsLine(_ map: [String: Any]) -> String? {
+        guard let eighteenRaw = JSONFlex.double(from: map["cards_18"] ?? map["rounds"]) else { return nil }
+        let eighteen = Int(eighteenRaw)
+        let nine = Int(JSONFlex.double(from: map["cards_9"]) ?? 0)
+        let total = eighteen + max(0, nine)
+        guard total > 0 else { return nil }
+        if nine > 0 { return "\(total) tarjetas (\(eighteen) de 18 y \(nine) de 9)" }
+        return total == 1 ? "1 tarjeta" : "\(total) tarjetas"
     }
 
     static func inviteLink(from raw: Any?) -> GroupInviteLink? {

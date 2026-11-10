@@ -125,6 +125,32 @@ final class GroupsTests: XCTestCase {
         XCTAssertNil(SharePrefs.allShared.jsonBody["strategy"])
     }
 
+    func testGroupMembersBecomeAPodiumWithoutInventingCards() {
+        let parsed = GroupsParser.comparison(from: [
+            "members": [
+                ["member_id": "a", "name": "Ana Pérez", "is_me": true, "cards_18": 6, "cards_9": 2, "photo_url": "/api/groups/g/members/a/photo",
+                 "types": ["birdies": ["total": 24, "per_round": 3], "pars": ["total": 10, "per_round": 1.2]], "best_net": 72],
+                ["member_id": "b", "name": "Luis Gómez", "is_me": false, "cards_18": 2, "cards_9": 0,
+                 "types": ["birdies": ["total": 4, "per_round": 2], "pars": ["total": 8, "per_round": 4]], "best_net": 79]
+            ]
+        ], fallback: .default)
+        XCTAssertEqual(parsed.hero?.rank, 1)
+        XCTAssertEqual(parsed.hero?.cards, "8 tarjetas (6 de 18 y 2 de 9)")
+        let birdies = parsed.rows.first { $0.metric == .birdies }
+        XCTAssertEqual(birdies?.ranked().map(\.memberName), ["Ana Pérez", "Luis Gómez"])
+        XCTAssertEqual(birdies?.ranked().first?.photoURL, "/api/groups/g/members/a/photo")
+        XCTAssertEqual(birdies?.ranked().first?.perRound, 3)
+        XCTAssertEqual(parsed.rows.first { $0.metric == .net }?.ranked().first?.memberName, "Ana Pérez")
+        let tied = GroupsParser.comparison(from: [
+            "members": [
+                ["member_id": "a", "name": "Ana", "is_me": true, "cards_18": 1, "types": ["birdies": ["total": 3]]],
+                ["member_id": "b", "name": "Luis", "types": ["birdies": ["total": 3]]]
+            ]
+        ], fallback: .default)
+        XCTAssertEqual(tied.hero?.rank, 1)
+        XCTAssertEqual(tied.hero?.cards, "1 tarjeta")
+    }
+
     func testParsesFlexibleGroupPayload() {
         let json: [String: Any] = [
             "group": [
