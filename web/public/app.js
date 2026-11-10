@@ -341,9 +341,9 @@ function sRonda(id){
   <div class="section"><h2>Tu juego</h2></div>
   <a class="card row rt-track" id="round-track" href="#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&amp;hole=1"><span class="rt-mark">TRACK</span><span class="body"><span class="t">Registrar mis tiros</span><span class="s">Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.</span></span>${ICON.chev}</a>
   <div class="section"><h2>Estadísticas de la ronda</h2>${has?'':'<img class="cad xs" src="/brand/caddie.png" alt="">'}<span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
-  <div class="rstats3"><div><span>Putts</span><b class="num">${r.putts==null?'Sin cargar':r.putts}</b></div><div><span>Greens</span><b class="num">${r.gir==null?'Sin cargar':r.gir}</b></div><div><span>Fairways</span><b class="num">${r.fir==null?'Sin cargar':r.fir}</b></div></div>
+  <div class="rstats3" id="rstats3"><div><span>Putts</span><b class="num" id="rt-putts">${r.putts==null?'Sin cargar':r.putts}</b><small id="rt-putts-src">${r.putts==null?'':'Manual'}</small></div><div><span>Greens</span><b class="num" id="rt-gir">${r.gir==null?'Sin cargar':r.gir}</b><small id="rt-gir-src">${r.gir==null?'':'Manual'}</small></div><div><span>Fairways</span><b class="num" id="rt-fir">${r.fir==null?'Sin cargar':r.fir}</b><small id="rt-fir-src">${r.fir==null?'':'Manual'}</small></div></div>
   <button type="button" class="btn ghost" id="load-round-stats">Cargar putts, greens y fairways</button>
-  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
+  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qsrc"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
   <div class="fields">
     <label class="field"><span>Putts</span><input inputmode="numeric" data-k="putts" value="${r.putts??''}" placeholder="—"></label>
     <label class="field"><span>Greens</span><input inputmode="numeric" data-k="gir" value="${r.gir??''}" placeholder="—/18"></label>
@@ -362,7 +362,8 @@ function sDif(id){
   const same = replay != null && shown != null && Math.abs(replay - shown) < 0.051;
   const line = (k, v) => `<div class="dif-row"><span>${k}</span><b class="num">${v}</b></div>`;
   return `<div class="bar"><span class="overline">${dmy(r.date)}</span></div>
-  <div class="stitle">Cómo se calcula tu diferencial</div>
+  <div class="stitle">¿Qué es esto?</div>
+  <p>Cómo se calcula tu diferencial.</p>
   <p class="foot">Con los números de esta tarjeta. Si un dato no está guardado, queda en no disponible. No lo completo.</p>
   <div class="card dif-card">
     ${line('Course Rating', rating == null ? 'No disponible' : f1(rating))}
@@ -2991,6 +2992,9 @@ function bindQuick(id){
   let idx = 0, gen = 0, phase = 'idle', chain = Promise.resolve();
   let revs = {}, seeded = false, readFailed = false, accountBoard = [];
   const drafts = new Map();
+  const derived = new Map();
+  const trackOwned = { putts: new Set(), gir: new Set(), drive: new Set() };
+  let trackReady = false;
   const visible = marks => (marks || []).filter(m => m.putts != null || m.gir === true || m.gir === false || m.drive).map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
   const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0], putts: null, gir: null, drive: null };
   const remember = () => { if (!seeded) return; try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {} };
@@ -3103,9 +3107,9 @@ function bindQuick(id){
     const cur = row();
     const prev = drafts.get(holeNo);
     const touched = { putts: !!(prev && prev.touched && prev.touched.putts), gir: !!(prev && prev.touched && prev.touched.gir), drive: !!(prev && prev.touched && prev.touched.drive) };
-    if (Object.prototype.hasOwnProperty.call(patch, 'putts')) touched.putts = true;
-    if (Object.prototype.hasOwnProperty.call(patch, 'gir')) touched.gir = true;
-    if (Object.prototype.hasOwnProperty.call(patch, 'drive')) touched.drive = true;
+    if (Object.prototype.hasOwnProperty.call(patch, 'putts')) { touched.putts = true; trackOwned.putts.delete(holeNo); }
+    if (Object.prototype.hasOwnProperty.call(patch, 'gir')) { touched.gir = true; trackOwned.gir.delete(holeNo); }
+    if (Object.prototype.hasOwnProperty.call(patch, 'drive')) { touched.drive = true; trackOwned.drive.delete(holeNo); }
     const next = Object.assign({ hole: holeNo, putts: null, gir: null, drive: null }, cur, patch);
     if (holes[idx][1] === 3) next.drive = null;
     if (next.putts == null && next.gir == null && !next.drive) rows = rows.filter(x => x.hole !== next.hole);
@@ -3155,11 +3159,87 @@ function bindQuick(id){
       retry.onclick = () => { if (phase === 'conflict') reloadAccount(); else retryLoad(); };
     }
     const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
+    const src = $('#qsrc');
+    if (src) {
+      const d = derived.get(h[0]);
+      const owned = (field, has) => trackOwned[field].has(h[0]) ? 'Desde TRACK' : (has ? 'Manual' : null);
+      const puttTag = owned('putts', cur.putts != null) || (d && d.putts.state === 'track' ? 'Desde TRACK' : 'Sin confirmar');
+      const fwTag = par === 3 ? 'No aplica' : (owned('drive', !!cur.drive) || (d && d.drive.state === 'track' ? 'Desde TRACK' : 'Sin confirmar'));
+      const girTag = owned('gir', cur.gir === true || cur.gir === false) || (d && d.gir.state === 'track' ? 'Desde TRACK' : 'Sin confirmar');
+      src.textContent = trackReady || d ? `Putts: ${puttTag}. Fairway: ${fwTag}. Green: ${girTag}.` : '';
+    }
+    const tot = (elId, srcId, manual, rowsFor, valueOf, ownedSet) => {
+      const el = document.getElementById(elId), cap = document.getElementById(srcId);
+      if (!el || !cap) return;
+      if (manual != null) { el.textContent = String(manual); cap.textContent = 'Manual'; return; }
+      if (!trackReady) return;
+      if (!rowsFor.length) { el.textContent = 'Sin confirmar'; cap.textContent = 'Sin confirmar'; return; }
+      const allTrack = rowsFor.every(x => ownedSet.has(x.hole));
+      el.textContent = String(valueOf(rowsFor));
+      cap.textContent = `${allTrack ? 'Desde TRACK' : 'Manual'} · ${rowsFor.length} hoyos`;
+    };
+    tot('rt-putts', 'rt-putts-src', r.putts, puttH, xs => xs.reduce((s, x) => s + x.putts, 0), trackOwned.putts);
+    tot('rt-gir', 'rt-gir-src', r.gir, girH, xs => xs.filter(x => x.gir).length, trackOwned.gir);
+    tot('rt-fir', 'rt-fir-src', r.fir, fwH, xs => xs.filter(x => x.drive === 'fairway').length, trackOwned.drive);
     const track = document.getElementById('round-track');
     if (track) track.setAttribute('href', `#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&hole=${h[0]}`);
   };
   box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
+  const factOf = s => {
+    const club = String(s.club || '');
+    const endKnown = ['green', 'fairway', 'bunker', 'water', 'rough', 'other'];
+    const endLie = endKnown.includes(s.result) ? s.result : (endKnown.includes(s.end_lie) ? s.end_lie : null);
+    const direction = ['left', 'right', 'center'].includes(s.direction) ? s.direction : null;
+    return {
+      penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0,
+      lost: s.result === 'lost',
+      holed: s.result === 'holed',
+      putt: /^pt$|putter/i.test(club) || s.lie === 'green',
+      originGreen: s.lie === 'green',
+      endLie, direction,
+    };
+  };
+  const loadTrack = async () => {
+    const Rules = window.GolfletRules;
+    if (!Rules || !Rules.deriveHoleCard) { trackReady = true; paint(); return; }
+    try {
+      const setup = await api('/api/reconstructions');
+      const list = (setup && setup.reconstructions) || [];
+      const found = list.find(x => x && x.round_id === id);
+      if (found) {
+        const pack = await api(`/api/reconstructions/${encodeURIComponent(found.id)}/shots`);
+        const shots = (pack && pack.shots) || [];
+        holes.forEach(h => {
+          const mine = shots.filter(s => Number(s.hole) === Number(h[0]));
+          derived.set(h[0], Rules.deriveHoleCard(h[1] == null ? null : Number(h[1]), mine.map(factOf)));
+        });
+      }
+      await seedPromise;
+      if (!seeded || !box.isConnected) { trackReady = true; return; }
+      let wrote = false;
+      holes.forEach(h => {
+        const d = derived.get(h[0]);
+        if (!d) return;
+        const stored = accountBoard.find(m => m.hole === h[0]);
+        const patch = {};
+        if ((stored == null || stored.putts == null) && d.putts.state === 'track') { patch.putts = d.putts.value; trackOwned.putts.add(h[0]); }
+        if ((stored == null || stored.gir == null) && d.gir.state === 'track') { patch.gir = d.gir.value; trackOwned.gir.add(h[0]); }
+        if (h[1] !== 3 && (stored == null || stored.drive == null) && d.drive.state === 'track' && d.drive.value) { patch.drive = d.drive.value; trackOwned.drive.add(h[0]); }
+        if (!Object.keys(patch).length) return;
+        const cur = rows.find(x => x.hole === h[0]) || { hole: h[0], putts: null, gir: null, drive: null };
+        const next = Object.assign({ hole: h[0], putts: null, gir: null, drive: null }, cur, patch);
+        const i = rows.findIndex(x => x.hole === h[0]);
+        if (i < 0) rows.push(next); else rows[i] = next;
+        drafts.set(h[0], { hole: h[0], putts: next.putts ?? null, gir: next.gir ?? null, drive: next.drive || null, rev: 0, touched: { putts: false, gir: false, drive: false } });
+        wrote = true;
+      });
+      trackReady = true;
+      if (wrote) { phase = 'saving'; const mine = ++gen; remember(); paint(); send(mine); }
+      else paint();
+    } catch (e) { trackReady = true; if (box.isConnected) paint(); }
+  };
   paint();
+  loadTrack();
 }
 function queueNoteSave(id, sent, gen, viewGen) {
   clearTimeout(noteTimers.get(id));
@@ -3609,6 +3689,16 @@ document.addEventListener('click', ev => {
   location.hash = href;
 }, true);
 view.innerHTML = '<div class="boot"><span class="spin"></span></div>';
+addEventListener('pageshow', () => {
+  const boot = view.querySelector('.boot');
+  if (!boot || boot.querySelector('img')) return;
+  const img = document.createElement('img');
+  img.className = 'cad sm';
+  img.alt = '';
+  img.decoding = 'async';
+  img.src = '/brand/caddie.png';
+  boot.prepend(img);
+}, { once: true });
 // first sign-in with Golfistics: run the first sync (clubs + cards) with the usual sync screen
 const firstSync = () => runSync({ club: 'tus clubes', url: '/api/accounts/first-sync', body: {},
   onFail: e => { if (e.data?.code === 'NEEDS_CLUB') { try { sessionStorage.setItem('gl_needs_club', JSON.stringify({ error: e.message, matricula: e.data.matricula, clubs: e.data.clubs })); } catch(x){} location.hash = '#/vincular'; render(true); return; }
