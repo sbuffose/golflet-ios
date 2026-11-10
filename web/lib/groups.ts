@@ -243,8 +243,13 @@ export async function groupCompare(groupId: string, viewerId: string, f: { year?
     }
     return shared;
   });
-  const { profilePhotos } = await import("./profile-photo");
-  const pics = await profilePhotos(data.map(d => d.m.user_id).filter((id): id is string => !!id));
+  let pics = new Set<string>();
+  try {
+    const { profilePhotos } = await import("./profile-photo");
+    pics = await profilePhotos(data.map(d => d.m.user_id).filter((id): id is string => !!id));
+  } catch (e) {
+    console.error("[groups] fotos de perfil omitidas:", e instanceof Error ? e.message : e);
+  }
   out.forEach((o: any, i: number) => {
     const uid = data[i].m.user_id;
     if (uid && data[i].sh.profile && pics.has(uid)) o.photo_url = `/api/groups/${groupId}/members/${data[i].m.member_id}/photo`;

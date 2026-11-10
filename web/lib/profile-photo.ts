@@ -29,16 +29,17 @@ export async function profilePhotoUrl(userId: string): Promise<string | null> {
   return (await profilePhotoStatus(userId)).photo_url;
 }
 
-/** Users who actually have a stored photo. A missing column returns an empty map. */
+/** Users who actually have a stored photo. user_pref.user_id is text, same as readProfilePhoto.
+ *  Any failure (missing column, a bad cast, the database) returns an empty set. It must not take the group down. */
 export async function profilePhotos(userIds: string[]): Promise<Set<string>> {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (!ids.length) return new Set();
   try {
-    const rows = await q(`select user_id from user_pref where user_id = any($1::uuid[]) and photo is not null`, [ids]);
+    const rows = await q(`select user_id from user_pref where user_id = any($1::text[]) and photo is not null`, [ids]);
     return new Set(rows.map((r: { user_id: string }) => r.user_id));
   } catch (e) {
-    if (missingPhotoColumn(e)) return new Set();
-    throw e;
+    console.error("[profile] no se leyeron las fotos:", e instanceof Error ? e.message : e);
+    return new Set();
   }
 }
 
