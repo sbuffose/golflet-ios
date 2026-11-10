@@ -218,6 +218,7 @@
       holes,
       course: { holes, course: courseName, course_id: courseId, club_code: clubCode || null },
       bag: Array.isArray(bag) ? bag : CLUBS.map(c => ({ code: c })),
+      roundId: roundId || "",
       api, esc, toast: () => {}, cid: () => "",
       onSave: async (shot) => {
         if (!mine()) return null;
@@ -243,6 +244,7 @@
             end_lat: shot.land?.lat ?? null,
             end_lng: shot.land?.lng ?? null,
             lie: shot.lie || null,
+            intent: shot.intent || null,
             distance_m: shot.distance_m ?? null,
             distance_kind: shot.distance_kind || null,
           };

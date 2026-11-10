@@ -25,7 +25,8 @@ create table if not exists shot (
   hole int not null, shot_number int not null, lat double precision not null, lng double precision not null,
   accuracy_m real, taken_at timestamptz not null default now(), club text, lie text, result text, source text not null default 'gps',
   created_at timestamptz not null default now(), updated_at timestamptz not null default now()
-);`;
+);
+alter table shot add column if not exists intent text;`;
 
 function statements(file: string): string[] {
   return file.split("\n").filter(line => !line.trim().startsWith("--")).join("\n").split(";").map(s => s.trim()).filter(Boolean);

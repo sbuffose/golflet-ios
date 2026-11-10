@@ -126,7 +126,7 @@ function yrList(items, dateOf, row, cls = 'list'){
     return `<section class="yrgrp yrlite${cur ? ' cur' : ''}">${cur ? '' : `<div class="yrpill" aria-hidden="true"><span class="num">${y}</span></div><div class="yrhd"><span class="sr">Año ${y}</span></div>`}<div class="${cls}">${a.map(([x, i]) => row(x, i)).join('')}</div></section>`; }).join('');
 }
 const minOr = a => a.length ? Math.min(...a) : '—';
-const emptyData = (t) => `<div class="onboard"><h2>${t||'Todavía no hay tarjetas'}</h2><p>Vinculá tu matrícula y Golflet trae las tarjetas de todos tus clubes.</p><a class="btn" href="#/vincular">Vincular tu matrícula</a></div>`;
+const emptyData = (t) => `<div class="onboard"><img class="cad" src="/brand/caddie.png" alt=""><h2>${t||'Todavía no hay tarjetas'}</h2><p>Vinculá tu matrícula y Golflet trae las tarjetas de todos tus clubes.</p><a class="btn" href="#/vincular">Vincular tu matrícula</a></div>`;
 
 /* ---------- INICIO ---------- */
 function clubsCard(){
@@ -157,7 +157,7 @@ function hiBand(hi, d){
 }
 function vInicio(){
   const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
-  const top = `<div class="top"><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
+  const top = `<div class="top"><img class="cad xs" src="/brand/caddie.png" alt=""><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
   if (!valid.length) return top + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas válidas. Tocá Actualizar para traerlas.</div>` : emptyData('Empecemos por tu club')) +
     `<div id="tees"></div><div id="scorecards"></div>${reconEntry()}<div id="cardpull"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
@@ -338,15 +338,18 @@ function sRonda(id){
     ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
-  <div class="section"><h2>Tu juego</h2><span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
+  <div class="section"><h2>Tu juego</h2></div>
   <a class="card row rt-track" id="round-track" href="#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&amp;hole=1"><span class="rt-mark">TRACK</span><span class="body"><span class="t">Registrar mis tiros</span><span class="s">Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.</span></span>${ICON.chev}</a>
+  <div class="section"><h2>Estadísticas de la ronda</h2>${has?'':'<img class="cad xs" src="/brand/caddie.png" alt="">'}<span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
+  <div class="rstats3"><div><span>Putts</span><b class="num">${r.putts==null?'Sin cargar':r.putts}</b></div><div><span>Greens</span><b class="num">${r.gir==null?'Sin cargar':r.gir}</b></div><div><span>Fairways</span><b class="num">${r.fir==null?'Sin cargar':r.fir}</b></div></div>
+  <button type="button" class="btn ghost" id="load-round-stats">Cargar putts, greens y fairways</button>
   <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
   <div class="fields">
     <label class="field"><span>Putts</span><input inputmode="numeric" data-k="putts" value="${r.putts??''}" placeholder="—"></label>
     <label class="field"><span>Greens</span><input inputmode="numeric" data-k="gir" value="${r.gir??''}" placeholder="—/18"></label>
     <label class="field"><span>Fairways</span><input inputmode="numeric" data-k="fir" value="${r.fir??''}" placeholder="—/14"></label>
   </div>
-  <div class="saved" id="saved" style="margin:8px 4px 0">${ICON.pencil}<span>${r.notes_at?'Guardado en tu cuenta · '+ago(r.notes_at):'Se guarda en tu cuenta'}</span></div>
+  <div class="saved" id="saved" style="margin:8px 4px 0">${r.notes_at?'<img class="cad xs" src="/brand/caddie.png" alt="">':''}${ICON.pencil}<span>${r.notes_at?'Guardado en tu cuenta · '+ago(r.notes_at):'Se guarda en tu cuenta'}</span></div>
   ${recapBox(r.round_id)}
   ${r.gps_shots?`<div class="section"><h2>Golpes con GPS</h2><span class="badge">${r.gps_shots}</span></div><div id="rshots"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>`:''}`;
 }
@@ -2975,6 +2978,8 @@ function releaseNoteEdit(id, sent) {
   });
 }
 function bindQuick(id){
+  const loadStats = document.getElementById('load-round-stats');
+  if (loadStats) loadStats.onclick = () => { const i = document.querySelector('.fields input[data-k="putts"]'); if (i) i.focus(); };
   const box = $('#qstat'); if (!box) return;
   const r = rounds.find(x => x.round_id === id); if (!r || !(r.holes || []).length) { box.hidden = true; return; }
   const key = 'gl_q_' + id;
@@ -3603,7 +3608,7 @@ document.addEventListener('click', ev => {
   ev.preventDefault();
   location.hash = href;
 }, true);
-view.innerHTML = '<div style="padding:40vh 0;text-align:center;color:var(--color-ink3)"><span class="spin"></span></div>';
+view.innerHTML = '<div class="boot"><span class="spin"></span></div>';
 // first sign-in with Golfistics: run the first sync (clubs + cards) with the usual sync screen
 const firstSync = () => runSync({ club: 'tus clubes', url: '/api/accounts/first-sync', body: {},
   onFail: e => { if (e.data?.code === 'NEEDS_CLUB') { try { sessionStorage.setItem('gl_needs_club', JSON.stringify({ error: e.message, matricula: e.data.matricula, clubs: e.data.clubs })); } catch(x){} location.hash = '#/vincular'; render(true); return; }

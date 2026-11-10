@@ -10,11 +10,11 @@ export type ClubDef = { code: string; label: string; enabled: boolean; brand?: s
 export const isPutter = (c: string | null | undefined) => !!c && /^(pt|putter)$/i.test(c);
 
 export const LIES = ["tee", "fairway", "rough", "bunker", "green", "fringe", "recovery", "other"] as const;
-export const RESULTS = ["fairway", "green", "rough", "bunker", "water", "ob", "penalty", "holed", "other"] as const;
+export const RESULTS = ["fairway", "green", "rough", "bunker", "water", "ob", "penalty", "holed", "lost", "other"] as const;
 
 export const DIRECTIONS = ["left", "center", "right"] as const;
 export const LENGTHS = ["short", "on", "long"] as const;
-export const INTENTS = ["green", "layup"] as const;
+export const INTENTS = ["green", "layup", "recovery"] as const;
 export type ShotIn = { id: string; hole: number; shot_number: number; lat: number | null; lng: number | null; accuracy_m: number | null; club: string | null; lie: string | null; result: string | null; taken_at: string | Date;
   direction?: string | null; length?: string | null; mishit?: boolean | null; intent?: string | null; source?: string | null; distance_kind?: string | null };
 export type Greens = Record<number, { center: LatLng; front?: LatLng; back?: LatLng }>;
@@ -46,7 +46,7 @@ export function countsForClub(x: ShotOut): boolean {
   if (x.source && x.source !== "gps") return false;
   if (x.distance_kind && x.distance_kind !== "measured") return false;
   return !!x.club && !isPutter(x.club) && x.distance_m != null && x.distance_m >= 10 && x.distance_m <= 400 &&
-    (x.accuracy_m == null || x.accuracy_m <= 20) && !["ob", "penalty", "water", "lost"].includes(x.result || "") && x.lie !== "recovery" && !x.mishit;
+    (x.accuracy_m == null || x.accuracy_m <= 20) && !["ob", "penalty", "water", "lost"].includes(x.result || "") && x.lie !== "recovery" && x.intent !== "recovery" && !x.mishit;
 }
 const median = (a: number[]) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
