@@ -14,6 +14,7 @@ struct RoundDetailView: View {
     @State private var showsGameEditor = false
     @State private var showsRecap = false
     @State private var showsTrack = false
+    @State private var showsWhat = false
     @State private var quickError = ""
     @State private var quickConflict = false
     @State private var needsRetry = false
@@ -73,6 +74,7 @@ struct RoundDetailView: View {
             .golfletChrome()
             .environment(model)
         }
+        .sheet(isPresented: $showsWhat) { whatSheet }
         .onAppear {
             leftRound = false
             visit.enter()
@@ -180,7 +182,12 @@ struct RoundDetailView: View {
         HStack(spacing: 0) {
             heroCell("Gross", round.gross.map(String.init) ?? "—", emphasize: true)
             heroCell("Neto", round.net.map(String.init) ?? "—", emphasize: false)
-            heroCell("Dif.*", differential.map(FormatAR.one) ?? "—", emphasize: false)
+            Button { showsWhat = true } label: {
+                heroCell("Dif.*", differential.map(FormatAR.one) ?? "—", emphasize: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("round-what")
+            .accessibilityLabel("¿Qué es esto?")
             heroCell("Puesto", position, emphasize: false)
         }
         .background(p.surface2)
@@ -357,6 +364,20 @@ struct RoundDetailView: View {
                 gameField("Greens", $girText, .gir)
                 gameField("Fairways", $firText, .fir)
             }
+            Text(statSources)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .accessibilityIdentifier("round-stat-source")
+            if let company = playedWith {
+                Text("Jugaste con \(company)")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink)
+                    .accessibilityIdentifier("round-partners")
+            }
+            Text(scheduleLine)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .accessibilityIdentifier("round-schedule")
             if !quickError.isEmpty {
                 Text(quickError)
                     .font(GType.label)
@@ -500,6 +521,61 @@ struct RoundDetailView: View {
                 }
             }
         }
+    }
+
+    private var statSources: String {
+        func tag(_ value: String, source: String?) -> String {
+            if value.isEmpty { return "Sin confirmar" }
+            return source == "track" ? "Desde TRACK" : "Manual"
+        }
+        return "Putts: \(tag(puttsText, source: round.puttsSource)). Greens: \(tag(girText, source: nil)). Fairways: \(tag(firText, source: nil))."
+    }
+
+    private var sameDayTee: TeeTime? {
+        let fmt = DateFormatter()
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        fmt.dateFormat = "yyyy-MM-dd"
+        let day = fmt.string(from: round.date)
+        let same = model.teeTimes.filter { fmt.string(from: $0.startsAt) == day }
+        return same.count == 1 ? same[0] : nil
+    }
+
+    private var playedWith: String? {
+        let names = sameDayTee?.companions.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
+        return names.isEmpty ? nil : names.joined(separator: ", ")
+    }
+
+    private var scheduleLine: String {
+        guard let tee = sameDayTee else { return "Sin horario conocido" }
+        return "Por horario · \(tee.chipWhen)"
+    }
+
+    private var whatSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("¿Qué es esto?")
+                        .font(GType.sheetTitle)
+                        .foregroundStyle(p.ink)
+                    Text("Course Rating es el score de un scratch en esa cancha y ese tee. Acá es \(FormatAR.one(round.courseRating)).")
+                    Text("Slope mide cuánto más difícil es para un bogey player. El estándar es 113. Acá es \(FormatAR.int(Int(round.slope.rounded()))).")
+                    Text("La cuenta es (113 / Slope) × (Adjusted Gross − Rating − PCC). Si el PCC no está, no lo pongo en cero.")
+                    if let gross = round.adjustedGross, round.slope > 0 {
+                        let replay = (113 / round.slope) * (Double(gross) - round.courseRating)
+                        Text("(113 / \(FormatAR.int(Int(round.slope.rounded())))) × (\(gross) − \(FormatAR.one(round.courseRating))) = \(FormatAR.one((replay * 10).rounded() / 10)). Sin PCC.")
+                    } else {
+                        Text("El adjusted gross de esta tarjeta no está guardado. No armo el ejemplo.")
+                    }
+                }
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+                .padding(20)
+            }
+            .navigationTitle("Diferencial")
+            .toolbar { Button("Cerrar") { showsWhat = false } }
+        }
+        .accessibilityIdentifier("round-what-sheet")
     }
 
     private var differential: Double? {

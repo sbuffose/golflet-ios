@@ -418,17 +418,54 @@ struct GroupDetailView: View {
             }
 
             if let comparison {
-                ForEach(comparison.rows) { row in
-                    ForEach(row.values) { value in
-                        GProbe(
-                            id: "compare-\(row.metric.rawValue)-\(value.memberID)",
-                            label: "\(value.memberName), \(display(value, metric: row.metric))"
-                        )
+                if let first = comparison.rows.first {
+                    podium(first)
+                }
+                DisclosureGroup("Ver tabla completa") {
+                    ForEach(comparison.rows) { row in
+                        ForEach(row.values) { value in
+                            GProbe(
+                                id: "compare-\(row.metric.rawValue)-\(value.memberID)",
+                                label: "\(value.memberName), \(display(value, metric: row.metric))"
+                            )
+                        }
+                        comparisonCard(row)
                     }
-                    comparisonCard(row)
+                }
+                .accessibilityIdentifier("group-full-table")
+            }
+        }
+    }
+
+    private func podium(_ row: GroupComparisonRow) -> some View {
+        let top = row.values
+            .filter { $0.shared && row.rank(of: $0.memberID) != nil }
+            .sorted { (row.rank(of: $0.memberID) ?? 99) < (row.rank(of: $1.memberID) ?? 99) }
+            .prefix(3)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(top.enumerated()), id: \.element.id) { index, value in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(index == 0 ? "1" : "\(index + 1)")
+                            .font(GType.label)
+                            .foregroundStyle(index == 0 ? Color(red: 0.77, green: 0.64, blue: 0.42) : p.ink3)
+                        Text(value.memberName)
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                            .lineLimit(1)
+                        Text(display(value, metric: row.metric))
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    .padding(12)
+                    .frame(width: 140, alignment: .leading)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityIdentifier("group-podium-\(index + 1)")
                 }
             }
         }
+        .accessibilityIdentifier("group-podium")
     }
 
     private func comparisonCard(_ row: GroupComparisonRow) -> some View {

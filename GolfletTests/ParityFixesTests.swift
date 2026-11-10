@@ -204,5 +204,22 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertEqual(GroupPeriod.parse("12m"), .year)
         XCTAssertEqual(GroupPeriod.parse("3m"), .all)
         XCTAssertEqual(GroupPeriod.parse("1w"), .week)
+
+        var played = TrackSession.set(TrackSession.State(), at: TrackPoint(lat: 1, lng: 1))
+        played = TrackSession.set(played, at: TrackPoint(lat: 1.01, lng: 1.01))
+        let lost = TrackSession.lostBall(played, at: TrackPoint(lat: 1.004, lng: 1.004), club: "Dr", provisional: true)
+        XCTAssertEqual(lost.strokeCount, 3)
+        XCTAssertEqual(lost.marks.map(\.lost), [true, false, false])
+        XCTAssertEqual(lost.marks[1].penalty, true)
+        XCTAssertEqual(lost.marks[2].provisional, true)
+        XCTAssertEqual(lost.ball, TrackPoint(lat: 1.004, lng: 1.004))
+        XCTAssertEqual(TrackSession.undoSpan(lost), 3)
+        XCTAssertEqual(TrackSession.undo(lost).strokeCount, 0)
+        XCTAssertEqual(TrackSession.holeClose(par: 4, strokes: 5, putts: 2), "5 golpes · 2 putts · Bogey")
+        XCTAssertEqual(TrackSession.holeClose(par: 4, strokes: 5, putts: nil), "5 golpes · Putts sin confirmar · Bogey")
+        XCTAssertEqual(TrackSession.suggest(yards: 150, bag: [("Driver", 230), ("7i", 155), ("Putter", nil)]), "7i")
+        XCTAssertEqual(HoleWind.shotNote(kmh: nil, tempC: nil, rainMm: nil, from: nil), "Clima no disponible")
+        XCTAssertFalse(HoleWind.shotNote(kmh: 18, tempC: 21, rainMm: 1, from: nil).contains("yd"))
+        XCTAssertTrue(HoleWind.shotNote(kmh: 18, tempC: 21, rainMm: 1, from: nil).contains("18 km/h"))
     }
 }

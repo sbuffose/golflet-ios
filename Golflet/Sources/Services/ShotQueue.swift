@@ -32,7 +32,8 @@ enum ShotQueue {
                 direction: item["direction"] as? String,
                 length: item["length"] as? String,
                 mishit: JSONFlex.bool(from: item["mishit"]) ?? false,
-                liveRoundId: live
+                liveRoundId: live,
+                intent: item["intent"] as? String
             )
         }
     }
@@ -68,6 +69,7 @@ enum ShotQueue {
         if let direction = draft.direction { body["direction"] = direction }
         if let length = draft.length { body["length"] = length }
         if draft.mishit { body["mishit"] = true }
+        if let intent = draft.intent { body["intent"] = intent }
         return body
     }
 
