@@ -4,6 +4,7 @@ import { getAllCanchas, getClubCourses, getVmCourse, greenWarnings, matchOurCour
 import { clubNames, namingFields } from "./course-names";
 import { applyGreenOverride, applyHolesOverride, parTotal } from "./course-override";
 import { greenDistances, haversine, validLatLng, type LatLng } from "./geo";
+import { coloradaLine } from "./colorada-osm";
 
 type OurCourse = { club_id: number; club_name: string; code: string; name: string; par: number | null; holes: any[] };
 
@@ -89,12 +90,15 @@ export async function courseGeometry(clubCode: string, vmCourse: string) {
   let siblings: string[] = [vmCourse]; try { siblings = await getClubCourses(clubCode); } catch { /* keep single */ }
   const nm = namingFields(clubCode, vmCourse, siblings.length ? siblings : [vmCourse], { ...(await clubNames([clubCode])).get(clubCode), golflet: ours[0]?.club_name ?? null }, ourName);
   const osm = row.osm?.holes || {};
+  let bundledTee = false;
   const holes = (row.holes as VmHole[]).map(h => {
     const card = our?.holes?.find((x: any) => x.hole === h.hole);
     const x = osm[String(h.hole)] || null;
+    const extra = x?.tee ? null : coloradaLine(clubCode, vmCourse, h.hole);
+    if (extra && !x?.tee) bundledTee = true;
     return { hole: h.hole, par: card?.par ?? null, hcp: card?.hcp ?? null, yards: card?.yards ?? {},
       green: { front: h.front, center: h.center, back: h.back },
-      tee: x?.tee ?? null, line: x?.line ?? null, hazards: x?.hazards ?? [] };
+      tee: x?.tee ?? extra?.tee ?? null, line: x?.line ?? extra?.line ?? null, hazards: x?.hazards ?? [] };
   });
   return {
     course_id: slug(clubCode, vmCourse), ...nm, vm_course: vmCourse,
@@ -102,8 +106,8 @@ export async function courseGeometry(clubCode: string, vmCourse: string) {
     course: ourName || nm.course_label, course_key: our ? `${our.club_id}:${our.name}` : null, par: our?.par ?? null,
     hole_count: holes.length, complete: holes.length >= 18 && [...Array(18)].every((_, i) => holes.some(h => h.hole === i + 1)),
     holes, warnings: greenWarnings(row.holes),
-    sources: { greens: "golfistics_viewmaster", greens_fetched_at: row.fetched_at, extras: row.osm ? "openstreetmap" : null, extras_fetched_at: row.osm?.fetched_at ?? null,
-      attribution: row.osm ? "Greens: sistema del club. Tees y obstáculos: © OpenStreetMap contributors (ODbL)." : "Greens: sistema del club." },
+    sources: { greens: "golfistics_viewmaster", greens_fetched_at: row.fetched_at, extras: row.osm || bundledTee ? "openstreetmap" : null, extras_fetched_at: row.osm?.fetched_at ?? null,
+      attribution: row.osm || bundledTee ? "Greens: sistema del club. Tees y obstáculos: © OpenStreetMap contributors (ODbL)." : "Greens: sistema del club." },
   };
 }
 

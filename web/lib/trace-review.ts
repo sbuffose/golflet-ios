@@ -6,6 +6,8 @@ import { azulOsmHoles, AZUL_OSM_CREDIT } from "./azul-osm";
 import { COLORADA_YARDS } from "./jockey-plans";
 import { MDP_CANCHA_VIEJA } from "./green-guide/209-cancha-vieja";
 import { COLORADA_GREEN_AXIS, GOLFISTICS_AXIS_READ, VIEJA_GREEN_AXIS } from "./golfistics-axis";
+import { COLORADA_OSM_CREDIT, coloradaOsmHole } from "./colorada-osm";
+import { holeSpan } from "./play-rules";
 import type { VmHole } from "./viewmaster-parse";
 
 export const TRACE_IMAGERY = {
@@ -104,11 +106,16 @@ function axisDetail(axis: { front: { lat: number; lng: number }; center: { lat: 
 function coloradaHole(n: number): Omit<HoleEvidence, "audience"> {
   const card = COLORADA_YARDS.find(h => h.n === n);
   const axis = axisOf(COLORADA_GREEN_AXIS, n);
+  const osm = coloradaOsmHole(n);
+  const span = osm && axis ? holeSpan(osm.tee, axis.center) : null;
   return {
-    hole: n, state: "necesito_una_mano", confidence: axis ? "golfistics_axis" : "none", track_lie: false, track_camera: false,
-    tee: null, polygon: null, axis, anchor: axis?.center || null,
+    hole: n, state: span ? "revisar" : "necesito_una_mano", confidence: osm ? "openstreetmap" : (axis ? "golfistics_axis" : "none"),
+    track_lie: false, track_camera: !!span,
+    tee: osm?.tee ?? null, polygon: null, axis, anchor: axis?.center || osm?.tee || null,
     par: card?.par ?? null, card_yards: card?.yards ?? null,
-    detail: axisDetail(axis, "La tarjeta de jockey-plans.ts trae par y yardas, no un polígono. Sebastián puede marcar el contorno y la salida sobre este satélite."),
+    detail: axisDetail(axis, osm
+      ? `La salida es el primer nodo del way OSM ${osm.ref} (${osm.osm_id}). ${COLORADA_OSM_CREDIT} No hay contorno: Sebastián puede marcar el anillo sobre el eje.`
+      : "Este hoyo no tiene way OSM de salida. La tarjeta de jockey-plans.ts trae par y yardas, no un polígono."),
   };
 }
 
@@ -139,8 +146,8 @@ export function priorityCourses(): CourseCoverage[] {
   return [
     pack("118", "Azul", "Jockey Club · Cancha Azul", "Golflet/Resources/Fixtures/hoyos-azul.json", holes(azulHole), fairways,
       "18 hoyos con anillo de green y línea OSM. El fairway no está en todos. TRACK puede usar el contorno y la salida. No es el pin."),
-    pack("118", "Colorada", "Jockey Club · Cancha Colorada", "web/lib/golfistics-axis.ts", holes(coloradaHole), null,
-      `Eje de green de Golfistics (${GOLFISTICS_AXIS_READ}) en los 18 hoyos. No es un contorno ni una salida. La tarjeta no se proyecta. Sebastián marca el contorno sobre ese eje.`),
+    pack("118", "Colorada", "Jockey Club · Cancha Colorada", "web/lib/colorada-osm.json", holes(coloradaHole), null,
+      `Salida OSM (ways 1C–18C, primer nodo) y eje de green de Golfistics (${GOLFISTICS_AXIS_READ}). No es un contorno ni el pin. La tarjeta no se proyecta. Sebastián marca el anillo sobre ese eje.`),
     pack("209", "Cancha Vieja", "Mar del Plata Golf Club · Cancha Vieja", "web/lib/golfistics-axis.ts", holes(viejaHole), null,
       `Eje de green de Golfistics (${GOLFISTICS_AXIS_READ}) en los 18 hoyos. La guía AAG está en u/v y no se proyecta. El eje no dibuja el green ni la salida. Sebastián marca el contorno sobre el satélite.`),
   ];

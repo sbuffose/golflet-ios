@@ -193,7 +193,8 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.deepEqual(cardWrites(calls), []);
     await page.screenshot({ path: join(ART, "track-map.png") });
     const readout = await page.$eval("#tkro", el => ({ h: el.getBoundingClientRect().height, t: el.textContent || "" }));
-    assert.ok(readout.h < 40, JSON.stringify(readout));
+    assert.ok(readout.h > 20 && readout.h < 140, JSON.stringify(readout));
+    assert.equal(/Fairway|regulación|No cambia la tarjeta/.test(readout.t), false);
     await page.waitForSelector("#play-club");
     await page.waitForSelector("#play-penalty");
     assert.equal(await page.$("#play-set"), null);

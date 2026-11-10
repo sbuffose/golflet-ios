@@ -48,7 +48,8 @@ test("salir no borra el grupo, un águila no es birdie y Cancha Vieja no se inve
   assert.equal(vieja.holes[0].anchor?.lng, -57.53818687);
   assert.equal(vieja.holes.filter(h => h.axis && !h.polygon && !h.tee).length, 18);
   const colorada = courseEvidence("118", "Colorada");
-  assert.equal(colorada?.holes.filter(h => h.axis && !h.polygon && !h.tee).length, 18);
+  assert.equal(colorada?.holes.filter(h => h.axis && !h.polygon && h.tee && h.track_camera).length, 18);
+  assert.match(colorada?.holes[0].detail || "", /OpenStreetMap/);
   assert.equal(colorada?.holes[8].axis?.front.lat, colorada?.holes[8].axis?.center.lat);
   assert.equal(colorada?.holes[8].axis?.front.lng, colorada?.holes[8].axis?.center.lng);
   assert.notEqual(colorada?.holes[8].axis?.back.lat, colorada?.holes[8].axis?.center.lat);
