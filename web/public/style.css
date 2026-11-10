@@ -270,6 +270,7 @@ h1.greet{display:flex;align-items:center;flex-wrap:wrap;max-width:100%}
 .rstats3 div{background:#fff;border-radius:14px;padding:10px 6px;text-align:center;box-shadow:var(--shadow-card)}
 .rstats3 span{display:block;font-size:11px;color:#5c6b7a}
 .rstats3 b{font-size:22px;color:#0B2545}
+.rstats3 small{display:block;margin-top:2px;font-size:10px;line-height:1.2;color:#5c6b7a}
 .auth-hero b{margin-top:8px;font-size:calc(32px*var(--tsb,1));font-weight:700;letter-spacing:-.04em;color:#0B2545}
 .auth-hero p{margin:4px 0 0;font-size:calc(16px*var(--ts,1));font-weight:600;color:#0B2545}
 @keyframes gl-rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
@@ -2750,7 +2751,7 @@ html.rc-map .tk-clubtile{width:64px;height:64px;border:0;border-radius:14px;back
 html.rc-map .tk-clubtile b{font-size:18px;line-height:1;font-weight:700}
 html.rc-map .tk-clubtile small{margin-top:3px;font-size:10px;letter-spacing:.06em;font-weight:650}
 html.rc-map .tk-club{position:relative;background:transparent;padding:0}
-html.rc-map .tk-club select{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+html.rc-map .tk-club select{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;clip:rect(0 0 0 0);overflow:hidden;opacity:0;pointer-events:none}
 html.rc-map .tk-sheet{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(11,37,69,.42);padding:12px 12px calc(env(safe-area-inset-bottom) + 12px)}
 html.rc-map .tk-sheet[hidden]{display:none!important}
 html.rc-map .tk-sheetx{position:absolute;right:10px;top:8px;width:44px;height:44px;border:0;border-radius:50%;background:#fff;color:#0B2545;font:700 18px/1 Geist,system-ui,sans-serif}

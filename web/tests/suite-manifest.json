@@ -2,11 +2,11 @@
   "suite": "web/tests/*.test.ts",
   "how_to_read": "El reporter de node:test imprime tests, pass, fail y skipped. El total es la suma. Un skip no es un pass. Con Chrome instalado los tests de navegador corren y el skip baja. Sin Chrome esos mismos tests se omiten.",
   "agent_vm_with_chrome": {
-    "total": 125,
-    "pass": 125,
+    "total": 130,
+    "pass": 130,
     "skip": 0,
     "fail": 0,
-    "note": "Corrida en esta VM con Chrome el 2026-11-10. 125 pass, 0 skip, 0 fail. No es validación de archivo ni paridad con WhyGolf. Incluye la competencia del grupo, el replay del diferencial y el catálogo de hierros Titleist. La Vieja abre en la salida del mapa y los hoyos 7 y 16 siguen sin salida."
+    "note": "Corrida en esta VM con Chrome el 2026-11-10. 130 pass, 0 skip, 0 fail. No es validación de archivo ni paridad con WhyGolf. Incluye la tarjeta derivada de TRACK, la pelota perdida con provisional y el clima sin dirección. La Vieja abre en la salida del mapa y los hoyos 7 y 16 siguen sin salida."
   },
   "archive_b1b65de": {
     "where": "validación independiente de b1b65de",

@@ -286,7 +286,13 @@ export function shotDistanceLabel(shot: {
   return { text: "Sin ubicación", yards: null, meters: null, kind: "missing" };
 }
 
-export type ShotFact = { penalty?: boolean; holed?: boolean; lost?: boolean; putt?: boolean; originGreen?: boolean; endLie?: "green" | "fairway" | "bunker" | "water" | "rough" | "other" | null };
+export type ShotFact = { penalty?: boolean; holed?: boolean; lost?: boolean; putt?: boolean; originGreen?: boolean; endLie?: "green" | "fairway" | "bunker" | "water" | "rough" | "other" | null; direction?: "left" | "right" | "center" | null };
+export type CardState = "track" | "unconfirmed" | "na";
+export type HoleCard = {
+  putts: { value: number | null; state: CardState };
+  drive: { value: "fairway" | "left" | "right" | "other" | null; state: CardState };
+  gir: { value: boolean | null; state: CardState };
+};
 export type HoleDerived = {
   finished: boolean;
   putts: number | null;
@@ -329,6 +335,30 @@ export function trackHoleSummary(par: number | null, shots: ShotFact[]): HoleDer
   lines.push(gir == null ? "Green en regulación: falta saber si la pelota llegó al green." : gir ? `Green en regulación: sí, en ${regulation} o menos.` : "Green en regulación: no.");
   if (!finished) lines.push("El hoyo sigue abierto.");
   return { finished, putts, fir: firApplies ? fir : null, gir, lines };
+}
+
+/** Per-hole card from TRACK shots. A missing lie stays unconfirmed. A par 3 has no fairway. Nothing here overwrites a manual mark. */
+export function deriveHoleCard(par: number | null, shots: ShotFact[]): HoleCard {
+  const sum = trackHoleSummary(par, shots);
+  const p = par == null || !Number.isFinite(Number(par)) ? null : Number(par);
+  const putts = sum.putts == null
+    ? { value: null, state: "unconfirmed" as const }
+    : { value: sum.putts, state: "track" as const };
+  let drive: HoleCard["drive"];
+  if (p === 3) drive = { value: null, state: "na" };
+  else if (p !== 4 && p !== 5) drive = { value: null, state: "unconfirmed" };
+  else {
+    const first = shots.find(s => !s.penalty && !s.lost);
+    if (!first) drive = { value: null, state: "unconfirmed" };
+    else if (first.direction === "left" || first.direction === "right") drive = { value: first.direction, state: "track" };
+    else if (first.endLie === "fairway" || first.direction === "center") drive = { value: "fairway", state: "track" };
+    else if (first.endLie) drive = { value: "other", state: "track" };
+    else drive = { value: null, state: "unconfirmed" };
+  }
+  const gir = sum.gir == null
+    ? { value: null, state: "unconfirmed" as const }
+    : { value: sum.gir, state: "track" as const };
+  return { putts, drive, gir };
 }
 
 const VS_PAR: Record<number, string> = { [-2]: "Águila", [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Doble bogey", 3: "Triple bogey" };
