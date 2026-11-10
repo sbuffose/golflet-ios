@@ -3,6 +3,15 @@ import SwiftUI
 struct BagView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
+    @State private var ironBrand = ""
+    @State private var ironModel = ""
+    private let ironCatalog = [
+        "Titleist": ["T100", "T150", "T200", "T250", "T350"],
+        "Callaway": ["Apex", "Apex Pro", "Paradym"],
+        "TaylorMade": ["P770", "P790", "P7MC"],
+        "Ping": ["i530", "G430", "Blueprint"],
+        "Mizuno": ["JPX 923", "Pro 243", "Pro 225"],
+    ]
     var body: some View {
         GScreen(id: "screen-bolsa") {
             VStack(alignment: .leading, spacing: 16) {
@@ -11,6 +20,7 @@ struct BagView: View {
                     GTitle(text: "Mi bolsa")
                 }
                 hint
+                ironSet
                 headerRow
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -61,6 +71,50 @@ struct BagView: View {
                     .foregroundStyle(p.ink2)
             }
         }
+    }
+
+    private var ironSet: some View {
+        GCard(radius: 18, padding: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Juego de hierros")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Menu {
+                    ForEach(ironCatalog.keys.sorted(), id: \.self) { brand in
+                        Button(brand) { ironBrand = brand; ironModel = "" }
+                    }
+                } label: {
+                    Text(ironBrand.isEmpty ? "Marca" : ironBrand)
+                        .font(GType.body)
+                        .foregroundStyle(p.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityIdentifier("iron-brand")
+                Menu {
+                    ForEach(ironCatalog[ironBrand] ?? [], id: \.self) { modelName in
+                        Button(modelName) { ironModel = modelName }
+                    }
+                } label: {
+                    Text(ironModel.isEmpty ? "Modelo" : ironModel)
+                        .font(GType.body)
+                        .foregroundStyle(p.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityIdentifier("iron-model")
+                Text(ironNote)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .accessibilityIdentifier("iron-note")
+            }
+        }
+    }
+
+    private var ironNote: String {
+        if ironBrand.isEmpty || ironModel.isEmpty { return "Elegí marca y modelo. No invento un juego." }
+        if ironCatalog[ironBrand]?.contains(ironModel) == true {
+            return "\(ironBrand) \(ironModel). No lo guardé: esta pantalla todavía no manda el juego."
+        }
+        return "No lo creamos"
     }
 
     private var headerRow: some View {
