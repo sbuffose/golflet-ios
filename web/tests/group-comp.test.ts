@@ -8,13 +8,13 @@ import test from "node:test";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
-const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".png": "image/png" };
+const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".png": "image/png", ".jpg": "image/jpeg" };
 const ART = "/opt/cursor/artifacts";
 
 const types = (n: number, rounds: number) => ({ total: n, per_round: rounds ? Math.round((n / rounds) * 10) / 10 : null });
-const member = (o: { id: string; name: string; me?: boolean; rounds: number; birdies: number; pars: number; net: number | null; avg: number | null; prev?: number | null }) => ({
-  member_id: o.id, name: o.name, color: o.me ? "#0B2545" : "#C8102E", is_me: !!o.me, is_admin: !!o.me,
-  rounds: o.rounds, cards_18: o.rounds, cards_9: 0, avg_gross: o.avg, best_gross: o.avg, avg_net: o.net, best_net: o.net, handicap_index: null,
+const member = (o: { id: string; name: string; me?: boolean; rounds: number; birdies: number; pars: number; net: number | null; avg: number | null; prev?: number | null; cards18?: number; cards9?: number; photo?: string }) => ({
+  member_id: o.id, name: o.name, color: o.me ? "#0B2545" : "#C8102E", is_me: !!o.me, is_admin: !!o.me, photo_url: o.photo ?? null,
+  rounds: o.rounds, cards_18: o.cards18 ?? o.rounds, cards_9: o.cards9 ?? 0, avg_gross: o.avg, best_gross: o.avg, avg_net: o.net, best_net: o.net, handicap_index: null,
   types: { birdies: types(o.birdies, o.rounds), pars: types(o.pars, o.rounds), eagles: types(0, o.rounds), aces: types(0, o.rounds), max_birdies: types(o.birdies ? 2 : 0, o.rounds), bogeys: types(1, o.rounds), doubles: types(0, o.rounds) },
   streak: o.rounds >= 2 ? 2 : null, consistency: o.rounds >= 3 ? { sd: 1.4, n: o.rounds } : null, trend: [],
   prev: o.prev == null ? null : { rounds: 1, birdies: o.prev, pars: 1, best_net: o.net, avg_gross: o.avg },
@@ -29,8 +29,19 @@ const payload = (range: string, min: number) => ({
   clubs: [],
   worst_holes: [],
   members: range === "1w"
-    ? [member({ id: "a", name: "Ana Pérez", me: true, rounds: 1, birdies: 3, pars: 4, net: 74, avg: 80, prev: 1 }), member({ id: "b", name: "Luis Gómez", rounds: 1, birdies: 1, pars: 2, net: 78, avg: 84, prev: 2 })]
-    : [member({ id: "a", name: "Ana Pérez", me: true, rounds: 8, birdies: 24, pars: 60, net: 74, avg: 80, prev: 10 }), member({ id: "b", name: "Luis Gómez", rounds: 2, birdies: 4, pars: 8, net: 79, avg: 86, prev: 6 })],
+    ? [member({ id: "a", name: "Ana Pérez", me: true, rounds: 1, birdies: 3, pars: 4, net: 74, avg: 80, prev: 1, photo: "/fixture-ana.jpg" }), member({ id: "b", name: "Luis Gómez", rounds: 1, birdies: 1, pars: 2, net: 78, avg: 84, prev: 2 })]
+    : [member({ id: "a", name: "Ana Pérez", me: true, rounds: 8, birdies: 24, pars: 60, net: 74, avg: 80, prev: 10, cards18: 6, cards9: 2, photo: "/fixture-ana.jpg" }), member({ id: "b", name: "Luis Gómez", rounds: 2, birdies: 4, pars: 8, net: 79, avg: 86, prev: 6 })],
+});
+
+const four = (range: string, min: number) => ({
+  ...payload(range, min),
+  group: { id: "g4", name: "Grupo de cuatro", is_admin: true, admins: 1, photo_url: null },
+  members: [
+    member({ id: "a", name: "Ana Pérez", me: true, rounds: 8, birdies: 24, pars: 60, net: 72, avg: 78, cards18: 6, cards9: 2, photo: "/fixture-ana.jpg" }),
+    member({ id: "b", name: "Luis Gómez", rounds: 6, birdies: 14, pars: 40, net: 75, avg: 82 }),
+    member({ id: "c", name: "Carla Díaz", rounds: 5, birdies: 9, pars: 30, net: 77, avg: 84 }),
+    member({ id: "d", name: "Mateo Ruiz", rounds: 4, birdies: 4, pars: 18, net: 80, avg: 88 }),
+  ],
 });
 
 test("la competencia del grupo reemplaza la tabla y compara el período anterior", { timeout: 90_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
@@ -39,6 +50,7 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     const url = new URL(req.url || "/", "http://127.0.0.1");
     if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
     const json = (data: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(data)); };
+    if (url.pathname.startsWith("/api/groups/g4")) return json(four(url.searchParams.get("range") || "all", 4));
     if (url.pathname.startsWith("/api/groups/g1")) return json(payload(url.searchParams.get("range") || "all", url.searchParams.get("range") === "1w" ? 1 : 4));
     if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, rounds: [], courses: [], clubs: [] });
     if (url.pathname.startsWith("/api/")) return json({});
@@ -56,29 +68,65 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
-    const open = async (range: string) => {
-      await page.goto(`http://127.0.0.1:${port}/#/grupo/g1?range=${range}`, { waitUntil: "networkidle0" });
-      await page.waitForSelector(".gg-carousel");
-      await new Promise(r => setTimeout(r, 800));
+    const open = async (id: string, range: string) => {
+      await page.goto(`http://127.0.0.1:${port}/#/grupo/${id}?range=${range}`, { waitUntil: "networkidle0" });
+      await page.waitForSelector(".gg-steps");
+      await page.waitForFunction(() => [...document.querySelectorAll(".gg-hero .gg-count, .gg-stage:not([hidden]) .gg-count")].every(n => (n as HTMLElement).textContent === String(Math.round(Number((n as HTMLElement).dataset.n)))));
     };
-    await open("1w");
+    const shot = async (name: string) => {
+      await page.evaluate(() => {
+        const steps = document.querySelector(".gg-stage:not([hidden]) .gg-steps");
+        const bar = document.querySelector("#tabbar");
+        if (!steps || !bar) return;
+        const room = bar.getBoundingClientRect().top - 12;
+        const box = steps.getBoundingClientRect();
+        if (box.bottom > room) window.scrollBy(0, box.bottom - room);
+      });
+      await page.screenshot({ path: `${ART}/${name}.png` });
+    };
+    await open("g1", "1w");
     const week = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
-    assert.match(week, /Semana/);
-    assert.match(week, /Tu puesto en birdies/);
+    assert.match(week, /Tu puesto/);
+    assert.match(week, /en birdies/);
+    assert.match(week, /1 tarjeta/);
     assert.match(week, /Ver tabla completa/);
     assert.match(week, /\+2 birdies sobre Luis Gómez/);
     assert.match(week, /1 ronda esta semana/);
-    assert.equal(await page.$eval('a[aria-selected="true"]', el => el.textContent), "Semana");
+    assert.match(week, /Rey del birdie/);
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Sem");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Semana");
+    assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
+    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 2);
+    assert.equal(await page.$(".gg-step .cad"), null);
     const tableHidden = await page.$eval(".gg-full", el => (el as HTMLDetailsElement).open);
     assert.equal(tableHidden, false);
-    await page.screenshot({ path: `${ART}/grupo-semana-390.png` });
-    await open("12y");
+    await shot("grupo-semana-390");
+    await open("g1", "all");
+    const hist = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
+    assert.match(hist, /8 tarjetas \(6 de 18 y 2 de 9\)/);
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Todo");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Histórico");
+    assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
+    assert.ok(await page.$(".gg-step.p1 img.gg-img"));
+    const peek = await page.$$eval(".gg-trophy", els => els.length >= 2 && els[1].getBoundingClientRect().left < window.innerWidth);
+    assert.equal(peek, true);
+    await shot("grupo-2-historico-390");
+    await open("g1", "12y");
     const year = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(year, /20 rondas este año/);
     assert.match(year, /Pocas rondas/);
     assert.match(year, /Rey del birdie/);
-    assert.equal(await page.$eval('a[aria-selected="true"]', el => el.textContent), "Año");
-    await page.screenshot({ path: `${ART}/grupo-anio-390.png` });
+    assert.match(year, /8 tarjetas \(6 de 18 y 2 de 9\)/);
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
+    await shot("grupo-2-anio-390");
+    await open("g4", "all");
+    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 3);
+    assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Mateo Ruiz/);
+    await shot("grupo-4-historico-390");
+    await open("g4", "12y");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
+    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 3);
+    await shot("grupo-4-anio-390");
   } finally {
     await browser.close();
     server.close();

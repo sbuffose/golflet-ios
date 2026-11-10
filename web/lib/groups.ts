@@ -67,6 +67,19 @@ export async function loadGroup(groupId: string, viewerId: string, need: "member
   if ((need === "owner" || need === "admin") && !isAdmin) throw new HttpError(403, "Solo los admins del grupo pueden hacer esto.");
   return { group: g, members, me: me ?? null, isOwner: isAdmin, isAdmin };
 }
+/** JPEG of an accepted member, only when that member shares the profile. Otherwise 404. */
+export async function memberProfilePhoto(groupId: string, viewerId: string, memberId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(memberId || "")) throw new HttpError(404, "Sin foto");
+  const { members } = await loadGroup(groupId, viewerId, "member");
+  const row = members.find(m => m.member_id === memberId && m.status === "accepted" && m.user_id);
+  if (!row?.user_id) throw new HttpError(404, "Sin foto");
+  const share = (await effectiveShare(groupId, [row.user_id])).get(row.user_id);
+  if (!share?.profile) throw new HttpError(404, "Sin foto");
+  const { readProfilePhoto } = await import("./profile-photo");
+  const photo = await readProfilePhoto(row.user_id);
+  if (!photo) throw new HttpError(404, "Sin foto");
+  return photo;
+}
 export const photoUrl = (g: { id: string; has_photo?: boolean; photo_updated_at?: string | null }) =>
   g.has_photo ? `/api/groups/${g.id}/photo?v=${g.photo_updated_at ? new Date(g.photo_updated_at).getTime() : 0}` : null;
 
@@ -229,6 +242,12 @@ export async function groupCompare(groupId: string, viewerId: string, f: { year?
       };
     }
     return shared;
+  });
+  const { profilePhotos } = await import("./profile-photo");
+  const pics = await profilePhotos(data.map(d => d.m.user_id).filter((id): id is string => !!id));
+  out.forEach((o: any, i: number) => {
+    const uid = data[i].m.user_id;
+    if (uid && data[i].sh.profile && pics.has(uid)) o.photo_url = `/api/groups/${groupId}/members/${data[i].m.member_id}/photo`;
   });
   // t74u: pelota only for members sharing "ball" (omitted otherwise, never null-filled)
   { const ids = acc.filter(m => share.get(m.user_id!)?.ball).map(m => m.user_id!); if (ids.length) { const bm = await (await import("./ball")).ballsFor(ids);
