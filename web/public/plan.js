@@ -543,13 +543,37 @@
   }
 
   /* ---------- 18-hole overview ---------- */
+  /* Arrow points where the wind blows, rotated against the verified tee→green bearing. Same mark on the strategy tile and the cancha card. */
+  function windAim(fromDeg, bearing) {
+    if (fromDeg == null || bearing == null || !Number.isFinite(+fromDeg) || !Number.isFinite(+bearing)) return null;
+    return ((+fromDeg + 180 - +bearing) % 360 + 360) % 360;
+  }
+  function windArrowGroup(cx, cy, aim) {
+    if (aim == null) return '';
+    return `<g transform="rotate(${Number(aim).toFixed(2)} ${cx} ${cy})"><path d="M${cx} ${cy + 8} L${cx} ${cy - 5}" stroke="${COL.ink}" stroke-width="2.2" stroke-linecap="round"/><path d="M${cx - 3.8} ${cy - 2.5} L${cx} ${cy - 8.5} L${cx + 3.8} ${cy - 2.5} Z" fill="${COL.ink}"/></g>`;
+  }
   function miniIcon(h, w, bearing) {
     const fr = holeFrame(h), ln = h.line.map(fr.toS), g = h.green?.polygon?.map(fr.toS) || [];
     const all = [...ln, ...g], xs = all.map(p => p[0]), ys = all.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
     const k = Math.min(30 / Math.max(x1 - x0, 1), 66 / Math.max(y1 - y0, 1)), ox = 22 - ((x0 + x1) / 2) * k, oy = 40 - ((y0 + y1) / 2) * k, T = p => `${(p[0] * k + ox).toFixed(1)},${(p[1] * k + oy).toFixed(1)}`;
-    const a = w ? ((w.from_deg + 180 - bearing) % 360 + 360) % 360 : null;
+    const a = w ? windAim(w.from_deg, bearing) : null;
     return `<svg class="gp-mini" viewBox="0 0 44 80" aria-hidden="true"><polyline points="${ln.map(T).join(' ')}" fill="none" stroke="${COL.fair}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>${g.length ? `<polygon points="${g.map(T).join(' ')}" fill="${COL.green}" stroke="${COL.greenE}" stroke-width=".8"/>` : ''}<circle cx="${T(ln[0]).split(',')[0]}" cy="${T(ln[0]).split(',')[1]}" r="2.4" fill="${COL.ink}"/>
-      ${a != null ? `<g transform="rotate(${a} 33 14)"><path d="M33 22 L33 9" stroke="${COL.ink}" stroke-width="2.2" stroke-linecap="round"/><path d="M29.2 11.5 L33 5.5 L36.8 11.5 Z" fill="${COL.ink}"/></g>` : ''}</svg>`;
+      ${windArrowGroup(33, 14, a)}</svg>`;
+  }
+  /* Compact hole wind for the cancha card. holes: {hole, bearing} from a verified tee and green. No bearing → no arrow. */
+  function windTiles(holes, wind) {
+    const rules = window.GolfletRules, from = wind && wind.from_deg, kmh = wind && wind.kmh;
+    const list = Array.isArray(holes) ? holes : [];
+    return `<div class="gp-grid tw-wind" aria-label="Viento por hoyo">${list.map(h => {
+      const play = rules && rules.windPlay ? rules.windPlay(h.hole, from, h.bearing, kmh) : null;
+      const ok = !!(play && play.relative && play.relative !== 'unavailable' && Number.isFinite(+h.bearing));
+      const word = ok ? (play.relative === 'contra' ? 'en contra' : play.relative === 'favor' ? 'a favor' : 'cruzado') : '';
+      const label = ok ? word : '<span>Sin rumbo</span><span>verificado</span>';
+      const speed = ok && kmh != null && Number.isFinite(+kmh) ? `${Math.round(+kmh)} km/h` : '';
+      const aim = ok ? windAim(from, h.bearing) : null;
+      const spoken = ok ? `Hoyo ${h.hole}, ${word}, ${speed}` : `Hoyo ${h.hole}, Sin rumbo verificado`;
+      return `<div class="gp-tile tw-wtile" data-hole="${h.hole}" data-wind="${ok ? play.relative : 'unavailable'}" aria-label="${spoken}"><span class="gp-n num">${h.hole}</span>${aim != null ? `<svg class="gp-mini" viewBox="0 0 44 44" aria-hidden="true">${windArrowGroup(22, 22, aim)}</svg>` : '<span class="gp-mini tw-noarrow" aria-hidden="true"></span>'}<span class="gp-w num">${speed}</span><span class="gp-eta">${label}</span></div>`;
+    }).join('')}</div>`;
   }
   function fcNote(fc) {
     if (fc.status === 'ok') return '';
@@ -1143,5 +1167,5 @@
   }
   const C16 = d => ['norte', 'nornoreste', 'noreste', 'estenoreste', 'este', 'estesudeste', 'sudeste', 'sudsudeste', 'sur', 'sudsudoeste', 'sudoeste', 'oestesudoeste', 'oeste', 'oestenoroeste', 'noroeste', 'nornoroeste'][Math.round(d / 22.5) % 16];
 
-  window.GolfletPlan = { init: h => { H = h; }, page, load, label, parent, fixed, invalidateClubs: () => { CLUBS = null; }, practiceLive };
+  window.GolfletPlan = { init: h => { H = h; }, page, load, label, parent, fixed, invalidateClubs: () => { CLUBS = null; }, practiceLive, windTiles };
 })();

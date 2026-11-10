@@ -46,7 +46,7 @@ export function countsForClub(x: ShotOut): boolean {
   if (x.source && x.source !== "gps") return false;
   if (x.distance_kind && x.distance_kind !== "measured") return false;
   return !!x.club && !isPutter(x.club) && x.distance_m != null && x.distance_m >= 10 && x.distance_m <= 400 &&
-    (x.accuracy_m == null || x.accuracy_m <= 20) && !["ob", "penalty", "water"].includes(x.result || "") && x.lie !== "recovery" && !x.mishit;
+    (x.accuracy_m == null || x.accuracy_m <= 20) && !["ob", "penalty", "water", "lost"].includes(x.result || "") && x.lie !== "recovery" && !x.mishit;
 }
 const median = (a: number[]) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
