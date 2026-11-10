@@ -124,7 +124,18 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
   const { default: puppeteer } = await import("puppeteer-core");
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
   const ready = (page: { waitForFunction: (fn: () => boolean, opts?: { timeout?: number }) => Promise<unknown> }) =>
-    page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-map") === "ready", { timeout: 25000 });
+    page.waitForFunction(() => {
+      const map = document.querySelector("#tkmap");
+      if (!map) return false;
+      const cmap = map.getAttribute("data-cmap");
+      if (map.getAttribute("data-map") !== "ready" || map.getAttribute("data-drawn") !== "1" || map.getAttribute("data-moving") !== "0") return false;
+      if (cmap !== "0" && cmap !== "1") return false;
+      for (const id of ["#play-hit", "#play-set"]) {
+        const button = document.querySelector(id) as HTMLButtonElement | null;
+        if (button && button.disabled) return false;
+      }
+      return true;
+    }, { timeout: 25000 });
   const pan = async (page: { mouse: { move: (x: number, y: number, opts?: { steps?: number }) => Promise<void>; down: () => Promise<void>; up: () => Promise<void> } }, dx: number, dy: number) => {
     await page.mouse.move(200, 360);
     await page.mouse.down();
@@ -435,6 +446,14 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     await page.click("#play-hit");
     await page.waitForFunction(() => (document.querySelector(".tk-msg")?.textContent || "").includes("Elegí un palo"));
     assert.equal(posts.length, blocked);
+    await page.$eval(".tk-msg", el => { el.setAttribute("data-once", "1"); });
+    await ready(page);
+    await page.click("#play-hit");
+    await page.waitForFunction(() => {
+      const msg = document.querySelector(".tk-msg");
+      return !!msg && msg.getAttribute("data-once") !== "1" && (msg.textContent || "").includes("Elegí un palo");
+    });
+    assert.equal(posts.length, blocked);
     await page.select("#play-club", "7i");
     await ready(page);
     await page.click("#play-hit");
@@ -454,6 +473,14 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     await ready(page);
     await page.click("#play-hit");
     await page.waitForFunction(() => (document.querySelector(".tk-msg")?.textContent || "").includes("Elegí un palo"));
+    assert.equal(posts.length, emptyPosts);
+    await page.$eval(".tk-msg", el => { el.setAttribute("data-once", "1"); });
+    await ready(page);
+    await page.click("#play-hit");
+    await page.waitForFunction(() => {
+      const msg = document.querySelector(".tk-msg");
+      return !!msg && msg.getAttribute("data-once") !== "1" && (msg.textContent || "").includes("Elegí un palo");
+    });
     assert.equal(posts.length, emptyPosts);
     await page.screenshot({ path: "/opt/cursor/artifacts/track-empty-bag.png" });
 
