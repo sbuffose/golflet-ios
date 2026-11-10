@@ -5,6 +5,7 @@ import { clubNames, namingFields } from "./course-names";
 import { applyGreenOverride, applyHolesOverride, parTotal } from "./course-override";
 import { greenDistances, haversine, validLatLng, type LatLng } from "./geo";
 import { coloradaLine } from "./colorada-osm";
+import { overlayCourseMapHole } from "./course-map-geom";
 
 type OurCourse = { club_id: number; club_name: string; code: string; name: string; par: number | null; holes: any[] };
 
@@ -79,7 +80,28 @@ export async function resolveCourseId(courseId: string): Promise<{ club_code: st
   return { club_code: code, vm_course: vm };
 }
 
-/** Full geometry for every hole: green front/center/back (Golfistics) + par/hcp/yards (our course card) + tee/line/hazards (OSM, when mapped). */
+/** course_map rows for this club whose course name is the linked card or the ViewMaster name. */
+async function courseMapHoles(clubCode: string, names: Array<string | null | undefined>) {
+  const want = [...new Set(names.map(n => String(n || "").trim().toLowerCase()).filter(Boolean))];
+  const out = new Map<number, any>();
+  if (!want.length) return out;
+  let rows: any[] = [];
+  try { rows = await q(`select m.course, h.hole, h.data from course_map m join course_map_hole h on h.course_map_id=m.id where m.club_code=$1`, [clubCode]); }
+  catch { return out; }
+  const courses = [...new Set(rows.map(r => String(r.course || "")))];
+  const exact = courses.find(c => want.includes(c.toLowerCase()));
+  const loose = courses.filter(c => {
+    const name = c.toLowerCase();
+    return want.some(n => n === name || n.endsWith(` ${name}`) || name.endsWith(` ${n}`));
+  });
+  const picked = exact || (loose.length === 1 ? loose[0] : "");
+  if (!picked) return out;
+  for (const r of rows) if (r.course === picked) out.set(Number(r.hole), r.data);
+  return out;
+}
+
+/** Full geometry for every hole. course_map_hole is the tee, the green and the line when that row exists.
+ *  Golfistics and OSM fill only the holes the map does not have. */
 export async function courseGeometry(clubCode: string, vmCourse: string) {
   const raw = await getVmCourse(clubCode, vmCourse);
   const [ov] = await q(`select green_override, override_at from vm_course where club_code=$1 and vm_course=$2`, [clubCode, vmCourse]);
@@ -100,14 +122,23 @@ export async function courseGeometry(clubCode: string, vmCourse: string) {
       green: { front: h.front, center: h.center, back: h.back },
       tee: x?.tee ?? extra?.tee ?? null, line: x?.line ?? extra?.line ?? null, hazards: x?.hazards ?? [] };
   });
+  const mapped = await courseMapHoles(clubCode, [ourName, vmCourse, nm.course_label]);
+  let fromMap = false;
+  const withMap = holes.map(h => {
+    const data = mapped.get(h.hole);
+    if (!data) return h;
+    const next = overlayCourseMapHole(h, data);
+    if (next !== h) fromMap = true;
+    return next;
+  });
   return {
     course_id: slug(clubCode, vmCourse), ...nm, vm_course: vmCourse,
     last_read_at: row.fetched_at ?? null, greens_updated_at: [row.fetched_at, ov?.override_at].filter(Boolean).map((d: any) => new Date(d)).sort((a, b) => +b - +a)[0] ?? null,
     course: ourName || nm.course_label, course_key: our ? `${our.club_id}:${our.name}` : null, par: our?.par ?? null,
     hole_count: holes.length, complete: holes.length >= 18 && [...Array(18)].every((_, i) => holes.some(h => h.hole === i + 1)),
-    holes, warnings: greenWarnings(row.holes),
-    sources: { greens: "golfistics_viewmaster", greens_fetched_at: row.fetched_at, extras: row.osm || bundledTee ? "openstreetmap" : null, extras_fetched_at: row.osm?.fetched_at ?? null,
-      attribution: row.osm || bundledTee ? "Greens: sistema del club. Tees y obstáculos: © OpenStreetMap contributors (ODbL)." : "Greens: sistema del club." },
+    holes: withMap, warnings: greenWarnings(row.holes),
+    sources: { greens: fromMap ? "course_map" : "golfistics_viewmaster", greens_fetched_at: row.fetched_at, extras: fromMap ? "course_map" : (row.osm || bundledTee ? "openstreetmap" : null), extras_fetched_at: row.osm?.fetched_at ?? null,
+      attribution: fromMap ? "Salidas y greens: mapa de la cancha. Lo que falta, eje del club u OpenStreetMap." : (row.osm || bundledTee ? "Greens: sistema del club. Tees y obstáculos: © OpenStreetMap contributors (ODbL)." : "Greens: sistema del club.") },
   };
 }
 

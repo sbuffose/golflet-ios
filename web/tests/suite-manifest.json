@@ -2,11 +2,11 @@
   "suite": "web/tests/*.test.ts",
   "how_to_read": "El reporter de node:test imprime tests, pass, fail y skipped. El total es la suma. Un skip no es un pass. Con Chrome instalado los tests de navegador corren y el skip baja. Sin Chrome esos mismos tests se omiten.",
   "agent_vm_with_chrome": {
-    "total": 114,
-    "pass": 114,
+    "total": 116,
+    "pass": 116,
     "skip": 0,
     "fail": 0,
-    "note": "Corrida en esta VM con Chrome el 2026-11-10, después de las salidas OSM de Colorada y la barra compacta de TRACK. 114 pass no es validación de archivo ni paridad con WhyGolf. El test nuevo es el de las salidas OSM de Colorada. Cancha Vieja sigue sin salida. shot-map, track-flow, track-putt, track-entry y ui-browser quedaron en verde en la misma corrida."
+    "note": "Corrida en esta VM con Chrome el 2026-11-10, después de usar course_map_hole como geometría de TRACK. 116 pass no es validación de archivo ni paridad con WhyGolf. Los tests nuevos leen el fixture derivado del export: la Vieja abre en la salida del mapa y los hoyos 7 y 16 siguen sin salida. Colorada y Azul también están en ese fixture. shot-map, track-flow, track-putt, track-entry y ui-browser quedaron en verde en la misma corrida."
   },
   "archive_b1b65de": {
     "where": "validación independiente de b1b65de",
