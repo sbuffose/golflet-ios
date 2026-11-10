@@ -932,12 +932,12 @@ async function loadTee(id, opts){
     el.innerHTML = `<div class="tt-hero"><div class="overline">${past?'Ya jugado':relDay(t.date)}</div><div class="tt-when"><b class="num">${esc(t.time)}</b><span>${WDL[dd.getUTCDay()]} ${dd.getUTCDate()} de ${MESL[dd.getUTCMonth()]}${t.start_hole?` · sale del hoyo ${t.start_hole}`:''}</span></div>
         <div class="tt-where"><b>${esc(t.club_name)}</b>${t.course_label?`<span>Cancha ${esc(t.course_label)}</span>`:'<span>La reserva no especifica la cancha.</span>'}${t.modality?`<span>${esc(t.modality)}</span>`:''}</div></div>
       ${t.event_name?`<p class="foot" style="margin-top:8px">${esc(t.event_name)}</p>`:''}
+      <button type="button" class="btn ghost sm" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>
+      <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
       <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HCP ${f1(c.hcp)}`:''}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HCP</span></div>`:''}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
-      <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
       ${past ? '' : `<div class="section"><h2>Tu hándicap de juego</h2></div><div class="card tt-now">${teeBlock(d, t.id)}</div>`}
-      <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>
-      <button type="button" class="btn ghost" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>`;
+      <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>`;
     const rb = $('#refresh-booking'); if (rb) rb.onclick = () => refreshBooking(id, rb);
     el.insertAdjacentHTML('beforeend', '<div id="teeprep"></div>');
     if (!opts?.quiet) refreshReservations(navigator.onLine !== false).then(d => { if (d?.fresh && $('#tee')?.dataset.id === id) loadTee(id, { quiet: true }); });
@@ -1294,7 +1294,7 @@ async function loadJugar(id){
   if (!$('#jugbody')) return;
   if (window.GolfletTrack) {
     if (LV?.watch != null && navigator.geolocation) navigator.geolocation.clearWatch(LV.watch);
-    window.GolfletTrack.mount(el, { id, live: R.live_round, shots: R.shots || [], holes: H.holes, api, esc, toast, cid, bag: G.bag || [] });
+    window.GolfletTrack.mount(el, { id, live: LV.live, shots: LV.shots || [], holes: LV.holes || [], api, esc, toast, cid, bag: G.bag || [] });
     return;
   }
   drawJugar(); jugPace(); jugWatch();
@@ -3140,7 +3140,7 @@ async function loadClima(dim, bucket){
       <div class="seg wx-seg">${DIMS.map(([k, l]) => `<a href="#/clima/${k}" class="${k===dim?'on':''}">${l}</a>`).join('')}</div>
       ${g.enough ? `<div class="wx-bars">${g.buckets.map(b => `<a class="card wx-b${b.key===bucket?' on':''}" href="#/clima/${dim}${b.key===bucket?'':'/'+b.key}"><span>${esc(b.label)}</span><b class="num">${n1(b.avg_diff)}</b><small class="num ${b.vs_overall<0?'pos':b.vs_overall>0?'neg':''}">${dsg(b.vs_overall)} vs tu promedio</small><small class="num">${b.n} tarjetas</small></a>`).join('')}</div>`
         : `<div class="card wx-empty">Todavía no alcanza para comparar ${esc(DIMS.find(x=>x[0]===dim)?.[1].toLowerCase()||'')} (hacen falta ${3} tarjetas por grupo).</div>`}
-      ${play.map(b => `<div class="card" id="wx-${esc(b.key)}"><b>${esc(b.label)}</b><span class="s">${b.n} tarjetas${b.avg_diff!=null?` · diferencial ${n1(b.avg_diff)}`:''}</span>${mixBits(b.mix)}${b.sentence?`<p>${esc(b.sentence)}</p>`:''}${b.note?`<p class="foot">${esc(b.note)}</p>`:''}${b.mix?`<p class="foot">${b.mix.cards} tarjetas con hoyos · ${b.mix.holes} hoyos. Cada número es el promedio de una vuelta de 18, no la suma de golpes.${b.mix.nine?` ${b.mix.nine} ${b.mix.nine===1?'tarjeta es':'tarjetas son'} de 9 hoyos: entran por hoyo y se muestran cada 18.`:''}</p>`:''}</div>`).join('')}
+      ${play.map(b => `<section class="wx-play" id="wx-${esc(b.key)}"><b>${esc(b.label)}</b><span class="s">${b.n} tarjetas${b.avg_diff!=null?` · diferencial ${n1(b.avg_diff)}`:''}</span>${mixBits(b.mix)}${b.sentence?`<p>${esc(b.sentence)}</p>`:''}${b.note?`<p class="foot">${esc(b.note)}</p>`:''}${b.mix?`<p class="foot">${b.mix.cards} tarjetas con hoyos · ${b.mix.holes} hoyos. Cada número es el promedio de una vuelta de 18, no la suma de golpes.${b.mix.nine?` ${b.mix.nine} ${b.mix.nine===1?'tarjeta es':'tarjetas son'} de 9 hoyos: entran por hoyo y se muestran cada 18.`:''}</p>`:''}</section>`).join('')}
       <p class="foot">Diferencial promedio (más bajo es mejor). Tu promedio con clima: <b class="num">${n1(d.overall_avg_diff)}</b>. ${vidSlot('clima')}</p>
       <div class="section"><h2>${bucket ? esc(g.buckets.find(b=>b.key===bucket)?.label || 'Tarjetas') : 'Tarjetas'}</h2><span class="badge">${rows.length}</span></div>
       ${yrList(rows, r => r.date, r => `<a class="row" href="#/ronda/${r.round_id}" data-wx="1">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course||'Ronda')} <span class="wxi">${WX_IC[r.wx.condition]||''}</span></div><div class="s">${WX_L[r.wx.condition]||''} · ${n1(r.wx.temp_c)}° · ${n1(r.wx.precip_mm)} mm · ${r.wx.wind_kmh!=null?Math.round(r.wx.wind_kmh):'—'} km/h</div></div><div class="score"><b class="num">${n1(r.differential)}</b><span>dif.</span></div>${ICON.chev}</a>`)}

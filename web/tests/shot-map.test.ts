@@ -173,6 +173,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     await pan(page, -70, 40);
     await page.click("#play-penalty");
     await page.waitForFunction(() => document.querySelector("#play-reticle")?.getAttribute("data-cursor") === "penalty");
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-390-penalty.png" });
     await pan(page, -40, 30);
     const lost = await cursor(page);
     await ready(page);
@@ -193,6 +194,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
 
     await page.click("#play-drop");
     await page.waitForFunction(() => document.querySelector("#play-reticle")?.getAttribute("data-cursor") === "drop");
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-390-drop.png" });
     assert.equal(await page.$eval("#play-reticle b", el => el.textContent), "3");
     await pan(page, 90, -20);
     const dropAt = await cursor(page);

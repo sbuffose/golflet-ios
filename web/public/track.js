@@ -65,6 +65,7 @@
       more: false, history: false, saved: H.shots || [],
       alive: true, done: false, suggestedTee: null, suggestedPin: null, flagKind: 'none', adjusted: false, clubChosen: false, cmapTried: false,
       playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false, undoing: false,
+      driverTee: null,
     };
 
     const holeRec = () => S.holes.find(h => h.hole === S.hole || h.number === S.hole) || S.holes[S.hole - 1] || {};
@@ -496,6 +497,23 @@
       return `<span class="tk-chip">${esc(play.text)}</span>`;
     };
 
+    const paintDriver = () => {
+      const slot = el.querySelector('#tk-driver');
+      if (!slot) return;
+      const first = (S.track.marks || []).filter(m => m.countsStroke).length === 0 && S.track.phase === 'tracking' && !S.done;
+      const show = !!(first && S.driverTee && R().isDriverClub(S.club, clubLabel(S.club)));
+      slot.hidden = !show;
+      slot.textContent = show ? `Historial del driver, primer tiro: ${S.driverTee.yd} yd · ${S.driverTee.n} ${S.driverTee.n === 1 ? 'tiro' : 'tiros'}` : '';
+    };
+    const loadDriverHistory = () => {
+      api('/api/club-stats').then(d => {
+        if (!S.alive) return;
+        const rows = Array.isArray(d && d.clubs) ? d.clubs : [];
+        const hit = rows.find(r => r && r.tee_shots && r.tee_shots.avg_yd != null && r.tee_shots.n >= 1 && R().isDriverClub(String(r.club || ''), String(r.label || '')));
+        S.driverTee = hit ? { yd: Math.round(Number(hit.tee_shots.avg_yd)), n: Number(hit.tee_shots.n) } : null;
+        paintDriver();
+      }).catch(() => {});
+    };
     const render = () => {
       stopCam();
       const rec = holeRec(), par = rec.par || gpsHole()?.par, hcp = rec.hcp || gpsHole()?.hcp;
@@ -583,7 +601,7 @@
         <div class="tk-map" id="tkmap"></div>
         <div class="tk-maperr" id="tk-maperr" hidden><b>El mapa no cargó.</b><button type="button" id="tk-retry">Reintentar</button></div>
         <div class="tk-ret on ${pen ? 'pen' : ''}" id="play-reticle" data-cursor="${cursorKind}" aria-hidden="true"><i></i>${cursorKind === 'drop' ? `<b>${nextStroke}</b>` : ''}</div>
-        ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>${S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? `<p class="tk-scale">Satélite real hasta el zoom 17.</p>` : ''}${greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}${verifiedTee() && verifiedFlag() && !spanOk() ? `<p class="tk-opennote" id="rc-nogeo">La salida no cierra. No marco un rumbo.</p>` : ''}${(cmapHole()?.green?.source === 'openstreetmap') ? `<p class="tk-osmnote">Contorno © OpenStreetMap contributors (ODbL) · Cancha Azul. No es el pin ni un relevamiento de caídas.</p>` : ''}${(cmapHole()?.green?.source === 'satellite_visual') ? `<p class="tk-osmnote">Contorno trazado sobre el satélite y aceptado en el admin. No es un relevamiento ni el pin.</p>` : ''}` : ''}
+        ${retro ? `<div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>${S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? `<p class="tk-scale">Satélite real hasta el zoom 17.</p>` : ''}` : ''}
         ${rail}
         <div class="tk-top">
           ${retro ? `<button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button>` : `<a class="tk-ib" href="#/inicio" aria-label="Inicio">⌂</a>`}
@@ -594,12 +612,17 @@
         ${read ? `<div class="tk-ro${setup ? ' tk-setup' : ''}" id="tkro">${read}</div>` : ''}
         ${hs ? `<a class="tk-strat" id="strategy-compact" href="#/estrategia/${encodeURIComponent(S.strat.course_key || S.course?.course_key || '')}">${esc(hs.plan_title || 'Plan del hoyo')}</a>` : ''}
         <div class="tk-dock">
+          ${retro && greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}
+          ${retro && verifiedTee() && verifiedFlag() && !spanOk() ? `<p class="tk-opennote" id="rc-nogeo">La salida no cierra. No marco un rumbo.</p>` : ''}
+          ${retro && cmapHole()?.green?.source === 'openstreetmap' ? `<p class="tk-osmnote" title="Contorno © OpenStreetMap contributors (ODbL). No es el pin.">Contorno OSM. No es el pin.</p>` : ''}
+          ${retro && cmapHole()?.green?.source === 'satellite_visual' ? `<p class="tk-osmnote" title="Contorno aceptado en el admin. No es un relevamiento ni el pin.">Contorno del admin. No es el pin.</p>` : ''}
           ${setup ? '' : `<div class="tk-nav">
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>
             <div class="tk-hn"><b>Hoyo ${S.hole}</b><span>${`Par ${par || '—'}${cardYd ? ` · ${cardYd}` : ''}${hcp != null && hcp !== '' && Number.isFinite(Number(hcp)) ? ` · Hcp ${hcp}` : ''}`}</span></div>
             <button type="button" id="tknext" ${S.hole >= 18 ? 'disabled' : ''} aria-label="Hoyo siguiente">›</button>
           </div>`}
           ${summary}
+          <p class="tk-driver" id="tk-driver" hidden></p>
           ${S.msg ? `<p class="tk-msg">${esc(S.msg)}</p>` : ''}
           <div class="tk-acts">
             ${setup ? `<button type="button" class="tk-cancel" id="play-cancel">Cancelar</button><button type="button" class="tk-enter" id="play-set" disabled>SET</button>` : ''}
@@ -623,6 +646,7 @@
       if (paintedHTML && freshMap) freshMap.insertAdjacentHTML('afterbegin', paintedHTML);
       paintMap();
       wire();
+      paintDriver();
     };
 
     const paintMap = () => {
@@ -1082,7 +1106,7 @@
     const wire = () => {
       const map = mapBox();
       const club = el.querySelector('#play-club');
-      if (club) club.onchange = () => { S.club = club.value; S.clubChosen = true; S.clubAuto = 'chosen'; };
+      if (club) club.onchange = () => { S.club = club.value; S.clubChosen = true; S.clubAuto = 'chosen'; paintDriver(); };
       const putt = el.querySelector('#play-putt-m');
       if (putt) putt.oninput = () => { S.puttDraft = putt.value; paintRead(); };
       const lieBtn = el.querySelector('#play-lie');
@@ -1262,9 +1286,10 @@
       else if (S.track.phase === 'confirmFlag') S.frame = 'flag';
       else if (S.suggestedTee) S.frame = 'tee';
       else S.frame = 'seek';
-      document.documentElement.classList.add('rc-map');
     }
+    document.documentElement.classList.add('rc-map');
     fitCam(); render();
+    loadDriverHistory();
     if (retro) loadCourseMap();
     if (!retro) { watch(); loadExtras(); }
     const onResize = () => paintMap();
@@ -1275,7 +1300,7 @@
         S.alive = false;
         if (S.watch != null && navigator.geolocation) navigator.geolocation.clearWatch(S.watch);
         S.watch = null;
-        if (retro) document.documentElement.classList.remove('rc-map');
+        document.documentElement.classList.remove('rc-map');
       }
     };
   }
