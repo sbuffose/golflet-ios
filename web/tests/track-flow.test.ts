@@ -197,26 +197,27 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     }));
     assert.equal(onGreen.club, "Pt");
     assert.equal(onGreen.label, "Putter");
-    assert.match(onGreen.text, /m/);
+    assert.match(onGreen.text, /En el hoyo|m al hoyo/);
     assert.ok(onGreen.z > beforeZoom, `${onGreen.z} vs ${beforeZoom}`);
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-putt.png" });
-    await page.type("#play-putt-m", "2,4");
+    assert.equal(await page.$("#play-putt-m"), null);
+    for (let i = 0; i < 8 && (await page.$eval("#tkro", el => el.textContent || "")).includes("En el hoyo"); i++) {
+      await page.mouse.move(195, 300);
+      await page.mouse.down();
+      await page.mouse.move(195, 420, { steps: 4 });
+      await page.mouse.up();
+    }
+    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /estimada en el mapa/);
     await ready(page);
     await page.click("#play-hit");
-    await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("a mano"));
+    await page.waitForFunction(() => /Putt|m/.test(document.querySelector("#rc-shots")?.textContent || ""));
     assert.equal(posts[2].club, "Pt");
-    assert.equal(posts[2].distance_kind, "manual");
+    assert.equal(posts[2].distance_kind, "estimated");
     assert.equal(posts[2].lie, "green");
     assert.equal(posts[2].result ?? null, null);
     assert.equal((await page.$eval("#tkro", el => el.textContent || "")).includes("En el hoyo"), false);
     if (await page.$("#play-lie")) await page.click("#play-lie");
-    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-putting") === "1");
-    const centered = await aim(page, GREEN.lat);
-    assert.ok(Math.abs(centered - GREEN.lat) < 0.00025, String(centered));
-    assert.equal((await page.$eval("#tkro", el => el.textContent || "")).includes("En el hoyo"), false);
-    await page.waitForSelector("#play-hole");
-    await page.click("#play-hole");
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /ENTER confirma/);
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-moving") === "0" && (document.querySelector("#tkro")?.textContent || "").includes("En el hoyo"), { timeout: 15000 });
     assert.equal(posts.length, 3);
     await ready(page);
     await page.click("#play-hit");

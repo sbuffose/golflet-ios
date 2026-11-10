@@ -25,7 +25,7 @@ export function distanceStats(values: number[]) {
   return { n: s.length, trimmed, avg_m: r0(avg), median_m: r0(med), max_m: r0(s[s.length - 1]), min_m: r0(s[0]), range_m: [r0(p25), r0(p75)] as [number | null, number | null], spread_m: r0(sd),
     avg_yd: yd(avg), median_yd: yd(med), max_yd: yd(s[s.length - 1]), range_yd: [yd(p25), yd(p75)] as [number | null, number | null], spread_yd: yd(sd) };
 }
-export const isApproach = (x: ShotOut) => !isPutter(x.club) && x.lie !== "green" && (x.intent === "green" || (x.intent !== "layup" && x.to_green_m != null && x.to_green_m <= APPROACH_MAX_M));
+export const isApproach = (x: ShotOut) => !isPutter(x.club) && x.lie !== "green" && x.intent !== "recovery" && (x.intent === "green" || (x.intent !== "layup" && x.to_green_m != null && x.to_green_m <= APPROACH_MAX_M));
 export const isTeeShot = (x: ShotOut) => (x.lie === "tee" || (x.lie == null && x.shot_number === 1)) && (x.to_green_m == null || x.to_green_m > APPROACH_MAX_M);
 const teeMeasured = (shots: ShotOut[]) => shots.filter(s => isTeeShot(s) && countsForClub(s));
 

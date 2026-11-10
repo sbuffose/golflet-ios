@@ -163,6 +163,7 @@ test("a putt starts after the approach, in meters, and the hole closes only on p
     const bearing = Number(await page.$eval("#tkmap", el => el.getAttribute("data-bearing") || "999"));
     assert.ok(bearing < 25 || bearing > 335, String(bearing));
     await page.click("#play-lie");
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-moving") === "0" && document.querySelector("#tkmap")?.getAttribute("data-putting") === "1");
     const armed = await page.evaluate(() => ({
       club: (document.querySelector("#play-club") as HTMLSelectElement).value,
       label: (document.querySelector("#play-club") as HTMLSelectElement).selectedOptions[0]?.textContent || "",
@@ -174,14 +175,19 @@ test("a putt starts after the approach, in meters, and the hole closes only on p
     assert.equal(armed.club, "Putter");
     assert.equal(armed.label, "Putter");
     assert.equal(armed.putting, "1");
-    assert.match(armed.text, /m/);
+    assert.match(armed.text, /En el hoyo|m al hoyo/);
     assert.equal(armed.text.includes("ft"), false);
     assert.equal(armed.posts, 1);
-    await page.click("#play-putt-m");
-    await page.type("#play-putt-m", "2,4");
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /2,4 m/);
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /a mano/);
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /mapa/);
+    assert.equal(await page.$("#play-putt-m"), null);
+    for (let i = 0; i < 8 && (await page.$eval("#tkro", el => el.textContent || "")).includes("En el hoyo"); i++) {
+      await page.mouse.move(195, 300);
+      await page.mouse.down();
+      await page.mouse.move(195, 420, { steps: 4 });
+      await page.mouse.up();
+    }
+    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /m al hoyo/);
+    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /estimada en el mapa/);
+    assert.equal((await page.$eval("#tkro", el => el.textContent || "")).includes("ft"), false);
     await ready(page);
     for (const w of [320, 430]) {
       await page.setViewport({ width: w, height: 844, hasTouch: true, isMobile: true });
@@ -200,8 +206,8 @@ test("a putt starts after the approach, in meters, and the hole closes only on p
     await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 2);
     assert.equal(posts.length, 2);
     assert.equal(posts[1].club, "Putter");
-    assert.equal(posts[1].distance_kind, "manual");
-    assert.equal(posts[1].distance_m, 2.4);
+    assert.equal(posts[1].distance_kind, "estimated");
+    assert.equal(typeof posts[1].distance_m, "number");
     assert.equal(posts[1].lie, "green");
     assert.equal(posts[1].result ?? null, null);
     assert.equal(typeof posts[1].lat, "number");
@@ -210,20 +216,25 @@ test("a putt starts after the approach, in meters, and the hole closes only on p
     assert.equal(near.includes("En el hoyo"), false);
     await ready(page);
     await page.click("#play-lie");
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-moving") === "0");
     assert.equal(posts.length, 2);
+    for (let i = 0; i < 8 && (await page.$eval("#tkro", el => el.textContent || "")).includes("En el hoyo"); i++) {
+      await page.mouse.move(195, 300);
+      await page.mouse.down();
+      await page.mouse.move(195, 420, { steps: 4 });
+      await page.mouse.up();
+    }
     assert.match(await page.$eval("#tkro", el => el.textContent || ""), /estimada en el mapa/);
     await ready(page);
     await page.click("#play-hit");
     await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 3);
     assert.equal(posts[2].result ?? null, null);
-    assert.equal(posts[2].distance_kind ?? null, null);
+    assert.equal(posts[2].distance_kind, "estimated");
     assert.equal(posts[2].club, "Putter");
     assert.equal(posts[2].lie, "green");
     await ready(page);
     if (await page.$("#play-lie")) await page.click("#play-lie");
-    await page.waitForSelector("#play-hole");
-    await page.click("#play-hole");
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /En el hoyo/);
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("En el hoyo"), { timeout: 15000 });
     assert.equal(posts.length, 3);
     await ready(page);
     await page.click("#play-hit");

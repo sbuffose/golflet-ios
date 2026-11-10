@@ -3,7 +3,7 @@
 import { q } from "./db";
 import { HttpError } from "./http-error";
 import { isUndefinedColumn, isUndefinedTable, type Sql } from "./scorecard-lease";
-import { LIES, RESULTS } from "./shots-calc";
+import { INTENTS, LIES, RESULTS } from "./shots-calc";
 import { placeShot, ReconstructInputError, type PlacedShot } from "./reconstruct-core";
 import { slug } from "./viewmaster-parse";
 
@@ -16,7 +16,7 @@ export class ReconstructSchemaError extends Error {
 
 const schema = (e: unknown) =>
   isUndefinedColumn(e, "origin") || isUndefinedColumn(e, "end_lat") || isUndefinedColumn(e, "distance_kind")
-  || isUndefinedColumn(e, "penalty_strokes") || isUndefinedColumn(e, "end_source") || isUndefinedColumn(e, "distance_m")
+  || isUndefinedColumn(e, "penalty_strokes") || isUndefinedColumn(e, "end_source") || isUndefinedColumn(e, "distance_m") || isUndefinedColumn(e, "intent")
   || (e as { code?: string })?.code === "23502";
 
 function wrap(sql?: Sql): Sql {
@@ -95,19 +95,21 @@ function shotFields(body: any) {
   const result = body.result == null || body.result === "" ? null : String(body.result);
   if (lie && !(LIES as readonly string[]).includes(lie)) throw new HttpError(400, "lie inválido");
   if (result && !(RESULTS as readonly string[]).includes(result)) throw new HttpError(400, "result inválido");
-  return { placed, hole, club, lie, result, clientId: body.client_id ? String(body.client_id).slice(0, 80) : null };
+  const intent = body.intent == null || body.intent === "" ? null : String(body.intent);
+  if (intent && !(INTENTS as readonly string[]).includes(intent)) throw new HttpError(400, "intent inválido");
+  return { placed, hole, club, lie, result, intent, clientId: body.client_id ? String(body.client_id).slice(0, 80) : null };
 }
 
 export async function saveManualShot(userId: string, liveId: string, body: any, sql?: Sql) {
   const db = wrap(sql);
   if (await liveOrigin(userId, liveId, db) !== "manual") throw new HttpError(404, "No encontrado");
   const shot = shotFields(body);
-  const [row] = await db(`insert into shot (live_round_id, user_id, client_id, hole, shot_number, lat, lng, accuracy_m, taken_at, club, lie, result, source, end_lat, end_lng, end_source, penalty_strokes, distance_m, distance_kind)
-    values ($1,$2,$3,$4, coalesce($5, (select coalesce(max(shot_number),0)+1 from shot where live_round_id=$1 and hole=$4)), $6,$7,null,now(),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+  const [row] = await db(`insert into shot (live_round_id, user_id, client_id, hole, shot_number, lat, lng, accuracy_m, taken_at, club, lie, result, source, end_lat, end_lng, end_source, penalty_strokes, distance_m, distance_kind, intent)
+    values ($1,$2,$3,$4, coalesce($5, (select coalesce(max(shot_number),0)+1 from shot where live_round_id=$1 and hole=$4)), $6,$7,null,now(),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
     returning id, hole, shot_number`, [
     liveId, userId, shot.clientId, shot.hole, body.shot_number ?? null,
     shot.placed.lat, shot.placed.lng, shot.club, shot.lie, shot.result, shot.placed.source,
-    shot.placed.end_lat, shot.placed.end_lng, shot.placed.end_source, shot.placed.penalty_strokes, shot.placed.distance_m, shot.placed.distance_kind,
+    shot.placed.end_lat, shot.placed.end_lng, shot.placed.end_source, shot.placed.penalty_strokes, shot.placed.distance_m, shot.placed.distance_kind, shot.intent,
   ]);
   await db(`update live_round set current_hole=$2, updated_at=now() where id=$1 and user_id=$3`, [liveId, shot.hole, userId]);
   return present(row.id, shot);

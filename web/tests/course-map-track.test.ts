@@ -83,8 +83,9 @@ test("Cancha Vieja abre con la salida del mapa y el hoyo 7 pide confirmarla", { 
     await page.screenshot({ path: join(art, "vieja-h1-map-390.png") });
     await page.click("#play-club-tile");
     await page.waitForSelector("#play-club-list button");
-    const pill = await page.$eval("#play-club-list button", el => el.getBoundingClientRect().height);
-    assert.ok(pill <= 34, `pill ${pill}`);
+    const pill = await page.$eval("#play-club-list button", el => ({ h: el.getBoundingClientRect().height, t: el.textContent || "" }));
+    assert.ok(pill.h >= 48 && pill.h <= 96, `sheet ${pill.h}`);
+    assert.equal(/^\d+\./.test(pill.t.trim()), false);
     await page.screenshot({ path: join(art, "vieja-h1-clubs-390.png") });
     await page.screenshot({ path: join(art, "track-390-club-list.png") });
     await open(2);

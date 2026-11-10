@@ -25,6 +25,7 @@ exports.yardNumber = yardNumber;
 exports.yardLabel = yardLabel;
 exports.shotDistanceLabel = shotDistanceLabel;
 exports.trackHoleSummary = trackHoleSummary;
+exports.holeCloseText = holeCloseText;
 exports.emptyStatFill = emptyStatFill;
 exports.bagClubs = bagClubs;
 exports.isDriverClub = isDriverClub;
@@ -32,6 +33,7 @@ exports.teeClub = teeClub;
 exports.trackNew = trackNew;
 exports.trackSet = trackSet;
 exports.trackEnter = trackEnter;
+exports.trackLost = trackLost;
 exports.trackPenalty = trackPenalty;
 exports.trackReload = trackReload;
 exports.trackDrop = trackDrop;
@@ -98,8 +100,8 @@ function holeSpan(tee, flag) {
         return null;
     return { meters, bearing };
 }
-/** Visual zoom may scale the last real tile. It must not ask Esri for a grey placeholder. */
-exports.VISUAL_ZOOM_MAX = exports.IMAGERY_ZOOM_MAX + 2.15;
+/** Visual zoom may scale the last real tile by up to three levels. The tile request stays on a real zoom. */
+exports.VISUAL_ZOOM_MAX = exports.IMAGERY_ZOOM_MAX + 3;
 const clampNum = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 function pointFrame(p, mode, z = exports.IMAGERY_ZOOM_MAX) {
     const [cx, cy] = projectLL(p.lat, p.lng);
@@ -323,12 +325,14 @@ function shotDistanceLabel(shot) {
 /** Putts count strokes that started on the green. FIR and GIR stay empty unless the lie is known. Nothing here is strokes gained. */
 function trackHoleSummary(par, shots) {
     const finished = shots.some(s => s.holed);
-    const putts = finished ? shots.filter(s => s.originGreen && !s.penalty).length : null;
+    const puttShots = shots.filter(s => !s.penalty && !s.lost && (s.putt || s.originGreen));
+    const knowPutts = shots.some(s => s.putt || s.originGreen || s.endLie);
+    const putts = !finished ? null : (puttShots.length || knowPutts ? puttShots.length : null);
     const p = par == null ? null : Number(par);
     let fir = null;
     const firApplies = p === 4 || p === 5;
     if (firApplies) {
-        const drive = shots.find(s => !s.penalty);
+        const drive = shots.find(s => !s.penalty && !s.lost);
         if (drive?.endLie === "fairway")
             fir = "fairway";
         else if (drive && drive.endLie)
@@ -351,7 +355,7 @@ function trackHoleSummary(par, shots) {
             gir = false;
     }
     const lines = [];
-    lines.push(putts == null ? "Putts: se confirman al embocar." : `Putts: ${putts}. Solo golpes que salieron del green.`);
+    lines.push(putts == null ? "Putts: se confirman al embocar." : `Putts: ${putts}. Solo putts o golpes que salieron del green.`);
     if (p === 3)
         lines.push("Fairway: un par 3 no lleva.");
     else if (firApplies)
@@ -362,6 +366,16 @@ function trackHoleSummary(par, shots) {
     if (!finished)
         lines.push("El hoyo sigue abierto.");
     return { finished, putts, fir: firApplies ? fir : null, gir, lines };
+}
+const VS_PAR = { [-2]: "Águila", [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Doble bogey", 3: "Triple bogey" };
+/** Closed-hole line. Putts stay unconfirmed when no shot is a putter or started on the green. */
+function holeCloseText(par, strokes, putts) {
+    const n = Math.max(0, Math.round(strokes));
+    const puttLine = putts == null ? "Putts sin confirmar" : `${putts} ${putts === 1 ? "putt" : "putts"}`;
+    const p = par == null || !Number.isFinite(Number(par)) ? null : Number(par);
+    const diff = p == null ? null : n - p;
+    const vs = diff == null ? null : (VS_PAR[diff] || (diff > 0 ? `${diff} sobre el par` : `${Math.abs(diff)} bajo el par`));
+    return { line: `${n} ${n === 1 ? "golpe" : "golpes"} · ${puttLine}`, vs };
 }
 /** Copy only the derived fields the card does not already have. A stored value stays. */
 function emptyStatFill(stored, derived) {
@@ -457,6 +471,20 @@ function trackEnter(state, at, club, cup, snapToFlag = false) {
         return { state: next, recorded: true, holed: false };
     }
     return { state, recorded: false, holed: false };
+}
+/** Stroke and distance. The ball last seen stays as a lost stroke. The next ball is back at its start, and the following stroke is the third. */
+function trackLost(state, at, club) {
+    if (state.phase !== "tracking" && state.phase !== "penaltyWhere")
+        return state;
+    const next = copyState(state);
+    const origin = state.ball || state.tee;
+    next.marks.push({ id: next.nextID, lat: at.lat, lng: at.lng, club, countsStroke: true, holed: false, penalty: false, drop: false, lost: true });
+    next.nextID += 1;
+    next.marks.push({ id: next.nextID, lat: at.lat, lng: at.lng, club: null, countsStroke: true, holed: false, penalty: true, drop: false });
+    next.nextID += 1;
+    next.ball = origin ? { ...origin } : next.ball;
+    next.phase = "tracking";
+    return next;
 }
 function trackPenalty(state) {
     if (state.phase !== "tracking")

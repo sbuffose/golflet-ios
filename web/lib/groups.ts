@@ -10,7 +10,6 @@ import { allUserShots, userClubs } from "./live";
 import { clubStats } from "./shots-calc";
 import { callName, titleWord } from "./person-name";
 import { effectiveShare, getView, linkInfo, newToken, type Share } from "./group-share";
-import { rangeSince, parseRange } from "./metrics";
 import { createGroupAtomic } from "./group-create-tx";
 
 export const MAX_MEMBERS = 12, INVITES_PER_DAY = 20, GROUPS_PER_DAY = 10;
@@ -177,7 +176,7 @@ export async function renameGroup(userId: string, groupId: string, name: unknown
 }
 
 /* ---------------- comparison (aggregates only) ---------------- */
-import { memberStats, shareMember, type NR } from "./group-stats";
+import { groupWindow, inWindow, memberStats, shareMember, worstHoles, type NR } from "./group-stats";
 export { memberStats, shareMember };
 const r1 = (x: number | null) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
 const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
@@ -186,8 +185,9 @@ export async function memberRounds(userId: string): Promise<{ rounds: NR[]; hi: 
   const d: any = await buildData(userId);
   const courses = new Map<string, { label: string; par: number | null; holes: any[] }>();
   for (const c of d.courses || []) courses.set(c.key, { label: c.course && c.club_name ? (c.label || c.course) : c.label, par: c.par ?? null, holes: (c.holes || []).map((h: any) => ({ hole: h.hole, par: h.par, hcp: h.hcp })) });
-  const rounds: NR[] = (d.rounds || []).filter((r: any) => r.valid_card && !r.is_9_holes && r.gross).map((r: any) => ({
+  const rounds: NR[] = (d.rounds || []).filter((r: any) => r.valid_card && r.gross).map((r: any) => ({
     date: r.date, year: String(r.date).slice(0, 4), course_key: r.course_key, course_label: r.course_label || courses.get(r.course_key)?.label || r.course,
+    nine: !!r.is_9_holes,
     gross: Number(r.gross) || null, net: r.net != null ? Number(r.net) : null, holes: Array.isArray(r.holes) ? r.holes : [],
     putts: r.putts ?? null, gir: r.gir ?? null, fir: r.fir ?? null, round_id: String(r.round_id),
     par: (() => { const hs = Array.isArray(r.holes) ? r.holes : []; const ok = hs.filter((h: any) => h && h[1]); return ok.length === 18 ? ok.reduce((n: number, h: any) => n + Number(h[1]), 0) : (courses.get(r.course_key)?.par ?? null); })() }));
@@ -211,13 +211,24 @@ export async function groupCompare(groupId: string, viewerId: string, f: { year?
   const data = await Promise.all(acc.map(async m => ({ m, sh: share.get(m.user_id!)!, ...(await memberRounds(m.user_id!)) })));
   const allYears = new Set<string>(), courseMembers = new Map<string, { label: string; members: Set<string> }>();
   for (const d of data) if (d.sh.scores || d.sh.holes) for (const r of d.rounds) { allYears.add(r.year); const c = courseMembers.get(r.course_key) || { label: r.course_label, members: new Set() }; c.members.add(d.m.member_id); courseMembers.set(r.course_key, c); }
-  const range = parseRange(f.range), since = range ? rangeSince(range) : null;
-  const filt = (rs: NR[]) => rs.filter(r => (!f.year || r.year === f.year) && (!since || r.date >= since) && (!f.course || r.course_key === f.course));
+  const win = f.year ? { key: null as string | null, since: null, until: null, prevSince: null, prevUntil: null, min: 3 } : groupWindow(f.range);
+  const since = win.since, range = win.key;
+  const filt = (rs: NR[]) => rs.filter(r => (!f.year || r.year === f.year) && (f.year || inWindow(r.date, win.since, win.until)) && (!f.course || r.course_key === f.course));
+  const prevOf = (rs: NR[]) => win.prevSince ? rs.filter(r => inWindow(r.date, win.prevSince, win.prevUntil) && (!f.course || r.course_key === f.course)) : [];
   const out = data.map((d, i) => {
     const rs = filt(d.rounds);
     const byCourse = Object.entries(rs.reduce((a: any, r) => { a[r.course_key] = (a[r.course_key] || 0) + 1; return a; }, {})).map(([key, n]) => ({ key, label: courseMembers.get(key)?.label || key, rounds: n }));
-    return shareMember({ member_id: d.m.member_id, name: names.get(d.m.user_id!) || "Jugador", color: colorOf(members, d.m.member_id, i),
+    const shared = shareMember({ member_id: d.m.member_id, name: names.get(d.m.user_id!) || "Jugador", color: colorOf(members, d.m.member_id, i),
       is_me: d.m.user_id === viewerId, is_admin: d.m.role === "admin", is_owner: d.m.role === "admin" }, memberStats(rs), d.sh, { hi: d.hi, by_course: byCourse });
+    const prevRs = prevOf(d.rounds);
+    if (prevRs.length && (d.sh.scores || d.sh.score_types)) {
+      const p = memberStats(prevRs);
+      shared.prev = {
+        ...(d.sh.scores ? { rounds: p.rounds, best_net: p.best_net, avg_gross: p.rounds >= win.min ? p.avg_gross : null } : {}),
+        ...(d.sh.score_types ? { birdies: p.types.birdies.total, pars: p.types.pars.total, eagles: p.types.eagles.total } : {}),
+      };
+    }
+    return shared;
   });
   // t74u: pelota only for members sharing "ball" (omitted otherwise, never null-filled)
   { const ids = acc.filter(m => share.get(m.user_id!)?.ball).map(m => m.user_id!); if (ids.length) { const bm = await (await import("./ball")).ballsFor(ids);
@@ -232,17 +243,18 @@ export async function groupCompare(groupId: string, viewerId: string, f: { year?
     group: { id: group.id, name: group.name, is_admin: isAdmin, is_owner: isAdmin, created_at: group.created_at, photo_url: photoUrl(group), admins: members.filter(m => m.status === "accepted" && m.role === "admin").length,
       ...(isAdmin ? { link: linkInfo(group) } : {}) },
     view: mine.view, share_override: mine.share_override,
-    filters: { year: f.year || null, range: range || null, since, course: f.course || null, years: [...allYears].sort().reverse(),
+    filters: { year: f.year || null, range: f.year ? null : (range || "all"), since, until: f.year ? null : win.until, min: win.min, course: f.course || null, years: [...allYears].sort().reverse(),
       courses: [...courseMembers.entries()].map(([key, c]) => ({ key, label: c.label, members: c.members.size, shared: c.members.size >= 2 })).sort((a, b) => b.members - a.members) },
     members: out, pending,
     clubs: [...clubMap.values()].filter(c => c.members.length >= 2),
+    worst_holes: f.course ? worstHoles(data.filter(d => d.sh.holes).flatMap(d => filt(d.rounds))) : null,
   };
 }
 
 /** Per-hole head-to-head on one shared course (18-hole heatmap). */
 export async function groupHoles(groupId: string, viewerId: string, course: string, year?: string | null, memberFilter?: string[] | null, range?: string | null) {
   if (range === undefined && !year) range = (await getView(groupId, viewerId)).view.range;
-  range = parseRange(range);
+  const win = year ? null : groupWindow(range);
   const { members } = await loadGroup(groupId, viewerId, "member");
   let acc = members.filter(m => m.status === "accepted" && m.user_id);
   if (memberFilter?.length) acc = acc.filter(m => memberFilter.includes(m.member_id));
@@ -250,10 +262,10 @@ export async function groupHoles(groupId: string, viewerId: string, course: stri
   const share = await effectiveShare(groupId, acc.map(m => m.user_id!));
   const data = await Promise.all(acc.map(async m => ({ m, sh: share.get(m.user_id!)!, ...(await memberRounds(m.user_id!)) })));
   const def = data.map(d => d.courses.get(course)).find(Boolean);
-  const since = range ? rangeSince(range as any) : null;
+  const since = win?.since ?? null, until = win?.until ?? null;
   const label = def?.label || data.flatMap(d => d.rounds).find(r => r.course_key === course)?.course_label || course;
   const holeNums = def?.holes?.length ? def.holes.map((h: any) => h.hole) : Array.from({ length: 18 }, (_, i) => i + 1);
-  const per = data.map(d => ({ d, rs: d.sh.holes ? d.rounds.filter(r => r.course_key === course && (!year || r.year === year) && (!since || r.date >= since)) : [] }));
+  const per = data.map(d => ({ d, rs: d.sh.holes ? d.rounds.filter(r => r.course_key === course && (!year || r.year === year) && (year || inWindow(r.date, since, until))) : [] }));
   const withData = per.filter(p => p.rs.length);
   const holes = holeNums.map((n: number) => {
     const hd = def?.holes?.find((h: any) => h.hole === n);
@@ -271,7 +283,7 @@ export async function groupHoles(groupId: string, viewerId: string, course: stri
       leaders: { avg: bestAvg == null ? [] : live.filter(x => x.avg_to_par === bestAvg).map(x => x.member_id), birdies: lead("birdies"), pars: lead("pars") } };
   });
   return { course: { key: course, label, par: def?.par ?? null }, year: year || null, shared: withData.length >= 2,
-    range: range || null, members: per.map(({ d, rs }) => ({ member_id: d.m.member_id, name: names.get(d.m.user_id!) || "Jugador", ...(d.sh.holes ? { rounds: rs.length } : { hidden: ["holes"] }),
+    range: win?.key || null, members: per.map(({ d, rs }) => ({ member_id: d.m.member_id, name: names.get(d.m.user_id!) || "Jugador", ...(d.sh.holes ? { rounds: rs.length } : { hidden: ["holes"] }),
       color: colorOf(members, d.m.member_id), is_me: d.m.user_id === viewerId })), holes: holes.map((h: any) => ({ ...h, members: h.members.filter((x: any) => share.get(acc.find(a => a.member_id === x.member_id)!.user_id!)?.holes) })) };
 }
 
