@@ -99,6 +99,16 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     assert.ok(sheetBox.w >= 390 && sheetBox.h >= 800, JSON.stringify(sheetBox));
     assert.ok(sheetBox.names.length >= 12, sheetBox.names.join(","));
     assert.equal(sheetBox.names.some(name => /^\d{2,}/.test(name.trim())), false);
+    const tiles = await page.$$eval("#play-club-list button[data-club]", els => els.map(el => ({
+      name: (el.querySelector("b")?.textContent || "").trim(),
+      sub: (el.querySelector("small")?.textContent || "").trim(),
+      sug: el.classList.contains("sug"),
+      text: el.textContent || "",
+    })));
+    assert.equal(tiles.some(tile => /Sugerido/i.test(tile.text)), false);
+    assert.equal(tiles.find(tile => tile.name === "Pt")?.sub || "", "");
+    assert.equal(tiles.find(tile => tile.name === "6i")?.sub, "165 yd");
+    assert.ok(tiles.some(tile => tile.sug));
     await page.screenshot({ path: "/opt/cursor/artifacts/palos-390.png" });
     await page.click("#play-club-close");
     await page.mouse.move(195, 340);
@@ -106,6 +116,7 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     await page.mouse.move(195, 420, { steps: 4 });
     await page.mouse.up();
     await ready(page);
+    await page.screenshot({ path: "/opt/cursor/artifacts/track-390-tiro.png" });
     await page.click("#play-penalty");
     await page.waitForSelector("#play-pen-menu:not([hidden])");
     await page.screenshot({ path: "/opt/cursor/artifacts/perdida-antes-390.png" });
@@ -120,23 +131,28 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     assert.equal(typeof posts[2].distance_m, "number");
     assert.equal(countsForClub({ source: "gps", club: "Dr", distance_m: 220, distance_kind: "measured", result: "lost", accuracy_m: 4 } as ShotOut), false);
     const rail = await page.$$eval("#rc-shots button", els => els.map(el => el.textContent || ""));
-    assert.match(rail[0], /^1\. perdida/);
+    assert.match(rail[0], /^1\. Perdida/);
     assert.equal(rail[0].includes("yd"), false);
     assert.match(rail[1], /^2\. Penalidad/);
     assert.match(rail[2], /^3\./);
     const aimRead = await page.$eval("#tkro", el => el.textContent || "");
     assert.equal(/^0 yd/.test(aimRead.trim()), false, aimRead);
-    assert.match(aimRead, /hasta la mira/);
+    assert.match(aimRead, /yd al hoyo/);
+    assert.equal(aimRead.includes("hasta la mira"), false);
+    assert.equal(aimRead.includes("Arrastrá hasta donde terminó"), false);
     await page.screenshot({ path: "/opt/cursor/artifacts/perdida-390.png" });
     await ready(page);
     await page.click("#play-hit");
-    await page.waitForFunction(() => document.querySelectorAll("#rc-shots button").length === 4, { timeout: 15000 });
+    await page.waitForFunction(() => {
+      const shots = [...document.querySelectorAll("#rc-shots button:not(#play-shots-more):not([hidden])")];
+      return shots.length === 3 && !!document.querySelector("#play-shots-more");
+    }, { timeout: 15000 });
     const fourth = posts[3];
     assert.equal(Number(fourth.lat), Number(posts[2].end_lat));
     assert.equal(Number(fourth.lng), Number(posts[2].end_lng));
     await page.waitForSelector("#play-undo");
     await page.click("#play-undo");
-    await page.waitForFunction(() => document.querySelectorAll("#rc-shots button").length === 3, { timeout: 15000 });
+    await page.waitForFunction(() => document.querySelectorAll("#rc-shots button").length === 3 && !document.querySelector("#play-shots-more"), { timeout: 15000 });
     assert.deepEqual(deleted, ["s4"]);
     await page.click("#play-undo");
     await page.waitForFunction(() => document.querySelector("#rc-shots") == null, { timeout: 15000 });
