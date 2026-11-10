@@ -10,6 +10,8 @@ export const LLM_FALLBACKS = (process.env.RECAP_LLM_FALLBACKS || "openai/gpt-5-m
 
 /** Gateway refused for account reasons (no card / no credits / auth): keep the audio and let the user retry or type. */
 export class AiUnavailable extends Error {}
+/** Product request only. Do not add a player credit gate. Renaming stays pending until the rule is clarified. This is not the gateway HTTP 402. */
+export const CREDIT_WORDING_PENDING = "Pendiente de aclarar la regla o el producto antes de renombrar. No es un gate de créditos y no es el HTTP 402 del gateway.";
 /** Server-side AI is off by default: recaps are transcribed + structured on the iPhone (Apple Speech + Foundation Models).
  *  Set RECAP_SERVER_AI=on (and enable AI Gateway billing) to turn the server path back on. */
 export const serverAiEnabled = () => process.env.RECAP_SERVER_AI === "on";

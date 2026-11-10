@@ -563,6 +563,9 @@
       const read = cursorRead(here);
       const cursorKind = phase === 'penaltyWhere' ? 'penalty' : phase === 'drop' ? 'drop' : phase === 'confirmFlag' ? 'flag' : (phase === 'confirmTee' && S.frame === 'tee') ? 'tee' : 'shot';
       const nextStroke = S.track.marks.filter(m => m.countsStroke).length + 1;
+      const painted = el.querySelector('.tk-tiles:not([data-pending])');
+      const paintedHole = el.querySelector('#tkmap')?.dataset.hole || '';
+      const paintedHTML = painted && paintedHole === String(S.hole) ? painted.outerHTML : '';
       el.innerHTML = `<div class="tk" id="play-track">
         <div class="tk-map" id="tkmap"></div>
         <div class="tk-maperr" id="tk-maperr" hidden><b>El mapa no cargó.</b><button type="button" id="tk-retry">Reintentar</button></div>
@@ -603,6 +606,8 @@
           </div>
         </div>
       </div>`;
+      const freshMap = el.querySelector('#tkmap');
+      if (paintedHTML && freshMap) freshMap.insertAdjacentHTML('afterbegin', paintedHTML);
       paintMap();
       wire();
     };
@@ -649,7 +654,31 @@
         const m = /\/tile\/(\d+)\/(\d+)\/(\d+)$/.exec(url);
         if (m) addTile(Number(m[3]), Number(m[2]));
       }
-      map.innerHTML = `<div class="tk-tiles" style="transform:translate(${W / 2}px,${Hh * 0.42}px) scale(${scale}) rotate(${-S.cam.hdg}deg);transform-origin:0 0">${tiles.map((t, i) => `<img class="tk-tile" data-i="${i}" alt="" decoding="async" style="left:${t.left}px;top:${t.top}px;width:256px;height:256px">`).join('')}</div><svg class="tk-svg" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">${overlaySVG(W, Hh)}</svg>`;
+      map.querySelectorAll('.tk-svg').forEach(node => node.remove());
+      const layer = document.createElement('div');
+      layer.className = 'tk-tiles';
+      layer.dataset.pending = '1';
+      layer.style.transform = `translate(${W / 2}px,${Hh * 0.42}px) scale(${scale}) rotate(${-S.cam.hdg}deg)`;
+      layer.style.transformOrigin = '0 0';
+      tiles.forEach((t, i) => {
+        const img = document.createElement('img');
+        img.className = 'tk-tile';
+        img.alt = '';
+        img.decoding = 'async';
+        img.dataset.i = String(i);
+        img.style.left = `${t.left}px`;
+        img.style.top = `${t.top}px`;
+        img.style.width = '256px';
+        img.style.height = '256px';
+        layer.append(img);
+      });
+      map.append(layer);
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'tk-svg');
+      svg.setAttribute('viewBox', `0 0 ${W} ${Hh}`);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      svg.innerHTML = overlaySVG(W, Hh);
+      map.append(svg);
       map.dataset.cx = String(S.cam.cx);
       map.dataset.cy = String(S.cam.cy);
       map.dataset.z = String(S.cam.z);
@@ -670,58 +699,107 @@
       map.dataset.lie = originOnGreen() ? 'green' : (lieAt(ballLL()) || '');
       map.dataset.cursorLie = lieAt(cursor) || '';
       map.dataset.putting = putting() ? '1' : '0';
-      map.dataset.moving = S.moving ? '1' : '0';
+      map.dataset.moving = '1';
       map.dataset.holeIntent = S.holeIntent ? '1' : '0';
       map.dataset.cmap = S.cmapTried ? (S.cmap ? '1' : '0') : '';
       map.dataset.map = 'loading';
+      map.dataset.drawn = '0';
+      const settled = !S.moving;
       setMapButtons(false);
       showMapBanner(false, false);
-      const publish = () => {
-        if (gen !== S.mapGen) return;
+      const dropLayer = () => { if (layer.dataset.pending === '1') layer.remove(); };
+      const finishMove = () => { if (gen === S.mapGen && settled) map.dataset.moving = '0'; };
+      const failMap = (state, placeholder) => {
+        if (gen !== S.mapGen) { dropLayer(); return; }
+        if (state === 'blocked') {
+          delete layer.dataset.pending;
+          for (const node of [...map.querySelectorAll('.tk-tiles')]) if (node !== layer) node.remove();
+        } else dropLayer();
+        S.mapReady = false;
+        map.dataset.map = state;
+        map.dataset.drawn = '0';
+        setMapButtons(false);
+        showMapBanner(true, placeholder);
+        finishMove();
+      };
+      const photoDrawn = img => {
+        if (!img || !img.complete || img.naturalWidth < 32 || img.naturalHeight < 32) return false;
+        const box = map.getBoundingClientRect();
+        const tile = img.getBoundingClientRect();
+        const ax = box.left + box.width / 2, ay = box.top + box.height * 0.42;
+        if (!(tile.width > 8 && tile.height > 8 && tile.left <= ax && tile.right >= ax && tile.top <= ay && tile.bottom >= ay)) return false;
+        const canvas = document.createElement('canvas');
+        canvas.width = 8; canvas.height = 8;
+        const g = canvas.getContext('2d', { willReadFrequently: true });
+        if (!g) return false;
+        try {
+          g.drawImage(img, 0, 0, 8, 8);
+          const data = g.getImageData(0, 0, 8, 8).data;
+          let min = 765, max = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            const v = data[i] + data[i + 1] + data[i + 2];
+            if (v < min) min = v;
+            if (v > max) max = v;
+          }
+          return max - min > 18;
+        } catch { return false; }
+      };
+      const publish = (retry = true) => {
+        if (gen !== S.mapGen) { dropLayer(); return; }
         const kinds = sampleUrls.map(url => S.tileCache.get(url)?.kind || '');
         if (!kinds.length || kinds.some(k => !k)) {
           S.mapReady = false;
           map.dataset.map = 'loading';
+          map.dataset.drawn = '0';
           setMapButtons(false);
           showMapBanner(false, false);
           return;
         }
-        const ready = kinds.every(k => k === 'real');
-        if (!ready) {
-          S.mapReady = false;
-          map.dataset.map = 'blocked';
-          setMapButtons(false);
-          showMapBanner(true, kinds.some(k => k === 'placeholder'));
+        if (!kinds.every(k => k === 'real')) {
+          failMap('blocked', kinds.some(k => k === 'placeholder'));
           return;
         }
-        const painted = sampleUrls.every(url => {
-          const img = map.querySelector(`[data-i][data-url="${url}"]`);
+        const imgFor = url => [...layer.querySelectorAll('img')].find(img => img.dataset.url === url);
+        const decoded = sampleUrls.every(url => {
+          const img = imgFor(url);
           return !!(img && img.complete && img.naturalWidth > 0);
         });
-        if (!painted) {
+        if (!decoded) {
           S.mapReady = false;
           map.dataset.map = 'loading';
+          map.dataset.drawn = '0';
           setMapButtons(false);
           showMapBanner(false, false);
           return;
         }
+        const aimImg = imgFor(aim);
+        if (!photoDrawn(aimImg)) {
+          if (retry) { requestAnimationFrame(() => { if (gen === S.mapGen) publish(false); }); return; }
+          failMap('error', false);
+          return;
+        }
+        delete layer.dataset.pending;
+        for (const node of [...map.querySelectorAll('.tk-tiles')]) if (node !== layer) node.remove();
         S.mapReady = true;
         map.dataset.map = 'ready';
+        map.dataset.drawn = '1';
         setMapButtons(true);
         showMapBanner(false, false);
+        finishMove();
       };
       tiles.forEach((t, i) => {
-        const img = map.querySelector(`[data-i="${i}"]`);
+        const img = layer.querySelector(`[data-i="${i}"]`);
         loadTile(t.url).then(rec => {
-          if (gen !== S.mapGen) return;
+          if (gen !== S.mapGen) { dropLayer(); return; }
           if (img) img.dataset.url = t.url;
           const kick = () => { if (gen === S.mapGen) publish(); };
           if (img && rec.objectUrl && img.getAttribute('src') !== rec.objectUrl) {
             img.onload = kick;
-            img.onerror = kick;
+            img.onerror = () => { if (gen === S.mapGen && (t.url === aim || sampleUrls.includes(t.url))) failMap('error', false); };
             img.src = rec.objectUrl;
             if (img.complete) kick();
-          } else kick();
+          } else if (rec.kind === 'error' || !rec.objectUrl) kick();
+          else kick();
         });
       });
       publish();

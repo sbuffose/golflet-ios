@@ -29,7 +29,7 @@
     "postgres": "quick-two-devices y una nota de quick-note-fence piden Postgres local. Sin eso se omiten."
   },
   "relevant_regressions_already_in_this_suite": [
-    "inherited-pass: grupo que no se borra, águila distinta de birdie, Cancha Vieja sin lat/lng, foto sin 0045, juego de hierros, Azul OSM",
+    "inherited-pass: grupo que no se borra, águila distinta de birdie, eje Golfistics de Vieja y Colorada sin polígono ni u/v, foto sin 0045, juego de hierros, Azul OSM",
     "track-flow, track-putt, track-yard, derived-play, round-context, map-ready, round-track"
   ]
 }

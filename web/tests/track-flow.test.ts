@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { inflateSync } from "node:zlib";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 
@@ -13,6 +14,55 @@ const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javasc
 const GREEN = { lat: -38.03381176, lng: -57.53818687 };
 const TEE = { lat: -38.037468, lng: -57.538187 };
 const vieja = [{ hole: 1, par: 4, hcp: 3, yards: 445, tee: TEE, green: { front: { lat: -38.03369214, lng: -57.5382432 }, center: GREEN, back: { lat: -38.03392117, lng: -57.53812785 } } }, { hole: 2, par: 3, yards: 160, tee: { lat: TEE.lat + 0.002, lng: TEE.lng }, green: { center: { lat: TEE.lat + 0.0032, lng: TEE.lng } } }];
+function mapBackgroundFraction(path: string, y0: number, y1: number): number {
+  const buf = readFileSync(path);
+  let o = 8;
+  const idat: Buffer[] = [];
+  let w = 0, h = 0, color = 0;
+  while (o + 8 <= buf.length) {
+    const n = buf.readUInt32BE(o);
+    const typ = buf.toString("ascii", o + 4, o + 8);
+    o += 8;
+    const chunk = buf.subarray(o, o + n);
+    o += n + 4;
+    if (typ === "IHDR") { w = chunk.readUInt32BE(0); h = chunk.readUInt32BE(4); color = chunk[9]; }
+    else if (typ === "IDAT") idat.push(chunk);
+    else if (typ === "IEND") break;
+  }
+  const bpp = color === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = w * bpp;
+  let pos = 0;
+  let prev = Buffer.alloc(stride);
+  const paeth = (a: number, b: number, c: number) => {
+    const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+    return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+  };
+  let dark = 0, tot = 0;
+  for (let y = 0; y < h; y++) {
+    const filter = raw[pos]; pos += 1;
+    const row = Buffer.from(raw.subarray(pos, pos + stride)); pos += stride;
+    for (let x = 0; x < stride; x++) {
+      const left = x >= bpp ? row[x - bpp] : 0;
+      const up = prev[x];
+      const ul = x >= bpp ? prev[x - bpp] : 0;
+      if (filter === 1) row[x] = (row[x] + left) & 255;
+      else if (filter === 2) row[x] = (row[x] + up) & 255;
+      else if (filter === 3) row[x] = (row[x] + ((left + up) >> 1)) & 255;
+      else if (filter === 4) row[x] = (row[x] + paeth(left, up, ul)) & 255;
+    }
+    if (y >= Math.floor(h * y0) && y < Math.floor(h * y1) && y % 8 === 0) {
+      for (let x = Math.floor(w * 0.08); x < Math.floor(w * 0.92); x += 8) {
+        const r = row[x * bpp], g = row[x * bpp + 1], b = row[x * bpp + 2];
+        tot += 1;
+        if (Math.abs(r - 21) < 8 && Math.abs(g - 32) < 10 && Math.abs(b - 22) < 10) dark += 1;
+      }
+    }
+    prev = row;
+  }
+  return tot ? dark / tot : 1;
+}
+
 const ring = [
   { lat: GREEN.lat + 0.00012, lng: GREEN.lng - 0.00012 },
   { lat: GREEN.lat + 0.00012, lng: GREEN.lng + 0.00012 },
@@ -162,13 +212,22 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     await ready(page);
     await page.click("#play-hit");
     await page.waitForSelector("#play-next");
-    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-frame") === "overview" && document.querySelector("#tkmap")?.getAttribute("data-moving") === "0");
+    await page.waitForFunction(() => {
+      const map = document.querySelector("#tkmap");
+      const state = map?.getAttribute("data-map") || "";
+      if (state === "error" || state === "blocked") return true;
+      return state === "ready" && map?.getAttribute("data-drawn") === "1" && map?.getAttribute("data-frame") === "overview" && map?.getAttribute("data-moving") === "0";
+    }, { timeout: 25000 });
+    assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-map")), "ready");
     assert.equal(await page.$("#play-hit"), null);
     assert.equal(posts[3].result, "holed");
     assert.match(await page.$eval("#tk-sum", el => el.textContent || ""), /Putts: /);
+    await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(null)))));
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-holed.png" });
+    const holedBg = mapBackgroundFraction("/opt/cursor/artifacts/track-390-holed.png", 0.12, 0.36);
+    assert.ok(holedBg < 0.25, `overview sin satélite, fondo ${holedBg}`);
     await page.click("#play-next");
-    await page.waitForFunction(() => (document.querySelector(".tk-hn")?.textContent || "").includes("Hoyo 2"));
+    await page.waitForFunction(() => (document.querySelector(".tk-hn")?.textContent || "").includes("Hoyo 2") && document.querySelector("#tkmap")?.getAttribute("data-map") === "ready" && document.querySelector("#tkmap")?.getAttribute("data-drawn") === "1", { timeout: 25000 });
     assert.equal((await page.$eval("#play-club", el => (el as HTMLSelectElement).value)), "");
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-next.png" });
 

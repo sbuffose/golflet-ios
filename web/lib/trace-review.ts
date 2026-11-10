@@ -5,6 +5,8 @@ import { haversine, validLatLng, type LatLng } from "./geo";
 import { azulOsmHoles, AZUL_OSM_CREDIT } from "./azul-osm";
 import { COLORADA_YARDS } from "./jockey-plans";
 import { MDP_CANCHA_VIEJA } from "./green-guide/209-cancha-vieja";
+import { COLORADA_GREEN_AXIS, GOLFISTICS_AXIS_READ, VIEJA_GREEN_AXIS } from "./golfistics-axis";
+import type { VmHole } from "./viewmaster-parse";
 
 export const TRACE_IMAGERY = {
   provider: "esri_world_imagery",
@@ -83,25 +85,43 @@ function azulHole(n: number): Omit<HoleEvidence, "audience"> {
   };
 }
 
+function samePoint(a: { lat: number; lng: number }, b: { lat: number; lng: number }): boolean {
+  return Math.abs(a.lat - b.lat) < 1e-7 && Math.abs(a.lng - b.lng) < 1e-7;
+}
+
+function axisOf(list: VmHole[], n: number): HoleEvidence["axis"] {
+  const h = list.find(x => x.hole === n);
+  if (!h) return null;
+  return { front: h.front, center: h.center, back: h.back };
+}
+
+function axisDetail(axis: { front: { lat: number; lng: number }; center: { lat: number; lng: number }; back: { lat: number; lng: number } } | null, extra: string): string {
+  if (!axis) return extra;
+  const repeated = samePoint(axis.front, axis.center) ? " Golfistics repite el mismo punto para frente y centro. No completo el que falta." : "";
+  return `Eje de green de Golfistics, lectura ${GOLFISTICS_AXIS_READ}: frente, centro y fondo. No es el contorno, no es el pin y no es la salida.${repeated} ${extra}`;
+}
+
 function coloradaHole(n: number): Omit<HoleEvidence, "audience"> {
   const card = COLORADA_YARDS.find(h => h.n === n);
+  const axis = axisOf(COLORADA_GREEN_AXIS, n);
   return {
-    hole: n, state: "necesito_una_mano", confidence: "none", track_lie: false, track_camera: false,
-    tee: null, polygon: null, axis: null, anchor: null,
+    hole: n, state: "necesito_una_mano", confidence: axis ? "golfistics_axis" : "none", track_lie: false, track_camera: false,
+    tee: null, polygon: null, axis, anchor: axis?.center || null,
     par: card?.par ?? null, card_yards: card?.yards ?? null,
-    detail: "Hay par, hándicap y yardas de tarjeta en jockey-plans.ts. No hay lat/lng ni contorno. El satélite no se centra en un punto inventado.",
+    detail: axisDetail(axis, "La tarjeta de jockey-plans.ts trae par y yardas, no un polígono. Sebastián puede marcar el contorno y la salida sobre este satélite."),
   };
 }
 
 function viejaHole(n: number): Omit<HoleEvidence, "audience"> {
   const g = MDP_CANCHA_VIEJA.greens?.[n];
+  const axis = axisOf(VIEJA_GREEN_AXIS, n);
   return {
-    hole: n, state: "necesito_una_mano", confidence: "schematic", track_lie: false, track_camera: false,
-    tee: null, polygon: null, axis: null, anchor: null,
+    hole: n, state: "necesito_una_mano", confidence: axis ? "golfistics_axis" : "schematic", track_lie: false, track_camera: false,
+    tee: null, polygon: null, axis, anchor: axis?.center || null,
     par: null, card_yards: null,
-    detail: g
-      ? "La guía impresa tiene forma, caídas y bunkers en u/v. No es lat/lng y no se proyecta sobre el satélite. El centro del campo OSM es solo el pronóstico."
-      : "La guía impresa no trae este green.",
+    detail: axisDetail(axis, g
+      ? "La guía impresa tiene forma, caídas y bunkers en u/v. No es un polígono y no se proyecta. El centro del campo OSM es solo el pronóstico. Sebastián puede marcar el contorno y la salida sobre este satélite."
+      : "La guía impresa no trae este green. Sebastián puede marcar el contorno y la salida sobre este satélite."),
   };
 }
 
@@ -119,10 +139,10 @@ export function priorityCourses(): CourseCoverage[] {
   return [
     pack("118", "Azul", "Jockey Club · Cancha Azul", "Golflet/Resources/Fixtures/hoyos-azul.json", holes(azulHole), fairways,
       "18 hoyos con anillo de green y línea OSM. El fairway no está en todos. TRACK puede usar el contorno y la salida. No es el pin."),
-    pack("118", "Colorada", "Jockey Club · Cancha Colorada", "web/lib/jockey-plans.ts", holes(coloradaHole), null,
-      "Solo el plan de tarjeta. Sin lat/lng. No es un polígono y no ancla el satélite. Queda para Sebastián."),
-    pack("209", "Cancha Vieja", "Mar del Plata Golf Club · Cancha Vieja", "web/lib/green-guide/209-cancha-vieja.ts", holes(viejaHole), null,
-      "Guía AAG en u/v. No es un polígono ni una coordenada. No se proyecta sobre el satélite. Queda para Sebastián. El eje de Golfistics, si la lectura GPS lo trae, orienta la cámara y no dibuja el green."),
+    pack("118", "Colorada", "Jockey Club · Cancha Colorada", "web/lib/golfistics-axis.ts", holes(coloradaHole), null,
+      `Eje de green de Golfistics (${GOLFISTICS_AXIS_READ}) en los 18 hoyos. No es un contorno ni una salida. La tarjeta no se proyecta. Sebastián marca el contorno sobre ese eje.`),
+    pack("209", "Cancha Vieja", "Mar del Plata Golf Club · Cancha Vieja", "web/lib/golfistics-axis.ts", holes(viejaHole), null,
+      `Eje de green de Golfistics (${GOLFISTICS_AXIS_READ}) en los 18 hoyos. La guía AAG está en u/v y no se proyecta. El eje no dibuja el green ni la salida. Sebastián marca el contorno sobre el satélite.`),
   ];
 }
 
@@ -160,6 +180,7 @@ export function validateTrace(hole: HoleEvidence, raw: TraceBody) {
   if (green.length && green.length < 3) errors.push("Un contorno necesita al menos 3 puntos que marques vos. No cierro un rombo.");
   if (green.length >= 3 && span(green) > GREEN_SPAN_MAX_M) errors.push(`Ese anillo mide más de ${GREEN_SPAN_MAX_M} m. No es un green.`);
   if (hole.polygon && hole.polygon.length >= 3 && green.length >= 3) errors.push("Este hoyo ya tiene contorno OSM. Un trazado sobre el satélite no lo reemplaza.");
+  if (hole.axis && green.length && parent !== "golfistics_axis") errors.push("La guía u/v no se convierte en lat/lng. El anillo tiene que anclarse al eje de Golfistics.");
   if (hole.confidence === "schematic" && green.length && parent !== "golfistics_axis") errors.push("La guía u/v no se convierte en lat/lng. Hace falta un eje de Golfistics como ancla, no el centro del campo.");
   if (tee && hole.tee && haversine(tee, hole.tee) > TEE_ADJUST_MAX_M) errors.push(`La salida nueva está a más de ${TEE_ADJUST_MAX_M} m de la que ya tenemos.`);
   const axis = hole.axis?.center || null;

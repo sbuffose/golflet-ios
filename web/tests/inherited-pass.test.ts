@@ -10,6 +10,7 @@ import test from "node:test";
 import { maxBirdiesInRound } from "../lib/group-stats";
 import { STATS } from "../lib/group-period-core";
 import { courseEvidence, priorityCourses, TRACE_IMAGERY, validateTrace } from "../lib/trace-review";
+import { CREDIT_WORDING_PENDING } from "../lib/ai";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
@@ -39,12 +40,23 @@ test("salir no borra el grupo, un águila no es birdie y Cancha Vieja no se inve
   assert.ok(STATS.some(s => s.key === "max_birdies"));
   const vieja = courseEvidence("209", "Cancha Vieja");
   assert.ok(vieja);
-  assert.equal(vieja.holes[0].audience, "sebastian");
-  assert.equal(vieja.holes[0].anchor, null);
+  assert.equal(vieja.holes[0].audience, "satellite");
+  assert.equal(vieja.holes[0].confidence, "golfistics_axis");
+  assert.equal(vieja.holes[0].tee, null);
   assert.equal(vieja.holes[0].polygon, null);
+  assert.equal(vieja.holes[0].anchor?.lat, -38.03381176);
+  assert.equal(vieja.holes[0].anchor?.lng, -57.53818687);
+  assert.equal(vieja.holes.filter(h => h.axis && !h.polygon && !h.tee).length, 18);
+  const colorada = courseEvidence("118", "Colorada");
+  assert.equal(colorada?.holes.filter(h => h.axis && !h.polygon && !h.tee).length, 18);
+  assert.equal(colorada?.holes[8].axis?.front.lat, colorada?.holes[8].axis?.center.lat);
+  assert.equal(colorada?.holes[8].axis?.front.lng, colorada?.holes[8].axis?.center.lng);
+  assert.notEqual(colorada?.holes[8].axis?.back.lat, colorada?.holes[8].axis?.center.lat);
   const azul = courseEvidence("118", "Azul");
   assert.equal(azul?.holes[0].audience, "satellite");
   assert.ok((azul?.holes[0].polygon || []).length >= 3);
+  assert.match(CREDIT_WORDING_PENDING, /Pendiente de aclarar/);
+  assert.match(CREDIT_WORDING_PENDING, /402/);
   const invented = validateTrace(vieja.holes[0], {
     status: "accepted", parent: "none", confirm: true,
     green: [{ lat: -38.0338, lng: -57.5382 }, { lat: -38.0337, lng: -57.5381 }, { lat: -38.0339, lng: -57.5383 }],
@@ -52,6 +64,13 @@ test("salir no borra el grupo, un águila no es birdie y Cancha Vieja no se inve
   });
   assert.equal(invented.ok, false);
   assert.match(invented.errors.join(" "), /guía u\/v|eje de Golfistics/);
+  const far = validateTrace(vieja.holes[0], {
+    status: "draft", parent: "golfistics_axis", confirm: false,
+    green: [{ lat: -38.02, lng: -57.52 }, { lat: -38.0201, lng: -57.5201 }, { lat: -38.0202, lng: -57.52 }],
+    note: "lejos del eje",
+  });
+  assert.equal(far.ok, false);
+  assert.match(far.errors.join(" "), /no cae sobre el eje/);
   const listed = priorityCourses().map(c => c.course);
   assert.deepEqual(listed, ["Azul", "Colorada", "Cancha Vieja"]);
 });
@@ -201,7 +220,7 @@ test("foto, salida del grupo, bolsa y trazado de Cancha Vieja en el teléfono", 
     await admin.setRequestInterception(true);
     admin.on("request", req => {
       const host = new URL(req.url()).hostname;
-      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      if (host !== "127.0.0.1" && host !== "localhost" && host !== "server.arcgisonline.com") req.abort();
       else req.continue();
     });
     await admin.goto(`http://127.0.0.1:${port}/admin/trazos`, { waitUntil: "networkidle0" });
@@ -214,12 +233,24 @@ test("foto, salida del grupo, bolsa y trazado de Cancha Vieja en el teléfono", 
     await admin.waitForFunction(() => (document.body.innerText || "").includes("u/v"));
     assert.match(await admin.evaluate(() => document.body.innerText), /Sebastián/);
     assert.match(await admin.evaluate(() => document.body.innerText), /no es un polígono/i);
-    assert.equal(await admin.$("#trsave"), null);
-    assert.equal(await admin.$("#trhelp"), null);
+    assert.match(await admin.evaluate(() => document.body.innerText), /Golfistics/);
+    assert.ok(await admin.$("#trmap"));
+    assert.ok(await admin.$("#trsave"));
+    await admin.waitForFunction(() => {
+      const imgs = [...document.querySelectorAll("#trmap img")] as HTMLImageElement[];
+      return imgs.length >= 4 && imgs.every(img => img.complete && img.naturalWidth > 32);
+    }, { timeout: 20000 });
     await admin.click("#trprev");
-    await admin.waitForFunction(() => (document.querySelector("#trmsg")?.textContent || "").includes("No se escribió"));
-    assert.match(await admin.$eval("#trmsg", el => el.textContent || ""), /Sebastián/);
-    assert.equal(writes.filter(w => w.method === "PUT" && w.path.includes("/api/admin/trazos")).length, 0);
+    await admin.waitForFunction(() => /no se escribió|no va a detectar/i.test(document.querySelector("#trmsg")?.textContent || ""));
+    const preview = writes.filter(w => w.method === "PUT" && w.path.includes("/api/admin/trazos"));
+    assert.equal(preview.length, 1);
+    assert.equal(JSON.parse(preview[0].body).confirm, false);
+    assert.equal((JSON.parse(preview[0].body).green || []).length, 0);
+    await admin.click("#trsave");
+    await admin.waitForFunction(() => /0046/.test(document.querySelector("#trmsg")?.textContent || ""));
+    assert.match(await admin.$eval("#trmsg", el => el.textContent || ""), /No se guardó nada/);
+    const saved = writes.filter(w => w.method === "PUT" && w.path.includes("/api/admin/trazos") && JSON.parse(w.body).confirm === true);
+    assert.equal(saved.length, 1);
     await admin.screenshot({ path: `${ART}/inherit-trazo-vieja-390.png` });
     await admin.goto(`http://127.0.0.1:${port}/admin/trazos/118/Azul/1`, { waitUntil: "networkidle0" });
     await admin.waitForFunction(() => /OpenStreetMap|contorno/i.test(document.body.innerText || ""));
