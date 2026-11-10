@@ -2,6 +2,7 @@ import { q } from "./db";
 import { HttpError } from "./http-error";
 import { userClubs } from "./live";
 import { addClub, editClub, sortBag, bagLabel, type Club } from "./bag-core";
+import { planIronSet } from "./club-face";
 import { DEFAULT_BAG } from "./data";
 
 async function save(userId: string, clubs: Club[]) {
@@ -26,6 +27,17 @@ export async function createEquipment(userId: string, raw: any) {
 export async function updateEquipment(userId: string, code: string, raw: any) {
   const list = await listEquipment(userId); const c = editClub(find(list, code), raw);
   await save(userId, list.map(x => (x.code === c.code ? c : x))); return c;
+}
+/** One write of the owner's club list. confirm false previews and does not write. */
+export async function applyIronSetFor(userId: string, raw: any) {
+  const list = await listEquipment(userId);
+  const plan = planIronSet(list, raw || {});
+  if (raw?.confirm !== true) return { saved: false as const, rows: plan.rows };
+  if (plan.rows.some(r => r.overwrite || r.modelCleared) && raw.ack !== true) {
+    throw new HttpError(409, "Hay palos con otra marca o con un modelo que no entra. Revisá la vista previa y confirmá el reemplazo.");
+  }
+  await save(userId, sortBag(plan.clubs));
+  return { saved: true as const, rows: plan.rows, clubs: sortBag(plan.clubs) };
 }
 export async function deleteEquipment(userId: string, code: string) {
   const list = await listEquipment(userId); const c = find(list, code);

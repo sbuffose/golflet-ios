@@ -13,6 +13,8 @@ struct RoundDetailView: View {
     @State private var extras: [Int: HoleExtra] = [:]
     @State private var showsGameEditor = false
     @State private var showsRecap = false
+    @State private var showsTrack = false
+    @State private var showsWhat = false
     @State private var quickError = ""
     @State private var quickConflict = false
     @State private var needsRetry = false
@@ -22,6 +24,11 @@ struct RoundDetailView: View {
     @State private var revByHole: [Int: Int] = [:]
     @State private var accountReady = false
     @State private var accountMarks: [Int: HoleMark] = [:]
+    @State private var trackCards: [Int: TrackCard.Hole] = [:]
+    @State private var trackOwnedPutts: Set<Int> = []
+    @State private var trackOwnedGir: Set<Int> = []
+    @State private var trackOwnedDrive: Set<Int> = []
+    @State private var didFillTrack = false
     @State private var loadGen = 0
     @State private var queue = QuickWorkQueue()
     @State private var visit = RoundVisit()
@@ -59,6 +66,20 @@ struct RoundDetailView: View {
             .golfletChrome()
             .environment(model)
         }
+        .sheet(isPresented: $showsTrack) {
+            NavigationStack {
+                ReconstructView(context: RoundTrackContext(
+                    roundId: round.roundId,
+                    date: round.date,
+                    courseName: round.course,
+                    clubCode: round.clubCode,
+                    hole: 1
+                ))
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(isPresented: $showsWhat) { whatSheet }
         .onAppear {
             leftRound = false
             visit.enter()
@@ -166,7 +187,12 @@ struct RoundDetailView: View {
         HStack(spacing: 0) {
             heroCell("Gross", round.gross.map(String.init) ?? "—", emphasize: true)
             heroCell("Neto", round.net.map(String.init) ?? "—", emphasize: false)
-            heroCell("Dif.*", differential.map(FormatAR.one) ?? "—", emphasize: false)
+            Button { showsWhat = true } label: {
+                heroCell("Dif.*", differential.map(FormatAR.one) ?? "—", emphasize: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("round-what")
+            .accessibilityLabel("¿Qué es esto?")
             heroCell("Puesto", position, emphasize: false)
         }
         .background(p.surface2)
@@ -193,12 +219,10 @@ struct RoundDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             holeTable(Array(round.holes.prefix(9)), totalLabel: "IDA", total: round.outScore)
             holeTable(Array(round.holes.suffix(from: min(9, round.holes.count))), totalLabel: "VTA", total: round.inScore)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], alignment: .leading, spacing: 8) {
-                legend(.eagleOrBetter, "Águila", categoryCount(.eagleOrBetter))
-                legend(.birdie, "Birdie", categoryCount(.birdie))
-                legend(.par, "Par", categoryCount(.par))
-                legend(.bogey, "Bogey", categoryCount(.bogey))
-                legend(.doubleOrWorse, "Doble+", categoryCount(.doubleOrWorse))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], alignment: .leading, spacing: 10) {
+                ForEach(ScoreLegend.items(holes: round.holes, counts: round.counts)) { item in
+                    legend(item)
+                }
             }
             if !caption.isEmpty {
                 Text(caption)
@@ -253,31 +277,47 @@ struct RoundDetailView: View {
         }
     }
 
-    private func categoryCount(_ result: HoleResult) -> Int {
-        let known = round.holes.filter { $0.strokes != nil && $0.result != .unknown }
-        if !known.isEmpty {
-            return known.filter { $0.result == result }.count
-        }
-        switch result {
-        case .eagleOrBetter:
-            return ScoreCounts.resolvedEagles(reported: round.counts.eagles, holes: round.holes)
-        case .birdie: return round.counts.birdies
-        case .par: return round.counts.pars
-        case .bogey: return round.counts.bogeys
-        case .doubleOrWorse: return round.counts.doubles + round.counts.triples + round.counts.worse
-        case .unknown: return 0
-        }
-    }
-
-    private func legend(_ result: HoleResult, _ label: String, _ count: Int) -> some View {
-        HStack(spacing: 4) {
-            ScoreMark(strokes: count, result: result, diameter: 22)
-            Text(label)
+    private func legend(_ item: ScoreLegend.Item) -> some View {
+        HStack(spacing: 8) {
+            legendMark(item.result, item.count)
+            Text(item.label)
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .accessibilityLabel("\(count) \(label)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(item.count) \(item.spoken)")
+    }
+
+    @ViewBuilder
+    private func legendMark(_ result: HoleResult, _ count: Int) -> some View {
+        let mark = Text("\(count)")
+            .font(GFont.ui(13, weight: .semibold))
+            .tabular()
+            .foregroundStyle(legendInk(result))
+            .frame(minWidth: 26, minHeight: 26)
+            .padding(.horizontal, 4)
+        switch result {
+        case .eagleOrBetter:
+            mark.background(p.primary).clipShape(Circle())
+        case .birdie:
+            mark.background(p.accent).clipShape(Circle())
+        case .par, .unknown:
+            mark
+        case .bogey:
+            mark.background(p.sand).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        case .doubleOrWorse:
+            mark.background(Color(red: 74 / 255, green: 81 / 255, blue: 76 / 255)).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    private func legendInk(_ result: HoleResult) -> Color {
+        switch result {
+        case .eagleOrBetter: return p.accent
+        case .birdie, .doubleOrWorse: return p.onPrimary
+        default: return p.ink
+        }
     }
 
     private var gameStats: some View {
@@ -292,11 +332,68 @@ struct RoundDetailView: View {
                     .foregroundStyle(p.ink2)
                     .accessibilityIdentifier("edit-game")
             }
+            Button { showsTrack = true } label: {
+                HStack(spacing: 12) {
+                    Text("TRACK")
+                        .font(GFont.ui(12, weight: .semibold))
+                        .foregroundStyle(p.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(p.onPrimary)
+                        .clipShape(Capsule())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Registrar mis tiros")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                        Text("Cómo fueron los golpes en el mapa de esta vuelta. Los putts, el drive y el green quedan aparte.")
+                            .font(GType.label)
+                            .foregroundStyle(p.onPrimary.opacity(0.72))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(p.onPrimary.opacity(0.8))
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("round-track")
+            .accessibilityLabel("Registrar mis tiros")
+            .accessibilityHint("Abre el mapa de golpes de esta vuelta")
             HStack(spacing: 10) {
                 gameField("Putts", $puttsText, .putts)
                 gameField("Greens", $girText, .gir)
                 gameField("Fairways", $firText, .fir)
             }
+            Text(statSources)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .accessibilityIdentifier("round-stat-source")
+            if !round.holes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(round.holes) { hole in
+                        Text("Hoyo \(hole.number) · \(holeCaption(hole))")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("hole-source-\(hole.number)")
+                    }
+                }
+            }
+            if let company = playedWith {
+                Text("Jugaste con \(company)")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink)
+                    .accessibilityIdentifier("round-partners")
+            }
+            Text(scheduleLine)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .accessibilityIdentifier("round-schedule")
             if !quickError.isEmpty {
                 Text(quickError)
                     .font(GType.label)
@@ -440,6 +537,138 @@ struct RoundDetailView: View {
                 }
             }
         }
+    }
+
+    private func holeCaption(_ hole: HoleScore) -> String {
+        let stored = accountMarks[hole.number]
+        let card = trackCards[hole.number]
+        func piece(_ name: String, filled: Bool, owned: Bool, state: String?) -> String {
+            if state == "na" { return "\(name): No aplica" }
+            if filled && !owned { return "\(name): Manual" }
+            if state == "track" || owned { return "\(name): Desde TRACK" }
+            return "\(name): Sin confirmar"
+        }
+        return [
+            piece("Putts", filled: stored?.putts != nil || trackOwnedPutts.contains(hole.number), owned: trackOwnedPutts.contains(hole.number), state: card?.putts.state),
+            piece("Green", filled: stored?.gir != nil || trackOwnedGir.contains(hole.number), owned: trackOwnedGir.contains(hole.number), state: card?.gir.state),
+            piece("Fairway", filled: (stored?.drive?.isEmpty == false) || trackOwnedDrive.contains(hole.number), owned: trackOwnedDrive.contains(hole.number), state: hole.par == 3 ? "na" : card?.drive.state),
+        ].joined(separator: ". ")
+    }
+
+    private func fillFromTrack(identity: QuickWorkIdentity) async {
+        guard QuickDispatch.visitStill(identity, model: model, visit: visit) else { return }
+        guard let setup = try? await model.api.reconstructionSetup() else { return }
+        guard let live = setup.saved.first(where: { $0.roundId == round.roundId }), !live.id.isEmpty else { return }
+        guard let shots = try? await model.api.reconstructionShots(liveRoundId: live.id) else { return }
+        guard QuickDispatch.visitStill(identity, model: model, visit: visit) else { return }
+        let grouped = Dictionary(grouping: shots, by: \.hole)
+        for hole in round.holes {
+            let card = TrackCard.derive(par: hole.par, shots: (grouped[hole.number] ?? []).map(TrackCard.fact))
+            trackCards[hole.number] = card
+            let stored = accountMarks[hole.number]
+            var putts: Int?
+            var gir: Bool?
+            var fairway: String?
+            if stored?.putts == nil, card.putts.state == "track" { putts = card.putts.value }
+            if stored?.gir == nil, card.gir.state == "track" { gir = card.gir.value }
+            if hole.par != 3, (stored?.drive ?? "").isEmpty, card.drive.state == "track" {
+                fairway = TrackCard.editorFairway(card.drive.value)
+            }
+            guard putts != nil || gir != nil || fairway != nil else { continue }
+            applyTrack(hole: hole.number, par: hole.par, putts: putts, gir: gir, fairway: fairway, identity: identity)
+        }
+    }
+
+    private func applyTrack(hole: Int, par: Int, putts: Int?, gir: Bool?, fairway: String?, identity: QuickWorkIdentity) {
+        if quickConflict || needsRetry { return }
+        var edit = pending[hole] ?? PendingHole(putts: nil, gir: nil, fairway: nil, touched: .init(putts: false, gir: false, drive: false))
+        if let putts {
+            edit.putts = putts
+            edit.touched.putts = true
+            trackOwnedPutts.insert(hole)
+        }
+        if let gir {
+            edit.gir = gir
+            edit.touched.gir = true
+            trackOwnedGir.insert(hole)
+        }
+        if let fairway {
+            edit.fairway = fairway
+            edit.touched.drive = true
+            trackOwnedDrive.insert(hole)
+        }
+        pending[hole] = edit
+        let current = extras[hole]
+        extras[hole] = HoleExtra(
+            roundId: round.roundId,
+            hole: hole,
+            putts: edit.touched.putts ? edit.putts : current?.putts,
+            gir: edit.touched.gir ? edit.gir : current?.gir,
+            fairway: par == 3 ? nil : (edit.touched.drive ? edit.fairway : current?.fairway)
+        )
+        markRev += 1
+        queue.enqueueMark(
+            identity: identity,
+            model: model,
+            visit: visit,
+            waitForAccount: { await self.ensureLoaded(identity: identity).value },
+            commit: { await self.commit(hole: hole, identity: identity) }
+        )
+    }
+
+    private var statSources: String {
+        func tag(_ value: String, source: String?) -> String {
+            if value.isEmpty { return "Sin confirmar" }
+            return source == "track" ? "Desde TRACK" : "Manual"
+        }
+        return "Putts: \(tag(puttsText, source: round.puttsSource)). Greens: \(tag(girText, source: nil)). Fairways: \(tag(firText, source: nil))."
+    }
+
+    private var sameDayTee: TeeTime? {
+        let fmt = DateFormatter()
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        fmt.dateFormat = "yyyy-MM-dd"
+        let day = fmt.string(from: round.date)
+        let same = model.teeTimes.filter { fmt.string(from: $0.startsAt) == day }
+        return same.count == 1 ? same[0] : nil
+    }
+
+    private var playedWith: String? {
+        let names = sameDayTee?.companions.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
+        return names.isEmpty ? nil : names.joined(separator: ", ")
+    }
+
+    private var scheduleLine: String {
+        guard let tee = sameDayTee else { return "Sin horario conocido" }
+        return "Por horario · \(tee.chipWhen)"
+    }
+
+    private var whatSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("¿Qué es esto?")
+                        .font(GType.sheetTitle)
+                        .foregroundStyle(p.ink)
+                    Text("Course Rating es el score de un scratch en esa cancha y ese tee. Acá es \(FormatAR.one(round.courseRating)).")
+                    Text("Slope mide cuánto más difícil es para un bogey player. El estándar es 113. Acá es \(FormatAR.int(Int(round.slope.rounded()))).")
+                    Text("La cuenta es (113 / Slope) × (Adjusted Gross − Rating − PCC). Si el PCC no está, no lo pongo en cero.")
+                    if let gross = round.adjustedGross, round.slope > 0 {
+                        let replay = (113 / round.slope) * (Double(gross) - round.courseRating)
+                        Text("(113 / \(FormatAR.int(Int(round.slope.rounded())))) × (\(gross) − \(FormatAR.one(round.courseRating))) = \(FormatAR.one((replay * 10).rounded() / 10)). Sin PCC.")
+                    } else {
+                        Text("El adjusted gross de esta tarjeta no está guardado. No armo el ejemplo.")
+                    }
+                }
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+                .padding(20)
+            }
+            .navigationTitle("Diferencial")
+            .toolbar { Button("Cerrar") { showsWhat = false } }
+        }
+        .accessibilityIdentifier("round-what-sheet")
     }
 
     private var differential: Double? {
@@ -756,6 +985,10 @@ struct RoundDetailView: View {
             accountReady = true
             quickError = ""
             quickConflict = false
+            if !didFillTrack {
+                didFillTrack = true
+                Task { await self.fillFromTrack(identity: identity) }
+            }
         }
     }
 }

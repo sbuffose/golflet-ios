@@ -20,6 +20,7 @@ struct GroupDetailView: View {
     @State private var confirmLeave = false
     @State private var comparativoRoute: ComparativoRoute?
     @State private var profileRoute: MemberProfileRoute?
+    @State private var compareMetric: String?
 
     private var group: GolfletGroup? {
         model.groups.first { $0.id == groupID }
@@ -134,7 +135,7 @@ struct GroupDetailView: View {
                     _ = await model.saveMatchPhoto(groupID: group.id, matchID: matchID, jpeg: data)
                 }
             )
-            comparisonSection
+            comparisonSection(group)
             comparativoEntry
             Button {
                 confirmLeave = true
@@ -376,8 +377,10 @@ struct GroupDetailView: View {
         .accessibilityIdentifier("group-comparativo")
     }
 
-    private var comparisonSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func comparisonSection(_ group: GolfletGroup) -> some View {
+        let rows = comparison?.rows ?? []
+        let selected = rows.first { $0.metric.rawValue == compareMetric } ?? rows.first
+        return VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Comparación")
                     .font(GType.section)
@@ -397,19 +400,210 @@ struct GroupDetailView: View {
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
                 .accessibilityIdentifier("group-view-range")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(GroupPeriod.allCases) { period in
+                        Button {
+                            selectPeriod(period)
+                        } label: {
+                            Text(period.short)
+                                .font(GType.label)
+                                .foregroundStyle(config.range == period ? p.onPrimary : p.ink)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(config.range == period ? p.primary : p.surface2)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(period.title)
+                        .accessibilityIdentifier("group-period-\(period.rawValue)")
+                    }
+                }
+            }
+
+            if let hero = comparison?.hero {
+                VStack(spacing: 2) {
+                    Text("Tu puesto")
+                        .font(GType.label)
+                        .foregroundStyle(Color(hex: 0x8C6A2F))
+                    Text("\(hero.rank)º")
+                        .font(GFont.ui(52, weight: .bold))
+                        .foregroundStyle(p.ink)
+                    Text("en birdies")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink)
+                    if let cards = hero.cards {
+                        Text(cards)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .padding(.horizontal, 12)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("group-hero")
+            }
+
+            if !rows.isEmpty {
+                Text("Trofeos")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                trophyStrip(rows, group: group)
+                Text("Ranking")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(rows) { row in
+                            Button { compareMetric = row.metric.rawValue } label: {
+                                Text(row.metric.title)
+                                    .font(GType.label)
+                                    .foregroundStyle(row.id == selected?.id ? p.onPrimary : p.ink)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(row.id == selected?.id ? p.primary : p.surface)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("group-metric-\(row.metric.rawValue)")
+                        }
+                    }
+                }
+                if let selected {
+                    podium(selected, group: group)
+                }
+            }
 
             if let comparison {
                 ForEach(comparison.rows) { row in
-                    ForEach(row.values) { value in
-                        GProbe(
-                            id: "compare-\(row.metric.rawValue)-\(value.memberID)",
-                            label: "\(value.memberName), \(display(value, metric: row.metric))"
-                        )
-                    }
                     comparisonCard(row)
                 }
             }
         }
+        .padding(.bottom, 8)
+    }
+
+    private func trophyTitle(_ metric: GroupMetricKind) -> String {
+        switch metric {
+        case .birdies: return "Rey del birdie"
+        case .pars: return "Más pares"
+        case .eagles: return "Más águilas"
+        case .net: return "Mejor neto"
+        case .gross: return "Mejor gross"
+        default: return metric.title
+        }
+    }
+
+    private func trophyStrip(_ rows: [GroupComparisonRow], group: GolfletGroup) -> some View {
+        let winners = rows.compactMap { row -> (GroupComparisonRow, MemberMetricValue)? in
+            guard let winner = row.ranked().first else { return nil }
+            return (row, winner)
+        }
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(winners, id: \.0.id) { item in
+                    trophyCard(row: item.0, winner: item.1, group: group)
+                }
+            }
+        }
+        .accessibilityIdentifier("group-trophies")
+    }
+
+    private func trophyCard(row: GroupComparisonRow, winner: MemberMetricValue, group: GolfletGroup) -> some View {
+        let photo = winner.photoURL ?? group.members.first { $0.id == winner.memberID }?.photoURL
+        return HStack(spacing: 10) {
+            Image(systemName: "medal.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(Color(hex: 0xC8A86A))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(trophyTitle(row.metric))
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    GroupPhotoView(url: photo, initials: winner.initials, size: 28)
+                    Text(winner.memberName)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 250, alignment: .leading)
+        .background(p.surface)
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color(hex: 0xC8A86A), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func podium(_ row: GroupComparisonRow, group: GolfletGroup) -> some View {
+        let top = Array(row.ranked().prefix(3))
+        let order = top.count >= 3 ? [1, 0, 2] : top.count == 2 ? [1, 0] : Array(top.indices)
+        let gap = podiumGap(row, top: top)
+        return HStack(alignment: .bottom, spacing: 8) {
+            ForEach(order, id: \.self) { index in
+                podiumStep(place: index + 1, value: top[index], metric: row.metric, group: group, gap: index == 0 ? gap : nil)
+            }
+        }
+        .accessibilityIdentifier("group-podium")
+    }
+
+    private func podiumStep(place: Int, value: MemberMetricValue, metric: GroupMetricKind, group: GolfletGroup, gap: String?) -> some View {
+        let photo = value.photoURL ?? group.members.first { $0.id == value.memberID }?.photoURL
+        return VStack(spacing: 4) {
+            Text("\(place)º")
+                .font(GType.label)
+                .foregroundStyle(Color(hex: 0x8C6A2F))
+            if place == 1 {
+                Image(systemName: "medal.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color(hex: 0xC8A86A))
+                    .accessibilityHidden(true)
+            }
+            GroupPhotoView(url: photo, initials: value.initials, size: place == 1 ? 64 : 52)
+            Text(value.memberName)
+                .font(GType.label)
+                .foregroundStyle(p.ink)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            Text(display(value, metric: metric))
+                .font(GFont.ui(28, weight: .bold))
+                .foregroundStyle(p.ink)
+            if let per = value.perRound {
+                Text("\(FormatAR.one(per)) por ronda")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+            }
+            if let gap {
+                Text(gap)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .frame(height: place == 1 ? 228 : place == 2 ? 184 : 156, alignment: .bottom)
+        .background(p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(place == 1 ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 2)
+        )
+        .accessibilityIdentifier("group-podium-\(place)")
+    }
+
+    private func podiumGap(_ row: GroupComparisonRow, top: [MemberMetricValue]) -> String? {
+        guard !row.metric.lowerIsBetter, top.count >= 2, let first = top[0].value, let second = top[1].value, first > second else { return nil }
+        let delta = first - second
+        let shown = delta.rounded() == delta ? String(Int(delta)) : FormatAR.one(delta)
+        return "+\(shown) \(row.metric.title.lowercased()) sobre \(top[1].memberName)"
     }
 
     private func comparisonCard(_ row: GroupComparisonRow) -> some View {
@@ -442,7 +636,6 @@ struct GroupDetailView: View {
                 }
             }
         }
-        .accessibilityIdentifier("compare-\(row.metric.rawValue)")
     }
 
     private func display(_ value: MemberMetricValue, metric: GroupMetricKind) -> String {
@@ -508,6 +701,12 @@ struct GroupDetailView: View {
         }
     }
 
+    private func selectPeriod(_ period: GroupPeriod) {
+        guard config.range != period else { return }
+        config.range = period
+        Task { await reloadComparison() }
+    }
+
     private func reloadComparison() async {
         do {
             comparison = try await model.api.groupComparison(groupID: groupID, config: config)
@@ -542,7 +741,7 @@ struct GroupViewSettings: View {
                         .font(GType.section)
                         .foregroundStyle(p.ink)
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(StatsRange.allCases) { range in
+                        ForEach(GroupPeriod.allCases) { range in
                             Button {
                                 draft.range = range
                             } label: {

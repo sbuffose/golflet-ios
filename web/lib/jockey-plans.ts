@@ -15,7 +15,7 @@ const AZUL_YARDS: Yard[] = [
   { n: 17, par: 4, hcp: 2, yards: 490 }, { n: 18, par: 4, hcp: 6, yards: 452 },
 ];
 
-const COLORADA_YARDS: Yard[] = [
+export const COLORADA_YARDS: Yard[] = [
   { n: 1, par: 4, hcp: 5, yards: 425 }, { n: 2, par: 4, hcp: 11, yards: 350 },
   { n: 3, par: 3, hcp: 17, yards: 148 }, { n: 4, par: 5, hcp: 9, yards: 490 },
   { n: 5, par: 4, hcp: 13, yards: 340 }, { n: 6, par: 4, hcp: 7, yards: 355 },

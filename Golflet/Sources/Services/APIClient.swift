@@ -19,6 +19,7 @@ protocol GolfletAPI: Sendable {
     func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave
     func holeMarks(roundId: String) async throws -> [HoleMark]
     func saveBag(_ items: [BagClub]) async throws -> [BagClub]
+    func saveIronSet(brand: String, model: String) async throws -> String
     func pollSyncProgress(progressID: String) async -> SyncAPIProgress?
 
     func gpsCourses(lat: Double?, lng: Double?) async throws -> GPSCourseList

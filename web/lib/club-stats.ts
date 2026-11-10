@@ -25,8 +25,9 @@ export function distanceStats(values: number[]) {
   return { n: s.length, trimmed, avg_m: r0(avg), median_m: r0(med), max_m: r0(s[s.length - 1]), min_m: r0(s[0]), range_m: [r0(p25), r0(p75)] as [number | null, number | null], spread_m: r0(sd),
     avg_yd: yd(avg), median_yd: yd(med), max_yd: yd(s[s.length - 1]), range_yd: [yd(p25), yd(p75)] as [number | null, number | null], spread_yd: yd(sd) };
 }
-export const isApproach = (x: ShotOut) => !isPutter(x.club) && x.lie !== "green" && (x.intent === "green" || (x.intent !== "layup" && x.to_green_m != null && x.to_green_m <= APPROACH_MAX_M));
+export const isApproach = (x: ShotOut) => !isPutter(x.club) && x.lie !== "green" && x.intent !== "recovery" && (x.intent === "green" || (x.intent !== "layup" && x.to_green_m != null && x.to_green_m <= APPROACH_MAX_M));
 export const isTeeShot = (x: ShotOut) => (x.lie === "tee" || (x.lie == null && x.shot_number === 1)) && (x.to_green_m == null || x.to_green_m > APPROACH_MAX_M);
+const teeMeasured = (shots: ShotOut[]) => shots.filter(s => isTeeShot(s) && countsForClub(s));
 
 const article = (label: string) => (/^madera/i.test(label) ? "la" : "el");
 /** "Con el Hierro 7 te vas 62% a la derecha y quedás corto (55%)." Needs ≥ 3 tagged shots per dimension. */
@@ -73,6 +74,9 @@ export function clubDetail(code: string, clubs: ClubDef[], shots: ShotOut[], sam
     length_on_approach: { ...len },                                            // % of approach shots with a length tag
     greens_hit: appr.length ? { pct: pct(gir, appr.length), hit: gir, of: appr.length } : null,
     fairways_hit: tee.length ? { pct: pct(fw, tee.length), hit: fw, of: tee.length } : null,
+    tee_shots: (/^(dr|driver)$/i.test(code) || /^driver\b/i.test(label)) && teeMeasured(mine).length
+      ? (() => { const stats = distanceStats(teeMeasured(mine).map(s => s.distance_m!)); return stats && stats.avg_yd != null ? { n: stats.n, avg_yd: stats.avg_yd } : null; })()
+      : null,
     mishit: { pct: pct(cnt(mine, s => !!s.mishit), mine.length), count: cnt(mine, s => !!s.mishit), of: mine.length },
     tendency: withFairways(tendency(label, dir, len), tee.length >= 3 ? pct(fw, tee.length) : null),
     launch_monitor: lm.length ? { shots: lm.length, sources: [...new Set(lm.map(s => s.source))], carry: lmDist,

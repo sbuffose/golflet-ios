@@ -147,7 +147,7 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     assert.match(bagText, /3 definidas por vos/);
     assert.match(bagText, /1 palo con tiros medidos por GPS/);
     assert.equal(bagText.includes("3/6"), false);
-    assert.equal(await page.$eval("#bagcount", el => el.textContent), "3 de 6");
+    assert.equal(await page.$eval("#bagcount", el => el.textContent), "3 de 5");
     const driver = await page.$eval('.bagrow[data-club="Driver"]', row => ({
       carry: (row.querySelector('[data-k="carry"]') as HTMLInputElement).value,
       total: (row.querySelector('[data-k="total"]') as HTMLInputElement).value,
@@ -206,12 +206,40 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#scoreline");
     const scoreline = await page.$eval("#scoreline", el => el.textContent || "");
-    assert.match(scoreline, /1 Águila/);
-    assert.match(scoreline, /1 Birdie/);
-    assert.match(scoreline, /1 Par/);
-    assert.match(scoreline, /0 Bogey/);
-    assert.match(await page.$eval(".keyrow", el => el.textContent || ""), /−2/);
-    assert.equal((await page.$eval(".keyrow", el => el.textContent || "")).includes("Águila2"), false);
+    const legend = await page.$eval("#scoreline", el => ({
+      text: el.textContent || "",
+      marks: [...el.querySelectorAll(".b")].map(node => node.textContent || ""),
+      names: [...el.querySelectorAll("[aria-label]")].map(node => node.getAttribute("aria-label")),
+    }));
+    assert.deepEqual(legend.marks, ["1", "1", "1", "0", "0"]);
+    assert.deepEqual(legend.names, ["1 águilas", "1 birdies", "1 pares", "0 bogeys", "0 doble o peor"]);
+    assert.match(scoreline, /1 Águilas/);
+    assert.match(scoreline, /1 Birdies/);
+    assert.match(scoreline, /1 Pares/);
+    assert.match(scoreline, /0 Bogeys/);
+    assert.match(scoreline, /0 Doble \+/);
+    assert.equal(/[−+][12]/.test(scoreline), false);
+    assert.equal(scoreline.includes("Águilas1"), false);
+    assert.equal(scoreline.includes("Águila2"), false);
+    assert.match(await page.$eval("#difnote", el => el.textContent || ""), /Diferencial estimado por Golflet/);
+    const trackPlace = await page.evaluate(() => {
+      const track = document.querySelector("#round-track");
+      const stats = document.querySelector("#qstat");
+      const fields = document.querySelector(".fields");
+      if (!track || !stats || !fields) return null;
+      return {
+        href: track.getAttribute("href"),
+        label: track.getAttribute("aria-label") || track.textContent,
+        beforeStats: !!(track.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING),
+        fieldsStay: !!fields.querySelector('[data-k="putts"]') && !!fields.querySelector('[data-k="gir"]') && !!fields.querySelector('[data-k="fir"]'),
+        quickStays: !!stats.querySelector("#qputts") && !!stats.querySelector("#qfw") && !!stats.querySelector("#qgir"),
+      };
+    });
+    assert.equal(trackPlace?.href, "#/reconstruir?ronda=r-nov&hole=1");
+    assert.match(trackPlace?.label || "", /Registrar mis tiros/);
+    assert.equal(trackPlace?.beforeStats, true);
+    assert.equal(trackPlace?.fieldsStay, true);
+    assert.equal(trackPlace?.quickStays, true);
     note("inicio");
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });
     await page.waitForSelector(".hero .hi-ch-l");
@@ -227,7 +255,25 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     assert.ok(big.ratio >= 3, `index ${big.ratio}`);
     assert.equal(await page.$eval(".hero .hi-ch-l", el => el.getAttribute("href")), "#/cambios");
     assert.equal(await page.$eval(".hero .hp-prac", el => el.getAttribute("href")), "#/jugar");
+    const hiText = await page.$eval(".hero", el => el.textContent || "");
+    assert.match(hiText, /Índice al/);
+    assert.match(hiText, /5 nov 2026/);
+    assert.match(hiText, /↓ 6,9/);
+    assert.match(hiText, /desde oct\. 2023/);
+    assert.equal(await page.$(".hero .delta"), null);
+    const hiBox = await page.evaluate(() => {
+      const evo = document.querySelector(".hi-evo") as HTMLElement;
+      const link = document.querySelector(".hero .hi-ch-l") as HTMLElement;
+      const bg = getComputedStyle(evo).backgroundColor;
+      const r = link.getBoundingClientRect();
+      return { bg, h: r.height, w: r.width, wide: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1 };
+    });
+    assert.equal(hiBox.bg.includes("200, 16, 46"), false);
+    assert.ok(hiBox.h >= 44 && hiBox.w >= 44, JSON.stringify(hiBox));
+    assert.equal(hiBox.wide, true);
     await page.screenshot({ path: `${ART}/hero-navy.png` });
+    await page.click(".hero .hi-ch-l");
+    await page.waitForFunction(() => location.hash === "#/cambios" && (document.body.innerText || "").includes("Cambios"));
     note("foto");
     await page.goto(`http://127.0.0.1:${port}/#/grupo/g1/ajustes`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#ggph", { timeout: 8000 });
@@ -258,6 +304,8 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
       input.files = dt.files;
       input.dispatchEvent(new Event("change"));
     });
+    await page.waitForSelector("#pc-ok");
+    await page.click("#pc-ok");
     await page.waitForFunction(() => (document.querySelector(".gg-img")?.getAttribute("src") || "").includes("v=2"));
     assert.equal(puts.at(-1)?.type, "image/jpeg");
     assert.ok((puts.at(-1)?.bytes || 0) < 150_000, `resized bytes ${puts.at(-1)?.bytes}`);
@@ -276,6 +324,8 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
       input.files = dt.files;
       input.dispatchEvent(new Event("change"));
     });
+    await page.waitForSelector("#pc-ok");
+    await page.click("#pc-ok");
     await page.waitForFunction(() => (document.querySelector("#ggpmsg")?.textContent || "").includes("anterior sigue"));
     assert.equal(await page.$eval(".gg-img", el => el.getAttribute("src")), kept);
     await page.screenshot({ path: `${ART}/group-photo.png` });

@@ -7,7 +7,7 @@ import { syncAccount, syncAppLink, type SyncResult } from "./sync";
 import { claimLoginLease, isUndefinedColumn, isUndefinedTable, newLeaseToken, releaseLoginLease, type Sql } from "./scorecard-lease";
 import {
   LOOKBACK_DAYS, MAX_SYNCS_PER_RUN, SYNC_BUSY_MESSAGE, applyAttempt, artParts, artTeeInstant, blankJob, nextAttempt, outcomeAfterRead,
-  planDue, reconcileJob, sameSchedule, scorecardLabel, shouldStop, syncDisposition, syncKey, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
+  planDue, reconcileJob, sameSchedule, scorecardPresentation, shouldStop, syncDisposition, syncKey, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
 } from "./scorecard-fetch-core";
 
 export class ScorecardSchemaError extends Error {
@@ -571,6 +571,17 @@ export async function listScorecardFetches(userId: string, now = new Date(), sql
     attempt_count: Number(r.attempt_count) || 0,
     last_error: r.last_error ? String(r.last_error) : null,
     round_id: r.round_id ? String(r.round_id) : null,
-    label: scorecardLabel(r.status, iso(r.next_attempt_at), r.last_error ? String(r.last_error) : null, now),
+    played_at: iso(r.played_at),
+    ...(() => {
+      const view = scorecardPresentation({
+        status: r.status,
+        playedAt: iso(r.played_at) || "",
+        nextAttemptAt: iso(r.next_attempt_at),
+        lastAttemptAt: iso(r.last_attempt_at),
+        lastError: r.last_error ? String(r.last_error) : null,
+        roundId: r.round_id ? String(r.round_id) : null,
+      }, now);
+      return { presentation: view.bucket, heading: view.heading, label: view.label };
+    })(),
   }));
 }

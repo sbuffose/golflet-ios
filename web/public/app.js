@@ -126,7 +126,7 @@ function yrList(items, dateOf, row, cls = 'list'){
     return `<section class="yrgrp yrlite${cur ? ' cur' : ''}">${cur ? '' : `<div class="yrpill" aria-hidden="true"><span class="num">${y}</span></div><div class="yrhd"><span class="sr">Año ${y}</span></div>`}<div class="${cls}">${a.map(([x, i]) => row(x, i)).join('')}</div></section>`; }).join('');
 }
 const minOr = a => a.length ? Math.min(...a) : '—';
-const emptyData = (t) => `<div class="onboard"><h2>${t||'Todavía no hay tarjetas'}</h2><p>Vinculá tu matrícula y Golflet trae las tarjetas de todos tus clubes.</p><a class="btn" href="#/vincular">Vincular tu matrícula</a></div>`;
+const emptyData = (t) => `<div class="onboard"><img class="cad" src="/brand/caddie.png" alt=""><h2>${t||'Todavía no hay tarjetas'}</h2><p>Vinculá tu matrícula y Golflet trae las tarjetas de todos tus clubes.</p><a class="btn" href="#/vincular">Vincular tu matrícula</a></div>`;
 
 /* ---------- INICIO ---------- */
 function clubsCard(){
@@ -145,11 +145,22 @@ function clubsCard(){
 /* t117u: discreet contact links at the bottom of Inicio (same page as on the login screen) */
 /* t135u: signed-in footer. '¿Sos profesor?' / '¿Sponsor o marca?' stay only on the login (logged-out) screen. */
 const CT_LINKS = `<nav class="ct-links" aria-label="Contacto"><a href="/feedback.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9.5L5 19.5v-4H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Feedback</a><a href="/contacto.html?tipo=contacto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 3.5h3l1.5 4-2 1.3a10 10 0 0 0 6.1 6.1l1.3-2 4 1.5v3c0 1.1-.9 2-2 2A16.5 16.5 0 0 1 4.6 5.5c0-1.1.9-2 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Contactar</a></nav>`;
+const reconEntry = () => `<a class="recon-entry" id="recon-start" href="#/reconstruir"><span class="rt-mark">TRACK</span><b>Cargar una vuelta ya jugada</b><span class="recon-go" aria-hidden="true">›</span></a>`;
+function hiBand(hi, d){
+  const dated = (hi || []).filter(h => h.hi != null).slice().sort((a, b) => a.date < b.date ? -1 : 1);
+  const last = dated.at(-1);
+  const when = last ? dmy(last.date) : '';
+  const from = d != null ? `${MES[+hi[0].date.slice(5, 7) - 1]}. ${hi[0].date.slice(0, 4)}` : '';
+  const arrow = d == null ? '' : (d < 0 ? '↓' : '↑');
+  const facts = `${when ? `<p class="hi-when"><span>Índice al</span> <b class="num">${when}</b></p>` : ''}${d != null ? `<p class="hi-evo"><b class="num">${arrow} ${f1(Math.abs(d))}</b> <span>desde ${from}</span></p>` : ''}`;
+  return `<div class="hi-strip">${facts ? `<div class="hi-facts">${facts}</div>` : ''}<a class="hi-ch-l" href="#/cambios">Cambios</a></div>`;
+}
 function vInicio(){
-  const top = `<div class="top"><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${esc(initials())}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
+  const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
+  const top = `<div class="top"><img class="cad xs" src="/brand/caddie.png" alt=""><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
   if (!valid.length) return top + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas válidas. Tocá Actualizar para traerlas.</div>` : emptyData('Empecemos por tu club')) +
-    `<div id="tees"></div><div id="scorecards"></div><a class="card" id="recon-start" href="#/reconstruir"><div class="t">Cargar una vuelta ya jugada</div><div class="s">Marcá cada golpe en el mapa. El punto es manual y la distancia, estimada. No cambia la tarjeta del club.</div></a><div id="cardpull"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
+    `<div id="tees"></div><div id="scorecards"></div>${reconEntry()}<div id="cardpull"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
   const hi = G.hi_history, d = hi.length>1 ? hi[hi.length-1].hi - hi[0].hi : null;
   const last = rounds[0], best = valid.slice().sort((a,b)=>a.gross-b.gross)[0];
   const pr = valid.filter(inR), prAll = rounds.filter(inR), bestR = pr.slice().sort((a,b)=>a.gross-b.gross)[0];
@@ -157,8 +168,7 @@ function vInicio(){
   return top + rangeSeg(prAll.length) + revealCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
     <div class="hi-avs"><div id="hiprofs" class="hi-profs nolab" hidden></div><div id="higroups" class="hi-grp" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a></div></div>
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
-    <div class="big num">${f1(hiNow)}</div></a>${(hi||[]).filter(h=>h.hi!=null).slice().sort((a,b)=>a.date<b.date?-1:1).at(-1) ? `<span class="delta">${dmy((hi||[]).filter(h=>h.hi!=null).slice().sort((a,b)=>a.date<b.date?-1:1).at(-1).date)}</span>` : ''}${d!=null?`<span class="delta">${d<0?'↓':'↑'} ${f1(Math.abs(d))} desde ${MES[+hi[0].date.slice(5,7)-1]}. ${hi[0].date.slice(0,4)}</span>`:''}
-    <a class="hi-ch-l" href="#/cambios">Cambios</a>
+    <div class="big num">${f1(hiNow)}</div></a>${hiBand(hi, d)}
     <div class="meta"><a href="${rlink('rounds',{scope:'all',course:'all',sort:'date',order:'desc'})}">Tarjetas<b class="num">${prAll.length}</b></a><a href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}">Mejor gross<b class="num">${bestR?bestR.gross:'—'}</b></a><a href="${rlink('average',{scope:'all',course:'all',sort:'date',order:'desc'})}">Promedio<b class="num">${f1(mean(pr.map(r=>r.gross)))}</b></a><a id="hcpimp" class="hi-imp" href="#/impacto${RANGE==='all'?'':'?range='+RANGE}">Impacto HCP<b class="num">…</b></a></div>
   </div></div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
@@ -169,7 +179,7 @@ function vInicio(){
     <a class="card mini stat vx-tap" href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}"><div class="k">Mejor</div><div class="v num">${minOr(pr.map(r=>r.gross))}</div></a>
     <a class="card mini stat vx-tap" href="${rlink('birdies',{scope:'all',course:'all',sort:'date',order:'desc'})}"><div class="k">Birdies</div><div class="v num">${prAll.reduce((s,r)=>s+(r.holes?.length?r.holes.filter(h=>h[1]!=null&&h[2]!=null&&h[2]-h[1]===-1).length:(r.summary_counts?.birdies||0)),0)}</div></a>
   </div>${perRoundCard(prAll)}</div></div>
-  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3"><a class="card" id="recon-start" href="#/reconstruir"><div class="t">Cargar una vuelta ya jugada</div><div class="s">Marcá cada golpe en el mapa. El punto es manual y la distancia, estimada. No cambia la tarjeta del club.</div></a></div><div class="o3" id="cardpull"></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
+  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3">${reconEntry()}</div><div class="o3" id="cardpull"></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
   <div class="o3"><div class="section"><h2>Amigos</h2>${G.user?.group_invitations?`<span class="badge gold">${G.user.group_invitations} invitación${G.user.group_invitations===1?'':'es'}</span>`:''}</div><a class="card gg-home" href="#/amigos"><span class="gg-home-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="3.2"/><circle cx="16.5" cy="10" r="2.6"/><path d="M3.5 19c.9-3 3-4.6 5.5-4.6s4.6 1.6 5.5 4.6M14.5 15c2.6-.3 4.8 1 5.8 3.8"/></svg></span><div><b>${G.user?.group_invitations?'Te invitaron a un grupo':'Comparar con amigos'}</b><p>Tabla, evolución y hoyo por hoyo con tus amigos. Solo si cada uno acepta.</p></div>${ICON.chev}</a></div>
   <div class="o5"><div class="section"><h2>Mis clubes</h2></div>${clubsCard()}</div></div></div>${CT_LINKS}`;
 }
@@ -236,7 +246,7 @@ function vResumen(){
   const worst = (pool.filter(r=>r.date>=wSince).length ? pool.filter(r=>r.date>=wSince) : pool).slice().sort((a,b)=>b.gross-a.gross)[0];
   const bd = pool.filter(r=>r.differential_computed!=null).sort((a,b)=>a.differential_computed-b.differential_computed)[0];
   const rec = pool.filter(r=>r.date>=rSince);
-  const hard = G.courses.filter(c=>segR==='Todas'||c.key===segR).flatMap(c=>{ const hs = ranged ? holeStats(pool, c.key) : null; return c.holes.map(h=>({ck:c.key,cn:c.course,...h,stats:hstat(h,hs)})).filter(h=>h.stats.n); }).sort((a,b)=>b.stats.avg_to_par-a.stats.avg_to_par).slice(0,4);
+  const hard = G.courses.filter(c=>segR==='Todas'||c.key===segR).flatMap(c=>{ const hs = ranged ? holeStats(pool, c.key) : null; return c.holes.map(h=>({ck:c.key,club:c.club_name||'',course:c.course||'',...h,stats:hstat(h,hs)})).filter(h=>h.stats.n); }).sort((a,b)=>b.stats.avg_to_par-a.stats.avg_to_par).slice(0,4);
   const cq = segR==='Todas'?'all':segR;
   const card = (r,k,href,tone) => r ? `<a class="card stat vx-tap tone-${tone}" href="${href}"><div class="k"><i class="tdot" aria-hidden="true"></i>${k}</div><div class="v num">${r.gross}<small>neto ${r.net??'—'}</small></div><div class="d">${dmy(r.date)} · ${esc(clabel(r.course_key))}</div></a>` : '';
   return `<div class="top"><span class="overline">${ranged ? `${rlabel(RANGE)} · desde ${dmy(rangeSince(RANGE))}` : `${rounds[rounds.length-1].date.slice(0,4)} – ${rounds[0].date.slice(0,4)}`}</span></div>
@@ -256,10 +266,15 @@ function vResumen(){
     <div class="legend"><span><i style="background:${C.primary}"></i>Índice (mejores 8 de 20)</span>${G.courses.map(c=>`<span><i style="background:${CCOL[c.key]};opacity:.6"></i>${esc(c.label)}</span>`).join('')}</div></div>
   <p class="foot">Cada punto es un diferencial calculado por Golflet (tu club no lo publica).${G.hi_history.length?` <a class="link" href="${mlink('handicap',{scope:'all'})}">HCP Index oficial: ${f1(G.hi_history[0]?.hi)} → ${f1(G.hi_history.at(-1)?.hi)}</a>.`:''}</p>
   </div><div class="col-b"><div class="section"><h2>Resultados por hoyo</h2></div>
-  <div class="grid3 rstats" style="gap:8px">${['eagles','birdies','pars','bogeys'].map(k=>{ const n = pool.reduce((s,r)=>s+(r.holes?.length? r.holes.filter(h=>h[1]!=null&&h[2]!=null&&(k==='eagles'?h[2]-h[1]<=-2:k==='birdies'?h[2]-h[1]===-1:k==='pars'?h[2]===h[1]:h[2]-h[1]===1)).length : (k==='eagles'?0:(r.summary_counts?.[k]||0))),0);
-    return `<a class="card mini stat vx-tap res-t res-${k}" style="padding:12px 10px" href="${rlink(k,{scope:'all',course:cq,sort:'date',order:'desc'})}"><div class="k"><i class="rsw" aria-hidden="true"></i>${MTITLE[k]}</div><div class="v num" style="font-size:calc(24px*var(--ts,1))">${n}</div></a>`; }).join('')}</div>
+  <div class="hr-grid">${['eagles','birdies','pars','bogeys'].map(k=>{ const n = pool.reduce((s,r)=>s+(r.holes?.length? r.holes.filter(h=>h[1]!=null&&h[2]!=null&&(k==='eagles'?h[2]-h[1]<=-2:k==='birdies'?h[2]-h[1]===-1:k==='pars'?h[2]===h[1]:h[2]-h[1]===1)).length : (k==='eagles'?0:(r.summary_counts?.[k]||0))),0);
+    const ic = { eagles:'<circle cx="16" cy="16" r="8" fill="#0B2545"/>', birdies:'<path fill="#C8102E" d="M8 18c3-6 8-7 12-4 2 4-1 8-6 8-3 0-5-1-6-4z"/>', pars:'<path fill="#0B2545" d="M15 6h2v14h-2z"/><path fill="#C8102E" d="M17 8h7l-1 3 1 3h-7z"/>', bogeys:'<circle cx="16" cy="16" r="7" fill="none" stroke="#0B2545" stroke-width="2"/>' }[k];
+    return `<a class="card hr-card vx-tap res-t res-${k}" href="${rlink(k,{scope:'all',course:cq,sort:'date',order:'desc'})}"><svg class="hr-ic" viewBox="0 0 32 32" aria-hidden="true">${ic}</svg><span class="hr-copy"><span class="k">${MTITLE[k]}</span><span class="v num">${n}</span></span></a>`; }).join('')}</div>
   ${hard.length?`<div class="section"><h2>Hoyos que más te cuestan</h2></div>
-  <div class="list">${hard.map(h=>`<a class="row" href="#/hoyo/${encodeURIComponent(h.ck)}/${h.hole}"><div class="date"><b class="num">${h.hole}</b><span>${esc(h.cn.slice(0,3))}</span></div><div class="body"><div class="t">Par ${h.par} · Handicap ${h.hcp}</div><div class="s">Promedio ${f2(h.stats.avg)} en ${h.stats.n} vueltas</div></div><span class="badge neg num">${sg(h.stats.avg_to_par)}</span>${ICON.chev}</a>`).join('')}</div>`:''}
+  <div class="list">${hard.map(h=>{ const courseName = (h.course || (h.ck||'').split(':').slice(1).join(':') || '').trim(), clubName = (h.club || '').trim();
+    const vs = h.stats.avg_to_par == null ? '' : `${sg(h.stats.avg_to_par)} vs par`;
+    const score = h.stats.avg != null ? `score ${f1(h.stats.avg)}` : '';
+    const sample = `${h.stats.n} ${h.stats.n === 1 ? 'vuelta' : 'vueltas'}`;
+    return `<a class="row hard-id" href="#/hoyo/${encodeURIComponent(h.ck)}/${h.hole}"><div class="body"><div class="t">Hoyo ${h.hole} · ${esc(courseName || 'Cancha')}</div>${clubName ? `<div class="s">${esc(clubName)}</div>` : ''}<div class="s">Par ${h.par ?? '—'} · Hcp ${h.hcp ?? '—'} · ${[vs, score, sample].filter(Boolean).join(' · ')}</div></div><span class="badge neg num">${sg(h.stats.avg_to_par)}</span>${ICON.chev}</a>`; }).join('')}</div>`:''}
   <p class="foot">Sobre ${pool.length} tarjetas válidas de 18 hoyos${ranged?` (${rlabel(RANGE).toLowerCase()})`:""}; las DES y las de 9 hoyos no cuentan.</p><div id="puttcard"></div><div id="wxres"></div><div id="privres"></div></div></div>`;
 }
 
@@ -300,9 +315,9 @@ function holeTally(r){
 }
 function scoreKey(c){
   if (!c.known) return '';
-  const item = (cls, n, label, mark) => `<span><span class="b ${cls}" aria-hidden="true">${mark}</span><b class="num">${n}</b> ${label}</span>`;
+  const item = (cls, n, label, spoken) => `<span aria-label="${n} ${spoken}"><span class="b ${cls}" aria-hidden="true">${n}</span> ${label}</span> `;
   const scope = c.known < c.holes ? `<p class="foot">En ${c.known} hoyos con score. Un hoyo sin score no cuenta como par.</p>` : '';
-  return `<div class="keyrow" id="scoreline" aria-label="${c.eagles} águilas, ${c.birdies} birdies, ${c.pars} pares, ${c.bogeys} bogeys, ${c.doubles} doble o peor">${item('eagle', c.eagles, 'Águilas', '−2')}${item('birdie', c.birdies, 'Birdies', '−1')}${item('par', c.pars, 'Pares', '0')}${item('bogey', c.bogeys, 'Bogeys', '+1')}${item('double', c.doubles, 'Doble +', '+2')}</div>${scope}`;
+  return `<div class="keyrow" id="scoreline">${item('eagle', c.eagles, 'Águilas', 'águilas')}${item('birdie', c.birdies, 'Birdies', 'birdies')}${item('par', c.pars, 'Pares', 'pares')}${item('bogey', c.bogeys, 'Bogeys', 'bogeys')}${item('double', c.doubles, 'Doble +', 'doble o peor')}</div>${scope}`;
 }
 function sRonda(id){
   const r = rounds.find(x=>x.round_id===id); if(!r) return '<p>Ronda no encontrada.</p>';
@@ -312,7 +327,8 @@ function sRonda(id){
   const tc = r.tee && TEE[r.tee.toUpperCase()];
   return `<div class="bar"><span class="overline">${dmy(r.date)}</span><button class="close" data-close>${ICON.x}</button></div>
   <div class="stitle">${cup(r)+esc(short(r.tournament)||'Ronda')}</div><div style="font-size:calc(12.5px*var(--ts,1));color:var(--color-ink3);margin-top:2px">${esc(title(r.tournament))}</div>
-  <div class="chips"><span class="badge">${esc(r.club_name)}</span>${r.course&&r.course!==r.club_name?`<span class="badge">${esc(r.course)}</span>`:''}${r.tee?`<span class="badge">${tc?`<i class="tee" style="background:${tc};margin-right:6px"></i>`:''}Tee ${esc(r.tee)}</span>`:''}${r.course_rating?`<span class="badge">${f1(r.course_rating)}${r.slope?' / '+r.slope:''}</span>`:''}</div>
+  <div class="chips"><span class="badge">${esc(r.club_name)}</span>${r.course&&r.course!==r.club_name?`<span class="badge">${esc(r.course)}</span>`:''}${r.tee?`<span class="badge">${tc?`<i class="tee" style="background:${tc};margin-right:6px"></i>`:''}Tee ${esc(r.tee)}</span>`:''}${r.course_rating!=null||r.slope!=null?`<a class="badge dif-chip" href="#/diferencial/${encodeURIComponent(r.round_id)}">${r.course_rating!=null?`Rating ${f1(r.course_rating)}`:''}${r.course_rating!=null&&r.slope!=null?' · ':''}${r.slope!=null?`Slope ${esc(String(r.slope))}`:''} <span class="dif-i" aria-hidden="true">i</span></a>`:''}</div>
+  <div class="r-partners" id="rpartners" hidden></div>
   <div id="rwx"></div>
   ${r.valid_card?'':'<div class="note-warn">Tarjeta DES: no presentada, levantada o descalificada. No cuenta en promedios.</div>'}
   <div class="grid3 rstats" style="gap:8px;margin-top:16px">
@@ -322,16 +338,52 @@ function sRonda(id){
     ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
-  <div class="section"><h2>Tu juego</h2><span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
-  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
+  <div class="section"><h2>Tu juego</h2></div>
+  <a class="card row rt-track" id="round-track" href="#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&amp;hole=1"><span class="rt-mark">TRACK</span><span class="body"><span class="t">Registrar mis tiros</span><span class="s">Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.</span></span>${ICON.chev}</a>
+  <div class="section"><h2>Estadísticas de la ronda</h2>${has?'':'<img class="cad xs" src="/brand/caddie.png" alt="">'}<span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
+  <div class="rstats3" id="rstats3"><div><span>Putts</span><b class="num" id="rt-putts">${r.putts==null?'Sin cargar':r.putts}</b><small id="rt-putts-src">${r.putts==null?'':'Manual'}</small></div><div><span>Greens</span><b class="num" id="rt-gir">${r.gir==null?'Sin cargar':r.gir}</b><small id="rt-gir-src">${r.gir==null?'':'Manual'}</small></div><div><span>Fairways</span><b class="num" id="rt-fir">${r.fir==null?'Sin cargar':r.fir}</b><small id="rt-fir-src">${r.fir==null?'':'Manual'}</small></div></div>
+  <button type="button" class="btn ghost" id="load-round-stats">Cargar putts, greens y fairways</button>
+  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qsrc"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
   <div class="fields">
     <label class="field"><span>Putts</span><input inputmode="numeric" data-k="putts" value="${r.putts??''}" placeholder="—"></label>
     <label class="field"><span>Greens</span><input inputmode="numeric" data-k="gir" value="${r.gir??''}" placeholder="—/18"></label>
     <label class="field"><span>Fairways</span><input inputmode="numeric" data-k="fir" value="${r.fir??''}" placeholder="—/14"></label>
   </div>
-  <div class="saved" id="saved" style="margin:8px 4px 0">${ICON.pencil}<span>${r.notes_at?'Guardado en tu cuenta · '+ago(r.notes_at):'Se guarda en tu cuenta'}</span></div>
+  <div class="saved" id="saved" style="margin:8px 4px 0">${r.notes_at?'<img class="cad xs" src="/brand/caddie.png" alt="">':''}${ICON.pencil}<span>${r.notes_at?'Guardado en tu cuenta · '+ago(r.notes_at):'Se guarda en tu cuenta'}</span></div>
   ${recapBox(r.round_id)}
   ${r.gps_shots?`<div class="section"><h2>Golpes con GPS</h2><span class="badge">${r.gps_shots}</span></div><div id="rshots"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>`:''}`;
+}
+function sDif(id){
+  const r = rounds.find(x => x.round_id === id);
+  if (!r) return '<p>Ronda no encontrada.</p>';
+  const n = v => { if (v == null || v === '') return null; const x = Number(String(v).replace(',', '.')); return Number.isFinite(x) ? x : null; };
+  const rating = n(r.course_rating), slope = n(r.slope), gross = n(r.gross), ags = n(r.adjusted_gross), pcc = n(r.pcc), shown = n(r.differential_computed);
+  const replay = ags != null && rating != null && slope ? Math.round((113 / slope) * (ags - rating) * 10) / 10 : null;
+  const same = replay != null && shown != null && Math.abs(replay - shown) < 0.051;
+  const line = (k, v) => `<div class="dif-row"><span>${k}</span><b class="num">${v}</b></div>`;
+  return `<div class="bar"><span class="overline">${dmy(r.date)}</span></div>
+  <div class="stitle">¿Qué es esto?</div>
+  <p>Cómo se calcula tu diferencial.</p>
+  <p class="foot">Con los números de esta tarjeta. Si un dato no está guardado, queda en no disponible. No lo completo.</p>
+  <div class="card dif-card">
+    ${line('Course Rating', rating == null ? 'No disponible' : f1(rating))}
+    ${line('Slope', slope == null ? 'No disponible' : String(slope))}
+    ${line('Gross', gross == null ? 'No disponible' : String(gross))}
+    ${line('Adjusted gross', ags == null ? 'No disponible' : String(ags))}
+    ${line('PCC del día', pcc == null ? 'No disponible' : f1(pcc))}
+    ${line('Dif.*', shown == null ? 'No disponible' : f1(shown))}
+  </div>
+  <h2 class="dif-h">Course Rating</h2>
+  <p>Es el score que se espera de un jugador scratch en esa cancha y ese tee, en condiciones normales. ${rating == null ? 'Esta tarjeta no lo trae.' : `En esta tarjeta es ${f1(rating)}.`}</p>
+  <h2 class="dif-h">Slope</h2>
+  <p>Mide cuánto más difícil es la cancha para un bogey player respecto de un scratch. El estándar del mundo es 113. ${slope == null ? 'Esta tarjeta no trae slope.' : `Acá el slope es ${slope}: ${slope > 113 ? 'más difícil que el estándar' : slope < 113 ? 'más fácil que el estándar' : 'el estándar'}.`}</p>
+  <h2 class="dif-h">La cuenta</h2>
+  <p>El diferencial del World Handicap System es (113 / Slope) × (Adjusted Gross Score − Course Rating − PCC). El PCC es el cálculo del día: si la cancha jugó más fácil o más difícil que lo normal.</p>
+  <p>El adjusted gross no es el gross de la tarjeta. Cada hoyo se capa en doble bogey neto: par + 2 + los golpes que te da tu hándicap en ese hoyo. ${ags == null ? 'El adjusted gross de esta tarjeta no está guardado.' : gross != null && ags !== gross ? `El gross es ${gross} y el adjusted gross guardado es ${ags}.` : ags != null ? `El adjusted gross guardado es ${ags}.` : ''}</p>
+  <p>${pcc == null ? 'El PCC no está en los datos del club. No lo pongo en cero: queda no disponible. El Dif.* no le resta un PCC.' : `El PCC guardado de este día es ${f1(pcc)}.`}</p>
+  <h2 class="dif-h">Esta tarjeta</h2>
+  <p>${replay == null ? 'Falta el rating, el slope o el adjusted gross, así que no armo el ejemplo. ' : `(113 / ${slope}) × (${ags} − ${f1(rating)}) = ${f1(replay)}. Sin PCC, porque no está. `}${shown == null ? 'Esta tarjeta no tiene Dif.* guardado.' : same ? `Da ${f1(shown)}, el mismo Dif.* de la tarjeta.` : `El Dif.* guardado es ${f1(shown)}. No lo cambio para que cierre con la cuenta.`}</p>
+  <p class="foot">El asterisco de Dif.* quiere decir que es el diferencial estimado por Golflet con el rating, el slope y el adjusted gross de la tarjeta. No es el número de la federación si ese día hubo un PCC que el club no mandó.</p>`;
 }
 
 /* ---------- CANCHA ---------- */
@@ -356,7 +408,7 @@ function vCancha(){
   <div class="teechips">${Object.entries(c.tees||{}).map(([t,x])=>`<span class="teechip"><i class="tee" style="background:${TEE[t.toUpperCase()]||'#ccc'}"></i>${esc(t)} <b class="num">${f1(x.course_rating)}</b>/${x.slope}</span>`).join('')}</div>
   <div id="stratcard" data-ck="${esc(c.key)}"></div>
   <div id="cancwx" data-ck="${esc(c.key)}" data-club="${esc(c.club_name||'')}"></div>
-  <a class="card row vx-tap lb-cbook" href="#/plan/cancha?ck=${encodeURIComponent(c.key)}"><div class="body"><div class="t">Libreta de la cancha</div><div class="s">Diseño, rumbo, marcas y greens para imprimir · sin reserva</div></div><span class="chev">›</span></a>
+  <a class="card lb-entry vx-tap lb-cbook" href="#/plan/cancha?ck=${encodeURIComponent(c.key)}"><div class="t">Libreta de la cancha</div><div class="s">Imprimir el diseño o, después de jugar, subir las fotos de la libreta. Sin reserva.</div></a>
   <div id="bench" data-ck="${esc(c.key)}"></div>
   <div class="section"><h2>Hoyos</h2><span class="badge">golpes sobre el par</span></div>
   <div class="hgrid">${c.holes.map(h=>{ const st = HS(h), v = st.n ? st.avg_to_par : null, hard = top.includes(h.hole);
@@ -676,11 +728,20 @@ async function loadScorecards(){
     const rows = d.fetches || [];
     if (!rows.length) { el.innerHTML = ''; return; }
     const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
-    const block = (title, list) => list.length ? `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${list.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div></div></div>`).join('')}</div>` : '';
-    const open = rows.filter(f => ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status));
-    const done = rows.filter(f => f.status === 'complete');
-    const rest = rows.filter(f => !open.includes(f) && !done.includes(f));
-    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${block('En curso', open)}${block('Ya está', done)}${block('Otras', rest)}`;
+    const rowText = f => f.heading === 'No presentó' ? 'El club respondió y no había tarjeta.' : (f.label || '');
+    const shown = (title, list) => title === 'No presentó' ? list.slice(0, 6) : list;
+    const block = (title, list) => {
+      const rows = shown(title, list);
+      if (!rows.length) return '';
+      const more = title === 'No presentó' && list.length > rows.length ? `<p class="foot">Hay ${list.length - rows.length} más en «No presentó». No cambia el hándicap.</p>` : '';
+      return `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${rows.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(rowText(f))}</div></div></div>`).join('')}</div>${more}`;
+    };
+    const headed = rows.some(f => f.heading);
+    const groups = headed ? ['Próxima', 'En curso', 'No presentó', 'Sin confirmar', 'Otras'] : ['En curso', 'Otras'];
+    const bucket = f => f.heading || (f.status === 'complete' ? 'Ya está' : ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status) ? 'En curso' : 'Otras');
+    const open = rows.filter(f => bucket(f) !== 'Ya está');
+    if (!open.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${groups.map(title => block(title, open.filter(f => bucket(f) === title))).join('')}<p class="foot">Acá quedan las búsquedas que todavía piden algo. Las tarjetas que ya llegaron están en Rondas. «No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -781,7 +842,10 @@ function wxCardHTML(title, pin, now, fc, holes){
   const rows = rules && holes && holes.length ? holes.map(h => rules.windPlay(h.hole, from, h.bearing, kmh)) : [];
   const playable = rows.filter(p => p && p.relative && p.relative !== 'unavailable');
   const missing = rules && !rows.length ? rules.windPlay(0, from, null, kmh).text.replace(/^Hoyo 0 · /, '') : '';
-  const wind = playable.length ? `<div class="tw-holes">${playable.map(p => `<div><span>${esc(p.text)}</span></div>`).join('')}</div>` : (rows.length ? `<p class="tw-miss">No hay rumbo verificado del tee al green. El viento no se clasifica por hoyo.</p>` : (missing ? `<p class="tw-miss">${esc(missing)}</p>` : ''));
+  const byHole = new Map((holes || []).map(h => [h.hole, h]));
+  const lined = playable.length ? Array.from({ length: 18 }, (_, i) => byHole.get(i + 1) || { hole: i + 1, bearing: null }) : [];
+  const tiles = lined.length && window.GolfletPlan && window.GolfletPlan.windTiles ? window.GolfletPlan.windTiles(lined, { from_deg: from, kmh }) : '';
+  const wind = tiles || (rows.length ? `<p class="tw-miss">No hay rumbo verificado del tee al green. El viento no se clasifica por hoyo.</p>` : (missing ? `<p class="tw-miss">${esc(missing)}</p>` : ''));
   const driver = (typeof G !== 'undefined' && Array.isArray(G.bag) ? G.bag : []).find(b => /driver|^dr$/i.test(String(b.club || '')));
   const carry = driver && driver.carry != null && Number.isFinite(Number(driver.carry)) ? Math.round(Number(driver.carry)) : null;
   const bagLine = carry != null ? `<p class="foot">Driver cargado: ${carry} yd. No lo paso a metros y no elijo un palo por el viento o el frío.</p>` : '';
@@ -907,12 +971,12 @@ async function loadTee(id, opts){
     el.innerHTML = `<div class="tt-hero"><div class="overline">${past?'Ya jugado':relDay(t.date)}</div><div class="tt-when"><b class="num">${esc(t.time)}</b><span>${WDL[dd.getUTCDay()]} ${dd.getUTCDate()} de ${MESL[dd.getUTCMonth()]}${t.start_hole?` · sale del hoyo ${t.start_hole}`:''}</span></div>
         <div class="tt-where"><b>${esc(t.club_name)}</b>${t.course_label?`<span>Cancha ${esc(t.course_label)}</span>`:'<span>La reserva no especifica la cancha.</span>'}${t.modality?`<span>${esc(t.modality)}</span>`:''}</div></div>
       ${t.event_name?`<p class="foot" style="margin-top:8px">${esc(t.event_name)}</p>`:''}
+      <button type="button" class="btn ghost sm" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>
+      <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
       <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HCP ${f1(c.hcp)}`:''}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HCP</span></div>`:''}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
-      <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
       ${past ? '' : `<div class="section"><h2>Tu hándicap de juego</h2></div><div class="card tt-now">${teeBlock(d, t.id)}</div>`}
-      <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>
-      <button type="button" class="btn ghost" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>`;
+      <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>`;
     const rb = $('#refresh-booking'); if (rb) rb.onclick = () => refreshBooking(id, rb);
     el.insertAdjacentHTML('beforeend', '<div id="teeprep"></div>');
     if (!opts?.quiet) refreshReservations(navigator.onLine !== false).then(d => { if (d?.fresh && $('#tee')?.dataset.id === id) loadTee(id, { quiet: true }); });
@@ -1216,16 +1280,46 @@ async function loadJugar(id){
     let C, L; try { [C, L] = await Promise.all([api('/api/gps/courses'), api('/api/live-rounds')]); } catch(e){ el.innerHTML = errBox(e); return; }
     if (!$('#jugbody')) return;
     const today = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10), open = (L.live_rounds || []).find(l => !l.ended_at && String(l.date).slice(0, 10) === today);
-    const cs = (C.courses || []).filter(c => c.mine);
+    const cs = (C.courses || []).filter(c => c.mine !== false);
     const groups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(cs) : [{ code: 'c', club: '', distance: null, rows: cs.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
+    const courseRadios = (rows, checkedFirst) => rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${checkedFirst && i === 0 ? 'checked' : ''}><span class="t">${esc(c.name)}</span>${c.club ? `<span class="s">${esc(c.club)}</span>` : ''}<svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('');
     el.innerHTML = `<div class="stitle">Empezar ronda</div>
       ${open ? `<a class="card row vx-tap jg-open" href="#/jugar/${esc(open.id)}"><div><div class="t">Seguir la ronda de hoy</div><div class="s">${esc(open.course || open.vm_course || 'Cancha')} · hoyo ${open.current_hole || 1}</div></div>${ICON.chev || '›'}</a>` : ''}
       <p class="lede">Elegí la cancha. En el hoyo confirmás el tee, después la bandera, y cada golpe con ENTER. El mapa se mueve bajo la mira.</p>
-      ${cs.length ? groups.map((g, gi) => `<section class="jg-club" id="club-${esc(g.code)}"><div class="jg-club-h"><b>${esc(g.club)}</b>${g.distance ? `<span>${esc(g.distance)}</span>` : ''}</div>${g.rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${gi === 0 && i === 0 ? 'checked' : ''}><span class="t">${esc(c.name)}</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('')}</section>`).join('')
-        : `<div class="msg">No encontramos canchas de tus clubes. Vinculá tu matrícula para elegir la cancha.</div>`}
+      <div class="section"><h2>Mis clubes</h2></div>
+      ${cs.length ? groups.map((g, gi) => `<section class="jg-club" id="club-${esc(g.code)}"><div class="jg-club-h"><b>${esc(g.club)}</b>${g.distance ? `<span>${esc(g.distance)}</span>` : ''}</div>${courseRadios(g.rows.map(r => ({ ...r, club: '' })), gi === 0)}</section>`).join('')
+        : `<div class="msg">No encontramos canchas de tus clubes. Podés buscar otra en el catálogo.</div>`}
+      <div class="section"><h2>Otra cancha</h2></div>
+      <label class="jg-find">Buscar por club o cancha<input id="jgq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Ej. Pilar, Norte"></label>
+      <div id="jgqout"></div>
       <div class="section"><h2>Jugadores en tu grupo</h2></div><div class="seg jg-pl" role="radiogroup" aria-label="Jugadores">${[1, 2, 3, 4].map(n => `<button type="button" data-pl="${n}" aria-pressed="false">${n}</button>`).join('')}</div>
-      <p class="foot">Opcional: sirve para avisarte si van atrasados en el hoyo 10.</p>
+      <p class="foot">Opcional: sirve para avisarte si van atrasados en el hoyo 10. Elegir otra cancha no cambia tus clubes.</p>
       <button class="btn" id="jgstart" ${cs.length ? '' : 'disabled'}>Empezar ronda</button><div id="jgerr"></div>`;
+    let qGen = 0;
+    const known = new Set(cs.map(c => c.course_id));
+    $('#jgq').oninput = () => {
+      const q = $('#jgq').value.trim();
+      clearTimeout($('#jgq')._t);
+      if (q.length < 2) { $('#jgqout').innerHTML = q ? '<p class="foot">Escribí al menos 2 letras.</p>' : ''; return; }
+      $('#jgq')._t = setTimeout(async () => {
+        const gen = ++qGen; $('#jgqout').innerHTML = '<p class="foot">Buscando en el catálogo…</p>';
+        try {
+          const d = await api('/api/gps/courses?q=' + encodeURIComponent(q));
+          if (gen !== qGen || !$('#jgqout')) return;
+          const hits = (d.courses || []).filter(c => c.course_id && !known.has(c.course_id));
+          const already = (d.courses || []).filter(c => known.has(c.course_id));
+          const cov = d.coverage;
+          const covLine = cov && cov.catalog ? `<p class="foot">Catálogo: ${cov.catalog} canchas en ${cov.clubs} clubes.${cov.truncated ? ' Hay más: afiná el nombre.' : ''}</p>` : '';
+          if (d.reason === 'short') { $('#jgqout').innerHTML = '<p class="foot">Escribí al menos 2 letras.</p>'; return; }
+          if (!hits.length && !already.length) { $('#jgqout').innerHTML = `<p class="foot">No hay una cancha con ese nombre en el catálogo.</p>${covLine}`; return; }
+          const foundGroups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(hits) : [{ code: 'o', club: '', rows: hits.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
+          $('#jgqout').innerHTML = `${already.length && !hits.length ? '<p class="foot">Esa cancha ya está en Mis clubes.</p>' : ''}
+            ${hits.length ? foundGroups.map(g => `<section class="jg-club"><div class="jg-club-h"><b>${esc(g.club)}</b></div>${courseRadios(g.rows.map(r => ({ ...r, club: g.club })), false)}</section>`).join('') : ''}
+            ${already.length && hits.length ? `<p class="foot">${already.length === 1 ? 'Otra coincidencia ya está en Mis clubes.' : 'Algunas coincidencias ya están en Mis clubes.'}</p>` : ''}${covLine}`;
+          $('#jgqout').querySelectorAll('input[name=jgc]').forEach(inp => inp.onchange = () => { const b = $('#jgstart'); if (b) b.disabled = false; });
+        } catch (e) { if (gen === qGen && $('#jgqout')) $('#jgqout').innerHTML = errBox(e, 'el catálogo'); }
+      }, 300);
+    };
     let pl = null; el.querySelectorAll('[data-pl]').forEach(b => b.onclick = () => { pl = +b.dataset.pl; el.querySelectorAll('[data-pl]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); });
     $('#jgstart').onclick = async () => { const c = el.querySelector('input[name=jgc]:checked')?.value; if (!c) return; $('#jgstart').disabled = true;
       try { const r = await api('/api/live-rounds', { method: 'POST', body: JSON.stringify({ course_id: c, current_hole: 1, ...(pl ? { players: pl } : {}) }) }); location.hash = `#/jugar/${r.live_round.id}`; }
@@ -1239,7 +1333,7 @@ async function loadJugar(id){
   if (!$('#jugbody')) return;
   if (window.GolfletTrack) {
     if (LV?.watch != null && navigator.geolocation) navigator.geolocation.clearWatch(LV.watch);
-    window.GolfletTrack.mount(el, { id, live: R.live_round, shots: R.shots || [], holes: H.holes, api, esc, toast, cid, bag: G.bag || [] });
+    window.GolfletTrack.mount(el, { id, live: LV.live, shots: LV.shots || [], holes: LV.holes || [], api, esc, toast, cid, bag: G.bag || [] });
     return;
   }
   drawJugar(); jugPace(); jugWatch();
@@ -1447,16 +1541,26 @@ async function loadEstrategia(ck){
 
 
 /* ---------- MI BOLSA ---------- */
+function isPutterName(s){ const t = String(s || '').trim(); return /^(pt|putter)$/i.test(t) || /^putter\b/i.test(t); }
+function wedgeFace(c){
+  const code = String(c.code || '').toLowerCase();
+  if (!['gw', 'sw', 'lw'].includes(code)) return c.label;
+  const loft = c.loft == null || c.loft === '' ? '' : String(c.loft).replace('.', ',') + '°';
+  const catalog = { gw: 'Gap wedge', sw: 'Sand wedge', lw: 'Lob wedge' }, bag = { gw: 'GW', sw: 'SW', lw: 'LW' };
+  const label = String(c.label || '').trim();
+  if (label && label !== catalog[code] && label !== bag[code] && label.toLowerCase() !== code) return label;
+  return loft || label || catalog[code];
+}
 function vBolsa(){
-  const bag = G.bag, filled = bag.filter(b=>b.carry||b.total).length;
+  const bag = G.bag, yard = bag.filter(b => !isPutterName(b.club)), filled = yard.filter(b=>b.carry||b.total).length;
   return `<div class="top"><span class="overline">Mis distancias</span></div>
   <h1 class="ltitle">Mi bolsa</h1>
-  <div class="section"><h2>Mis palos</h2><a class="badge" href="#/equipo/nuevo">+ Agregar palo</a></div><div id="equip"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
+  <div class="section"><h2>Mis palos</h2><span><a class="badge" href="#/equipo/juego">Juego de hierros</a> <a class="badge" href="#/equipo/nuevo">+ Agregar palo</a></span></div><div id="equip"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
   <a class="card bagball" id="bagball" href="#/pelota"><span class="gi">${BALL_IC}</span><span class="bb-t">Pelota<small>&nbsp;</small></span>${ICON.chev}</a>
   <div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div>
-  <div class="card bagsum"><p class="bagsum-n num" id="bagcount">${filled} de ${bag.length}</p><div id="bagmsg" class="bagsum-d">${filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste.</p></div>
+  <div class="card bagsum"><p class="bagsum-n num" id="bagcount">${filled} de ${yard.length}</p><div id="bagmsg" class="bagsum-d">${filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste. El putter no lleva yardas acá.</p></div>
   <div class="bagtable"><div class="baghdr" aria-hidden="true"><span>Palo</span><span>Carry</span><span>Total</span></div>
-  <div class="list">${bag.map((b,i)=>`<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
+  <div class="list">${bag.map((b,i)=>isPutterName(b.club) ? `<div class="bagrow bag-putter" data-club="${esc(b.club)}" data-putter="1"><span class="n">${esc(b.club)}<small class="bsrc">Sin distancia en la bolsa</small></span><span class="bag-noputt">El putter no lleva yardas. En TRACK los metros del putt se cargan en el hoyo.</span></div>` : `<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
   <p class="foot" id="bagsaved">Tu distancia es la que manda. Al lado, lo que mediste con GPS (total, no carry). Yardas, sin datos inventados.</p>
   <div class="section"><h2>Distancias por palo</h2><span class="badge gold">GPS</span></div><div id="cdist"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div><div id="gpsrounds"></div>`;
 }
@@ -1465,7 +1569,7 @@ function vBolsa(){
 async function loadBagSources(){
   try { const d = await api('/api/bag/distances'); const norm = x => String(x||'').trim().toLowerCase();
     const find = name => d.clubs.find(x => norm(x.club) === norm(name) || norm(x.code) === norm(name));
-    document.querySelectorAll('.bagrow[data-club]').forEach(row => { const c = find(row.dataset.club), el = row.querySelector('.bsrc'), gb = row.querySelector('.bgps'); if (!el || !gb) return;
+    document.querySelectorAll('.bagrow[data-club]').forEach(row => { const c = find(row.dataset.club), el = row.querySelector('.bsrc'), gb = row.querySelector('.bgps'); if (row.dataset.putter) return; if (!el || !gb) return;
       const b = G.bag.find(x => norm(x.club) === norm(row.dataset.club)), man = !!(b && (b.carry || b.total)), g = c?.gps;
       el.textContent = man ? 'Definida por vos' : g ? 'Sin distancia cargada · hay tiros GPS' : ''; el.className = 'bsrc' + (man ? ' def' : g ? ' auto' : '');
       if (!g) { gb.hidden = true; gb.innerHTML = ''; return; }   /* t126u: GPS block only when there are measured shots */
@@ -1473,7 +1577,7 @@ async function loadBagSources(){
       gb.innerHTML = `<span class="bg-l">GPS</span><a href="${href('promedio')}"><span>Prom.</span><b class="num">${g.avg_yd} yd</b></a><a href="${href('tiros')}"><b class="num">${g.n}</b><span>${g.n === 1 ? 'tiro' : 'tiros'}</span></a>${g.used >= 3 ? `<a href="${href('dispersion')}"><span>Rango</span><b class="num">${g.range_yd[0]}–${g.range_yd[1]}</b><span class="num">±${g.spread_yd}</span></a>` : ''}`;
       gb.hidden = false; });
     /* t75u/t126u header: a club has distance if it has a typed one OR GPS-measured shots */
-    const bag = G.bag, st = bag.map(b => ({ man: !!(b.carry || b.total), gps: !!find(b.club)?.gps }));
+    const bag = G.bag.filter(b => !isPutterName(b.club)), st = bag.map(b => ({ man: !!(b.carry || b.total), gps: !!find(b.club)?.gps }));
     const man = st.filter(x => x.man).length, gps = st.filter(x => x.gps).length, tot = st.filter(x => x.man || x.gps).length;
     const cnt = $('#bagcount'), msg = $('#bagmsg'); if (!cnt || !msg) return;
     cnt.textContent = `${tot} de ${bag.length}`;
@@ -1599,7 +1703,7 @@ async function loadEquipList(){
     const done = clubs.filter(c => c.brand).length, nm = x => String(x || '').trim().toLowerCase();
     const bagOf = c => { const ks = [typ(c.code)?.bag, c.label, c.code].filter(Boolean).map(nm); return (G.bag || []).find(b => ks.includes(nm(b.club))); };
     el.innerHTML = `<p class="foot" style="margin:0 0 10px">${clubs.length} palos · ${done ? `${done} con marca y modelo` : 'cargá marca y modelo de cada uno'}.</p>
-      <div class="list">${[...Object.keys(CATL), 'otros'].filter(k => groups[k]).map(k => groups[k].map(c => { const b = bagOf(c), i = b ? G.bag.indexOf(b) : -1; return `<div class="row eq-row${c.enabled===false?' eq-off':''}"><a class="eq-a" href="#/equipo/${eqCode(c)}"><span class="eq-code num">${esc(c.code)}</span><div class="body"><div class="t">${esc(c.label)}${c.loft?` <span class="eq-loft num">${String(c.loft).replace('.',',')}°</span>`:''}</div><div class="s">${eqLine(c)}${c.enabled===false?' · oculto al marcar golpes':''}</div></div></a><label class="eq-yd" title="Carry en yardas"><input class="num" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" maxlength="3" data-eqc="${esc(c.code)}" value="${b?.carry ?? ''}" placeholder="—" aria-label="Carry de ${esc(c.label)} en yardas"><span>yd</span></label><a class="eq-ch" href="#/equipo/${eqCode(c)}" tabindex="-1" aria-hidden="true">${ICON.chev}</a></div>`; }).join('')).join('')}</div>`;
+      <div class="list">${[...Object.keys(CATL), 'otros'].filter(k => groups[k]).map(k => groups[k].map(c => { const b = bagOf(c), i = b ? G.bag.indexOf(b) : -1; return `<div class="row eq-row${c.enabled===false?' eq-off':''}"><a class="eq-a" href="#/equipo/${eqCode(c)}"><span class="eq-code num">${esc(c.code)}</span><div class="body"><div class="t">${esc(wedgeFace(c))}</div><div class="s">${eqLine(c)}${c.enabled===false?' · oculto al marcar golpes':''}</div></div></a>${(isPutterName(c.code) || isPutterName(c.label) || typ(c.code)?.category === 'putter') ? '<span class="eq-yd">Sin yardas</span>' : `<label class="eq-yd" title="Carry en yardas"><input class="num" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" maxlength="3" data-eqc="${esc(c.code)}" value="${b?.carry ?? ''}" placeholder="—" aria-label="Carry de ${esc(c.label)} en yardas"><span>yd</span></label>`}<a class="eq-ch" href="#/equipo/${eqCode(c)}" tabindex="-1" aria-hidden="true">${ICON.chev}</a></div>`; }).join('')).join('')}</div>`;
     /* t223u: the carry right on the row (the planner reads it from Mi bolsa: total if you typed one, else carry). Save on blur / Enter, no detail screen. */
     el.querySelectorAll('input[data-eqc]').forEach(inp => {
       inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } };
@@ -1611,6 +1715,121 @@ async function loadEquipList(){
         const f = $('#bagsaved'); if (f) f.textContent = 'Guardando…'; saveBag(); };
     });
   } catch(e){ el.innerHTML = errBox(e); }
+}
+const IRON_SET = ['4i', '5i', '6i', '7i', '8i', '9i', 'PW'];
+function sIronSet(){
+  return `<div class="bar"><span class="overline">Mi bolsa</span></div><div class="stitle">Juego de hierros</div><p class="foot">Del 4 al pitching, en un solo paso. No abre un palo suelto y no crea los que faltan.</p><div id="ironset"><div style="padding:40px 0;text-align:center"><span class="spin"></span></div></div>`;
+}
+async function loadIronSet(){
+  const el = $('#ironset'); if (!el) return;
+  try {
+    const [cat, { clubs }] = await Promise.all([bagCat(), api('/api/my-clubs/items')]); if (!$('#ironset')) return;
+    const rows = IRON_SET.map(code => ({ code, club: clubs.find(c => c.code.toLowerCase() === code.toLowerCase()) }));
+    const present = rows.filter(r => r.club);
+    const brands = (cat.brands || []).filter(b => b.categories && b.categories.iron && b.categories.iron.length).map(b => b.brand);
+    const presentCodes = present.map(r => r.code);
+    const chips = [];
+    let start = presentCodes[0], prev = presentCodes[0];
+    const at = c => IRON_SET.indexOf(c);
+    for (const code of presentCodes.slice(1)) {
+      if (at(code) === at(prev) + 1) { prev = code; continue; }
+      chips.push(start === prev ? start : `${start}–${prev}`);
+      start = prev = code;
+    }
+    if (presentCodes.length) chips.push(start === prev ? start : `${start}–${prev}`);
+    const missing = rows.filter(r => !r.club).map(r => r.code);
+    const missLine = missing.length ? `<p class="iron-miss">${esc(missing.join(', '))} no está en tu bolsa. No lo creamos.</p>` : '';
+    el.innerHTML = present.length ? `<form class="card iron-sheet" id="ironf" autocomplete="off">
+        <p class="iron-kicker">En tu bolsa</p>
+        <div class="iron-chips" aria-label="Hierros en la bolsa">${chips.map(c => `<span class="iron-chip">${esc(c)}</span>`).join('')}</div>
+        ${missLine}
+        <label class="iron-field" for="ironb">Marca</label>
+        <div class="iron-combo">
+          <input id="ironb" role="combobox" aria-expanded="false" aria-controls="ironbl" aria-autocomplete="list" aria-label="Marca" autocomplete="off" placeholder="Buscar marca" maxlength="40">
+          <ul id="ironbl" class="iron-list" role="listbox" hidden></ul>
+        </div>
+        <input id="ironbo" hidden maxlength="40" placeholder="Marca" aria-label="Marca escrita a mano">
+        <label class="iron-field" for="ironm">Modelo <small>(opcional)</small></label>
+        <div class="iron-combo">
+          <input id="ironm" role="combobox" aria-expanded="false" aria-controls="ironml" aria-autocomplete="list" aria-label="Modelo" autocomplete="off" placeholder="Buscar o escribir" maxlength="60">
+          <ul id="ironml" class="iron-list" role="listbox" hidden></ul>
+        </div>
+        <div class="tt-acts iron-acts"><button class="btn" type="button" id="ironprev">Ver qué cambia</button><a class="btn ghost" href="#/bolsa">Cancelar</a></div>
+        <div id="ironmsg"></div><div id="ironplan"></div>
+      </form>` : `<p class="foot">${missLine ? missing.join(', ') + ' no está en tu bolsa. No lo creamos. ' : ''}Ningún hierro del 4 al PW está en la bolsa. No inventamos el juego.</p><a class="btn ghost" href="#/bolsa">Volver a Mi bolsa</a>`;
+    const brandEl = $('#ironb'); if (!brandEl) return;
+    const say = (t, err) => { const m = $('#ironmsg'); m.innerHTML = `<div class="msg${err ? ' err' : ''}"></div>`; m.firstChild.textContent = t; };
+    const canon = (name) => brands.find(b => b.toLowerCase() === String(name || '').trim().toLowerCase()) || '';
+    const modelsForBrand = () => { const b = canon(brandEl.value); const row = (cat.brands || []).find(x => x.brand === b); return (row && row.categories && row.categories.iron) || []; };
+    const choices = (options, query) => {
+      const q = String(query || '').trim(), ql = q.toLowerCase();
+      const hits = (ql ? options.filter(x => x.toLowerCase().includes(ql)) : options).slice(0, 12);
+      const exact = !!q && options.some(x => x.toLowerCase() === ql);
+      const out = hits.map(value => ({ label: value, value, custom: false }));
+      if (q && !exact) out.push({ label: 'Usar «' + q + '»', value: q, custom: true });
+      return out;
+    };
+    const wireCombo = (input, list, source, onPick) => {
+      let act = -1, items = [];
+      const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); act = -1; };
+      const paint = () => {
+        items = choices(source(), input.value);
+        list.innerHTML = items.length ? items.map((item, i) => `<li role="option" id="${list.id}-${i}" aria-selected="${i === act ? 'true' : 'false'}"${item.custom ? ' class="iron-use"' : ''}>${esc(item.label)}</li>`).join('') : '<li class="iron-empty" role="presentation">Sin modelos en el catálogo. Podés escribirlo.</li>';
+        list.hidden = false; input.setAttribute('aria-expanded', 'true');
+        if (act >= 0 && items[act]) input.setAttribute('aria-activedescendant', `${list.id}-${act}`);
+        list.querySelectorAll('[role=option]').forEach((li, i) => { li.onmousedown = ev => { ev.preventDefault(); pick(i); }; });
+      };
+      const pick = i => { const item = items[i]; if (!item) return; input.value = item.value; close(); onPick(item.value, item.custom); };
+      input.onfocus = paint;
+      input.oninput = () => { act = -1; paint(); onPick(input.value, !canon(input.value) && input === brandEl); };
+      input.onkeydown = ev => {
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); if (list.hidden) paint(); if (!items.length) return; act = ev.key === 'ArrowDown' ? Math.min(items.length - 1, act + 1) : Math.max(0, act - 1); paint(); }
+        else if (ev.key === 'Enter') { if (!list.hidden && act >= 0) { ev.preventDefault(); pick(act); } }
+        else if (ev.key === 'Escape') close();
+      };
+      input.onblur = () => setTimeout(close, 160);
+    };
+    wireCombo(brandEl, $('#ironbl'), () => brands, () => {
+      const known = canon(brandEl.value);
+      $('#ironbo').value = known ? '' : brandEl.value.trim();
+      const model = $('#ironm');
+      const allowed = modelsForBrand();
+      if (model.value && !allowed.some(m => m.toLowerCase() === model.value.trim().toLowerCase())) model.value = '';
+    });
+    wireCombo($('#ironm'), $('#ironml'), modelsForBrand, () => {});
+    const lift = () => {
+      const vv = window.visualViewport, sheet = $('#ironf'); if (!vv || !sheet) return;
+      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      sheet.style.paddingBottom = `${24 + covered}px`;
+      const acts = sheet.querySelector('.iron-acts'); if (!acts || covered < 40) return;
+      const rect = acts.getBoundingClientRect();
+      const limit = vv.offsetTop + vv.height - 12;
+      if (rect.bottom > limit) (document.scrollingElement || document.documentElement).scrollBy(0, rect.bottom - limit);
+    };
+    if (window.visualViewport) { visualViewport.addEventListener('resize', lift); visualViewport.addEventListener('scroll', lift); }
+    brandEl.addEventListener('focus', () => setTimeout(lift, 60));
+    $('#ironm').addEventListener('focus', () => setTimeout(lift, 60));
+    const brandNow = () => { const known = canon(brandEl.value); return known || brandEl.value.trim(); };
+    $('#ironprev').onclick = async () => {
+      const brand = brandNow(); if (!brand) return say('Escribí la marca.', 1);
+      const model = $('#ironm').value.trim();
+      try {
+        const r = await api('/api/my-clubs/iron-set', { method: 'POST', body: JSON.stringify({ brand, model, confirm: false }) });
+        const need = (r.rows || []).some(row => row.overwrite || row.modelCleared);
+        $('#ironplan').innerHTML = (r.rows || []).map(row => `<p class="foot"><b>${esc(row.code)}</b> ${esc(row.note || '')}</p>`).join('')
+          + (need ? `<label class="check"><input type="checkbox" id="ironack"><span>Reemplazo la marca o el modelo que ya tenían.</span></label>` : '')
+          + `<button type="button" class="btn" id="ironsave">Guardar el juego</button>`;
+        $('#ironsave').onclick = async () => {
+          if (need && !$('#ironack')?.checked) return say('Revisá la vista previa y confirmá el reemplazo.', 1);
+          try {
+            const saved = await api('/api/my-clubs/iron-set', { method: 'POST', body: JSON.stringify({ brand, model, confirm: true, ack: !!need }) });
+            if (!saved.saved) return say('No se guardó. La bolsa sigue igual.', 1);
+            toast('Juego de hierros guardado.'); location.hash = '#/bolsa';
+          } catch (err) { say(err.message || 'No se guardó. La bolsa sigue igual.', 1); }
+        };
+      } catch (err) { say(err.message || 'No pudimos armar la vista previa. No se guardó nada.', 1); }
+    };
+  } catch (e) { el.innerHTML = errBox(e, 'el juego de hierros'); }
 }
 function sEquipo(code, edit){ return `<div class="bar"><span class="overline">Mi bolsa</span></div><div id="equipo" data-code="${esc(code)}"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
 async function loadEquipo(code, edit){
@@ -1733,10 +1952,54 @@ function bindNick(){
       catch (err) { m.textContent = errText(err); } };
   };
 }
+function photoFace(){
+  if (G.user?.photo_url) return `<img class="me-face" src="${esc(G.user.photo_url)}" alt="">`;
+  return `<span class="me-face">${esc(initials())}</span>`;
+}
+function photoCopy(state){
+  if (state === 'unavailable') return 'La foto de perfil todavía no se puede guardar: falta la migración 0045. No se guardó nada. Seguís con tus iniciales.';
+  if (state === 'ready') return 'Al cambiarla, se reemplaza.';
+  return 'Sin foto. Se ven tus iniciales.';
+}
+function bindPhoto(){
+  const msg = $('#mephmsg'); if (!msg) return;
+  const state = G.user?.photo_state || (G.user?.photo_url ? 'ready' : 'empty');
+  msg.textContent = photoCopy(state);
+  const input = $('#meph');
+  const send = async (method, body) => {
+    if (state === 'unavailable') { msg.textContent = photoCopy('unavailable'); return; }
+    msg.textContent = method === 'DELETE' ? 'Quitando…' : 'Subiendo…';
+    try {
+      const r = await fetch('/api/me/photo', { method, credentials: 'same-origin', headers: body ? { 'Content-Type': 'image/jpeg' } : {}, body: body || undefined });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { msg.textContent = j.error || 'No se pudo cambiar la foto. La anterior sigue igual.'; return; }
+      G.user.photo_url = j.photo_url || null;
+      G.user.photo_state = j.photo_url ? 'ready' : 'empty';
+      toast(j.photo_url ? 'Foto guardada.' : 'Foto quitada. Vuelven tus iniciales.');
+      render(true);
+    } catch (_) { msg.textContent = 'No se pudo enviar la foto. La anterior sigue igual.'; }
+  };
+  if (input) input.onchange = async () => {
+    const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+    let blob; try { blob = await window.GolfletCrop.open(f); } catch (e) { msg.textContent = e.message || 'No pudimos leer la foto. La anterior sigue igual.'; return; }
+    if (!blob) { msg.textContent = 'Cancelaste. La anterior sigue igual.'; return; }
+    await send('PUT', blob);
+  };
+  const rm = $('#mephrm'); if (rm) rm.onclick = () => send('DELETE');
+}
 function sCuenta(){
-  return `<div class="bar"><span class="overline">Tu cuenta</span><span class="bar-r">${G.user?.role?`<a class="staff-l" href="${G.user.role==='admin'?'/admin':'/admin/strategy'}">${G.user.role==='admin'?'Admin':'Editor'}</a>`:''}<button class="close" data-close>${ICON.x}</button></span></div>
-  ${G.user?.call_name ? `<div class="stitle nick" id="nick">${nickView()}</div>` : `<div class="stitle">${esc(G.user?.name||'')}</div>`}<div style="font-size:calc(14px*var(--ts,1));color:var(--color-ink2);margin-top:4px">${esc(/@golfistics\.invalid$/.test(G.user?.email||'') ? 'Entrás con tu matrícula' : (G.user?.email||''))}</div>
-  ${G.player?.name?`<div class="chips"><span class="badge">${esc(title(G.player.name))}</span>${G.player.handicap_index!=null?`<span class="badge gold">HI ${f1(G.player.handicap_index)}</span>`:''}</div>`:''}
+  const roleHref = G.user?.role === 'admin' ? '/admin' : '/admin/strategy';
+  const role = G.user?.role ? `<a class="me-role" href="${roleHref}">${G.user.role === 'admin' ? 'Admin' : 'Editor'}</a>` : '';
+  const mail = /@golfistics\.invalid$/.test(G.user?.email || '') ? 'Entrás con tu matrícula' : (G.user?.email || '');
+  const name = G.user?.call_name ? `<div class="stitle me-name nick" id="nick">${nickView()}</div>` : `<div class="stitle me-name">${esc(G.user?.name || '')}</div>`;
+  const who = G.player?.name ? `<span class="badge">${esc(title(G.player.name))}</span>${G.player.handicap_index != null ? `<span class="badge gold">HI ${f1(G.player.handicap_index)}</span>` : ''}` : '';
+  const chips = (who || role) ? `<div class="me-chips">${who}${role}</div>` : '';
+  return `<div class="bar"><span class="overline">Tu cuenta</span><span class="bar-r"><button class="close" data-close>${ICON.x}</button></span></div>
+  <section class="me-id">
+    <div class="me-id-main">${photoFace()}<div class="me-id-copy">${name}<p class="me-mail" title="${esc(mail)}">${esc(mail)}</p>${chips}</div></div>
+    <div class="me-acts"><label class="me-change">${G.user?.photo_url ? 'Cambiar' : 'Elegir foto'}<input type="file" accept="image/*" id="meph" hidden></label>${G.user?.photo_url ? '<button type="button" class="me-remove" id="mephrm">Quitar</button>' : ''}</div>
+    <p class="me-note" id="mephmsg"></p>
+  </section>
   <a class="card gg-home nt-home" href="#/notificaciones"><span class="gg-home-ic">${NT_BELL}</span><div><b>Notificaciones</b><p>Invitaciones a grupos y mensajes de tus clubes.</p></div><span class="nt-home-r">${NBADGE}${ICON.chev}</span></a>
   ${G.user?.call_name ? '' : `<div class="section"><h2>Cómo te llamamos</h2></div>
   <form class="card vx-callname" id="cnf"><label for="cn">Nombre para el saludo</label><div class="vx-cn-row"><input id="cn" name="cn" maxlength="40" autocomplete="given-name" value="${esc(G.user?.call_name||'')}" placeholder="${esc(G.user?.first_name||'')}"><button class="btn" type="submit">Guardar</button></div><p class="foot" id="cnmsg">Así te saludamos en Inicio. Si lo dejás vacío usamos el nombre de tu ficha del club.</p></form>`}
@@ -2716,6 +2979,8 @@ function releaseNoteEdit(id, sent) {
   });
 }
 function bindQuick(id){
+  const loadStats = document.getElementById('load-round-stats');
+  if (loadStats) loadStats.onclick = () => { const i = document.querySelector('.fields input[data-k="putts"]'); if (i) i.focus(); };
   const box = $('#qstat'); if (!box) return;
   const r = rounds.find(x => x.round_id === id); if (!r || !(r.holes || []).length) { box.hidden = true; return; }
   const key = 'gl_q_' + id;
@@ -2727,6 +2992,9 @@ function bindQuick(id){
   let idx = 0, gen = 0, phase = 'idle', chain = Promise.resolve();
   let revs = {}, seeded = false, readFailed = false, accountBoard = [];
   const drafts = new Map();
+  const derived = new Map();
+  const trackOwned = { putts: new Set(), gir: new Set(), drive: new Set() };
+  let trackReady = false;
   const visible = marks => (marks || []).filter(m => m.putts != null || m.gir === true || m.gir === false || m.drive).map(m => ({ hole: m.hole, putts: m.putts ?? null, gir: m.gir ?? null, drive: m.drive ?? null, rev: m.rev }));
   const row = () => rows.find(x => x.hole === holes[idx][0]) || { hole: holes[idx][0], putts: null, gir: null, drive: null };
   const remember = () => { if (!seeded) return; try { localStorage.setItem(key, JSON.stringify(rows)); } catch (e) {} };
@@ -2839,9 +3107,9 @@ function bindQuick(id){
     const cur = row();
     const prev = drafts.get(holeNo);
     const touched = { putts: !!(prev && prev.touched && prev.touched.putts), gir: !!(prev && prev.touched && prev.touched.gir), drive: !!(prev && prev.touched && prev.touched.drive) };
-    if (Object.prototype.hasOwnProperty.call(patch, 'putts')) touched.putts = true;
-    if (Object.prototype.hasOwnProperty.call(patch, 'gir')) touched.gir = true;
-    if (Object.prototype.hasOwnProperty.call(patch, 'drive')) touched.drive = true;
+    if (Object.prototype.hasOwnProperty.call(patch, 'putts')) { touched.putts = true; trackOwned.putts.delete(holeNo); }
+    if (Object.prototype.hasOwnProperty.call(patch, 'gir')) { touched.gir = true; trackOwned.gir.delete(holeNo); }
+    if (Object.prototype.hasOwnProperty.call(patch, 'drive')) { touched.drive = true; trackOwned.drive.delete(holeNo); }
     const next = Object.assign({ hole: holeNo, putts: null, gir: null, drive: null }, cur, patch);
     if (holes[idx][1] === 3) next.drive = null;
     if (next.putts == null && next.gir == null && !next.drive) rows = rows.filter(x => x.hole !== next.hole);
@@ -2891,9 +3159,87 @@ function bindQuick(id){
       retry.onclick = () => { if (phase === 'conflict') reloadAccount(); else retryLoad(); };
     }
     const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
+    const src = $('#qsrc');
+    if (src) {
+      const d = derived.get(h[0]);
+      const owned = (field, has) => trackOwned[field].has(h[0]) ? 'Desde TRACK' : (has ? 'Manual' : null);
+      const puttTag = owned('putts', cur.putts != null) || (d && d.putts.state === 'track' ? 'Desde TRACK' : 'Sin confirmar');
+      const fwTag = par === 3 ? 'No aplica' : (owned('drive', !!cur.drive) || (d && d.drive.state === 'track' ? 'Desde TRACK' : 'Sin confirmar'));
+      const girTag = owned('gir', cur.gir === true || cur.gir === false) || (d && d.gir.state === 'track' ? 'Desde TRACK' : 'Sin confirmar');
+      src.textContent = trackReady || d ? `Putts: ${puttTag}. Fairway: ${fwTag}. Green: ${girTag}.` : '';
+    }
+    const tot = (elId, srcId, manual, rowsFor, valueOf, ownedSet) => {
+      const el = document.getElementById(elId), cap = document.getElementById(srcId);
+      if (!el || !cap) return;
+      if (manual != null) { el.textContent = String(manual); cap.textContent = 'Manual'; return; }
+      if (!trackReady) return;
+      if (!rowsFor.length) { el.textContent = 'Sin confirmar'; cap.textContent = 'Sin confirmar'; return; }
+      const allTrack = rowsFor.every(x => ownedSet.has(x.hole));
+      el.textContent = String(valueOf(rowsFor));
+      cap.textContent = `${allTrack ? 'Desde TRACK' : 'Manual'} · ${rowsFor.length} hoyos`;
+    };
+    tot('rt-putts', 'rt-putts-src', r.putts, puttH, xs => xs.reduce((s, x) => s + x.putts, 0), trackOwned.putts);
+    tot('rt-gir', 'rt-gir-src', r.gir, girH, xs => xs.filter(x => x.gir).length, trackOwned.gir);
+    tot('rt-fir', 'rt-fir-src', r.fir, fwH, xs => xs.filter(x => x.drive === 'fairway').length, trackOwned.drive);
+    const track = document.getElementById('round-track');
+    if (track) track.setAttribute('href', `#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&hole=${h[0]}`);
   };
   box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
+  const factOf = s => {
+    const club = String(s.club || '');
+    const endKnown = ['green', 'fairway', 'bunker', 'water', 'rough', 'other'];
+    const endLie = endKnown.includes(s.result) ? s.result : (endKnown.includes(s.end_lie) ? s.end_lie : null);
+    const direction = ['left', 'right', 'center'].includes(s.direction) ? s.direction : null;
+    return {
+      penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0,
+      lost: s.result === 'lost',
+      holed: s.result === 'holed',
+      putt: /^pt$|putter/i.test(club) || s.lie === 'green',
+      originGreen: s.lie === 'green',
+      endLie, direction,
+    };
+  };
+  const loadTrack = async () => {
+    const Rules = window.GolfletRules;
+    if (!Rules || !Rules.deriveHoleCard) { trackReady = true; paint(); return; }
+    try {
+      const setup = await api('/api/reconstructions');
+      const list = (setup && setup.reconstructions) || [];
+      const found = list.find(x => x && x.round_id === id);
+      if (found) {
+        const pack = await api(`/api/reconstructions/${encodeURIComponent(found.id)}/shots`);
+        const shots = (pack && pack.shots) || [];
+        holes.forEach(h => {
+          const mine = shots.filter(s => Number(s.hole) === Number(h[0]));
+          derived.set(h[0], Rules.deriveHoleCard(h[1] == null ? null : Number(h[1]), mine.map(factOf)));
+        });
+      }
+      await seedPromise;
+      if (!seeded || !box.isConnected) { trackReady = true; return; }
+      let wrote = false;
+      holes.forEach(h => {
+        const d = derived.get(h[0]);
+        if (!d) return;
+        const stored = accountBoard.find(m => m.hole === h[0]);
+        const patch = {};
+        if ((stored == null || stored.putts == null) && d.putts.state === 'track') { patch.putts = d.putts.value; trackOwned.putts.add(h[0]); }
+        if ((stored == null || stored.gir == null) && d.gir.state === 'track') { patch.gir = d.gir.value; trackOwned.gir.add(h[0]); }
+        if (h[1] !== 3 && (stored == null || stored.drive == null) && d.drive.state === 'track' && d.drive.value) { patch.drive = d.drive.value; trackOwned.drive.add(h[0]); }
+        if (!Object.keys(patch).length) return;
+        const cur = rows.find(x => x.hole === h[0]) || { hole: h[0], putts: null, gir: null, drive: null };
+        const next = Object.assign({ hole: h[0], putts: null, gir: null, drive: null }, cur, patch);
+        const i = rows.findIndex(x => x.hole === h[0]);
+        if (i < 0) rows.push(next); else rows[i] = next;
+        drafts.set(h[0], { hole: h[0], putts: next.putts ?? null, gir: next.gir ?? null, drive: next.drive || null, rev: 0, touched: { putts: false, gir: false, drive: false } });
+        wrote = true;
+      });
+      trackReady = true;
+      if (wrote) { phase = 'saving'; const mine = ++gen; remember(); paint(); send(mine); }
+      else paint();
+    } catch (e) { trackReady = true; if (box.isConnected) paint(); }
+  };
   paint();
+  loadTrack();
 }
 function queueNoteSave(id, sent, gen, viewGen) {
   clearTimeout(noteTimers.get(id));
@@ -2936,27 +3282,43 @@ function decorateWx(){
   loadWX().then(d => { if (!d) return; view.querySelectorAll('a[href^="#/ronda/"]:not([data-wx])').forEach(a => {
     a.dataset.wx = '1'; const w = d.rounds[a.getAttribute('href').split('/')[2]]; if (!w || !w.condition) return;
     const t = a.querySelector('.body .t') || a.querySelector('.t'); if (!t) return;
-    t.insertAdjacentHTML('beforeend', ` <span class="wxi" title="${WX_L[w.condition]}${w.temp_c!=null?` · ${n1(w.temp_c)}°`:''}" aria-label="${WX_L[w.condition]}">${WX_IC[w.condition]}${w.temp_c!=null?`<b class="num">${Math.round(w.temp_c)}°</b>`:''}</span>`); }); });
+    const forecast = w.kind === 'forecast' || w.source === 'open-meteo-forecast', name = `${forecast ? 'Pronóstico: ' : ''}${WX_L[w.condition] || ''}`;
+    t.insertAdjacentHTML('beforeend', ` <span class="wxi" title="${name}${w.temp_c!=null?` · ${n1(w.temp_c)}°`:''}" aria-label="${name}">${WX_IC[w.condition]}${w.temp_c!=null?`<b class="num">${Math.round(w.temp_c)}°</b>`:''}</span>`); }); });
 }
-async function loadRoundWx(id){
+function wxMiss(reason){
+  const retry = '<button type="button" class="btn ghost sm" id="wxretry">Reintentar</button>';
+  if (reason === 'no_course_location') return '<div class="card wx-card wx-none"><span class="overline">Clima</span><span>No tenemos la ubicación de esta cancha, así que no hay clima.</span></div>';
+  if (reason === 'not_played' || reason === 'future') return '<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Esa fecha todavía no llegó en Argentina. No hay clima de la ronda.</span></div>';
+  if (reason === 'unavailable') return `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Open-Meteo no tiene datos para ese día y esa cancha.</span>${retry}</div>`;
+  if (reason === 'error') return `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>No pudimos consultar el clima.</span>${retry}</div>`;
+  return `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Todavía no leímos el clima de ese día.</span>${retry}</div>`;
+}
+async function loadRoundWx(id, retry){
   const el = $('#rwx'); if (!el) return;
-  let d; try { d = await api(`/api/rounds/${encodeURIComponent(id)}/weather`); } catch(e){ return; }
+  let d; try { d = await api(`/api/rounds/${encodeURIComponent(id)}/weather${retry ? '?retry=1' : ''}`); } catch(e){ if ($('#rwx')) { $('#rwx').innerHTML = wxMiss('error'); const b = $('#wxretry'); if (b) b.onclick = () => loadRoundWx(id, true); } return; }
   if (!$('#rwx')) return; const w = d.weather;
-  if (!w) { el.innerHTML = d.reason === 'no_course_location' ? '' : `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Todavía no tenemos el clima de ese día. Lo traemos en unos días.</span></div>`; return; }
-  el.innerHTML = `<div class="card wx-card"><div class="wx-h"><span class="wx-ic">${WX_IC[w.condition]||''}</span><div><span class="overline">Clima ${w.basis==='tee_time'?'en tu salida':'durante el día'}</span><b>${WX_L[w.condition]||'—'}</b></div></div>
+  if (!w) { el.innerHTML = wxMiss(d.reason); const b = $('#wxretry'); if (b) b.onclick = () => loadRoundWx(id, true); return; }
+  const forecast = w.kind === 'forecast' || w.source === 'open-meteo-forecast';
+  el.innerHTML = `<div class="card wx-card"><div class="wx-h"><span class="wx-ic">${WX_IC[w.condition]||''}</span><div><span class="overline">${forecast ? 'Pronóstico, no es el histórico' : `Clima ${w.basis==='tee_time'?'en tu salida':'durante el día'}`}</span><b>${WX_L[w.condition]||'—'}</b></div></div>
     <div class="wx-kv"><div><span>Temperatura</span><b class="num">${n1(w.temp_c)}°</b></div><div><span>Lluvia</span><b class="num">${n1(w.precip_mm)} mm</b></div><div><span>Viento</span><b class="num">${w.wind_kmh!=null?Math.round(w.wind_kmh):'—'} km/h</b></div><div><span>Ráfagas</span><b class="num">${w.gust_kmh!=null?Math.round(w.gust_kmh):'—'} km/h</b></div></div>
-    <p class="wx-src">${w.window[0]} a ${w.window[1]} h · Open-Meteo (histórico)</p></div>`;
+    <p class="wx-src">${w.window[0]} a ${w.window[1]} h · ${forecast ? 'Open-Meteo pronóstico. No entra en Clima y juego.' : 'Open-Meteo histórico.'}</p></div>`;
 }
 const dsg = v => v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '±') + String(Math.abs(Math.round(v*10)/10)).replace('.', ',');
 const DIMS = [['lluvia','Lluvia o seco'],['temperatura','Temperatura'],['viento','Viento']];
+const per18 = v => v == null ? '—' : String(v).replace('.', ',');
+function mixBits(mix){
+  if (!mix) return '';
+  return `<div class="wx-mix">${[['Águilas', mix.eagles], ['Birdies', mix.birdies], ['Pares', mix.pars], ['Bogeys', mix.bogeys], ['Dobles+', mix.doubles]].map(([k, r]) => `<span><small>${k} / 18</small><b class="num">${per18(r.per_18)}</b></span>`).join('')}</div>`;
+}
 async function loadWxRes(){
   const el = $('#wxres'); if (!el) return;
   let d; try { d = await api('/api/metrics/weather'); } catch(e){ el.innerHTML = ''; return; }
   if (!$('#wxres')) return; const dims = DIMS.filter(([k]) => d[k]?.enough);
   if (!dims.length) { el.innerHTML = d.n ? `<div class="section"><h2>Clima y juego</h2></div><div class="card wx-empty">Con ${d.n} tarjetas con clima todavía no alcanza para comparar (hacen falta ${d.min_group} por grupo). Se arma a medida que juegues.</div>` : ''; return; }
+  const hint = (k, label) => { const row = (d.play?.[k] || []).find(b => b.sentence); return row ? row.sentence : `${label}: diferencial por grupo`; };
   el.innerHTML = `<div class="section"><h2>Clima y juego</h2><a href="#/clima/lluvia">Ver detalle</a></div>
-    <div class="list wx-list">${dims.map(([k, l]) => `<a class="row" href="#/clima/${k}"><div class="body"><div class="t">${l}</div><div class="s">${d[k].buckets.map(b => `${esc(b.label)} <b class="num">${n1(b.avg_diff)}</b>`).join(' · ')}</div></div>${ICON.chev}</a>`).join('')}</div>
-    <p class="foot">Diferencial promedio por grupo (más bajo es mejor), sobre ${d.n} tarjetas válidas con clima. Grupos con al menos ${d.min_group} tarjetas.</p>`;
+    <div class="list wx-list">${dims.map(([k, l]) => `<a class="row" href="#/clima/${k}"><div class="body"><div class="t">${l}</div><div class="s">${d[k].buckets.map(b => `${esc(b.label)} <b class="num">${n1(b.avg_diff)}</b>`).join(' · ')}</div><div class="s">${esc(hint(k, l))}</div></div>${ICON.chev}</a>`).join('')}</div>
+    <p class="foot">El diferencial es el promedio (más bajo es mejor), sobre ${d.n} tarjetas válidas con clima histórico. Los birdies y bogeys del detalle son un promedio cada 18 hoyos, no una suma. El pronóstico no entra.</p>`;
 }
 function sClima(){ return `<div class="bar"><span class="overline">Resumen</span><button class="close" data-close>${ICON.x}</button></div><div id="clima"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
 async function loadClima(dim, bucket){
@@ -2964,10 +3326,12 @@ async function loadClima(dim, bucket){
   try {
     const d = await api(`/api/metrics/weather?dim=${encodeURIComponent(dim)}${bucket?`&bucket=${encodeURIComponent(bucket)}`:''}`); if (!$('#clima')) return;
     const g = d.group, rows = d.rounds.slice().sort((a, b) => b.date.localeCompare(a.date));
+    const play = Array.isArray(d.play) ? d.play : [];
     el.innerHTML = `<div class="stitle">Clima y juego</div>
       <div class="seg wx-seg">${DIMS.map(([k, l]) => `<a href="#/clima/${k}" class="${k===dim?'on':''}">${l}</a>`).join('')}</div>
       ${g.enough ? `<div class="wx-bars">${g.buckets.map(b => `<a class="card wx-b${b.key===bucket?' on':''}" href="#/clima/${dim}${b.key===bucket?'':'/'+b.key}"><span>${esc(b.label)}</span><b class="num">${n1(b.avg_diff)}</b><small class="num ${b.vs_overall<0?'pos':b.vs_overall>0?'neg':''}">${dsg(b.vs_overall)} vs tu promedio</small><small class="num">${b.n} tarjetas</small></a>`).join('')}</div>`
         : `<div class="card wx-empty">Todavía no alcanza para comparar ${esc(DIMS.find(x=>x[0]===dim)?.[1].toLowerCase()||'')} (hacen falta ${3} tarjetas por grupo).</div>`}
+      ${play.map(b => `<section class="wx-play" id="wx-${esc(b.key)}"><b>${esc(b.label)}</b><span class="s">${b.n} tarjetas${b.avg_diff!=null?` · diferencial ${n1(b.avg_diff)}`:''}</span>${mixBits(b.mix)}${b.sentence?`<p>${esc(b.sentence)}</p>`:''}${b.note?`<p class="foot">${esc(b.note)}</p>`:''}${b.mix?`<p class="foot">${b.mix.cards} tarjetas con hoyos · ${b.mix.holes} hoyos. Cada número es el promedio de una vuelta de 18, no la suma de golpes.${b.mix.nine?` ${b.mix.nine} ${b.mix.nine===1?'tarjeta es':'tarjetas son'} de 9 hoyos: entran por hoyo y se muestran cada 18.`:''}</p>`:''}</section>`).join('')}
       <p class="foot">Diferencial promedio (más bajo es mejor). Tu promedio con clima: <b class="num">${n1(d.overall_avg_diff)}</b>. ${vidSlot('clima')}</p>
       <div class="section"><h2>${bucket ? esc(g.buckets.find(b=>b.key===bucket)?.label || 'Tarjetas') : 'Tarjetas'}</h2><span class="badge">${rows.length}</span></div>
       ${yrList(rows, r => r.date, r => `<a class="row" href="#/ronda/${r.round_id}" data-wx="1">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course||'Ronda')} <span class="wxi">${WX_IC[r.wx.condition]||''}</span></div><div class="s">${WX_L[r.wx.condition]||''} · ${n1(r.wx.temp_c)}° · ${n1(r.wx.precip_mm)} mm · ${r.wx.wind_kmh!=null?Math.round(r.wx.wind_kmh):'—'} km/h</div></div><div class="score"><b class="num">${n1(r.differential)}</b><span>dif.</span></div>${ICON.chev}</a>`)}
@@ -2977,17 +3341,32 @@ async function loadClima(dim, bucket){
 /* ---------- t136u/t137u: PRIVATE (owner-only) by tee-time hour band and partners ---------- */
 const LOCK_IC = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
 const PRIV_EMPTY = 'Se arma a medida que juegues: usamos tus salidas reservadas en el club desde que vinculaste tu cuenta.';
+const impactLabel = v => { const n = Math.round(Number(v) * 10) / 10; const body = String(Math.abs(n)).replace('.', ','); return `${n < 0 ? '−' : n > 0 ? '+' : ''}${body} golpes`; };
+const impactHtml = (impact, n) => impact == null ? `<b class="priv-impact few">Pocas tarjetas (${n})</b>` : `<b class="priv-impact ${impact < 0 ? 'good' : impact > 0 ? 'bad' : ''}">${impactLabel(impact)}</b>`;
+let privSort = 'n';
+const iniOf = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+async function paintRoundPartners(id){
+  const host = document.getElementById('rpartners'); if (!host) return;
+  let d; try { d = await api('/api/me/private-metrics'); } catch (e) { host.remove(); return; }
+  if (!document.getElementById('rpartners')) return;
+  const row = (d && d.with_partners || []).find(x => x.round_id === id);
+  const people = (row && row.companions || []).filter(p => p && p.name && p.key);
+  if (!people.length) { host.remove(); return; }
+  host.hidden = false;
+  host.innerHTML = `<span>Jugaste con</span>${people.map(p => `<a href="#/privado/companero/${encodeURIComponent(p.key)}"><i aria-hidden="true">${esc(iniOf(p.name))}</i>${esc(p.name)}</a>`).join('')}`;
+}
 async function loadPrivRes(){
   const el = $('#privres'); if (!el) return;
   let d; try { d = await api('/api/me/private-metrics'); } catch(e){ el.innerHTML = ''; return; }
   if (!$('#privres')) return; const top = d.partners.slice(0, 3);
   el.innerHTML = `<div class="section"><h2 class="priv-h">${LOCK_IC}Solo para vos</h2></div>
-    <div class="list priv-list"><a class="row" href="#/privado/horario"><div class="body"><div class="t">Por horario</div><div class="s">${d.played ? d.bands.map(b => `${b.label} <b class="num">${b.played}</b>`).join(' · ') : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a>
-    <a class="row" href="#/privado/companeros"><div class="body"><div class="t">Con quién jugás</div><div class="s">${top.length ? top.map(p => `${esc(p.name.split(' ')[0])} <b class="num">${p.count}</b>`).join(' · ') : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a></div>
-    <p class="foot">Privado: solo lo ves vos. No aparece en grupos, profesores ni enlaces compartidos.</p>`;
+    <div class="list priv-list"><a class="row" href="#/privado/horario"><div class="body"><div class="t">Por horario</div><div class="s">${d.played ? d.bands.map(b => `${b.label} <b class="num">${b.played}</b>${b.impact!=null?` · ${impactLabel(b.impact)}`:''}`).join(' · ') : 'Se arma a medida que juegues'}${d.unknown ? ` · ${d.unknown} sin horario` : ''}</div></div>${ICON.chev}</a>
+    <a class="row" href="#/privado/companeros"><div class="body"><div class="t">Con quién jugás</div><div class="s">${top.length ? top.map(p => `${esc(p.name)} <b class="num">${p.count}</b>${p.impact!=null?` · ${impactLabel(p.impact)}`:''}`).join(' · ') : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a></div>
+    <p class="foot">Privado: solo lo ves vos. No aparece en grupos, profesores ni enlaces compartidos. El número de al lado del nombre es la cantidad de salidas.</p>`;
 }
 function sPrivado(){ return `<div class="bar"><span class="overline">Solo para vos</span><button class="close" data-close>${ICON.x}</button></div><div id="privado"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
-const teeRowP = t => `<${t.round_id?`a href="#/ronda/${t.round_id}"`:'div'} class="row">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name||'')}${t.course_label?' · '+esc(t.course_label):''}</div><div class="s">${esc(t.time)} · ${t.companions.length?esc(t.companions.map(n=>n.split(' ')[0]).join(', ')):'sin compañeros leídos'}</div></div>${t.round_id?`<div class="score"><b class="num">${n1(t.differential)}</b><span>dif.</span></div>${ICON.chev}`:'<div class="score"><span>sin tarjeta</span></div>'}</${t.round_id?'a':'div'}>`;
+const scoreFoot = s => s ? `En ${s.cards} tarjetas (${s.holes} hoyos), cada 18: ${s.eagles==null?'':per18(s.eagles)+' águilas · '}${per18(s.birdies)} birdies · ${per18(s.pars)} pares · ${per18(s.bogeys)} bogeys · ${per18(s.doubles)} dobles o peor. Es un promedio, no la suma. Más bajo en el diferencial es mejor.` : 'El resultado por hoyo aparece con al menos 3 tarjetas que tengan el detalle. No lo invento.';
+const teeRowP = t => `<${t.round_id?`a href="#/ronda/${t.round_id}"`:'div'} class="row">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name||'')}${t.course_label?' · '+esc(t.course_label):''}</div><div class="s">${esc(t.time)} · ${t.companions.length?esc(t.companions.join(', ')):'sin compañeros leídos'}</div></div>${t.round_id?`<div class="score"><b class="num">${n1(t.differential)}</b><span>dif.</span></div>${ICON.chev}`:'<div class="score"><span>sin tarjeta</span></div>'}</${t.round_id?'a':'div'}>`;
 async function loadPrivado(what, arg){
   const el = $('#privado'); if (!el) return;
   try {
@@ -2996,29 +3375,39 @@ async function loadPrivado(what, arg){
       const d = await api(what === 'franja' ? `/api/me/private-metrics/bands/${encodeURIComponent(arg)}` : `/api/me/private-metrics/partners/${encodeURIComponent(arg)}`); if (!$('#privado')) return;
       const h = what === 'franja' ? d.band : d.partner;
       el.innerHTML = `<div class="stitle">${esc(what === 'franja' ? h.label : h.name)}</div>
-        <div class="grid3" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px"><div class="card mini stat"><div class="k">${what==='franja'?'Veces que jugaste':'Salidas juntos'}</div><div class="v num">${what==='franja'?h.played:h.count}</div></div>
-        <div class="card mini stat"><div class="k">Diferencial promedio</div><div class="v num">${n1(h.avg_diff)}</div></div></div>
-        <p class="foot">${h.avg_diff==null?`El promedio aparece con al menos 3 salidas con tarjeta (hay ${h.matched}).`:`Sobre ${h.matched} salidas con tarjeta. Tu promedio general: ${n1(d.overall_avg_diff)}.`}</p>
+        <div class="grid3" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px"><div class="card mini stat"><div class="k">${what==='franja'?'Salidas en esta franja':'Salidas juntos'}</div><div class="v num">${what==='franja'?h.played:h.count}</div><div class="d">cantidad, no un resultado</div></div>
+        <div class="card mini stat"><div class="k">Diferencial</div><div class="v num">${n1(h.avg_diff)}</div><div class="d">más bajo es mejor</div></div></div>
+        <p class="foot">${h.avg_diff==null?`El diferencial aparece con al menos 3 salidas con tarjeta (hay ${h.matched}).`:`Sobre ${h.matched} salidas con tarjeta. Tu diferencial general: ${n1(d.overall_avg_diff)}.`}</p>
+        <p class="foot">${scoreFoot(h.scores)}</p>
         <div class="section"><h2>Salidas</h2><span class="badge">${d.tee_times.length}</span></div>${yrList(d.tee_times, t => t.date, teeRowP)}${priv}`;
       return;
     }
     const d = await api('/api/me/private-metrics'); if (!$('#privado')) return;
     if (d.empty) { el.innerHTML = `<div class="stitle">${what==='companeros'?'Con quién jugás':'Por horario'}</div><div class="card wx-empty" style="margin-top:14px">${PRIV_EMPTY}</div>${priv}`; return; }
+    const src = d.sources || {};
+    const srcBits = [['reservation', 'reserva'], ['card', 'tarjeta'], ['track', 'TRACK']].filter(([k]) => src[k]).map(([k, l]) => `${src[k]} por ${l}`);
+    const partners = (d.partners || []).slice().sort((a, b) => privSort === 'impact'
+      ? (a.impact == null) - (b.impact == null) || (a.impact ?? 0) - (b.impact ?? 0) || b.count - a.count
+      : b.count - a.count || a.name.localeCompare(b.name, 'es'));
+    const how = what === 'companeros'
+      ? `<details class="priv-how"><summary>Cómo se calcula</summary><p>El impacto es tu diferencial con esa persona menos tu diferencial en todas las tarjetas. Un número negativo es mejor. Hacen falta 3 tarjetas. Los nombres salen solo de las reservas del club que coinciden con una tarjeta: la tarjeta no trae compañeros. Dos personas no se juntan por un apellido. No invento un nombre.</p></details>`
+      : `<details class="priv-how"><summary>Cómo se calcula</summary><p>Cada tarjeta usa un horario real, en este orden: la reserva del club, un horario guardado en la tarjeta, el inicio de TRACK. Si no hay ninguno, queda afuera. Mañana es antes de las 11, mediodía de 11 a 14 y tarde desde las 14. El impacto es el diferencial de esa franja menos tu promedio. No invento un horario.</p></details>`;
     el.innerHTML = what === 'companeros'
-      ? `<div class="stitle">Con quién jugás</div><p class="foot">Compañeros de línea que el club muestra en tus reservas, de más a menos salidas.</p>
-         <div class="list">${d.partners.map((p, i) => `<a class="row" href="#/privado/companero/${encodeURIComponent(p.key)}"><div class="date"><b class="num">${i+1}</b></div><div class="body"><div class="t">${esc(p.name)}</div><div class="s">${p.count} ${p.count===1?'salida':'salidas'}${p.avg_diff!=null?` · dif. ${n1(p.avg_diff)}`:''}</div></div><span class="badge num">${p.count}</span>${ICON.chev}</a>`).join('') || `<div class="card wx-empty">Todavía no leímos compañeros en tus salidas.</div>`}</div>${priv}`
-      : `<div class="stitle">Por horario</div><p class="foot">Salidas reservadas en el club que ya pasaron: ${d.played}, ${d.matched} con tarjeta.</p>
-         <div class="list">${d.bands.map(b => `<a class="row" href="#/privado/franja/${b.key}"><div class="body"><div class="t">${b.label}</div><div class="s">${b.played} ${b.played===1?'vez':'veces'}${b.avg_diff!=null?` · dif. ${n1(b.avg_diff)}`:b.played?` · promedio con 3+ tarjetas`:''}</div></div><span class="badge num">${b.played}</span>${ICON.chev}</a>`).join('')}</div>
-         <p class="foot">Mañana: antes de las 11 · Mediodía: 11 a 14 · Tarde: desde las 14.</p>${priv}`;
+      ? `<div class="stitle">Cómo te va según con quién jugás</div><p class="foot">Solo lo ves vos.</p>
+         <div class="seg priv-sort" role="group" aria-label="Orden"><button type="button" data-psort="n" class="${privSort==='n'?'on':''}">Por salidas</button><button type="button" data-psort="impact" class="${privSort==='impact'?'on':''}">Por impacto</button></div>
+         <div class="list priv-list">${partners.map(p => `<a class="row" href="#/privado/companero/${encodeURIComponent(p.key)}"><div class="body"><div class="t priv-name">${esc(p.name)}</div><div class="s">${p.count} ${p.count===1?'salida':'salidas'}</div></div>${impactHtml(p.impact, p.matched ?? p.count)}</a>`).join('') || `<div class="card wx-empty">Todavía no leímos compañeros en tus salidas.</div>`}</div>${how}${priv}`
+      : `<div class="stitle">Cómo te va según el horario</div><p class="foot">Solo lo ves vos.${d.unknown ? ` ${d.unknown} ${d.unknown===1?'tarjeta':'tarjetas'} sin horario conocido.` : ''}${srcBits.length ? ` Horario: ${srcBits.join(', ')}.` : ''}</p>
+         <div class="list priv-list">${d.bands.map(b => `<a class="row" href="#/privado/franja/${b.key}"><div class="body"><div class="t">${b.label}</div><div class="s">${b.played} ${b.played===1?'tarjeta':'tarjetas'}</div></div>${b.played ? impactHtml(b.impact, b.matched ?? b.played) : ''}</a>`).join('')}</div>${how}${priv}`;
+    el.querySelectorAll('[data-psort]').forEach(b => b.onclick = () => { privSort = b.dataset.psort; loadPrivado(what, arg); });
   } catch(e){ el.innerHTML = errBox(e); }
 }
-const DETAIL = ['reconstruir','jugar','metricas','notificaciones','notificacion','pelota','sorteos','sorteo','ronda','hoyo','vincular','club','cuenta','metrica','gps','palo','estrategia','amigos','grupo','unirse','compartir','nivel','trabajar','putting','tee','tees','equipo','impacto','club-faltante','hi-cambio','cambios','outliers','profesor','profesores','profe','clima','privado','plan','partido','partidos'];
+const DETAIL = ['reconstruir','jugar','metricas','notificaciones','notificacion','pelota','sorteos','sorteo','ronda','diferencial','hoyo','vincular','club','cuenta','metrica','gps','palo','estrategia','amigos','grupo','unirse','compartir','nivel','trabajar','putting','tee','tees','equipo','impacto','club-faltante','hi-cambio','cambios','outliers','profesor','profesores','profe','clima','privado','plan','partido','partidos'];
 const GROUPISH = k => ['amigos','grupo','unirse','compartir'].includes(k);
 const GG = window.GolfletGroups;
 const GM = window.GolfletMatch;   // t260u Armar partido (public/match.js)
 const GP = window.GolfletPlan;   // t176u Estrategia de juego (public/plan.js)
 const kind = h => (h || '').replace(/^#\/?/, '').split(/[/?]/)[0] || 'inicio';
-const PARENT = { reconstruir:'#/rondas', jugar:'#/metricas', metricas:'#/resumen', notificaciones:'#/inicio', notificacion:'#/notificaciones', clima:'#/resumen', privado:'#/resumen', pelota:'#/cuenta', sorteos:'#/cuenta', sorteo:'#/sorteos', profe:'#/cuenta', profesor:'#/cuenta', profesores:'#/cuenta', 'hi-cambio':'#/inicio', cambios:'#/inicio', outliers:'#/resumen', 'club-faltante':'#/cuenta', impacto:'#/inicio', equipo:'#/bolsa', tee:'#/inicio', tees:'#/inicio', trabajar:'#/inicio', putting:'#/resumen', nivel:'#/cancha', ronda:'#/rondas', hoyo:'#/cancha', vincular:'#/cuenta', club:'#/cuenta', cuenta:'#/inicio', metrica:'#/resumen', gps:'#/bolsa', palo:'#/bolsa', estrategia:'#/cancha' };
+const PARENT = { reconstruir:'#/rondas', jugar:'#/metricas', metricas:'#/resumen', notificaciones:'#/inicio', notificacion:'#/notificaciones', clima:'#/resumen', privado:'#/resumen', pelota:'#/cuenta', sorteos:'#/cuenta', sorteo:'#/sorteos', profe:'#/cuenta', profesor:'#/cuenta', profesores:'#/cuenta', 'hi-cambio':'#/inicio', cambios:'#/inicio', outliers:'#/resumen', 'club-faltante':'#/cuenta', impacto:'#/inicio', equipo:'#/bolsa', tee:'#/inicio', tees:'#/inicio', trabajar:'#/inicio', putting:'#/resumen', nivel:'#/cancha', ronda:'#/rondas', diferencial:'#/rondas', hoyo:'#/cancha', vincular:'#/cuenta', club:'#/cuenta', cuenta:'#/inicio', metrica:'#/resumen', gps:'#/bolsa', palo:'#/bolsa', estrategia:'#/cancha' };
 function labelFor(h){
   const p = (h || '#/inicio').replace(/^#\/?/, '').split('/'), k = p[0].split('?')[0] || 'inicio';
   if (GROUPISH(k) && GG) return GG.label(h);
@@ -3050,6 +3439,7 @@ function labelFor(h){
   if (k === 'trabajar') return p[1] ? (IMP?.areas?.find(a => a.key === p[1])?.label || 'Qué trabajar') : 'Qué trabajar';
   if (k === 'putting') return p[1] ? (PM[p[1].split('?')[0]] || 'Putting') : 'Putting';
   if (k === 'ronda') { const r = rounds.find(x => x.round_id === p[1]); return r ? short(r.tournament) || 'Ronda' : 'Ronda'; }
+  if (k === 'diferencial') return 'Cómo se calcula';
   if (k === 'club') return G.clubs.find(x => x.id === p[1])?.club_name || 'Club';
   return { inicio:'Inicio', resumen:'Resumen', rondas:'Rondas', cancha:'Cancha', bolsa:'Mi bolsa', cuenta:'Tu cuenta', vincular:'Vincular', estrategia:'Cómo jugar la cancha', gps:'Ronda con GPS', palo:'Distancias por palo', amigos:'Amigos' }[k] || 'Volver';
 }
@@ -3091,11 +3481,13 @@ function render(keepScroll){
     const [k, qs] = p[0].split('?'); p[0] = k; const r = new URLSearchParams(qs).get('range'); if (RKEYS.includes(r)) setRange(r);
   } else if (p.length === 1 && ['inicio','resumen','cancha'].includes(p[0]) && RANGE !== 'all') history.replaceState(null, '', `#/${p[0]}?range=${RANGE}`);
   const playLive = p[0] === 'jugar' && !!p[1];
+  document.documentElement.classList.remove('rc-map');
   window.GolfletTrack?.destroy?.();
   document.documentElement.classList.toggle('gp-fix', playLive || !!(GP && GP.fixed && GP.fixed(location.hash)));
   document.documentElement.classList.toggle('gp-live', playLive || !!(GP && GP.practiceLive && GP.practiceLive(location.hash))); setTabH();
   let detail = null, aside = null;
   if (p[0]==='ronda'){ detail = sRonda(p[1]); aside = asideRounds(p[1]); base = base==='inicio'||base==='resumen'?base:'rondas'; }
+  else if (p[0]==='diferencial'){ detail = sDif(p[1]); base = 'rondas'; }
   else if (p[0]==='hoyo'){ detail = sHoyo(p[1],p[2]); aside = asideHoles(p[1], p[2]); if (base!=='resumen') base='cancha'; segC = p[1]; }
   else if (p[0]==='vincular'){ detail = sVincular(); aside = asideAccount('vincular'); }
   else if (p[0]==='club'){ detail = sClub(p[1]); aside = asideAccount(p[1]); }
@@ -3114,7 +3506,7 @@ function render(keepScroll){
   else if (p[0]==='privado'){ detail = sPrivado(); base = 'resumen'; }
   else if (p[0]==='pelota'){ detail = sPelota(); base = 'cuenta'; }
   else if (p[0]==='sorteos'){ detail = sSorteos(); base = 'cuenta'; }
-  else if (p[0]==='reconstruir'){ detail = `<div id="recon" data-id="${esc(p[1] || '')}"></div>`; base = 'rondas'; }
+  else if (p[0]==='reconstruir'){ detail = `<div id="recon" data-id="${esc((p[1] || '').split('?')[0])}"></div>`; base = 'rondas'; }
   else if (p[0]==='jugar'){ detail = sJugar(p[1]); base = 'resumen'; }
   else if (p[0].split('?')[0]==='metricas'){ detail = sMetricas(p[1], p[2]); base = 'resumen'; }
   else if (p[0]==='notificaciones'){ detail = sNotifs(); base = 'inicio'; }
@@ -3127,6 +3519,7 @@ function render(keepScroll){
   else if (p[0]==='profesores'){ detail = p[1]==='encontrar' ? sMatch(p[2]) : p[1] ? sProfBuscar() : sMisProfes(); base = 'cuenta'; }
   else if (p[0]==='profesor'){ detail = sProfesor(); base = 'cuenta'; }
   else if (p[0]==='profe'){ detail = p[1]==='perfil' ? sProfePerfil() : p[1]==='alumno' ? (p[3]==='clase' ? sProfeClase() : p[3]==='contenido' ? sProfeContenido() : sProfeAlumno()) : sProfe(); base = 'cuenta'; }
+  else if (p[0]==='equipo' && decodeURIComponent((p[1]||'').split('?')[0]) === 'juego'){ detail = sIronSet(); base = 'bolsa'; }
   else if (p[0]==='equipo'){ detail = sEquipo(decodeURIComponent(p[1]||'nuevo'), p[2]==='editar'); base = 'bolsa'; }
   else if (p[0]==='tee' && p[1] && p[1]!=='nuevo'){ detail = sTee(p[1]); base = 'inicio'; }
   else if (p[0]==='trabajar'){ const a = (p[1]||'').split('?')[0]; detail = sTrabajar(a); aside = asideTrabajar(a); base = 'inicio'; }
@@ -3134,7 +3527,7 @@ function render(keepScroll){
   else base = ['inicio','resumen','rondas','cancha','bolsa'].includes(p[0]) ? p[0] : 'inicio';
   const y = window.scrollY;
   if (detail){
-    const here = location.hash || '#/inicio', back = (GROUPISH(p[0]) && GG) ? GG.parent(here) : (p[0] === 'plan' && GP) ? GP.parent(here) : ((p[0] === 'partido' || p[0] === 'partidos') && GM) ? GM.parent(here) : (p[0] === 'metricas' && p[2]) ? `#/metricas/${metTab(p[1])}` : (BACK[here] || PARENT[p[0]] || '#/inicio');
+    const here = location.hash || '#/inicio', back = (GROUPISH(p[0]) && GG) ? GG.parent(here) : (p[0] === 'plan' && GP) ? GP.parent(here) : ((p[0] === 'partido' || p[0] === 'partidos') && GM) ? GM.parent(here) : (p[0] === 'metricas' && p[2]) ? `#/metricas/${metTab(p[1])}` : (p[0] === 'diferencial' && p[1]) ? (BACK[here] || `#/ronda/${p[1]}`) : (BACK[here] || PARENT[p[0]] || '#/inicio');
     detail = detail.replace(/<button class="close" data-close>[\s\S]*?<\/button>/g, '');
     view.dataset.v = 'd-' + p[0];
     view.innerHTML = `<div class="pg"><nav class="crumbs" aria-label="Volver"><a class="crumb-back" href="${esc(back)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1L3 6l5 5"/></svg>${esc(labelFor(back))}</a></nav>
@@ -3193,7 +3586,7 @@ function bind(p, isDetail){
   view.querySelectorAll('[data-sortl]').forEach(b=>b.onclick=()=>{ sortL=b.dataset.sortl; render(true); });
   view.querySelectorAll('[data-segc]').forEach(b=>b.onclick=()=>{ segC=b.dataset.segc; render(true); });
   document.querySelectorAll('[data-sync]').forEach(b=>b.onclick=e=>{ e.preventDefault(); doSync(b.dataset.sync, null, false); });
-  if (p[0]==='ronda') { loadHoleMap(p[1]); view.querySelectorAll('.fields input[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; const id = p[1]; const gen = (notePending.get(id)?.gen || 0) + 1; const values = {}; view.querySelectorAll('.fields input[data-k]').forEach(inp => { values[inp.dataset.k] = inp.value.trim(); }); notePending.set(id, { gen, values, viewGen: VIEW_GEN }); queueNoteSave(id, values, gen, VIEW_GEN); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
+  if (p[0]==='ronda') { loadHoleMap(p[1]); paintRoundPartners(p[1]); view.querySelectorAll('.fields input[data-k]').forEach(el=>el.oninput=()=>{ $('#saved span').textContent='Guardando…'; const id = p[1]; const gen = (notePending.get(id)?.gen || 0) + 1; const values = {}; view.querySelectorAll('.fields input[data-k]').forEach(inp => { values[inp.dataset.k] = inp.value.trim(); }); notePending.set(id, { gen, values, viewGen: VIEW_GEN }); queueNoteSave(id, values, gen, VIEW_GEN); }); loadRecap(p[1]); bindRecap(p[1]); loadRoundShots(p[1]); bindQuick(p[1]); }
   if (p[0]==='metrica') { const m = (p[1]||'').split('?')[0]; loadMetric(m); view.querySelectorAll('[data-mswitch]').forEach(b=>b.onclick=()=>{ const st = MQ[m]||{}; location.hash = mlink(b.dataset.mswitch, { scope: st.scope||'year', year: st.year||'', course: st.course||'all', sort: st.sort==='count'?'count':'date', order:'desc', range: st.range||'' }); }); }
   if (p[0]==='gps') loadGps(p[1]);
   if (p[0]==='palo') loadPalo(p[1], p[2]);
@@ -3222,9 +3615,10 @@ function bind(p, isDetail){
   if (p[0]==='profesores') { if (p[1]==='encontrar') loadMatch(p[2] || '1'); else if (p[1]) bindProfBuscar(); else loadProfsCard(); }
   if (p[0]==='profesor') loadProfesor(decodeURIComponent(p[1]||''));
   if (p[0]==='profe') { if (p[1]==='perfil') loadProfePerfil(); else if (p[1]==='alumno') { const sid = decodeURIComponent(p[2]||''); if (p[3]==='clase') bindProfeClase(sid); else if (p[3]==='contenido') loadProfeContenido(sid); else loadProfeAlumno(sid); } else loadProfe(); }
-  if (p[0]==='cuenta') { loadProfsCard().then(() => { if (sessionStorage.getItem('goProfs')) { sessionStorage.removeItem('goProfs'); $('#profs')?.scrollIntoView({ behavior:'smooth', block:'start' }); } }); bindNick(); }
+  if (p[0]==='cuenta') { loadProfsCard().then(() => { if (sessionStorage.getItem('goProfs')) { sessionStorage.removeItem('goProfs'); $('#profs')?.scrollIntoView({ behavior:'smooth', block:'start' }); } }); bindNick(); bindPhoto(); }
   if (p[0]==='club-faltante') bindClubFaltante();
-  if (p[0]==='equipo') loadEquipo(decodeURIComponent((p[1]||'nuevo').split('?')[0]), (p[2]||'').startsWith('editar'));
+  if (p[0]==='equipo' && decodeURIComponent((p[1]||'').split('?')[0]) === 'juego') loadIronSet();
+  else if (p[0]==='equipo') loadEquipo(decodeURIComponent((p[1]||'nuevo').split('?')[0]), (p[2]||'').startsWith('editar'));
   if (p[0]==='tee' && p[1] && p[1]!=='nuevo') loadTee(p[1]);
   if (p[0]==='trabajar') loadTrabajar((p[1]||'').split('?')[0]);
   if (p[0]==='putting') loadPutting((p[1]||'').split('?')[0]);
@@ -3294,7 +3688,17 @@ document.addEventListener('click', ev => {
   ev.preventDefault();
   location.hash = href;
 }, true);
-view.innerHTML = '<div style="padding:40vh 0;text-align:center;color:var(--color-ink3)"><span class="spin"></span></div>';
+view.innerHTML = '<div class="boot"><span class="spin"></span></div>';
+addEventListener('pageshow', () => {
+  const boot = view.querySelector('.boot');
+  if (!boot || boot.querySelector('img')) return;
+  const img = document.createElement('img');
+  img.className = 'cad sm';
+  img.alt = '';
+  img.decoding = 'async';
+  img.src = '/brand/caddie.png';
+  boot.prepend(img);
+}, { once: true });
 // first sign-in with Golfistics: run the first sync (clubs + cards) with the usual sync screen
 const firstSync = () => runSync({ club: 'tus clubes', url: '/api/accounts/first-sync', body: {},
   onFail: e => { if (e.data?.code === 'NEEDS_CLUB') { try { sessionStorage.setItem('gl_needs_club', JSON.stringify({ error: e.message, matricula: e.data.matricula, clubs: e.data.clubs })); } catch(x){} location.hash = '#/vincular'; render(true); return; }

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createRequire } from "node:module";
 import { createWithLedger, normalizeIdempotencyKey, presentCreatedGroup } from "../lib/group-create";
-import { HI_UNIDENTIFIED, hiAttribution, hiCardLine, monthColumns, MONTHS_VISIBLE, officialIndex, onCup, puttFeet, strategyChoice, trackCancel, trackDrop, trackEnter, trackNew, trackPenalty, trackReload, trackSet, windPlay, windRelative, coursePickerGroups } from "../lib/play-rules";
+import { HI_UNIDENTIFIED, hiAttribution, hiCardLine, matchRoundCourse, monthColumns, MONTHS_VISIBLE, officialIndex, onCup, puttFeet, strategyChoice, trackCancel, trackDrop, trackEnter, trackNew, trackPenalty, trackReload, trackSet, windPlay, windRelative, coursePickerGroups } from "../lib/play-rules";
 
 const js = createRequire(import.meta.url)("../public/play-rules.js") as typeof import("../lib/play-rules");
 
@@ -20,6 +20,29 @@ test("el viento meteorológico se lee desde donde viene", () => {
   assert.equal(none.includes("en contra"), false);
   assert.equal(js.windRelative(90, 90), "contra");
   assert.equal(js.windPlay(1, 270, 90, 22).text.includes("a favor"), true);
+});
+
+test("una tarjeta no abre la cancha de otro club aunque el nombre coincida", () => {
+  const clubB = { course_id: "200-principal", club_code: "200", club_name: "Club B", course: "Principal", course_label: "Principal" };
+  const clubA = { course_id: "118-principal", club_code: "118", club_name: "Club A", course: "Principal", course_aliases: ["La Principal"] };
+  assert.equal(matchRoundCourse({ course: "Principal", club_name: "Club A", club_code: "118" }, [clubB]), null);
+  assert.equal(matchRoundCourse({ course: "Principal", club_name: "Club A" }, [clubB]), null);
+  assert.equal(matchRoundCourse({ course: "Principal", club_code: "118", course_id: "118-principal" }, [{ ...clubB, club_name: "Club A" }]), null);
+  assert.equal(matchRoundCourse({ course: "Principal", club_code: "118" }, [{ ...clubA, course_id: "200-principal" }]), null);
+  const byAlias = matchRoundCourse({ course: "La Principal", club_name: "Club A", club_code: "118" }, [clubA, clubB]);
+  assert.ok(byAlias);
+  assert.equal(byAlias.course_id, "118-principal");
+  const byClubAlias = matchRoundCourse({ course: "Principal", club_name: "C.A." }, [{ ...clubA, club_aliases: ["C.A.", "Club A"] }]);
+  assert.ok(byClubAlias);
+  assert.equal(byClubAlias.course_id, "118-principal");
+  const uniqueName = matchRoundCourse({ course: "Principal" }, [clubB]);
+  assert.ok(uniqueName);
+  assert.equal(uniqueName.course_id, "200-principal");
+  assert.equal(matchRoundCourse({ course: "Principal" }, [clubA, clubB]), null);
+  assert.equal(js.matchRoundCourse({ course: "Principal", club_name: "Club A", club_code: "118" }, [clubB]), null);
+  const bundled = js.matchRoundCourse({ course: "Principal" }, [clubB]);
+  assert.ok(bundled);
+  assert.equal(bundled.course_id, "200-principal");
 });
 
 test("el índice oficial es el punto fechado más nuevo", () => {

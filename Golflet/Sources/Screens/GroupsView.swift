@@ -107,6 +107,7 @@ struct GroupsView: View {
     private var emptyGroups: some View {
         GCard(radius: 18, padding: 16) {
             VStack(alignment: .leading, spacing: 8) {
+                CaddieMark(height: 72)
                 Text("Todavía no estás en un grupo")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)

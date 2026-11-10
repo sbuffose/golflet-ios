@@ -26,6 +26,9 @@ struct TrackMark: Equatable, Sendable, Identifiable {
     var holed: Bool
     var penalty: Bool
     var drop: Bool
+    var lost: Bool = false
+    var provisional: Bool = false
+    var recovery: Bool = false
 }
 
 enum TrackSession {
@@ -98,11 +101,11 @@ enum TrackSession {
     }
 
     /// ENTER confirms the cursor. `onCup` must already mean the cursor is on the flag.
-    static func enter(_ state: State, at point: TrackPoint, club: String?, onCup: Bool) -> EnterOutcome {
+    static func enter(_ state: State, at point: TrackPoint, club: String?, onCup: Bool, putting: Bool = false) -> EnterOutcome {
         var next = state
         switch state.phase {
         case .tracking:
-            let holed = onCup
+            let holed = onCup && putting
             let spot = holed ? (state.flag ?? point) : point
             next.marks.append(TrackMark(
                 id: next.nextID,
@@ -137,6 +140,80 @@ enum TrackSession {
         case .confirmTee, .confirmFlag, .relief, .drop:
             return EnterOutcome(state: state, recorded: false, holed: false)
         }
+    }
+
+    /// The original ball is lost, then the penalty. A provisional finishes at the cursor and the next shot starts there.
+    static func lostBall(_ state: State, at point: TrackPoint, club: String?, provisional: Bool) -> State {
+        guard state.phase == .tracking, let origin = state.ball ?? state.tee else { return state }
+        var next = state
+        func add(at: TrackPoint, club: String?, lost: Bool, penalty: Bool, provisional: Bool) {
+            next.marks.append(TrackMark(
+                id: next.nextID,
+                at: at,
+                club: club,
+                countsStroke: true,
+                holed: false,
+                penalty: penalty,
+                drop: false,
+                lost: lost,
+                provisional: provisional
+            ))
+            next.nextID += 1
+        }
+        add(at: point, club: club, lost: true, penalty: false, provisional: false)
+        add(at: origin, club: nil, lost: false, penalty: true, provisional: false)
+        if provisional {
+            add(at: point, club: club, lost: false, penalty: false, provisional: true)
+            next.ball = point
+        } else {
+            next.ball = origin
+        }
+        next.phase = .tracking
+        return next
+    }
+
+    static func undoSpan(_ state: State) -> Int {
+        guard let last = state.marks.last else { return 0 }
+        let prev = state.marks.dropLast().last
+        if last.provisional { return 3 }
+        if last.penalty && prev?.lost == true { return 2 }
+        if last.lost { return 2 }
+        return 1
+    }
+
+    static func undo(_ state: State) -> State {
+        let span = undoSpan(state)
+        guard span > 0 else { return state }
+        var next = state
+        next.marks.removeLast(min(span, next.marks.count))
+        next.ball = next.marks.last(where: { $0.countsStroke && !$0.penalty && !$0.lost })?.at ?? next.tee
+        next.phase = .tracking
+        return next
+    }
+
+    static func holeClose(par: Int?, strokes: Int, putts: Int?) -> String {
+        let putt = putts.map { "\($0) \($0 == 1 ? "putt" : "putts")" } ?? "Putts sin confirmar"
+        guard let par else { return "\(strokes) golpes · \(putt)" }
+        let delta = strokes - par
+        let vs: String
+        switch delta {
+        case ..<(-1): vs = "Águila"
+        case -1: vs = "Birdie"
+        case 0: vs = "Par"
+        case 1: vs = "Bogey"
+        case 2: vs = "Doble bogey"
+        default: vs = delta > 0 ? "+\(delta)" : "\(delta)"
+        }
+        return "\(strokes) golpes · \(putt) · \(vs)"
+    }
+
+    /// Closest non-putter carry. A chosen club is left alone.
+    static func suggest(yards: Int, bag: [(name: String, carry: Int?)]) -> String? {
+        let choices = bag.filter { item in
+            let name = item.name.lowercased()
+            return name != "pt" && name != "putter" && item.carry != nil
+        }
+        return choices.min { abs(($0.carry ?? 0) - yards) < abs(($1.carry ?? 0) - yards) }?.name
     }
 
     static func beginPenalty(_ state: State) -> State {
