@@ -603,7 +603,7 @@
           if (best) S.suggest = best;
         }
       }
-      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="listbox" aria-label="Palo"><b>${esc(shortClub(picked?.label || ''))}</b><small>CLUB</small></button><div class="tk-sheet" id="play-club-sheet" hidden><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><ul class="tk-clublist" id="play-club-list" hidden>${clubChoices.map(c => { const put = /putter|^pt$/i.test(c.label); const carry = put ? '' : carryOf(c.id); const on = c.id === S.club ? ' on' : ''; return `<li><button type="button" data-club="${esc(c.id)}" class="${on.trim()}"><b>${esc(shortClub(c.label))}</b>${carry ? `<small>${esc(carry)}</small>` : ''}${c.id === S.suggest ? '<i>Sugerido</i>' : ''}</button></li>`; }).join('')}</ul></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>` : '';
+      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="Palo"><b>${esc(shortClub(picked?.label || ''))}</b><small>CLUB</small></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => { const on = c.id === S.club ? ' on' : ''; const sug = c.id === S.suggest ? ' sug' : ''; return `<li><button type="button" data-club="${esc(c.id)}" class="${(on + sug).trim()}"><b>${esc(shortClub(c.label))}</b>${c.id === S.suggest ? '<i>Sugerido</i>' : ''}</button></li>`; }).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>` : '';
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
@@ -666,7 +666,7 @@
         const sum = R().trackHoleSummary(par || null, facts);
         S.derived = { putts: sum.putts, gir: sum.gir, fir: sum.fir };
         const canSave = sum.finished && typeof H.onStats === 'function' && R().emptyStatFill && R().emptyStatFill(S.storedMark || null, S.derived);
-        summary = `<div class="tk-sum" id="tk-sum"><span>${esc(sum.lines[0])}</span>${canSave ? `<button type="button" id="play-stats">Guardar lo que falta</button>` : ''}</div>`;
+        summary = canSave ? `<div class="tk-sum" id="tk-sum"><button type="button" id="play-stats">Guardar lo que falta</button></div>` : '';
       }
       const setup = retro && (phase === 'confirmTee' || phase === 'confirmFlag');
       const marking = retro && phase === 'tracking' && !S.done && phase !== 'relief';
@@ -718,12 +718,11 @@
             </div>
             <div class="tk-rounds">
               ${marking && S.track.marks.length ? `<button type="button" class="tk-round" id="play-undo" aria-label="Deshacer"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8.5 7.5H4.5V3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 8.2A8 8 0 1 1 6.4 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>` : ''}
-              ${(marking || (!retro && phase === 'tracking')) ? `<button type="button" class="tk-round tk-pen" id="play-penalty" aria-label="Penalidad">P+1</button>` : ''}
+              ${(marking || (!retro && phase === 'tracking')) ? `<div class="tk-penwrap"><button type="button" class="tk-round tk-pen" id="play-penalty" aria-haspopup="menu" aria-expanded="false" aria-controls="play-pen-menu" aria-label="Penalidad">P+1</button><div class="tk-penmenu" id="play-pen-menu" role="menu" hidden><button type="button" id="play-pen-stroke" role="menuitem">Penalidad +1</button>${marking ? '<button type="button" id="play-lost" role="menuitem">Pelota perdida / fuera de límites</button><button type="button" id="play-lost-prov" role="menuitem">Pelota perdida · jugué la provisional</button>' : ''}</div></div>` : ''}
               ${marking ? `<button type="button" class="tk-round${S.recovery ? ' on' : ''}" id="play-recovery" aria-pressed="${S.recovery ? 'true' : 'false'}" aria-label="Sacada a buena">Sacada</button>` : ''}
               ${!retro && phase === 'relief' ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
               ${retro && (phase === 'relief') ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
               ${marking && !hasGreenPoly() && !originOnGreen() ? `<button type="button" class="tk-ghost tk-side" id="play-lie">En el green</button>` : ''}
-              ${marking ? `<button type="button" class="tk-ghost" id="play-lost">Pelota perdida / fuera de límites</button><button type="button" class="tk-ghost" id="play-lost-prov">Pelota perdida · jugué la provisional</button>` : ''}
               ${retro && !S.done && phase === 'tracking' && S.track.flag ? `<button type="button" class="tk-round" id="play-flag" aria-label="Bandera"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 20V4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6 5.2h9.2l-2 3 2 3H6" fill="#C8102E" stroke="#C8102E"/></svg></button>` : ''}
             </div>
           </div>
@@ -1272,6 +1271,10 @@
           }
           S.lostPair = ids;
           S.msg = '';
+          S.panned = false;
+          S.adjusted = false;
+          S.frame = 'play';
+          fitCam();
         } catch (e) { if (S.alive) S.msg = e.message || 'No se pudo marcar la pelota perdida.'; }
         S.busy = false;
         if (S.alive) render();
@@ -1284,7 +1287,11 @@
       const next = el.querySelector('#tknext'); if (next) next.onclick = () => goHole(S.hole + 1);
       const set = el.querySelector('#play-set'); if (set) set.onclick = () => commit();
       const hit = el.querySelector('#play-hit'); if (hit) hit.onclick = () => commit();
-      const pen = el.querySelector('#play-penalty'); if (pen) pen.onclick = () => { S.track = R().trackPenalty(S.track); render(); };
+      const pen = el.querySelector('#play-penalty');
+      const penMenu = el.querySelector('#play-pen-menu');
+      if (pen && penMenu) pen.onclick = ev => { ev.preventDefault(); penMenu.hidden = !penMenu.hidden; pen.setAttribute('aria-expanded', penMenu.hidden ? 'false' : 'true'); };
+      const stroke = el.querySelector('#play-pen-stroke');
+      if (stroke) stroke.onclick = () => { S.track = R().trackPenalty(S.track); render(); };
       const rel = el.querySelector('#play-reload'); if (rel) rel.onclick = () => { S.track = R().trackReload(S.track); S.msg = ''; render(); };
       const drop = el.querySelector('#play-drop'); if (drop) drop.onclick = () => { S.track = R().trackDrop(S.track); render(); };
       const cancel = el.querySelector('#play-cancel'); if (cancel) cancel.onclick = () => {
