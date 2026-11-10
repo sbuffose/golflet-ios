@@ -31,6 +31,8 @@ struct PlayHoleView: View {
     @State private var aimTarget: GPSCoord?
     @State private var track = TrackSession.State()
     @State private var chosenClub: String?
+    @State private var shotsExpanded = false
+    @State private var sawDragHint = false
     @State private var showsClubs = false
     @State private var recovery = false
     @State private var waterAsk = false
@@ -240,6 +242,7 @@ struct PlayHoleView: View {
                 if let mapCenter, abs(mapCenter.lat - next.lat) < 0.0000004, abs(mapCenter.lng - next.lng) < 0.0000004 {
                     return
                 }
+                sawDragHint = true
                 mapCenter = next
             },
             onTarget: { aimTarget = $0 }
@@ -258,11 +261,23 @@ struct PlayHoleView: View {
 
     private var shotRail: some View {
         let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
+        let shown = rows.count > 3 && !shotsExpanded ? Array(rows.suffix(3)) : rows
         return VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { _, shot in
-                Text("\(shot.shotNumber). \(shot.club ?? "Golpe")")
+            if rows.count > 3 {
+                Button(shotsExpanded ? "Menos" : "+\(rows.count - 3)") { shotsExpanded.toggle() }
+                    .font(GFont.ui(11, weight: .semibold))
+                    .foregroundStyle(p.onPrimary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(p.primary)
+                    .clipShape(Capsule())
+                    .accessibilityIdentifier("play-shots-more")
+            }
+            ForEach(shown, id: \.id) { shot in
+                Text("\(shot.shotNumber). \(shotLabel(shot.club))")
                     .font(GFont.ui(11, weight: .semibold))
                     .foregroundStyle(p.ink)
+                    .lineLimit(1)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.white.opacity(0.94))
@@ -351,11 +366,20 @@ struct PlayHoleView: View {
                 if track.marks.contains(where: \.holed) {
                     CaddieMark(height: 48)
                 }
-                Text(statusLine)
-                    .font(GType.headline)
-                    .foregroundStyle(p.ink)
-                    .lineLimit(2)
-                    .accessibilityIdentifier("play-aim-label")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(aimTitle)
+                        .font(GFont.ui(22, weight: .semibold))
+                        .foregroundStyle(p.ink)
+                        .lineLimit(2)
+                    if let detail = aimDetail {
+                        Text(detail)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .lineLimit(2)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("play-aim-label")
                 distances
                 holeNav
                 markActions
@@ -378,7 +402,7 @@ struct PlayHoleView: View {
         .background(Color.white.opacity(0.96))
     }
 
-    private var statusLine: String {
+    private var aimTitle: String {
         if track.marks.contains(where: \.holed) {
             let putterShots = track.marks.filter { mark in
                 mark.countsStroke && !mark.penalty && !mark.lost && isPutter(mark.club)
@@ -391,10 +415,41 @@ struct PlayHoleView: View {
             let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
             if TrackSession.onCup(meters: meters) { return "En el hoyo" }
             if meters > 1.2 && meters <= 25 { return "\(FormatAR.one(meters)) m al hoyo" }
-            return "\(PlayMath.yards(from: playerCoord, to: cursor)) yd · \(track.prompt)"
+            return "\(PlayMath.yards(from: playerCoord, to: cursor)) yd"
         default:
             return track.prompt
         }
+    }
+
+    private var aimDetail: String? {
+        guard !track.marks.contains(where: \.holed) else { return nil }
+        switch track.phase {
+        case .tracking, .penaltyWhere:
+            let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
+            if TrackSession.onCup(meters: meters) { return nil }
+            if meters > 1.2 && meters <= 25 { return "estimada en el mapa" }
+            let left = "\(PlayMath.yards(from: playerCoord, to: pinCoord)) yd al hoyo"
+            if track.marks.isEmpty && !sawDragHint {
+                return "\(left)\nArrastrá el mapa hasta donde terminó el golpe"
+            }
+            return left
+        default:
+            return nil
+        }
+    }
+
+    private func shotLabel(_ club: String?) -> String {
+        let raw = (club ?? "Golpe").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = raw.first else { return "Golpe" }
+        return String(first).uppercased() + raw.dropFirst()
+    }
+
+    private func savedYards(_ club: BagClub) -> String? {
+        let name = club.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if name == "pt" || name == "putter" || name.hasPrefix("putter") { return nil }
+        if let carry = club.carry, carry > 0 { return "\(carry) yd" }
+        if let total = club.total, total > 0 { return "\(total) yd" }
+        return nil
     }
 
     private func isPutter(_ name: String?) -> Bool {
@@ -513,11 +568,6 @@ struct PlayHoleView: View {
                     .font(GType.label)
                     .foregroundStyle(p.ink)
                     .lineLimit(1)
-                if chosenClub == nil, suggestedClub != nil {
-                    Text("Sugerido")
-                        .font(GFont.ui(9, weight: .semibold))
-                        .foregroundStyle(p.ink3)
-                }
             }
             .frame(minWidth: 52, minHeight: 40)
             .padding(.horizontal, 8)
@@ -549,15 +599,20 @@ struct PlayHoleView: View {
                                     .font(GType.label)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
-                                if suggestedName == club.name {
-                                    Text("Sugerido")
-                                        .font(GFont.ui(9, weight: .semibold))
+                                if let yards = savedYards(club) {
+                                    Text(yards)
+                                        .font(GFont.ui(10, weight: .semibold))
+                                        .lineLimit(1)
                                 }
                             }
                             .foregroundStyle(chosenClub == club.name ? p.onPrimary : p.ink)
                             .frame(maxWidth: .infinity, minHeight: 64)
                             .background(chosenClub == club.name ? p.primary : p.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(suggestedName == club.name ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 3)
+                            )
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("play-club-\(club.name)")
@@ -1278,6 +1333,8 @@ struct PlayHoleView: View {
         await savePuttsIfNeeded()
         let clamped = min(max(next, 1), max(course.holes.count, 1))
         hole = clamped
+        shotsExpanded = false
+        sawDragHint = false
         aimTarget = nil
         mapCenter = nil
         waterAsk = false
