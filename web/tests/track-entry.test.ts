@@ -6,7 +6,8 @@ import { extname } from "node:path";
 import test from "node:test";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { VIEJA_GREEN_AXIS } from "../lib/golfistics-axis";
+import { COLORADA_GREEN_AXIS, VIEJA_GREEN_AXIS } from "../lib/golfistics-axis";
+import { coloradaOsmHole } from "../lib/colorada-osm";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
@@ -222,10 +223,15 @@ test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { ti
       for await (const chunk of req) void chunk;
       if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [] });
       if (url.pathname === "/api/gps/courses/209-cancha-vieja") return json({ course: { club_code: "209", course: "Cancha Vieja", holes: open } });
+      if (url.pathname === "/api/gps/courses/118-colorada") return json({ course: { club_code: "118", course: "Colorada", holes: COLORADA_GREEN_AXIS.map(h => {
+        const osm = coloradaOsmHole(h.hole);
+        return { hole: h.hole, par: 4, hcp: h.hole, yards: 380, tee: osm?.tee || null, line: osm?.line || null, green: { front: h.front, center: h.center, back: h.back } };
+      }) } });
       if (url.pathname === "/api/gps/courses/209-cancha-vieja-mala") return json({ course: { club_code: "209", course: "Cancha Vieja Mala", holes: bad } });
       if (url.pathname === "/api/reconstructions" && req.method === "GET") return json({ rounds: [], reconstructions: [
         { id: "live-open", current_hole: 1, club_code: "209", vm_course: "Cancha Vieja", course: "Cancha Vieja", round_id: null },
         { id: "live-bad", current_hole: 1, club_code: "209", vm_course: "Cancha Vieja Mala", course: "Cancha Vieja Mala", round_id: null },
+        { id: "live-colorada", current_hole: 1, club_code: "118", vm_course: "Colorada", course: "Colorada", round_id: null },
       ] });
       if (url.pathname.endsWith("/shots")) return json({ shots: [] });
       return json({});
@@ -270,6 +276,38 @@ test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { ti
     assert.equal(h1.bearing, "");
     assert.ok(Math.abs(Number(h1.aim) - VIEJA_GREEN_AXIS[0].center.lat) < 1e-6);
     assert.match(h1.axis, /Eje verificado del green/);
+    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /Arrastrá para confirmar la salida/);
+    assert.equal(await page.$eval("#play-set", el => (el as HTMLButtonElement).disabled), false);
+    assert.equal(await page.$eval("#play-cancel", el => el.textContent || ""), "CANCEL");
+    await page.screenshot({ path: join(art, "vieja-h1-confirm-390.png") });
+    await page.click("#play-set");
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-tee-source") === "jugador");
+    assert.match(await page.$eval("#tk-player", el => el.textContent || ""), /No es una medida/);
+    const colorada = await visit("live-colorada", 1, "colorada-h1-frame-390.png");
+    assert.equal(colorada.span, "1");
+    assert.notEqual(colorada.bearing, "");
+    const tee = coloradaOsmHole(1);
+    assert.ok(tee);
+    assert.ok(Math.abs(Number(await page.$eval("#tkmap", el => el.getAttribute("data-ball-lat"))) - tee.tee.lat) < 1e-5);
+    await page.click("#play-club-tile");
+    await page.waitForSelector("#play-club-list button");
+    const bar = await page.evaluate(() => {
+      const tile = document.querySelector("#play-club-tile") as HTMLElement;
+      const hit = document.querySelector("#play-hit") as HTMLElement;
+      const list = document.querySelector("#play-club-list") as HTMLElement;
+      return {
+        tile: tile.getBoundingClientRect().width,
+        hit: hit.getBoundingClientRect().width,
+        hitBg: getComputedStyle(hit).backgroundColor,
+        list: list.hidden,
+        clubs: list.innerText,
+      };
+    });
+    assert.ok(bar.tile <= 72 && bar.hit <= 72, JSON.stringify(bar));
+    assert.equal(bar.hitBg, "rgb(11, 37, 69)");
+    assert.equal(bar.list, false);
+    assert.match(bar.clubs, /Driver|Dr/);
+    await page.screenshot({ path: join(art, "track-390-club-list.png") });
     const h2 = await visit("live-open", 2, "vieja-h2-green-390.png");
     assert.equal(h2.empty, false);
     assert.ok(Math.abs(Number(h2.aim) - VIEJA_GREEN_AXIS[1].center.lat) < 1e-6);

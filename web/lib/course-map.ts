@@ -4,6 +4,7 @@ import { q } from "./db";
 import { holeWind, courseCompleteness, markersToEntrance, type Completeness } from "./course-map-core";
 import { getGreenGuide } from "./green-guide";
 import { azulBundledMap, isJockeyAzul } from "./azul-osm";
+import { coloradaBundledMap, coloradaLine, isJockeyColorada } from "./colorada-osm";
 import { mergeTrace, readAcceptedTraces } from "./course-trace";
 
 export const IMAGERY = {
@@ -20,6 +21,15 @@ export function imageryConfig() {
   return { default: IMAGERY, ...(esri ? { recent: esri } : {}) };
 }
 
+/** A Colorada hole that has no tee of its own takes the OSM hole-way tee. A stored tee stays. */
+function fillColorada(club: string, course: string, hole: any) {
+  if (!isJockeyColorada(club, course)) return hole;
+  if (hole?.tee || hole?.line?.[0] || hole?.tees?.[0]?.center) return hole;
+  const extra = coloradaLine(club, course, Number(hole?.hole));
+  if (!extra) return hole;
+  return { ...hole, tee: extra.tee, line: extra.line, tees: [{ center: extra.tee, source: "openstreetmap" }] };
+}
+
 export async function listCourseMaps() {
   return q(`select m.club_code, m.course, m.extracted_at, m.imported_at, m.summary->'holes' as holes, m.summary->'holes_with' as holes_with,
             coalesce(jsonb_array_length(m.summary->'issues'), 0) as issues, c.name as club_name
@@ -29,10 +39,17 @@ export async function listCourseMaps() {
 export async function getCourseMap(clubCode: string, course: string, o: { hole?: number | null; windFrom?: number | null; windKmh?: number | null } = {}) {
   const [m] = await q(`select id, club_code, course, extracted_at, imported_at, sources, boundary, summary from course_map where club_code=$1 and lower(course)=lower($2)`, [clubCode, course]);
   if (!m) {
-    if (!isJockeyAzul(clubCode, course)) return null;
-    const bundled = azulBundledMap(o.hole);
-    const traces = await readAcceptedTraces(clubCode, course);
-    return { ...bundled, imagery: imageryConfig(), holes: bundled.holes.map(h => mergeTrace(h, traces.find((t: any) => Number(t.hole) === h.hole) || null)) };
+    if (isJockeyAzul(clubCode, course)) {
+      const bundled = azulBundledMap(o.hole);
+      const traces = await readAcceptedTraces(clubCode, course);
+      return { ...bundled, imagery: imageryConfig(), holes: bundled.holes.map(h => mergeTrace(h, traces.find((t: any) => Number(t.hole) === h.hole) || null)) };
+    }
+    if (isJockeyColorada(clubCode, course)) {
+      const bundled = coloradaBundledMap(o.hole);
+      const traces = await readAcceptedTraces(clubCode, course);
+      return { ...bundled, imagery: imageryConfig(), holes: bundled.holes.map(h => mergeTrace(h, traces.find((t: any) => Number(t.hole) === h.hole) || null)) };
+    }
+    return null;
   }
   const holes = await q(`select hole, data, crosscheck, coverage from course_map_hole where course_map_id=$1 ${o.hole ? "and hole=$2" : ""} order by hole`, o.hole ? [m.id, o.hole] : [m.id]);
   const traces = await readAcceptedTraces(m.club_code, m.course);
@@ -42,7 +59,7 @@ export async function getCourseMap(clubCode: string, course: string, o: { hole?:
     ...meta, imagery: imageryConfig(), completeness: await courseCompletenessFor(m.club_code, m.course),
     green_surfaces: await greenSurfaceHoles(m.club_code, m.course),   // t181u: holes whose green has a REAL slope survey (usually none)
     attribution: [m.sources?.osm?.attribution, m.sources?.trace?.attribution, m.sources?.dem?.attribution].filter(Boolean),
-    holes: holes.map(h => withGuide(mergeTrace({ ...h.data, crosscheck: h.crosscheck, coverage: h.coverage, ...(wind ? { wind: holeWind(h.data, o.windFrom!, o.windKmh!) } : {}) }, traces.find((t: any) => Number(t.hole) === h.hole) || null), h.hole, gg)),
+    holes: holes.map(h => withGuide(fillColorada(m.club_code, m.course, mergeTrace({ ...h.data, crosscheck: h.crosscheck, coverage: h.coverage, ...(wind ? { wind: holeWind(h.data, o.windFrom!, o.windKmh!) } : {}) }, traces.find((t: any) => Number(t.hole) === h.hole) || null)), h.hole, gg)),
     marker_ref: gg?.marker_ref?.to === "entrada" ? { to: "entrada", label: "a la entrada del green", source: gg.marker_ref.source } : { to: "centro", label: "al centro del green", source: "mapa" },
   };
 }
