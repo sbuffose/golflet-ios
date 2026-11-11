@@ -1384,17 +1384,31 @@ struct PlayHoleView: View {
                     Text("Palo")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
-                    ForEach(model.bag, id: \.name) { club in
-                        Button {
-                            Task { await retarget(shot, club: club.name) }
-                        } label: {
-                            HStack {
-                                Text(club.name)
-                                Spacer()
-                                if let yards = club.carry { Text("\(yards) yd") }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], spacing: 8) {
+                        ForEach(model.bag, id: \.name) { club in
+                            Button {
+                                Task { await retarget(shot, club: club.name) }
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Text(club.name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                    if let yards = club.carry ?? club.total {
+                                        Text("\(yards) yd")
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink3)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(p.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: 0))
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("play-edit-club-\(club.name)")
                         }
-                        .accessibilityIdentifier("play-edit-club-\(club.name)")
                     }
                     Button("Cerrar") { editingShot = nil }
                     if askDeleteShot {

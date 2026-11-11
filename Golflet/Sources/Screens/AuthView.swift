@@ -12,20 +12,18 @@ struct AuthView: View {
         GScreen(id: "screen-login") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(p.primary)
-                            .frame(width: 36, height: 36)
-                            .overlay {
-                                Image(systemName: "flag.fill")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(p.accentOnNavy)
-                            }
+                    VStack(alignment: .leading, spacing: 8) {
+                        CaddieMark(height: 96)
                         Text("Golflet")
                             .font(GType.headline)
                             .foregroundStyle(p.ink)
+                        Text("La libreta, el caddie y el 18.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
                     }
                     .padding(.top, 12)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Golflet. La libreta, el caddie y el 18.")
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Tu golf,")

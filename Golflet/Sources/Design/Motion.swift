@@ -10,6 +10,34 @@ enum GMotion {
     }
 }
 
+struct RoundZoomSource: ViewModifier {
+    var id: String
+    var space: Namespace.ID
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.matchedTransitionSource(id: id, in: space)
+        } else {
+            content
+        }
+    }
+}
+
+struct RoundZoomDestination: ViewModifier {
+    var id: String
+    var space: Namespace.ID
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.navigationTransition(.zoom(sourceID: id, in: space))
+        } else {
+            content
+        }
+    }
+}
+
 struct GSelectionHaptic<T: Equatable>: ViewModifier {
     var reduce: Bool
     var trigger: T

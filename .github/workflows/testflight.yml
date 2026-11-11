@@ -279,6 +279,15 @@ jobs:
           DEVICE_ID="${{ steps.setup_sim.outputs.device_id }}"
           xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
 
+      - name: Upload parity iOS screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-ios
+          path: ${{ runner.temp }}/screenshots/parity-ios-*.png
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload UI Test Results and Screenshots
         uses: actions/upload-artifact@v4
         if: always()
