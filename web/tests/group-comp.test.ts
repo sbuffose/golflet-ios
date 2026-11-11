@@ -51,6 +51,15 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
     const json = (data: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(data)); };
     if (url.pathname.startsWith("/api/groups/g4")) return json(four(url.searchParams.get("range") || "all", 4));
+    if (url.pathname.startsWith("/api/groups/gT")) return json({
+      ...payload("all", 3),
+      group: { id: "gT", name: "Empate", is_admin: true, admins: 1, photo_url: null },
+      members: [
+        member({ id: "a", name: "Ana Pérez", me: true, rounds: 4, birdies: 4, pars: 20, net: 74, avg: 80, cards18: 4, photo: "/fixture-ana.jpg" }),
+        member({ id: "b", name: "Luis Gómez", rounds: 4, birdies: 4, pars: 16, net: 76, avg: 82, cards18: 4 }),
+        member({ id: "c", name: "Sol Díaz", rounds: 4, birdies: 1, pars: 10, net: 80, avg: 86, cards18: 4 }),
+      ],
+    });
     if (url.pathname.startsWith("/api/groups/g1")) return json(payload(url.searchParams.get("range") || "all", url.searchParams.get("range") === "1w" ? 1 : 4));
     if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, rounds: [], courses: [], clubs: [] });
     if (url.pathname.startsWith("/api/")) return json({});
@@ -114,7 +123,7 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await open("g1", "12y");
     const year = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(year, /20 rondas este año/);
-    assert.match(year, /Pocas rondas/);
+    assert.match(year, /Pocas tarjetas/);
     assert.match(year, /Rey del birdie/);
     assert.match(year, /8 tarjetas \(6 de 18 y 2 de 9\)/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
@@ -127,6 +136,22 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
     assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 3);
     await shot("grupo-4-anio-390");
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    const board = async (name: string) => {
+      await page.evaluate(() => document.querySelector(".gg-filters")?.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: `${ART}/${name}.png` });
+    };
+    await open("gT", "all");
+    const tied = await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.map(el => ({ place: el.querySelector(".gg-place")?.textContent, h: Math.round(el.getBoundingClientRect().height), p1: el.classList.contains("p1") })));
+    assert.equal(tied.filter(s => s.place === "1º" && s.p1).length, 2);
+    assert.equal(tied[0].h, tied[1].h);
+    assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /3º/);
+    await board("grupos2-empate-390");
+    await open("g1", "1w");
+    assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Pocas tarjetas/);
+    await board("grupos2-semana-390");
+    await open("g1", "12y");
+    await board("grupos2-anio-390");
   } finally {
     await browser.close();
     server.close();
