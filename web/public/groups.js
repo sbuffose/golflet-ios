@@ -14,7 +14,8 @@
   ];
   const MT = Object.fromEntries(MET.map(m => [m[0], m]));
   const SECTIONS = [['table', 'Tabla'], ['trend', 'Evolución'], ['holes', 'Hoyo por hoyo'], ['vs', 'Mano a mano'], ['clubs', 'Distancias por palo']];
-  const RANGES = [['1w', 'Sem', 'Semana'], ['1m', 'Mes', 'Mes'], ['3q', 'Trim', 'Trimestre'], ['6s', 'Sem.', 'Semestre'], ['12y', 'Año', 'Año'], ['all', 'Todo', 'Histórico']];
+  const RANGES = [['1w', 'Sem', 'Semana'], ['1m', 'Mes', 'Mes'], ['3q', 'Trim', 'Trimestre'], ['6s', '6m', 'Semestre'], ['12y', 'Año', 'Año'], ['all', 'Todo', 'Histórico']];
+  const placesOf = rows => { const out = []; rows.forEach((x, i) => out.push(i && x.v === rows[i - 1].v ? out[i - 1] : i + 1)); return out; };
   const MIN_FALLBACK = { '1w': 1, '1m': 2, '3q': 3, '6s': 4, '12y': 4, all: 3 };
   /* which "Qué comparto" category hides each metric */
   const CAT = k => { const t = MT[k][2]; return t === 't' ? 'score_types' : t === 'p' ? 'holes' : t === 'u' ? 'putting' : t === 'g' || t === 'r' ? 'gir_fir' : t === 'h' ? 'handicap' : 'scores'; };
@@ -227,7 +228,8 @@
       live.sort((a, b) => a.low ? a.v - b.v : b.v - a.v);
       const n = Math.min(live.length, 3);
       const order = n >= 3 ? [1, 0, 2] : n === 2 ? [1, 0] : [0];
-      const pod = order.map(i => { const x = live[i], place = i + 1; return `<a class="gg-step p${place}" href="${href}"><span class="gg-place">${place}º</span>${place === 1 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="num">${x.text}</span><small>${x.n} tarjetas</small></a>`; }).join('');
+      const places = placesOf(live);
+      const pod = order.map(i => { const x = live[i], place = places[i]; return `<a class="gg-step p${i + 1}" href="${href}"><span class="gg-place">${place}º</span>${i === 0 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="num">${x.text}</span><small>${x.n} tarjetas</small></a>`; }).join('');
       return `<section class="gg-rank"><h2>${title}</h2><div class="gg-steps n${n}">${pod}</div><p class="foot">${xNote(title)}</p></section>`;
     };
     const xNote = t => t.startsWith('Consistencia') ? 'Desvío del gross en tarjetas de 18. Menos es más parejo. Hacen falta 3.' : 'Rondas de 18 seguidas en el par o mejor. Una de 9 no corta ni suma la racha.';
@@ -251,32 +253,34 @@
       if (!rows.length) return `<div class="gg-rank" id="gg-${key}"><p class="foot">Sin tarjetas compartidas para este número.</p></div>`;
       const n = Math.min(rows.length, 3);
       const order = n >= 3 ? [1, 0, 2] : n === 2 ? [1, 0] : [0];
+      const places = placesOf(rows);
       const steps = order.map(i => {
-        const x = rows[i], place = i + 1, quiet = shy(key, x), rate = per(x.m, key);
+        const x = rows[i], place = places[i], quiet = shy(key, x), rate = per(x.m, key);
         const num = quiet ? '<span class="gg-few">Pocas rondas</span>' : `<span class="num gg-count" data-n="${x.v}">${fmt(key, x.v)}</span>`;
         const rateLine = !quiet && rate != null ? `<small>${H.f1(rate)} por ronda</small>` : '';
-        const gap = place === 1 ? gapLine(key, rows) : '';
-        return `<a class="gg-step p${place}" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span class="gg-place">${place}º</span>${place === 1 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b>${num}${rateLine}${gap ? `<small class="gg-gap">${H.esc(gap)}</small>` : ''}</a>`;
+        const gap = i === 0 ? gapLine(key, rows) : '';
+        return `<a class="gg-step p${i + 1}" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span class="gg-place">${place}º</span>${i === 0 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b>${num}${rateLine}${gap ? `<small class="gg-gap">${H.esc(gap)}</small>` : ''}</a>`;
       }).join('');
-      const rest = rows.slice(3).map((x, i) => `<a class="gg-rankrow" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span>${i + 4}º ${H.esc(x.m.name)}</span><b class="num">${shy(key, x) ? 'Pocas rondas' : fmt(key, x.v)}</b></a>`).join('');
+      const rest = rows.slice(3).map((x, i) => `<a class="gg-rankrow" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span>${places[i + 3]}º ${H.esc(x.m.name)}</span><b class="num">${shy(key, x) ? 'Pocas rondas' : fmt(key, x.v)}</b></a>`).join('');
       return `<div class="gg-rank" id="gg-${key}"><div class="gg-steps n${n}">${steps}</div>${rest ? `<div class="gg-rest">${rest}</div>` : ''}</div>`;
     };
     const place = () => {
       const rows = ranked('birdies');
       const i = rows.findIndex(x => x.m.is_me);
       if (i < 0) return '';
+      const mine = placesOf(rows)[i];
       const me = rows[i].m;
       let arrow = '';
       if (me.prev && me.prev.birdies != null) {
         const prev = ms.filter(m => m.prev && m.prev.birdies != null).map(m => ({ id: m.member_id, v: m.prev.birdies })).sort((a, b) => b.v - a.v);
         const prevI = prev.findIndex(x => x.id === me.member_id);
         if (prevI >= 0) {
-          const delta = (prevI + 1) - (i + 1);
+          const delta = (placesOf(prev)[prevI]) - mine;
           arrow = delta > 0 ? `<p class="gg-move"><b class="gg-up">↑ ${delta}</b></p>` : delta < 0 ? `<p class="gg-move"><b class="gg-dn">↓ ${-delta}</b></p>` : '';
         }
       }
       const cards = cardsLine(me);
-      return `<section class="gg-hero"><p class="gg-kicker">Tu puesto</p><b class="gg-ranknum"><span class="num gg-count" data-n="${i + 1}">${i + 1}</span>º</b>${arrow}<span class="gg-where">en birdies</span>${cards ? `<p class="gg-cards">${H.esc(cards)}</p>` : ''}</section>`;
+      return `<section class="gg-hero"><p class="gg-kicker">Tu puesto</p><b class="gg-ranknum"><span class="num gg-count" data-n="${mine}">${mine}</span>º</b>${arrow}<span class="gg-where">en birdies</span>${cards ? `<p class="gg-cards">${H.esc(cards)}</p>` : ''}</section>`;
     };
     const trophy = (title, rows) => {
       const live = rows.filter(x => x.v != null);
@@ -298,7 +302,7 @@
     const challenge = !isVs && goal && me && !(me.hidden || []).includes('scores') ? `<section class="gg-rank gg-goal"><h2>${goal[1]}</h2>${meter(Math.round(Math.min(1, (me.cards_18 ?? 0) / goal[0]) * 100))}<p class="foot">${me.cards_18 ?? 0} de ${goal[0]} tarjetas de 18. Una de 9 no cuenta como ronda completa.</p></section>` : '';
     const secs = (V.sections && V.sections.length ? V.sections : SECTIONS.map(x => x[0])).filter(k => sec[k]);
     const CATS = [['birdies', 'Birdies'], ['pars', 'Pares'], ['eagles', 'Águilas'], ['aces', 'Hoyos en uno'], ['max_birdies', 'Máximo de birdies'], ['rounds', 'Rondas'], ['best_net', 'Mejor neto'], ['avg_net', 'Promedio neto']];
-    const slides = !isVs ? `<div class="section"><h2>Ranking</h2></div><div class="gg-cats" role="tablist" aria-label="Categoría">${CATS.map(([k, t], i) => `<button type="button" role="tab" data-cat="${k}" aria-selected="${i ? 'false' : 'true'}" class="${i ? '' : 'on'}">${t}</button>`).join('')}</div><div class="gg-stages">${CATS.map(([k, t], i) => `<div class="gg-stage" data-cat="${k}"${i ? ' hidden' : ''}>${rankCard(k, t)}</div>`).join('')}</div>` : '';
+    const slides = !isVs ? `<div class="section"><h2>Ranking</h2></div><div class="gg-catwrap"><div class="gg-cats" role="tablist" aria-label="Categoría">${CATS.map(([k, t], i) => `<button type="button" role="tab" data-cat="${k}" aria-selected="${i ? 'false' : 'true'}" class="${i ? '' : 'on'}">${t}</button>`).join('')}</div><span class="gg-more">Deslizá</span></div><div class="gg-stages">${CATS.map(([k, t], i) => `<div class="gg-stage" data-cat="${k}"${i ? ' hidden' : ''}>${rankCard(k, t)}</div>`).join('')}</div>` : '';
     const fullTable = !isVs && secs.includes('table') ? `<details class="gg-full"><summary>Ver tabla completa</summary>${sec.table()}</details>` : '';
     el.innerHTML = `${isVs ? bar(ms.map(m => m.name).join(' vs '), 'Mano a mano') : `<div class="gg-top"><div class="bar"><span class="overline">Grupo</span></div>${gear}</div><div class="gg-head">${photo(d.group, 'gg-hph')}<div class="stitle">${H.esc(d.group.name)}</div></div>`}
       ${legend(ms)}${filters(id, d, qs, base)}
@@ -308,6 +312,10 @@
       ${ms.length < 2 ? `<div class="msg"><img class="cad" src="/brand/caddie.png" alt="">Todavía sos el único en el grupo. ${d.group.is_admin ? `<a class="link" href="#/grupo/${id}/ajustes">Compartí el link por WhatsApp</a> o invitá por matrícula.` : 'Cuando alguien más se sume, acá ves la comparación.'}</div>` : ''}
       ${secs.filter(k => k !== 'table').map(k => sec[k]()).join('')}
       ${!isVs ? `<div class="section"><h2>Jugadores</h2></div><a class="card gg-list row" href="#/grupo/${id}/miembros"><div class="gg-t"><b>${d.group.is_admin ? 'Jugadores, admins e invitaciones' : 'Ver jugadores y salir del grupo'}</b><span>${ms.length} en el grupo · ${d.group.admins} admin${d.group.admins === 1 ? '' : 's'}${d.pending.length ? ` · ${d.pending.length} pendiente${d.pending.length === 1 ? '' : 's'}` : ''}</span></div>${CHEV}</a>` : ''}`;
+    const cats = el.querySelector('.gg-cats');
+    const more = el.querySelector('.gg-more');
+    const paintMore = () => { if (!cats || !more) return; more.hidden = cats.scrollWidth - cats.clientWidth - cats.scrollLeft < 8; };
+    if (cats) { cats.addEventListener('scroll', paintMore); paintMore(); }
     el.querySelectorAll('.gg-cats button').forEach(b => b.onclick = () => {
       el.querySelectorAll('.gg-cats button').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); });
       el.querySelectorAll('.gg-stage').forEach(s => { s.hidden = s.dataset.cat !== b.dataset.cat; });
@@ -334,7 +342,7 @@
     const vs = ms.map(m => val(m, k)).filter(v => v != null), mx = Math.max(...vs, 1), mn = Math.min(...vs, 0);
     const w = v => v == null ? 0 : def[3] && ['avg_gross', 'best_gross', 'avg_net', 'best_net', 'par3', 'par4', 'par5', 'putts'].includes(k) ? 30 + 70 * (mx - v) / Math.max(1, mx - mn) : 8 + 92 * v / mx;
     el.innerHTML = `${bar(def[1], d.group.name)}${legend(d.members)}${filters(id, d, qs, `#/grupo/${id}/m/${k}`)}
-      <div class="card gg-bars">${ms.map((m, i) => `<div class="gg-br"><span class="gg-rk num">${val(m, k) == null ? '—' : ms.filter(x => val(x, k) != null).indexOf(m) + 1}</span><span class="gg-nm">${dot(m.color)}${H.esc(m.name)}</span><span class="gg-track"><i style="width:${w(val(m, k))}%;background:${m.color}"></i></span>${hid(m, k) ? NS : `<b class="num">${fmt(k, val(m, k))}</b>`}</div>`).join('')}
+      <div class="card gg-bars">${ms.map((m, i) => `<div class="gg-br"><span class="gg-rk num">${val(m, k) == null ? '—' : placesOf(ms.filter(x => val(x, k) != null).map(x => ({ v: val(x, k) })))[ms.filter(x => val(x, k) != null).indexOf(m)]}</span><span class="gg-nm">${dot(m.color)}${H.esc(m.name)}</span><span class="gg-track"><i style="width:${w(val(m, k))}%;background:${m.color}"></i></span>${hid(m, k) ? NS : `<b class="num">${fmt(k, val(m, k))}</b>`}</div>`).join('')}
       <p class="foot">${def[3] ? 'Menos es mejor.' : 'Más es mejor.'}${ms.some(m => hid(m, k)) ? ' Quien no comparte esta métrica no entra en el ranking.' : ''}${def[2] === 't' ? ' Total en el período; abajo, por ronda.' : ''}</p></div>
       ${def[2] === 't' ? `<div class="section"><h2>Por ronda</h2></div><div class="card gg-bars">${ms.map(m => `<div class="gg-br"><span class="gg-nm">${dot(m.color)}${H.esc(m.name)}</span>${hid(m, k) ? NS : `<b class="num">${H.f1(per(m, k))}</b>`}</div>`).join('')}</div>` : ''}
       ${k === 'avg_gross' ? `<div class="section"><h2>Mes a mes</h2></div><div class="card">${trendSvg(d.members, location.hash)}</div>` : ''}
@@ -344,7 +352,7 @@
         ${d.filters.courses.map(c => `<tr><th><a href="#/grupo/${id}/m/${k}${keepQs(qs, { course: c.key })}">${H.esc(c.label)}</a></th>${d.members.map(m => `<td>${m.by_course ? `<span class="num">${m.by_course.find(x => x.key === c.key)?.rounds ?? 0}</span>` : NS}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }
 
-  const heatCol = tp => tp == null ? '#F1EEE6' : tp <= -0.25 ? '#C8102E' : tp <= 0.15 ? '#0B2545' : tp <= 0.6 ? '#5E8C6A' : tp <= 1.1 ? '#DCD6C8' : '#B4553F';
+  const heatCol = tp => tp == null ? '#F1EEE6' : tp <= -0.25 ? '#C8102E' : tp <= 0.15 ? '#0B2545' : tp <= 0.6 ? '#5E8C6A' : tp <= 1.1 ? '#DCD6C8' : '#C8102E';
   const heatInk = tp => tp == null ? '#9AA09B' : (tp <= 0.6 && tp > -0.25) ? '#F6F7F9' : tp <= -0.25 ? '#1d1a12' : tp > 1.1 ? '#FFFFFF' : '#121614';
   const sgn = x => x == null ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '±') + H.f1(Math.abs(x)).replace(/^—$/, '0');
   function drawHeat(el, id, d, qs) {
@@ -363,7 +371,7 @@
       <div class="card gg-heat" style="--n:${ms.length}"><div class="gg-hrow gg-hh"><span>Hoyo</span>${ms.map(m => `<span title="${H.esc(m.name)}">${dot(m.color)}${H.esc(m.name.split(' ')[0])}</span>`).join('')}</div>
         ${d.holes.map(h => `<a class="gg-hrow" href="#/grupo/${id}/hoyo/${h.hole}${keepQs(qs)}"><span class="gg-hn"><b class="num">${h.hole}</b><small>Par ${h.par ?? '—'}</small></span>${ms.map(m => { const x = h.members.find(y => y.member_id === m.member_id) || {}; const best = h.leaders.avg.includes(m.member_id);
           return `<span class="gg-cell${best ? ' best' : ''}" style="background:${heatCol(x.avg_to_par)};color:${heatInk(x.avg_to_par)}"><b class="num">${x.n ? sgn(x.avg_to_par) : '—'}</b>${x.n ? `<small class="num">${x.birdies}b · ${x.pars}p</small>` : ''}</span>`; }).join('')}</a>`).join('')}
-        <div class="gg-key"><span><i style="background:#C8102E"></i>bajo par</span><span><i style="background:#0B2545"></i>par</span><span><i style="background:#5E8C6A"></i>hasta +0,6</span><span><i style="background:#DCD6C8"></i>bogey</span><span><i style="background:#B4553F"></i>más de +1</span><span>Borde dorado: mejor promedio del hoyo</span></div></div>`;
+        <div class="gg-key"><span><i style="background:#C8102E"></i>bajo par</span><span><i style="background:#0B2545"></i>par</span><span><i style="background:#5E8C6A"></i>hasta +0,6</span><span><i style="background:#DCD6C8"></i>bogey</span><span><i style="background:#C8102E"></i>más de +1</span><span>Borde dorado: mejor promedio del hoyo</span></div></div>`;
   }
   function drawHole(el, id, d, n, qs) {
     const h = d.holes.find(x => x.hole === n); if (!h) { el.innerHTML = '<p class="msg">Hoyo no encontrado.</p>'; return; }
@@ -376,8 +384,8 @@
         return `<tr><th>${l}</th>${xs.map(x => `<td class="${lead.includes(x.member_id) ? 'lead' : ''}"><b class="num">${x.n ? (k === 'avg' ? H.f1(x.avg) : k === 'avg_to_par' ? sgn(x.avg_to_par) : x[k] ?? '—') : '—'}</b></td>`).join('')}</tr>`; }).join('')}
       </tbody></table></div></div>
       <div class="section"><h2>Cómo terminó cada uno</h2></div><div class="card gg-bars">${ms.map(m => { const x = h.members.find(y => y.member_id === m.member_id) || { n: 0 }; const tot = x.n || 1;
-        return `<div class="gg-dist"><span class="gg-nm">${dot(m.color)}${H.esc(m.name)}</span><span class="vx-split">${[['eagles', '#C4A36A'], ['birdies', '#C8102E'], ['pars', '#0B2545'], ['bogeys', '#DCD6C8'], ['doubles', '#B4553F']].map(([k, c]) => x[k] ? `<span style="flex:${x[k]};background:${c}" title="${k}: ${x[k]}"></span>` : '').join('') || '<span style="flex:1;background:#F1EEE6"></span>'}</span><small class="num">${x.n} vez${x.n === 1 ? '' : 'es'}</small></div>`; }).join('')}
-      <div class="gg-key"><span><i style="background:#C8102E"></i>birdie o mejor</span><span><i style="background:#0B2545"></i>par</span><span><i style="background:#DCD6C8"></i>bogey</span><span><i style="background:#B4553F"></i>doble o peor</span></div></div>`;
+        return `<div class="gg-dist"><span class="gg-nm">${dot(m.color)}${H.esc(m.name)}</span><span class="vx-split">${[['eagles', '#C4A36A'], ['birdies', '#C8102E'], ['pars', '#0B2545'], ['bogeys', '#DCD6C8'], ['doubles', '#C8102E']].map(([k, c]) => x[k] ? `<span style="flex:${x[k]};background:${c}" title="${k}: ${x[k]}"></span>` : '').join('') || '<span style="flex:1;background:#F1EEE6"></span>'}</span><small class="num">${x.n} vez${x.n === 1 ? '' : 'es'}</small></div>`; }).join('')}
+      <div class="gg-key"><span><i style="background:#C8102E"></i>birdie o mejor</span><span><i style="background:#0B2545"></i>par</span><span><i style="background:#DCD6C8"></i>bogey</span><span><i style="background:#C8102E"></i>doble o peor</span></div></div>`;
   }
 
   function drawMembers(el, id, d) {
@@ -492,8 +500,17 @@
     const list = (cur, all, lab, attr) => [...cur, ...all.filter(k => !cur.includes(k))].map((k, i, arr) => `<div class="gg-vrow"><label class="check"><input type="checkbox" data-${attr}="${k}" ${cur.includes(k) ? 'checked' : ''}><span>${H.esc(lab(k))}</span></label>
       <span class="gg-ord"><button type="button" class="btn ghost sm" data-up="${attr}:${k}" ${i === 0 ? 'disabled' : ''} aria-label="Subir">↑</button><button type="button" class="btn ghost sm" data-dn="${attr}:${k}" ${i === arr.length - 1 ? 'disabled' : ''} aria-label="Bajar">↓</button></span></div>`).join('');
     const ov = v.share_override;
+    const me = (d.members || []).find(m => m.is_me);
+    const mineSummary = () => {
+      if (!me) return '';
+      const n = Number(me.cards_18 ?? me.rounds ?? 0);
+      if (n < 3) return `<section class="gg-mine"><h2>Tu resumen</h2><p>Pocas tarjetas</p><small>${n} tarjetas de 18 en este período. No armo promedios con menos de 3.</small></section>`;
+      const keys = ['avg_gross', 'birdies', 'pars', 'putts', 'gir', 'fir'].filter(k => !hid(me, k) && val(me, k) != null);
+      if (!keys.length) return `<section class="gg-mine"><h2>Tu resumen</h2><p>Sin números de tus tarjetas en este período.</p><small>${n} tarjetas</small></section>`;
+      return `<section class="gg-mine"><h2>Tu resumen</h2>${keys.map(k => `<div><span>${MT[k][1]}</span><b class="num">${fmt(k, val(me, k))}</b><small>${n} tarjetas</small></div>`).join('')}</section>`;
+    };
     const draw = () => {
-      el.innerHTML = `${bar('Mi vista del grupo', d.group.name)}<p class="gg-lede">Solo cambia lo que ves vos. Los demás eligen su propia vista.</p>
+      el.innerHTML = `${bar('Mi vista', d.group.name)}${mineSummary()}<p class="gg-lede">Solo tus tarjetas compartidas. Lo de abajo cambia lo que ves vos.</p>
       <div class="section"><h2>Período y cancha</h2></div><div class="card gg-form">
         <label>Período<select id="gvr">${RANGES.map(([k, l]) => `<option value="${k}" ${k === v.view.range ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label>Cancha<select id="gvc"><option value="">Todas las canchas</option>${d.filters.courses.map(c => `<option value="${H.esc(c.key)}" ${c.key === v.view.course ? 'selected' : ''}>${H.esc(c.label)}</option>`).join('')}</select></label></div>
@@ -659,7 +676,7 @@
     el.innerHTML = `<div class="bar"><span class="overline">${H.esc(m.name)}${m.is_me ? ' (vos)' : ''}</span></div><div class="stitle">${dmy(c.date)} · ${H.esc(c.course_label || '')}</div>
       <div class="pills"><div class="pill dark"><b class="num">${c.gross ?? '—'}</b><span>Gross</span></div><div class="pill"><b class="num">${c.net ?? '—'}</b><span>Neto</span></div><div class="pill"><b class="num">${tpTxt(c.to_par)}</b><span>vs par</span></div></div>
       <div class="section"><h2>Hoyo por hoyo</h2></div>${nine(hs.filter(h => h.hole <= 9), 'Ida')}${nine(hs.filter(h => h.hole > 9), 'Vuelta')}
-      <div class="gg-key"><span><i style="background:#C8102E"></i>birdie o mejor</span><span><i style="background:#0B2545"></i>par</span><span><i style="background:#DCD6C8"></i>bogey</span><span><i style="background:#B4553F"></i>doble o peor</span></div>
+      <div class="gg-key"><span><i style="background:#C8102E"></i>birdie o mejor</span><span><i style="background:#0B2545"></i>par</span><span><i style="background:#DCD6C8"></i>bogey</span><span><i style="background:#C8102E"></i>doble o peor</span></div>
       ${c.putts != null || c.gir != null || c.fir != null ? `<div class="section"><h2>Cargado en la tarjeta</h2></div><div class="pills">${c.putts != null ? `<div class="pill"><b class="num">${c.putts}</b><span>Putts</span></div>` : ''}${c.gir != null ? `<div class="pill"><b class="num">${c.gir}</b><span>Greens</span></div>` : ''}${c.fir != null ? `<div class="pill"><b class="num">${c.fir}</b><span>Fairways</span></div>` : ''}</div>` : ''}
       <p class="foot">${m.is_me ? 'Así ven tu tarjeta los jugadores del grupo.' : `${H.esc(m.name.split(' ')[0])} comparte sus tarjetas con el grupo.`} Las notas de la ronda nunca se comparten.</p>`;
   }
