@@ -79,134 +79,96 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
     const open = async (id: string, range: string) => {
       await page.goto(`http://127.0.0.1:${port}/#/grupo/${id}?range=${range}`, { waitUntil: "networkidle0" });
-      await page.waitForSelector(".gg-steps");
-      await page.waitForFunction(() => [...document.querySelectorAll(".gg-hero .gg-count, .gg-stage:not([hidden]) .gg-count")].every(n => (n as HTMLElement).textContent === String(Math.round(Number((n as HTMLElement).dataset.n)))));
+      await page.waitForSelector(".gg-lb");
     };
+    const rowsOf = () => page.$$eval(".gg-stage:not([hidden]) .gg-lb tbody tr", els => els.length);
+    const placesOf = () => page.$$eval(".gg-stage:not([hidden]) .gg-lb td.pos b", els => els.map(el => el.textContent || ""));
     const shot = async (name: string) => {
-      await page.evaluate(() => {
-        const steps = document.querySelector(".gg-stage:not([hidden]) .gg-steps");
-        const bar = document.querySelector("#tabbar");
-        if (!steps || !bar) return;
-        const room = bar.getBoundingClientRect().top - 12;
-        const box = steps.getBoundingClientRect();
-        if (box.bottom > room) window.scrollBy(0, box.bottom - room);
-      });
+      await page.evaluate(() => document.querySelector(".gg-mast")?.scrollIntoView({ block: "start" }));
       await page.screenshot({ path: `${ART}/${name}.png` });
     };
     await open("g1", "1w");
     const week = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
-    assert.match(week, /Tu puesto/);
-    assert.match(week, /en birdies · 3 esta semana/);
+    assert.match(week, /Tu posición/);
+    assert.match(week, /Semana del 1 ene/);
     assert.match(week, /1 tarjeta/);
     assert.match(week, /Ver tabla completa/);
     assert.match(week, /\+2 sobre Luis/);
-    assert.match(week, /Birdies por ronda/);
+    assert.match(week, /Por ronda/);
     assert.match(week, /1 ronda esta semana/);
-    assert.match(week, /Rey del birdie/);
+    assert.match(week, /Pocas tarjetas/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Sem");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Semana");
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
-    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 2);
-    assert.equal(await page.$(".gg-step .cad"), null);
+    assert.equal(await rowsOf(), 2);
+    assert.deepEqual(await placesOf(), ["1", "2"]);
+    assert.ok(await page.$(".gg-stage:not([hidden]) .gg-move"));
+    assert.equal(await page.$(".gg-lb .cad"), null);
     const tableHidden = await page.$eval(".gg-full", el => (el as HTMLDetailsElement).open);
     assert.equal(tableHidden, false);
     await shot("grupo-semana-390");
     await open("g1", "all");
     const hist = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(hist, /8 tarjetas \(6 de 18 y 2 de 9\)/);
+    assert.match(hist, /Histórico/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Todo");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Histórico");
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
-    assert.ok(await page.$(".gg-step.p1 img.gg-img"));
-    const peek = await page.$$eval(".gg-trophy", els => els.length >= 2 && els[1].getBoundingClientRect().left < window.innerWidth);
-    assert.equal(peek, true);
+    assert.ok(await page.$(".gg-lb img.gg-img"));
+    const leaders = await page.$$eval(".gg-leaders button", els => els.length >= 3 && els[1].getBoundingClientRect().left < window.innerWidth && Math.abs(els[1].getBoundingClientRect().top - els[0].getBoundingClientRect().top) < 2);
+    assert.equal(leaders, true);
     await shot("grupo-2-historico-390");
     await open("g1", "12y");
     const year = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(year, /20 rondas este año/);
     assert.match(year, /Pocas tarjetas/);
-    assert.match(year, /Rey del birdie/);
+    assert.match(year, /Temporada 2026/);
     assert.match(year, /8 tarjetas \(6 de 18 y 2 de 9\)/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
     await shot("grupo-2-anio-390");
     await open("g4", "all");
-    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 3);
+    assert.equal(await rowsOf(), 4);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Mateo Ruiz/);
     await shot("grupo-4-historico-390");
     await open("g4", "12y");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
-    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 3);
+    assert.equal(await rowsOf(), 4);
     await shot("grupo-4-anio-390");
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
     const board = async (name: string) => {
-      await page.evaluate(() => document.querySelector(".gg-filters")?.scrollIntoView({ block: "start" }));
-      const gap = await page.evaluate(() => {
-        const bar = document.querySelector("#tabbar")?.getBoundingClientRect().top ?? window.innerHeight;
-        const labels = [...document.querySelectorAll(".gg-stage:not([hidden]) .gg-col span")];
-        return Math.min(...labels.map(el => bar - el.getBoundingClientRect().bottom));
-      });
-      assert.ok(gap >= 8, `las etiquetas del gráfico quedan a ${gap}px de la barra`);
+      await page.evaluate(() => document.querySelector(".gg-mast")?.scrollIntoView({ block: "start" }));
       await page.screenshot({ path: `${ART}/${name}.png` });
     };
-    const labelsClearNav = async () => {
-      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const tableClearsNav = async () => {
+      await page.evaluate(() => document.querySelector(".gg-stage:not([hidden]) .gg-lb tbody tr:last-child")?.scrollIntoView({ block: "end" }));
       return page.evaluate(() => {
         const bar = document.querySelector("#tabbar")?.getBoundingClientRect().top ?? window.innerHeight;
-        const labels = [...document.querySelectorAll(".gg-stage:not([hidden]) .gg-col span")];
-        return Math.min(...labels.map(el => bar - el.getBoundingClientRect().bottom));
+        const row = document.querySelector(".gg-stage:not([hidden]) .gg-lb tbody tr:last-child");
+        return row ? bar - row.getBoundingClientRect().bottom : 0;
       });
     };
     await open("gT", "all");
-    const tied = await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.map(el => {
-      const box = el.getBoundingClientRect();
-      return { place: el.querySelector(".gg-place")?.textContent, h: Math.round(box.height), p1: el.classList.contains("p1"), mid: (box.left + box.right) / 2, left: box.left };
-    }));
-    assert.equal(tied.filter(s => s.place === "1º" && s.p1).length, 2);
-    assert.equal(tied[0].h, tied[1].h);
-    assert.ok(tied[2].h < tied[0].h);
-    assert.ok(tied[2].left > tied[1].mid);
-    const pairMid = (tied[0].mid + tied[1].mid) / 2;
-    assert.ok(Math.abs(pairMid - 195) < 24, `el par de 1º quedó en ${pairMid}`);
-    assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /3º/);
-    await board("grupos4-empate-390");
+    assert.deepEqual(await placesOf(), ["T1", "T1", "3"]);
+    assert.match(await page.evaluate(() => document.querySelector(".gg-you")?.textContent || ""), /Empate en la punta/);
+    await board("grupos5-empate-390");
     await open("g1", "1w");
     const fit = await page.$eval(".gg-filters", el => {
       const row = el.getBoundingClientRect();
       const course = el.querySelector(".gg-course summary").getBoundingClientRect();
       const pills = [...el.querySelectorAll(".gg-rng a")].map(a => a.getBoundingClientRect());
       const last = pills[pills.length - 1];
-      const first = [...el.querySelectorAll(".gg-stage:not([hidden]) .gg-step")];
       return {
         courseInside: course.right <= row.right + 1 && course.left >= last.right - 1 && course.top >= row.top - 1 && course.bottom <= row.bottom + 1,
         oneRow: new Set(pills.map(p => Math.round(p.top))).size === 1,
-        steps: first.length,
       };
     });
     assert.equal(fit.courseInside, true);
     assert.equal(fit.oneRow, true);
-    const centered = await page.$eval(".gg-stage:not([hidden]) .gg-fairway", el => {
-      const fair = el.getBoundingClientRect();
-      const lead = el.querySelector(".gg-step.p1").getBoundingClientRect();
-      const side = el.querySelector(".gg-step.p2").getBoundingClientRect();
-      const pairMid = (side.left + lead.right) / 2;
-      const fairMid = (fair.left + fair.right) / 2;
-      return {
-        delta: Math.abs(pairMid - fairMid),
-        leadRight: lead.left + 2 >= side.right,
-        leftGap: side.left - fair.left,
-        rightGap: fair.right - lead.right,
-        slots: el.querySelectorAll(".gg-slot").length,
-      };
-    });
-    assert.ok(centered.delta < 16, `el par quedó a ${centered.delta}px del centro`);
-    assert.equal(centered.leadRight, true);
-    assert.equal(centered.slots, 0);
-    assert.ok(Math.abs(centered.leftGap - centered.rightGap) < 18, `huecos ${centered.leftGap}/${centered.rightGap}`);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Pocas tarjetas/);
-    await board("grupos4-semana-390");
-    assert.ok(await labelsClearNav() >= 8, "al final del scroll las etiquetas quedan detrás de la barra");
+    assert.ok(await tableClearsNav() >= 8, "la última fila queda detrás de la barra");
+    await board("grupos5-semana-390");
     await open("g1", "12y");
-    await board("grupos4-anio-390");
+    await board("grupos5-anio-390");
   } finally {
     await browser.close();
     server.close();
