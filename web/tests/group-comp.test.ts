@@ -96,10 +96,10 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await open("g1", "1w");
     const week = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(week, /Tu puesto/);
-    assert.match(week, /en birdies/);
+    assert.match(week, /3 birdies/);
     assert.match(week, /1 tarjeta/);
     assert.match(week, /Ver tabla completa/);
-    assert.match(week, /\+2 birdies sobre Luis Gómez/);
+    assert.match(week, /\+2 sobre Luis Gómez/);
     assert.match(week, /1 ronda esta semana/);
     assert.match(week, /Rey del birdie/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Sem");
@@ -142,16 +142,46 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
       await page.screenshot({ path: `${ART}/${name}.png` });
     };
     await open("gT", "all");
-    const tied = await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.map(el => ({ place: el.querySelector(".gg-place")?.textContent, h: Math.round(el.getBoundingClientRect().height), p1: el.classList.contains("p1") })));
+    const tied = await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.map(el => {
+      const box = el.getBoundingClientRect();
+      return { place: el.querySelector(".gg-place")?.textContent, h: Math.round(box.height), p1: el.classList.contains("p1"), mid: (box.left + box.right) / 2, left: box.left };
+    }));
     assert.equal(tied.filter(s => s.place === "1º" && s.p1).length, 2);
     assert.equal(tied[0].h, tied[1].h);
+    assert.ok(tied[2].h < tied[0].h);
+    assert.ok(tied[2].left > tied[1].mid);
+    const pairMid = (tied[0].mid + tied[1].mid) / 2;
+    assert.ok(Math.abs(pairMid - 195) < 24, `el par de 1º quedó en ${pairMid}`);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /3º/);
-    await board("grupos2-empate-390");
+    await board("grupos3-empate-390");
     await open("g1", "1w");
+    const fit = await page.$eval(".gg-filters", el => {
+      const row = el.getBoundingClientRect();
+      const course = el.querySelector(".gg-course summary").getBoundingClientRect();
+      const pills = [...el.querySelectorAll(".gg-rng a")].map(a => a.getBoundingClientRect());
+      const last = pills[pills.length - 1];
+      const first = [...el.querySelectorAll(".gg-stage:not([hidden]) .gg-step")];
+      return {
+        courseInside: course.right <= row.right + 1 && course.left >= last.right - 1 && course.top >= row.top - 1 && course.bottom <= row.bottom + 1,
+        oneRow: new Set(pills.map(p => Math.round(p.top))).size === 1,
+        steps: first.length,
+      };
+    });
+    assert.equal(fit.courseInside, true);
+    assert.equal(fit.oneRow, true);
+    const centered = await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => {
+      const mid = window.innerWidth / 2;
+      const lead = els.find(el => el.classList.contains("p1"));
+      const side = els.find(el => el.classList.contains("p2"));
+      const box = lead.getBoundingClientRect();
+      return { delta: Math.abs((box.left + box.right) / 2 - mid), sideLeft: side.getBoundingClientRect().right <= box.left + 2 };
+    });
+    assert.ok(centered.delta < 28, `el 1º quedó a ${centered.delta}px del centro`);
+    assert.equal(centered.sideLeft, true);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Pocas tarjetas/);
-    await board("grupos2-semana-390");
+    await board("grupos3-semana-390");
     await open("g1", "12y");
-    await board("grupos2-anio-390");
+    await board("grupos3-anio-390");
   } finally {
     await browser.close();
     server.close();

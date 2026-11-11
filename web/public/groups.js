@@ -245,8 +245,7 @@
       if (live.length < 2) return '';
       if (live[0].v === live[1].v) return 'Empate en la punta.';
       const dlt = lowOf(key) ? live[1].v - live[0].v : live[0].v - live[1].v;
-      const unit = { birdies: 'birdies', pars: 'pares', eagles: 'águilas', aces: 'hoyos en uno', rounds: 'rondas', max_birdies: 'birdies' }[key] || '';
-      return `+${String(Math.round(dlt * 10) / 10).replace('.', ',')}${unit ? ' ' + unit : ''} sobre ${live[1].m.name}`;
+      return `+${String(Math.round(dlt * 10) / 10).replace('.', ',')} sobre ${live[1].m.name}`;
     };
     const UNIT = { birdies: 'birdies', pars: 'pares', eagles: 'águilas', aces: 'hoyos en uno', rounds: 'rondas', max_birdies: 'birdies', racha: 'rondas', best_net: 'golpes', regular: 'de desvío' };
     const WHERE = { birdies: 'en birdies', pars: 'en pares', eagles: 'en águilas', aces: 'en hoyos en uno', rounds: 'en rondas', max_birdies: 'en birdies por vuelta', racha: 'en la racha', best_net: 'en mejor neto', regular: 'en regularidad' };
@@ -268,11 +267,17 @@
       const rows = boardRows(key);
       if (!rows.length) return emptyBoard(key);
       rows.sort((a, b) => (a.low ? a.v - b.v : b.v - a.v));
-      const n = Math.min(rows.length, 3);
-      const order = n >= 3 ? [1, 0, 2] : n === 2 ? [1, 0] : [0];
       const places = placesOf(rows);
+      const firsts = [], others = [];
+      rows.forEach((x, i) => (places[i] === 1 ? firsts : others).push(i));
+      const third = others.find(i => places[i] === 3);
+      const seconds = others.filter(i => places[i] === 2);
+      const slots = firsts.length >= 2
+        ? [null, firsts[0], firsts[1], third ?? null]
+        : [seconds[0] ?? null, firsts[0], third ?? seconds[1] ?? null];
       const leader = rows[0].v;
-      const steps = order.map(i => {
+      const steps = slots.map(i => {
+        if (i == null) return '<span class="gg-slot" aria-hidden="true"></span>';
         const x = rows[i], place = places[i], face = place === 1 ? 1 : place === 2 ? 2 : 3;
         const rate = x.n >= 3 && x.rate != null ? `<small>${H.f1(x.rate)} por ronda</small>` : (x.n < 3 ? '<small>Pocas tarjetas</small>' : '');
         const sample = cardsLine(x.m);
@@ -288,6 +293,9 @@
       let you = '';
       if (meAt >= 0) {
         const mine = places[meAt], me = rows[meAt].m, cards = cardsLine(me);
+        const noun = UNIT[key] || '';
+        const rateBit = rows[meAt].n >= 3 && rows[meAt].rate != null ? `${H.f1(rows[meAt].rate)} por ronda` : '';
+        const mainLine = [[shown(key, rows[meAt]), noun].filter(Boolean).join(' '), rateBit].filter(Boolean).join(' · ');
         let gap = '';
         if (rows.length > 1) {
           if (mine === 1 && rows.filter((_, j) => places[j] === 1).length > 1) gap = 'Empate en la punta.';
@@ -296,8 +304,7 @@
             let ahead = meAt - 1;
             while (ahead > 0 && places[ahead] === mine) ahead -= 1;
             const dlt = rows[meAt].low ? rows[meAt].v - rows[ahead].v : rows[ahead].v - rows[meAt].v;
-            const unit = UNIT[key] || '';
-            gap = `a ${String(Math.round(dlt * 10) / 10).replace('.', ',')} ${unit} de ${rows[ahead].m.name}`.replace(/\s+/g, ' ').trim();
+            gap = `a ${String(Math.round(dlt * 10) / 10).replace('.', ',')} de ${rows[ahead].m.name}`;
           }
         }
         const field = { birdies: 'birdies', pars: 'pars', eagles: 'eagles', rounds: 'rounds', best_net: 'best_net' }[key];
@@ -311,9 +318,10 @@
           }
         }
         const few = (Number(me.cards_18 ?? me.rounds ?? 0) + Number(me.cards_9 || 0)) < 3;
-        you = `<section class="gg-hero gg-you"><div class="gg-you-top"><p class="gg-kicker">Tu puesto</p>${arrow}</div><div class="gg-you-main"><b class="gg-ranknum"><span class="num gg-count" data-n="${mine}">${mine}</span>º</b><div><span class="gg-where">${where}</span><b class="num">${shown(key, rows[meAt])}</b>${gap ? `<p class="gg-gap">${H.esc(gap)}</p>` : ''}</div></div>${cards ? `<p class="gg-cards">${H.esc(cards)}</p>` : ''}${few ? '<p class="gg-cards">Pocas tarjetas</p>' : ''}</section>`;
+        const meta = [cards, few ? 'Pocas tarjetas' : ''].filter(Boolean).join(' · ');
+        you = `<section class="gg-hero gg-you"><span class="sr">Tu puesto</span><b class="gg-ranknum"><span class="num gg-count" data-n="${mine}">${mine}</span>º</b><div class="gg-you-copy"><b>${H.esc(mainLine)}</b>${gap ? `<span class="gg-gap">${H.esc(gap)}</span>` : ''}${meta ? `<small class="gg-cards">${H.esc(meta)}</small>` : ''}</div>${arrow}</section>`;
       }
-      return `<div class="gg-rank" id="gg-${key}"><div class="gg-steps n${n}">${steps}</div>${rest ? `<div class="gg-rest">${rest}</div>` : ''}${you}</div>`;
+      return `<div class="gg-rank" id="gg-${key}"><div class="gg-steps${firsts.length >= 2 ? ' tie' : ''}">${steps}</div>${rest ? `<div class="gg-rest">${rest}</div>` : ''}${you}</div>`;
     };
     const trophy = (title, rows) => {
       const live = rows.filter(x => x.v != null);
