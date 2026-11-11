@@ -160,11 +160,11 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await open("g1", "1w");
     const fit = await page.$eval(".gg-filters", el => {
       const row = el.getBoundingClientRect();
-      const course = el.querySelector(".gg-course summary").getBoundingClientRect();
+      const course = el.querySelector(".gg-course summary")?.getBoundingClientRect();
       const pills = [...el.querySelectorAll(".gg-rng a")].map(a => a.getBoundingClientRect());
       const last = pills[pills.length - 1];
       return {
-        courseInside: course.right <= row.right + 1 && course.left >= last.right - 1 && course.top >= row.top - 1 && course.bottom <= row.bottom + 1,
+        courseInside: !!course && !!last && course.right <= row.right + 1 && course.left >= last.right - 1 && course.top >= row.top - 1 && course.bottom <= row.bottom + 1,
         oneRow: new Set(pills.map(p => Math.round(p.top))).size === 1,
       };
     });
