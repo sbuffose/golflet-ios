@@ -10,6 +10,13 @@
   --color-primary2:#13315C;
   --color-onPrimary:#FFFFFF;
   --color-accent:#C8102E;
+  --color-gold:#C8A86A;
+  --type-11:11px;
+  --type-13:13px;
+  --type-15:15px;
+  --type-18:18px;
+  --type-24:24px;
+  --type-40:40px;
   --color-accentSoft:#FBE7EA;
   --color-positive:#13315C;
   --color-negative:#A6192E;
@@ -41,19 +48,19 @@
   --motion-fast:160ms;
   --motion-base:260ms;
   --motion-curve:cubic-bezier(.2,.8,.2,1);
-  --type-largeTitle-size:42px; --type-largeTitle-weight:600; --type-largeTitle-tracking:-0.045em;
-  --type-sheetTitle-size:30px; --type-sheetTitle-weight:600; --type-sheetTitle-tracking:-0.040em;
-  --type-section-size:20px; --type-section-weight:600; --type-section-tracking:-0.025em;
-  --type-headline-size:15.5px; --type-headline-weight:600; --type-headline-tracking:-0.016em;
-  --type-body-size:16px; --type-body-weight:400; --type-body-tracking:-0.009em;
-  --type-label-size:12.5px; --type-label-weight:500; --type-label-tracking:-0.004em;
+  --type-largeTitle-size:var(--type-40); --type-largeTitle-weight:600; --type-largeTitle-tracking:-0.045em;
+  --type-sheetTitle-size:var(--type-24); --type-sheetTitle-weight:600; --type-sheetTitle-tracking:-0.040em;
+  --type-section-size:var(--type-18); --type-section-weight:600; --type-section-tracking:-0.025em;
+  --type-headline-size:var(--type-15); --type-headline-weight:600; --type-headline-tracking:-0.016em;
+  --type-body-size:var(--type-15); --type-body-weight:400; --type-body-tracking:-0.009em;
+  --type-label-size:var(--type-13); --type-label-weight:500; --type-label-tracking:-0.004em;
   --type-overline-size:11px; --type-overline-weight:600; --type-overline-tracking:0.127em;
   --type-statHero-size:80px; --type-statHero-weight:600; --type-statHero-tracking:-0.055em;
   --type-statL-size:32px; --type-statL-weight:600; --type-statL-tracking:-0.044em;
   --type-statM-size:24px; --type-statM-weight:600; --type-statM-tracking:-0.037em;
   --font-ui:'Geist',-apple-system, 'SF Pro Text', system-ui, sans-serif;
   --font-display:'Geist',-apple-system, 'SF Pro Display', system-ui, sans-serif;
-  --display-weight:var(--fw600,600); --display-size:42px; --display-tracking:-0.045em;
+  --display-weight:var(--fw600,600); --display-size:var(--type-40); --display-tracking:-0.045em;
 }
 
 /* t150u: Tamaño / Grosor del texto (Tu cuenta). Body text scales by --ts; big numbers (≥ 26px) by --tsb (less); the 9-column scorecard by --tsc (least). */

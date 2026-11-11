@@ -123,10 +123,10 @@ export async function updateManualShot(userId: string, liveId: string, shotId: s
   const shot = shotFields({ ...body, hole: body.hole ?? 1 });
   const hole = body.hole == null ? null : shot.hole;
   const rows = await db(`update shot set lat=$2, lng=$3, source=$4, end_lat=$5, end_lng=$6, end_source=$7, penalty_strokes=$8, distance_m=$9, distance_kind=$10,
-      club=coalesce($11, club), lie=$12, result=$13, hole=coalesce($14, hole), accuracy_m=null, updated_at=now()
+      club=coalesce($11, club), lie=$12, result=$13, hole=coalesce($14, hole), intent=coalesce($17, intent), accuracy_m=null, updated_at=now()
     where id=$1 and user_id=$15 and live_round_id=$16 returning id`, [
     shotId, shot.placed.lat, shot.placed.lng, shot.placed.source, shot.placed.end_lat, shot.placed.end_lng, shot.placed.end_source,
-    shot.placed.penalty_strokes, shot.placed.distance_m, shot.placed.distance_kind, shot.club, shot.lie, shot.result, hole, userId, liveId,
+    shot.placed.penalty_strokes, shot.placed.distance_m, shot.placed.distance_kind, shot.club, shot.lie, shot.result, hole, userId, liveId, shot.intent,
   ]);
   if (!rows.length) throw new HttpError(404, "No encontrado");
   return present(shotId, shot);
@@ -143,7 +143,7 @@ export async function deleteManualShot(userId: string, liveId: string, shotId: s
 export async function listManualShots(userId: string, liveId: string, sql?: Sql) {
   const db = wrap(sql);
   if (await liveOrigin(userId, liveId, db) !== "manual") throw new HttpError(404, "No encontrado");
-  const rows = await db(`select id, hole, shot_number, lat, lng, club, lie, result, source, end_lat, end_lng, end_source, penalty_strokes, distance_m, distance_kind
+  const rows = await db(`select id, hole, shot_number, lat, lng, club, lie, result, source, end_lat, end_lng, end_source, penalty_strokes, distance_m, distance_kind, intent
     from shot where live_round_id=$1 and user_id=$2 order by hole, shot_number`, [liveId, userId]);
   return rows.map(presentRow);
 }
@@ -169,7 +169,7 @@ function presentRow(row: any) {
   const meters = row.distance_m == null ? placed.distance_m : Number(row.distance_m);
   return {
     id: String(row.id), hole: Number(row.hole), shot_number: Number(row.shot_number),
-    club: row.club, lie: row.lie, result: row.result,
+    club: row.club, lie: row.lie, result: row.result, intent: row.intent || null,
     ...placed,
     distance_m: meters,
     distance_kind: kind,

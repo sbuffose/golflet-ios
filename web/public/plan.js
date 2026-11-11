@@ -106,8 +106,8 @@
   let BDTAP = null, MAPTAP = null, FLAGDRAG = null;   // t250u: FLAGDRAG = drag the flag on the green
   const FLUNDO = {};   // "<plan>|<hole>|<date>" → previous flag positions (↶)   // t244u: MAPTAP = «tocá el mapa donde está la bandera»
   const PEND = {};                    // "<plan>|<hole>" → { club, to?, adjusted }
-  const MKC = { rojo: '#B4553F', blanco: '#FFFFFF', azul: '#2F63C9', amarillo: '#E6C34A' };   // t227u: course marker colours
-  const COL = { ink: '#0B2545', gold: '#C8102E', red: '#B4553F', cream: '#F6F7F9', celeste: '#75AADB', rough: '#DDE7D3', fair: '#A9D18E', fairE: '#8DBB73', green: '#6DBB5F', greenE: '#3F8F3C', sand: '#EEDDB0', sandE: '#C8102E', wood: '#8DB384', tree: '#5E8C5A', water: '#75AADB', waterE: '#4F86BC' };
+  const MKC = { rojo: '#C8102E', blanco: '#FFFFFF', azul: '#2F63C9', amarillo: '#E6C34A' };   // t227u: course marker colours
+  const COL = { ink: '#0B2545', gold: '#C8102E', red: '#C8102E', cream: '#F6F7F9', celeste: '#C8A86A', rough: '#DDE7D3', fair: '#A9D18E', fairE: '#8DBB73', green: '#6DBB5F', greenE: '#3F8F3C', sand: '#EEDDB0', sandE: '#C8102E', wood: '#8DB384', tree: '#5E8C5A', water: '#C8A86A', waterE: '#4F86BC' };
   const spin = '<div style="padding:60px 0;text-align:center"><span class="spin"></span></div>';
   const e = s => H.esc(s == null ? '' : String(s));
   const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'], WD = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -256,7 +256,7 @@
   const pts = (poly, fr) => poly.map(p => fr.toS(p).map(v => v.toFixed(1)).join(',')).join(' ');
   const sd = (poly, fr) => window.GolfletSmooth ? window.GolfletSmooth.d(poly.map(p => fr.toS(p))) : 'M' + pts(poly, fr).replace(/ /g, ' L') + ' Z';   // t215u: smooth outlines
   /* t221u: tees from the club card (crosscheck.card.yards, real data only), placed on the map, and club names spelled out */
-  const TEE_COL = { AZUL: '#2F6DB5', NEGRO: '#1A1A1A', BLANCO: '#FFFFFF', AMARILLO: '#E3B925', ROJO: '#C0392B', ROSA: '#E79AB8', VERDE: '#2E8B57', DORADO: '#C8102E', PLATEADO: '#B8BEC2', CELESTE: '#75AADB', NARANJA: '#E07B2E', VIOLETA: '#7A4FA0' };
+  const TEE_COL = { AZUL: '#2F6DB5', NEGRO: '#1A1A1A', BLANCO: '#FFFFFF', AMARILLO: '#E3B925', ROJO: '#C0392B', ROSA: '#E79AB8', VERDE: '#2E8B57', DORADO: '#C8102E', PLATEADO: '#B8BEC2', CELESTE: '#C8A86A', NARANJA: '#E07B2E', VIOLETA: '#7A4FA0' };
   const teeName = k => String(k).charAt(0).toUpperCase() + String(k).slice(1).toLowerCase();
   function holeTees(h, x, d) {
     if (d.course.numbering_unconfirmed && x.par == null) return [];          // Azul 3–8 / 12–17: the card may be another hole
