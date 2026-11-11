@@ -265,10 +265,10 @@ struct CourseView: View {
         return GCard(radius: 22, padding: 16) {
             VStack(alignment: .leading, spacing: 10) {
                 GOverline(text: "Libreta")
-                Text("Descargar cómo jugarla")
+                Text("Libreta de la cancha")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Text("Un PDF con el plan publicado. El de viento usa solo el del horario reservado.")
+                Text("Imprimir el diseño o, después de jugar, subir las fotos de la libreta. Sin reserva.")
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
                 Button("Descargar sin viento") {

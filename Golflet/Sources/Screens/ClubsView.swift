@@ -16,21 +16,32 @@ struct ClubsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Tu ficha del club")
-                        GTitle(text: "Clubes")
+                        GOverline(text: "Tu cuenta")
+                        GTitle(text: accountName)
+                        if let mail = accountMail {
+                            Text(mail)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
                     }
-                    Text("Golflet entra con tu matrícula y contraseña y trae todos tus clubes. Nunca cambia nada en tu cuenta.")
-                        .font(GType.body)
-                        .foregroundStyle(p.ink2)
 
                     notificationsRow
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Clubes")
+                            .font(GType.section)
+                            .foregroundStyle(p.ink)
+                        Text("Golflet entra con tu matrícula y contraseña y trae todos tus clubes. Nunca cambia nada en tu cuenta.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                        ForEach(model.clubs) { club in
+                            clubCard(club)
+                        }
+                    }
+
                     groupsSection
                     shareSection
                     accessibilitySection
-
-                    ForEach(model.clubs) { club in
-                        clubCard(club)
-                    }
 
                     if !model.clubs.isEmpty {
                         sharedActions
@@ -48,16 +59,8 @@ struct ClubsView: View {
 
                     playSettingsSection
 
-                    if let user = model.user {
+                    if model.user != nil {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Tu cuenta")
-                                .font(GType.section)
-                                .foregroundStyle(p.ink)
-                            if let email = user.visibleEmail {
-                                Text(email)
-                                    .font(GType.label)
-                                    .foregroundStyle(p.ink2)
-                            }
                             Button("Salir") {
                                 Task {
                                     await model.signOut()
@@ -101,6 +104,18 @@ struct ClubsView: View {
         }
     }
 
+    private var accountName: String {
+        let named = model.user?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !named.isEmpty { return named }
+        let shown = model.profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return shown.isEmpty ? "Tu cuenta" : shown
+    }
+
+    private var accountMail: String? {
+        if let mail = model.user?.visibleEmail { return mail }
+        return model.user == nil ? nil : "Entrás con tu matrícula"
+    }
+
     private var notificationsRow: some View {
         Button { model.presentNotifications() } label: {
             GCard(radius: 16, padding: 14) {
@@ -115,7 +130,7 @@ struct ClubsView: View {
                         Text("Notificaciones")
                             .font(GType.headline)
                             .foregroundStyle(p.ink)
-                        Text(model.unreadBadgeText == nil ? "Invitaciones y mensajes de club" : "Tenés novedades")
+                        Text(model.unreadBadgeText == nil ? "Invitaciones a grupos y mensajes de tus clubes." : "Tenés novedades")
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
                     }
@@ -205,7 +220,7 @@ struct ClubsView: View {
 
     private var playSettingsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Jugar")
+            Text("Ronda con GPS")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             Toggle(isOn: Binding(
@@ -213,10 +228,10 @@ struct ClubsView: View {
                 set: { model.setPaceAlertEnabled($0) }
             )) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Aviso de ritmo")
+                    Text("Aviso de ritmo de juego")
                         .font(GType.headline)
                         .foregroundStyle(p.ink)
-                    Text("Si vas más de 10 minutos atrasado, te avisamos en el hoyo 10.")
+                    Text("Al llegar al hoyo 10, si vas más de 10 minutos atrás del ritmo estimado de la cancha, te avisamos. El ritmo es una estimación de Golflet, no del club.")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
                 }
@@ -241,7 +256,7 @@ struct ClubsView: View {
                             Text("Qué comparto")
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
-                            Text("Elegí qué ven tus grupos")
+                            Text("Elegí qué ven de vos los jugadores de tus grupos.")
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
                         }
