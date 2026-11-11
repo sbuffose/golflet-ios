@@ -19,7 +19,7 @@ test("the closed hole can be edited and the satellite note is gone", () => {
   assert.match(track, /Editar hoyo/);
   assert.match(track, /id="play-shot-editor"/);
   assert.doesNotMatch(track, /Satélite real/);
-  assert.match(sw, /golflet-v128/);
+  assert.match(sw, /golflet-v129/);
   const groups = readFileSync(new URL("../public/groups.js", import.meta.url), "utf8");
   assert.match(groups, /x\.v === rows\[i - 1\]\.v/);
   assert.match(groups, /Pocas tarjetas/);

@@ -214,6 +214,7 @@
     const gear = !isVs ? `<details class="gg-gear"><summary aria-label="Ajustes del grupo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></summary><div><a href="#/grupo/${id}/vista">Personalizar mi vista</a>${d.group.is_admin ? `<a href="#/grupo/${id}/ajustes">Cambiar foto</a><a href="#/grupo/${id}/ajustes">Ajustes y link de invitación</a>` : ''}</div></details>` : '';
     const cardsLine = m => { const eighteen = Number(m.cards_18 ?? m.rounds ?? 0), nine = Number(m.cards_9 || 0), total = eighteen + nine; if (!total) return ''; return nine ? `${total} tarjetas (${eighteen} de 18 y ${nine} de 9)` : (total === 1 ? '1 tarjeta' : `${total} tarjetas`); };
     const shortCards = m => { const total = Number(m.cards_18 ?? m.rounds ?? 0) + Number(m.cards_9 || 0); if (!total) return ''; return total === 1 ? '1 tarjeta' : `${total} tarjetas`; };
+    const lineCards = m => { const total = cardN(m); return total ? `${total} tarj.` : ''; };
     const rankOf = (key, title) => {
       const rows = ms.map(m => ({ m, v: val(m, key), hidden: hid(m, key) })).filter(x => !x.hidden && x.v != null);
       rows.sort((a, b) => (MT[key][3] ? a.v - b.v : b.v - a.v));
@@ -326,7 +327,7 @@
           gap = `a ${numTxt(dlt)} de ${firstOf(rows[ahead].m.name)}`;
         }
       }
-      const bits = ['Tu posición', posToken(place, places), gap, cardsLine(rows[meAt].m)].filter(Boolean);
+      const bits = ['Tu posición', posToken(place, places), gap, lineCards(rows[meAt].m)].filter(Boolean);
       return `<caption class="gg-you">${H.esc(bits.join(' · '))}</caption>`;
     };
     const rateCell = x => x.n < 3 ? 'Pocas tarjetas' : (x.rate != null ? H.f1(x.rate) : '—');

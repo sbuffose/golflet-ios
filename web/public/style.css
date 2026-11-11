@@ -922,9 +922,9 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-slide{flex:0 0 88%;scroll-snap-align:start;margin:0}
 .gg-pod.is-1{box-shadow:0 0 0 2px #C4A36A}
 #view:has(.gg-mast),#app:has(.gg-mast){background:#fff}
-.gg-mast{background:#0B2545;color:#fff;margin:-18px calc(-1 * max(18px, env(safe-area-inset-right))) 0 calc(-1 * max(18px, env(safe-area-inset-left)));margin-top:calc(-1 * (env(safe-area-inset-top) + 18px));padding:calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 18px max(18px, env(safe-area-inset-left));border-radius:0}
+.gg-mast{background:#0B2545;color:#fff;margin:-18px calc(-1 * max(18px, env(safe-area-inset-right))) 0 calc(-1 * max(18px, env(safe-area-inset-left)));margin-top:calc(-1 * (env(safe-area-inset-top) + 18px));padding:calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 18px max(18px, env(safe-area-inset-left));border-radius:0;border-bottom:4px solid #C8102E}
 .gg-mast-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.gg-event{margin:0;font-size:11px;font-weight:650;letter-spacing:.16em;text-transform:uppercase;color:#fff}
+.gg-event{margin:0;font-size:11px;font-weight:650;letter-spacing:.16em;text-transform:uppercase;color:#C8102E}
 .gg-mast h1{margin:6px 0 0;font-size:28px;line-height:.95;font-weight:700;letter-spacing:-.045em;color:#fff}
 .gg-meet{margin:8px 0 0;font-size:14px;font-weight:600;letter-spacing:.01em;color:#fff}
 .gg-mast .gg-gear summary{background:transparent;color:#fff;box-shadow:none;border-radius:0;width:36px;height:36px}
@@ -940,7 +940,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-tabs button.on{color:#0B2545;border-bottom-color:#C8102E}
 .gg-lb{width:100%;border-collapse:collapse;margin:0 0 18px;scroll-margin-bottom:calc(var(--tabh, 88px) + 24px)}
 .gg-lb tbody tr{scroll-margin-bottom:calc(var(--tabh, 88px) + 16px)}
-.gg-lb caption{caption-side:top;text-align:left;padding:12px 0 8px;font-size:13px;font-weight:650;letter-spacing:-.01em;color:#0B2545;font-style:normal}
+.gg-lb caption{caption-side:top;text-align:left;padding:12px 0 8px;font-size:13px;font-weight:650;letter-spacing:-.02em;color:#0B2545;font-style:normal;white-space:nowrap}
 .gg-lb th{padding:8px 4px 7px;border-bottom:1px solid #0B2545;font-size:10px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;text-align:right;color:#0B2545;font-style:normal}
 .gg-lb th.pos,.gg-lb th.who{text-align:left}
 .gg-lb td{padding:11px 4px;border-bottom:1px solid rgba(11,37,69,.14);text-align:right;font-size:15px;font-weight:650;letter-spacing:-.03em;color:#0B2545;font-variant-numeric:tabular-nums;vertical-align:middle}
