@@ -34,6 +34,10 @@ struct PlayHoleView: View {
     @State private var shotsExpanded = false
     @State private var sawDragHint = false
     @State private var showsClubs = false
+    @State private var editingClosed = false
+    @State private var editingShot: Shot?
+    @State private var askDeleteShot = false
+    @State private var movingShotID: String?
     @State private var recovery = false
     @State private var waterAsk = false
     @State private var droppedClientIDs: Set<String> = []
@@ -151,6 +155,7 @@ struct PlayHoleView: View {
         .sheet(isPresented: $showsHoles) { holePicker }
         .sheet(isPresented: $showsStrategy) { strategySheet }
         .sheet(isPresented: $showsClubs) { clubSheet }
+        .sheet(item: $editingShot) { shot in shotEditor(shot) }
         .alert("Ritmo de juego", isPresented: $showsPaceAlert) {
             Button("Listo", role: .cancel) {}
                 .accessibilityIdentifier("pace-alert-ok")
@@ -382,8 +387,32 @@ struct PlayHoleView: View {
                 .accessibilityIdentifier("play-aim-label")
                 distances
                 holeNav
-                markActions
-                if track.phase == .tracking { lostActions }
+                if let movingID = movingShotID, let moving = shots.first(where: { $0.id == movingID }) {
+                    Text("Mové el mapa y tocá Guardar punto.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                    Button("Guardar punto") { Task { await moveShot(moving) } }
+                        .font(GType.headline)
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier("play-edit-save")
+                }
+                if holeClosed {
+                    Button("Editar hoyo") { editingClosed = true }
+                        .font(GType.headline)
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier("play-edit-hole")
+                } else {
+                    markActions
+                    if track.phase == .tracking { lostActions }
+                }
                 greenTools
                 holeShots
                 accuracy
@@ -400,6 +429,10 @@ struct PlayHoleView: View {
         }
         .frame(maxHeight: 248)
         .background(Color.white.opacity(0.96))
+    }
+
+    private var holeClosed: Bool {
+        track.marks.contains(where: \.holed) && !editingClosed
     }
 
     private var aimTitle: String {
@@ -640,8 +673,9 @@ struct PlayHoleView: View {
                     Button("Deshacer") { undoGroup() }
                         .font(GType.label)
                         .foregroundStyle(p.ink)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(p.surface2))
+                        .padding(.horizontal, 12)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .background(Capsule().fill(p.surface2))
                         .accessibilityIdentifier("play-undo")
                 }
                 Button(recovery ? "Sacada" : "Sacada") { recovery.toggle() }
@@ -920,6 +954,7 @@ struct PlayHoleView: View {
                 GCard(radius: 18, padding: 14) {
                     VStack(spacing: 10) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, shot in
+                            Button { editingShot = shot; askDeleteShot = false; movingShotID = nil } label: {
                             HStack {
                                 Text("\(shot.shotNumber)")
                                     .font(GType.label)
@@ -945,6 +980,8 @@ struct PlayHoleView: View {
                                     .foregroundStyle(p.ink)
                             }
                             .accessibilityIdentifier("play-shot-\(index)")
+                            }
+                            .buttonStyle(.plain)
                             if index < rows.count - 1 { Hairline() }
                         }
                     }
@@ -1325,6 +1362,81 @@ struct PlayHoleView: View {
         }
     }
 
+    private func shotEditor(_ shot: Shot) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Golpe \(shot.shotNumber)")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    Button("Mover el punto") {
+                        movingShotID = shot.id
+                        editingShot = nil
+                    }
+                    .accessibilityIdentifier("play-edit-move")
+                    Text("Palo")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                    ForEach(model.bag, id: \.name) { club in
+                        Button {
+                            Task { await retarget(shot, club: club.name) }
+                        } label: {
+                            HStack {
+                                Text(club.name)
+                                Spacer()
+                                if let yards = club.carry { Text("\(yards) yd") }
+                            }
+                        }
+                        .accessibilityIdentifier("play-edit-club-\(club.name)")
+                    }
+                    if askDeleteShot {
+                        Text("¿Borrar este golpe?")
+                        Button("Sí, borrar") { Task { await deleteShot(shot) } }
+                            .accessibilityIdentifier("play-edit-yes")
+                    } else {
+                        Button("Borrar") { askDeleteShot = true }
+                            .accessibilityIdentifier("play-edit-del")
+                    }
+                    Button("Cerrar") { editingShot = nil }
+                }
+                .padding(16)
+            }
+            .navigationTitle("Editar golpe")
+        }
+        .accessibilityIdentifier("play-shot-editor")
+    }
+
+    private func retarget(_ shot: Shot, club: String) async {
+        do {
+            let saved = try await model.api.patchShot(id: shot.id, body: ["club": club])
+            if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
+            editingShot = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func moveShot(_ shot: Shot) async {
+        do {
+            let saved = try await model.api.patchShot(id: shot.id, body: ["lat": cursor.lat, "lng": cursor.lng])
+            if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
+            movingShotID = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func deleteShot(_ shot: Shot) async {
+        do {
+            try await model.api.deleteShot(id: shot.id)
+            shots.removeAll { $0.id == shot.id }
+            editingShot = nil
+            askDeleteShot = false
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func changeHole(_ next: Int) {
         Task { await changeHoleAsync(next) }
     }
@@ -1333,6 +1445,9 @@ struct PlayHoleView: View {
         await savePuttsIfNeeded()
         let clamped = min(max(next, 1), max(course.holes.count, 1))
         hole = clamped
+        editingClosed = false
+        editingShot = nil
+        movingShotID = nil
         shotsExpanded = false
         sawDragHint = false
         aimTarget = nil

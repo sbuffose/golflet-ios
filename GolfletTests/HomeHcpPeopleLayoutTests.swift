@@ -10,7 +10,7 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(HomeHcpPeopleLayout.columnWidth(profesorCount: 1, groupCount: 1), width)
         XCTAssertLessThanOrEqual(HomeHcpPeopleLayout.columnWidth(profesorCount: 4, groupCount: 5), width)
         XCTAssertEqual(HomeHcpPeopleLayout.accent, BrandHex.red)
-        XCTAssertEqual(HomeHcpPeopleLayout.celeste, 0x75AADB)
+        XCTAssertEqual(HomeHcpPeopleLayout.celeste, 0xC8A86A)
         XCTAssertEqual(HomeHcpPeopleLayout.profesorAvatar, 28)
         XCTAssertNil(HomeHcpPeopleLayout.profesorCaption(0))
         XCTAssertNil(HomeHcpPeopleLayout.profesorCaption(1))

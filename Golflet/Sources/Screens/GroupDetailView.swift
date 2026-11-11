@@ -60,7 +60,7 @@ struct GroupDetailView: View {
         }
         .sheet(isPresented: $showsViewSettings) {
             NavigationStack {
-                GroupViewSettings(groupID: groupID, config: $config) { updated in
+                GroupViewSettings(groupID: groupID, config: $config, cards: comparison?.hero?.cards) { updated in
                     config = updated
                     Task { await reloadComparison() }
                 }
@@ -547,25 +547,25 @@ struct GroupDetailView: View {
         let gap = podiumGap(row, top: top)
         return HStack(alignment: .bottom, spacing: 8) {
             ForEach(order, id: \.self) { index in
-                podiumStep(place: index + 1, value: top[index], metric: row.metric, group: group, gap: index == 0 ? gap : nil)
+                podiumStep(slot: index + 1, place: row.rank(of: top[index].memberID) ?? (index + 1), value: top[index], metric: row.metric, group: group, gap: index == 0 ? gap : nil)
             }
         }
         .accessibilityIdentifier("group-podium")
     }
 
-    private func podiumStep(place: Int, value: MemberMetricValue, metric: GroupMetricKind, group: GolfletGroup, gap: String?) -> some View {
+    private func podiumStep(slot: Int, place: Int, value: MemberMetricValue, metric: GroupMetricKind, group: GolfletGroup, gap: String?) -> some View {
         let photo = value.photoURL ?? group.members.first { $0.id == value.memberID }?.photoURL
         return VStack(spacing: 4) {
             Text("\(place)º")
                 .font(GType.label)
                 .foregroundStyle(Color(hex: 0x8C6A2F))
-            if place == 1 {
+            if slot == 1 {
                 Image(systemName: "medal.fill")
                     .font(.system(size: 18))
                     .foregroundStyle(Color(hex: 0xC8A86A))
                     .accessibilityHidden(true)
             }
-            GroupPhotoView(url: photo, initials: value.initials, size: place == 1 ? 64 : 52)
+            GroupPhotoView(url: photo, initials: value.initials, size: slot == 1 ? 64 : 52)
             Text(value.memberName)
                 .font(GType.label)
                 .foregroundStyle(p.ink)
@@ -589,14 +589,14 @@ struct GroupDetailView: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
-        .frame(height: place == 1 ? 228 : place == 2 ? 184 : 156, alignment: .bottom)
+        .frame(height: slot == 1 ? 228 : slot == 2 ? 184 : 156, alignment: .bottom)
         .background(p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(place == 1 ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 2)
+                .stroke(slot == 1 ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 2)
         )
-        .accessibilityIdentifier("group-podium-\(place)")
+        .accessibilityIdentifier("group-podium-\(slot)")
     }
 
     private func podiumGap(_ row: GroupComparisonRow, top: [MemberMetricValue]) -> String? {
@@ -717,10 +717,17 @@ struct GroupDetailView: View {
 }
 
 struct GroupViewSettings: View {
+    static func fewCards(_ cards: String) -> Bool {
+        guard let match = cards.range(of: #"\d+ de 18"#, options: .regularExpression) else { return false }
+        let n = Int(cards[match].split(separator: " ").first.map(String.init) ?? "") ?? 0
+        return n < 3
+    }
+
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
     let groupID: String
+    var cards: String? = nil
     @Binding var config: GroupViewConfig
     var onSave: (GroupViewConfig) -> Void
     @State private var draft: GroupViewConfig = .default
@@ -732,6 +739,22 @@ struct GroupViewSettings: View {
                     VStack(alignment: .leading, spacing: 6) {
                         GOverline(text: "Solo para vos")
                         GTitle(text: "Mi vista", size: 30)
+                    }
+                    if let cards {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Tu resumen")
+                                .font(GType.section)
+                                .foregroundStyle(p.ink)
+                            Text(GroupViewSettings.fewCards(cards) ? "Pocas tarjetas" : cards)
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            if GroupViewSettings.fewCards(cards) {
+                                Text(cards)
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink2)
+                            }
+                        }
+                        .accessibilityIdentifier("vista-resumen")
                     }
                     Text("Elegí qué métricas y gráficos ves, el orden, el período y la cancha. Nadie más cambia esta vista.")
                         .font(GType.body)
