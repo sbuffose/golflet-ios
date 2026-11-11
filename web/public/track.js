@@ -743,7 +743,15 @@
       const nextStroke = S.track.marks.filter(m => m.countsStroke).length + 1;
       const holeShots = () => (S.saved || []).filter(s => Number(s.hole) === Number(S.hole));
       const editingShot = S.editN ? holeShots()[S.editN - 1] : null;
-      const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>Golpe ${S.editN}</b><button type="button" id="play-edit-club">Cambiar palo</button><button type="button" id="play-edit-move">${S.moveShot ? 'Guardar punto' : 'Mover el punto'}</button><button type="button" id="play-edit-del">Borrar</button><button type="button" id="play-edit-x">Cerrar</button>${S.askDel ? '<p>¿Borrar este golpe?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? '<p>Mové el mapa y tocá Guardar punto.</p>' : ''}</div>` : '';
+      const editBits = [`Golpe ${S.editN}`];
+      if (editingShot) {
+        const clubName = editingShot.result === 'penalty' ? 'Penalidad' : editingShot.result === 'lost' ? 'Perdida' : (clubLabel(editingShot.club) || editingShot.club || '');
+        if (clubName) editBits.push(String(clubName));
+        const meters = Number(editingShot.distance_m);
+        const putt = editingShot.lie === 'green' || /putt/i.test(String(editingShot.club || ''));
+        if (editingShot.result !== 'lost' && editingShot.result !== 'penalty' && Number.isFinite(meters) && meters > 0) editBits.push(putt ? `${meters} m` : `${Math.round(meters / 0.9144)} yd`);
+      }
+      const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>${esc(editBits.join(' · '))}</b><button type="button" id="play-edit-club">Cambiar palo</button><button type="button" id="play-edit-move">${S.moveShot ? 'Guardar punto' : 'Mover el punto'}</button><button type="button" id="play-edit-x">Cerrar</button><button type="button" id="play-edit-del">Borrar</button>${S.askDel ? '<p>¿Borrar este golpe?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? '<p>Mové el mapa y tocá Guardar punto.</p>' : ''}</div>` : '';
       const editSheet = S.pickClub && !showClub ? `<div class="tk-sheet" id="play-club-sheet" role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => { const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}"><b>${esc(shortClub(c.label))}</b>${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div>` : '';
       const painted = el.querySelector('.tk-tiles:not([data-pending])');
       const paintedHole = el.querySelector('#tkmap')?.dataset.hole || '';

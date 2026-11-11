@@ -127,7 +127,7 @@ function yrList(items, dateOf, row, cls = 'list'){
 }
 const minOr = a => a.length ? Math.min(...a) : '—';
 const emptyData = (t) => `<div class="onboard"><img class="cad" src="/brand/caddie.png" alt=""><h2>${t||'Todavía no hay tarjetas'}</h2><p>Vinculá tu matrícula y Golflet trae las tarjetas de todos tus clubes.</p><a class="btn" href="#/vincular">Vincular tu matrícula</a></div>`;
-const caddieEmpty = (title, text) => `<div class="card cad-empty"><span class="cad-mark"><img class="cad" src="/brand/caddie.png" alt=""><i class="cad-flag" aria-hidden="true">18</i></span><b>${title}</b><p>${text}</p></div>`;
+const caddieEmpty = (title, text) => `<div class="card cad-empty"><span class="cad-mark"><img class="cad" src="/brand/caddie.png" alt=""><i class="cad-flag" aria-hidden="true">18</i></span><span class="cad-copy"><b>${title}</b><p>${text}</p></span></div>`;
 
 /* ---------- INICIO ---------- */
 function clubsCard(){
@@ -328,7 +328,7 @@ function sRonda(id){
   <div class="r-partners" id="rpartners" hidden></div>
   ${r.valid_card?'':'<div class="note-warn">Tarjeta DES: no presentada, levantada o descalificada. No cuenta en promedios.</div>'}
   <div class="grid3 rstats" style="gap:8px;margin-top:16px">
-    ${[['Gross',r.gross??'—'],['Neto',r.net??'—'],['Dif.*',f1(r.differential_computed)],['Puesto',r.position?r.position+'º':'—']].map(([kk,v],i)=>`<div class="card mini stat" style="padding:12px 10px;${i===0?'background:var(--color-primary);color:var(--color-onPrimary)':''}"><div class="k" style="${i===0?'color:rgba(247,245,240,.6)':''}">${kk}</div><div class="v num" style="font-size:calc(25px*var(--ts,1))">${v}</div></div>`).join('')}
+    ${[['Gross',r.gross??'—'],['Neto',r.net??'—'],['Dif.*',f1(r.differential_computed)],['Puesto',r.position?r.position+'º':'—']].map(([kk,v],i)=>`<div class="card mini stat" style="padding:12px 10px;${i===0?'background:var(--color-primary);color:var(--color-onPrimary)':''}"><div class="k" style="${i===0?'color:#C8A86A':''}">${kk}</div><div class="v num" style="font-size:calc(25px*var(--ts,1))">${v}</div></div>`).join('')}
   </div>
   ${r.holes?.length?`<div class="card" style="margin-top:12px;padding:14px 12px">${nine(r,c,0)}<div class="sc"><span class="div"></span></div>${nine(r,c,9)}
     ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
@@ -386,7 +386,7 @@ function sDif(id){
 /* ---------- CANCHA ---------- */
 let segC = null;
 function vCancha(){
-  if (!G.courses.length) return `<h1 class="ltitle">Cancha</h1>${caddieEmpty('Sin cancha', 'Cuando tu club publique una cancha, la vas a ver acá. No inventamos hoyos ni tees.')}`;
+  if (!G.courses.length) return `<h1 class="ltitle">Cancha</h1>${caddieEmpty('Sin cancha', 'Elegí una cancha para ver sus hoyos.')}`;
   if (!course(segC)) segC = G.courses[0].key;
   const c = course(segC), ranged = RANGE!=='all', hs = ranged ? holeStats(valid.filter(inR), c.key) : null, HS = h => hstat(h, hs);
   const top = c.holes.filter(h=>HS(h).n).slice().sort((a,b)=>HS(b).avg_to_par-HS(a).avg_to_par).slice(0,3).map(h=>h.hole);
@@ -637,7 +637,7 @@ async function loadTeeCard(fresh){
       c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1800); }; }
   el.innerHTML = `<div class="section"><h2>Próximos tee times</h2>${ts.length?`<a href="#/tees">Ver todos</a>`:''}</div><p class="foot" id="teenote">${esc(TEE_NOTE)}</p>` + (ts.length
     ? `${yrList(ts.slice(0,3), t => t.date, teeRow)}`.replace('<a class="row" href="#/tee/', '<a class="row tt-next" href="#/tee/')
-    : caddieEmpty('Sin reservas próximas', 'Cuando reserves una salida en tu club, la vas a ver acá con fecha, hora, cancha y con quién jugás.'));
+    : caddieEmpty('Sin reservas próximas', 'Cuando reserves una salida en tu club, aparece acá.'));
   if (fresh) for (const id of [...(fresh.new || []), ...(fresh.changed || [])]) { const a = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"]`); if (a) { a.classList.add('tt-in'); setTimeout(() => a.classList.remove('tt-in'), 2600); } }
   if (fresh) for (const id of fresh.new || []) { const sp = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"] .score span`); if (sp) { sp.textContent = 'nueva'; sp.classList.add('tt-newb'); } }
   if (fresh && (fresh.new || []).length) el.insertAdjacentHTML('beforeend', `<span class="sr" role="status">${fresh.new.length === 1 ? 'Apareció una reserva nueva' : `Aparecieron ${fresh.new.length} reservas nuevas`}</span>`);
@@ -757,7 +757,7 @@ async function loadTees(opts){
     const cardNote = cards.error ? `<div class="msg err">${esc(cards.error.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>` : '';
     el.innerHTML = `<div class="stitle">Tee times</div>
       ${cardNote}
-      <div class="section"><h2>Próximos</h2><span class="badge">${u.tee_times.length}</span></div>${u.tee_times.length?`${yrList(mark(u.tee_times), t => t.date, teeRow)}`:caddieEmpty('Sin reservas próximas', 'Cuando reserves una salida en tu club, la vas a ver acá. No inventamos horarios ni tees.')}
+      <div class="section"><h2>Próximos</h2><span class="badge">${u.tee_times.length}</span></div>${u.tee_times.length?`${yrList(mark(u.tee_times), t => t.date, teeRow)}`:caddieEmpty('Sin reservas próximas', 'Cuando reserves una salida en tu club, aparece acá.')}
       ${p.tee_times.length?`<div class="section"><h2>Pasados</h2></div>${yrList(mark(p.tee_times), t => t.date, teeRow, 'list tt-past')}`:''}
       <div class="section"><h2>De dónde salen</h2></div>${sourcesNote(u.clubs)}
       <p class="foot">Golflet lee tus reservas en el sitio de cada club con tu sesión, solo para mostrarlas: no reserva ni cancela nada. La tarjeta se busca sola a partir de cinco horas después de la salida. El servidor revisa cada quince minutos, así que la primera lectura puede llegar hasta un cuarto de hora más tarde, aunque la app esté cerrada.</p>`;
@@ -1173,7 +1173,7 @@ const missBars = (m, n) => { const L = [['short', 'Corto'], ['long', 'Largo'], [
   return `<div class="met-bars">${L.map(([k, l]) => `<div class="mb-r"><span>${l}</span><i><em style="width:${Math.round(m[k] / mx * 100)}%"></em></i><b class="num">${m[k]}${n ? ` <small>${Math.round(m[k] / n * 100)}%</small>` : ''}</b></div>`).join('')}</div>`; };
 async function loadMetricas(sub, b){
   const el = $('#metbody'); if (!el) return; const tab = metTab(sub);
-  const stopSpin = setTimeout(() => { const box = $('#metbody'); if (box && box.querySelector('.spin')) box.innerHTML = caddieEmpty('No pudimos cargar las métricas', 'La lectura no llegó. Reintentá. No inventamos números.'); }, 12000);
+  const stopSpin = setTimeout(() => { const box = $('#metbody'); if (box && box.querySelector('.spin')) box.innerHTML = caddieEmpty('No pudimos cargar las métricas', 'La lectura no llegó. Reintentá.'); }, 12000);
   let M, P;
   try { [M, P] = await Promise.all([api(`/api/game-metrics?${rq()}`), tab === 'putting' && !b ? api(`/api/putting?${rq()}`).catch(() => null) : Promise.resolve(null)]); }
   catch(e){ clearTimeout(stopSpin); el.innerHTML = errBox(e); el.querySelector('[data-retry]')?.addEventListener('click', () => loadMetricas(sub, b)); return; }
@@ -1755,7 +1755,7 @@ async function loadIronSet(){
         </div>
         <div class="tt-acts iron-acts"><button class="btn" type="button" id="ironprev">Ver qué cambia</button><a class="btn ghost" href="#/bolsa">Cancelar</a></div>
         <div id="ironmsg"></div><div id="ironplan"></div>
-      </form>` : `<p class="foot">${missLine ? missing.join(', ') + ' no está en tu bolsa. No lo creamos. ' : ''}Ningún hierro del 4 al PW está en la bolsa. No inventamos el juego.</p><a class="btn ghost" href="#/bolsa">Volver a Mi bolsa</a>`;
+      </form>` : `<p class="foot">${missLine ? missing.join(', ') + ' no está en tu bolsa. No lo creamos. ' : ''}Ningún hierro del 4 al PW está en la bolsa.</p><a class="btn ghost" href="#/bolsa">Volver a Mi bolsa</a>`;
     const brandEl = $('#ironb'); if (!brandEl) return;
     const say = (t, err) => { const m = $('#ironmsg'); m.innerHTML = `<div class="msg${err ? ' err' : ''}"></div>`; m.firstChild.textContent = t; };
     const canon = (name) => brands.find(b => b.toLowerCase() === String(name || '').trim().toLowerCase()) || '';
