@@ -7,7 +7,7 @@ final class GolfletUITests: XCTestCase {
 
     func testNavigateEveryScreenAndCapture() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing"]
+        app.launchArguments = ["-ui-testing", "-ui-testing-greeting", "Sebastián"]
         app.launch()
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
@@ -38,6 +38,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertFalse(strategy.label.contains("Todavía no hay"), "La estrategia de Azul no cargó: \(strategy.label)")
         dismissIfPresent(app, "metric-back")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+        pinTop(app, "home-greeting")
         saveShot("01_inicio")
         saveShot("parity-ios-inicio")
 
@@ -87,12 +88,12 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Cancha")
         XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
+        saveShot("05_cancha")
+        saveShot("parity-ios-cancha")
         assertCanchaHoleGrid(app)
         if waitFor(app, "filter-colorada", timeout: 2) {
             first(app, "filter-colorada").tap()
         }
-        saveShot("05_cancha")
-        saveShot("parity-ios-cancha")
 
         if app.buttons["hole-1"].waitForExistence(timeout: 4) {
             app.buttons["hole-1"].tap()
@@ -151,6 +152,13 @@ final class GolfletUITests: XCTestCase {
         XCTAssertFalse(first(app, "hub-tee-example").exists, "Hay un horario de ejemplo junto a los tee times reales")
         saveShot("60_grupos")
         saveShot("parity-ios-grupos")
+        if liveGroup.isHittable {
+            liveGroup.tap()
+        } else {
+            liveGroup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
+        saveShot("parity-ios-grupos-usga")
 
         tapTab(app, "Jugar")
         XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
@@ -178,16 +186,19 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Inicio")
         if first(app, "home-mode-chip").waitForExistence(timeout: 4) {
+            reveal(app, first(app, "home-mode-chip"))
             first(app, "home-mode-chip").tap()
             first(app, "home-mode-comp").tap()
             saveShot("71_inicio_competitivo")
+            reveal(app, first(app, "home-mode-chip"))
             first(app, "home-mode-chip").tap()
             first(app, "home-mode-mej").tap()
             saveShot("72_inicio_mejorar")
+            reveal(app, first(app, "home-mode-chip"))
             first(app, "home-mode-chip").tap()
             first(app, "home-mode-soc").tap()
             saveShot("73_inicio_social")
-            app.swipeDown()
+            reveal(app, first(app, "home-mode-chip"))
             XCTAssertTrue(first(app, "home-mode-chip").waitForExistence(timeout: 4))
             first(app, "home-mode-chip").tap()
             first(app, "home-mode-clasico").tap()
@@ -250,6 +261,28 @@ final class GolfletUITests: XCTestCase {
             XCTAssertTrue(waitFor(app, "screen-sg", timeout: 6))
             saveShot("80_sg")
         }
+    }
+
+    func testParityClosedHoleAndClub() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-closed-hole"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
+        first(app, "play-start").tap()
+        XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
+        startAzulRound(app)
+        XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
+        XCTAssertTrue(first(app, "play-edit-hole").waitForExistence(timeout: 6), "El hoyo cerrado no mostró Editar hoyo")
+        saveShot("parity-ios-track-closed")
+        first(app, "play-edit-hole").tap()
+        XCTAssertTrue(first(app, "play-club").waitForExistence(timeout: 4), "Falta el palo al editar el hoyo")
+        first(app, "play-club").tap()
+        XCTAssertTrue(waitFor(app, "play-club-sheet", timeout: 4), "No se abrió el popup de palos")
+        saveShot("parity-ios-track-club")
+        dismissIfPresent(app, "play-club-close")
     }
 
     func testPlayRecapAndRecurring() throws {
@@ -1363,6 +1396,26 @@ final class GolfletUITests: XCTestCase {
             return number.intValue == 1
         }
         return false
+    }
+
+    private func pinTop(_ app: XCUIApplication, _ id: String) {
+        let element = first(app, id)
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<16 {
+            if element.exists {
+                let y = element.frame.minY
+                if y >= 48 && y <= 220 { return }
+                if y < 48 {
+                    if scroll.exists { scroll.swipeDown() } else { app.swipeDown() }
+                } else if scroll.exists {
+                    scroll.swipeUp()
+                } else {
+                    app.swipeUp()
+                }
+            } else {
+                app.swipeDown()
+            }
+        }
     }
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {

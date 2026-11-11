@@ -353,8 +353,8 @@ extension MockAPIClient {
     private func currentMember(role: GroupRole, owner: Bool) -> GroupMember {
         GroupMember(
             id: MockGroupStore.meID,
-            name: "Jugador Demo",
-            initials: "JD",
+            name: MockGroupStore.meName,
+            initials: MockGroupStore.meInitials,
             photoURL: nil,
             role: role,
             isOwner: owner
@@ -379,6 +379,13 @@ struct MockGroupStore: Sendable {
     static let anaID = "ana"
     static let luisID = "luis"
 
+    static var meName: String { RuntimeFlags.testingGreetingName ?? "Jugador Demo" }
+
+    static var meInitials: String {
+        guard let name = RuntimeFlags.testingGreetingName, let first = name.first else { return "JD" }
+        return String(first).uppercased()
+    }
+
     var groups: [GolfletGroup]
     var pending: [GroupInvitePreview]
     var views: [String: GroupViewConfig]
@@ -386,7 +393,7 @@ struct MockGroupStore: Sendable {
     var createdByKey: [String: GolfletGroup] = [:]
 
     static func seed() -> MockGroupStore {
-        let me = GroupMember(id: meID, name: "Jugador Demo", initials: "JD", photoURL: nil, role: .admin, isOwner: true)
+        let me = GroupMember(id: meID, name: meName, initials: meInitials, photoURL: nil, role: .admin, isOwner: true)
         let ana = GroupMember(id: anaID, name: "Ana Pérez", initials: "AP", photoURL: nil, role: .member, isOwner: false)
         let luis = GroupMember(id: luisID, name: "Luis Gómez", initials: "LG", photoURL: nil, role: .admin, isOwner: false)
         let jockey = GolfletGroup(
@@ -502,7 +509,7 @@ enum MockComparativo {
 
     static func profile(groupID: String, memberID: String) -> GroupMemberProfile? {
         let names = [
-            MockGroupStore.meID: "Jugador Demo",
+            MockGroupStore.meID: MockGroupStore.meName,
             MockGroupStore.anaID: "Ana Pérez",
             MockGroupStore.luisID: "Luis Gómez"
         ]
@@ -598,7 +605,7 @@ enum MockComparativo {
     }
 
     private static func members(withRounds: Bool) -> [ComparativoMember] {
-        let me = value(memberID: MockGroupStore.meID, name: "Jugador Demo", isMe: true, hidden: false, withRounds: withRounds, net: -3, gross: 0, avg: 76.0)
+        let me = value(memberID: MockGroupStore.meID, name: MockGroupStore.meName, isMe: true, hidden: false, withRounds: withRounds, net: -3, gross: 0, avg: 76.0)
         let luis = value(memberID: MockGroupStore.luisID, name: "Luis Gómez", isMe: false, hidden: false, withRounds: withRounds, net: 1, gross: 4, avg: 81.0)
         let ana = value(memberID: MockGroupStore.anaID, name: "Ana Pérez", isMe: false, hidden: true, withRounds: false, net: nil, gross: nil, avg: nil)
         return [me, luis, ana]

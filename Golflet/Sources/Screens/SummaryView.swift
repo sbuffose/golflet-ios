@@ -10,6 +10,18 @@ struct SummaryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     header
+                    NavigationLink { ClimaView() } label: {
+                        Text("Ver cómo afecta el clima")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(p.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("resumen-clima")
                     filters
                     metricsEntry
                     NavigationLink { AcademiaView() } label: {
@@ -35,6 +47,7 @@ struct SummaryView: View {
                     .accessibilityIdentifier("resumen-trabajar")
                     grid
                     trend
+                    holeResults
                     hardest
                 }
                 .padding(.horizontal, 20)
@@ -50,23 +63,18 @@ struct SummaryView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             GOverline(text: "\(model.summary.firstYear) – \(model.summary.lastYear)")
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    GTitle(text: "Resumen")
-                    Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                        .accessibilityIdentifier("range-count")
-                }
-                Spacer(minLength: 8)
-                RangeMenuButton(
-                    range: Binding(
-                        get: { model.statsRange },
-                        set: { model.setStatsRange($0) }
-                    ),
-                    count: model.rangeRoundCount
-                )
-            }
+            GTitle(text: "Resumen")
+            Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .accessibilityIdentifier("range-count")
+            RangeMenuButton(
+                range: Binding(
+                    get: { model.statsRange },
+                    set: { model.setStatsRange($0) }
+                ),
+                count: model.rangeRoundCount
+            )
         }
     }
 
@@ -276,6 +284,36 @@ struct SummaryView: View {
             Text(label)
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
+        }
+    }
+
+    private var holeResults: some View {
+        let rounds = model.rangedValidRounds()
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Resultados por hoyo")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(ScoreKind.allCases, id: \.self) { kind in
+                    let total = rounds.reduce(0) { $0 + StatsEngine.count(kind, in: $1).count }
+                    NavigationLink(value: MetricRoute.scoreKind(kind, .allCards)) {
+                        GCard(radius: 18, padding: 14) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(kind.title)
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink2)
+                                Text("\(total)")
+                                    .font(GType.statM)
+                                    .tabular()
+                                    .foregroundStyle(p.ink)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("resumen-\(kind.rawValue)")
+                }
+            }
         }
     }
 

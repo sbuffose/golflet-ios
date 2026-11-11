@@ -123,39 +123,35 @@ struct MetricRoundsView: View {
     }
 
     private var sortRow: some View {
-        HStack {
-            Text(sortCaption)
+        HStack(spacing: 8) {
+            Text("Ordenar")
                 .font(GType.label)
-                .foregroundStyle(p.ink2)
-            Spacer()
-            Menu {
-                Button("Recientes") { sort = .date; order = .bestFirst }
-                Button("Antiguas") { sort = .date; order = .worstFirst }
-                Button("Mejor gross") { sort = .gross; order = .bestFirst }
-                Button("Peor gross") { sort = .gross; order = .worstFirst }
-                Button("Mejor neto") { sort = .net; order = .bestFirst }
-                Button("Peor neto") { sort = .net; order = .worstFirst }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(p.ink)
-                    .frame(width: 36, height: 36)
-                    .background(p.surface2)
-                    .clipShape(Circle())
-            }
-            .accessibilityIdentifier("metric-sort-menu")
+                .foregroundStyle(p.ink3)
+            sortChip("Fecha", field: .date, id: "sort-date")
+            sortChip("Mejor gross", field: .gross, id: "sort-gross")
+            sortChip("Mejor neto", field: .net, id: "sort-net")
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("metric-sort-menu")
     }
 
-    private var sortCaption: String {
-        switch (sort, order) {
-        case (.date, .bestFirst): return "Recientes"
-        case (.date, .worstFirst): return "Antiguas"
-        case (.gross, .bestFirst): return "Mejor"
-        case (.gross, .worstFirst): return "Peor"
-        case (.net, .bestFirst): return "Mejor neto"
-        case (.net, .worstFirst): return "Peor neto"
+    private func sortChip(_ title: String, field: MetricSortField, id: String) -> some View {
+        let on = sort == field && order == .bestFirst
+        return Button {
+            sort = field
+            order = .bestFirst
+        } label: {
+            Text(title)
+                .font(GType.label)
+                .foregroundStyle(on ? p.onPrimary : p.ink)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(on ? p.primary : p.surface)
+                .clipShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private var yearSections: [RoundYearSection] {

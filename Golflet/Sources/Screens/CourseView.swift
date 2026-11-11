@@ -41,25 +41,25 @@ struct CourseView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let count = model.courseSnapshot().validCount
+        return VStack(alignment: .leading, spacing: 10) {
             GOverline(text: model.clubs.first?.name ?? "Golflet")
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    GTitle(text: "Cancha")
-                    Text("\(model.courseSnapshot().validCount) \(model.courseSnapshot().validCount == 1 ? "ronda" : "rondas")")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                        .accessibilityIdentifier("range-count")
-                }
-                Spacer(minLength: 8)
-                RangeMenuButton(
-                    range: Binding(
-                        get: { model.statsRange },
-                        set: { model.setStatsRange($0) }
-                    ),
-                    count: model.courseSnapshot().validCount
-                )
-            }
+            GTitle(text: "Cancha")
+            Text("\(count) \(count == 1 ? "ronda" : "rondas")")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .accessibilityIdentifier("range-count")
+            RangeMenuButton(
+                range: Binding(
+                    get: { model.statsRange },
+                    set: { model.setStatsRange($0) }
+                ),
+                count: count
+            )
+            Text("\(model.statsRange.title) · \(model.selectedCourseName). Los promedios y los hoyos de esta vista son solo de esta cancha.")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

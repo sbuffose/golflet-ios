@@ -22,29 +22,100 @@ struct BagView: View {
                     GOverline(text: "Mis distancias")
                     GTitle(text: "Mi bolsa")
                 }
+                HStack {
+                    Text("Mis palos")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    Spacer()
+                    NavigationLink { AddClubView() } label: {
+                        Text("+ Agregar palo")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(p.surface2)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("bag-add-club")
+                }
+                NavigationLink { PelotaView() } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Pelota")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text("La pelota con la que jugás")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(p.ink3)
+                    }
+                    .padding(14)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("bag-pelota")
                 hint
-                ironSet
                 headerRow
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
                         ForEach(model.bag) { club in
-                            NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: club.name))) {
-                                HStack {
-                                    Text(club.name)
-                                        .font(GType.headline)
-                                        .foregroundStyle(p.ink)
-                                    Spacer()
-                                    cell(club.carry)
-                                    cell(club.total)
-                                    MetricChevron(color: p.ink3)
+                            HStack(spacing: 8) {
+                                NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: club.name))) {
+                                    HStack {
+                                        Text(club.name)
+                                            .font(GType.headline)
+                                            .foregroundStyle(p.ink)
+                                            .lineLimit(1)
+                                        Spacer(minLength: 4)
+                                        MetricChevron(color: p.ink3)
+                                    }
+                                    .contentShape(Rectangle())
                                 }
-                                .padding(.vertical, 16)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("bag-\(club.name)")
+                                if isPutter(club.name) {
+                                    Text("Sin yardas")
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink3)
+                                        .frame(width: 128, alignment: .trailing)
+                                } else {
+                                    yardField(club, carry: true)
+                                    yardField(club, carry: false)
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("bag-\(club.name)")
+                            .padding(.vertical, 10)
                             Hairline()
                         }
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Distancias por palo")
+                                    .font(GType.section)
+                                    .foregroundStyle(p.ink)
+                                Spacer()
+                                Text("GPS")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color(hex: 0xC8A86A).opacity(0.35))
+                                    .clipShape(Capsule())
+                            }
+                            .padding(.top, 18)
+                            Text("Sin tiros medidos con GPS. Lo que escribas arriba es tu distancia.")
+                                .font(GType.body)
+                                .foregroundStyle(p.ink2)
+                                .accessibilityIdentifier("bag-gps")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 12)
+                        ironSet
+                            .padding(.bottom, 24)
                     }
                 }
             }
@@ -190,14 +261,30 @@ struct BagView: View {
         .padding(.horizontal, 4)
     }
 
-    private func cell(_ value: Int?) -> some View {
-        Text(value.map(String.init) ?? "—")
-            .font(GType.headline)
-            .tabular()
-            .foregroundStyle(value == nil ? p.ink3 : p.ink)
-            .frame(width: 64, height: 36)
-            .background(p.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    private func yardField(_ club: BagClub, carry: Bool) -> some View {
+        TextField("—", text: Binding(
+            get: {
+                let value = carry ? club.carry : club.total
+                return value.map(String.init) ?? ""
+            },
+            set: { raw in
+                let digits = raw.filter(\.isNumber)
+                let parsed = digits.isEmpty ? nil : Int(digits)
+                model.updateBagClub(
+                    name: club.name,
+                    carry: carry ? parsed : club.carry,
+                    total: carry ? club.total : parsed
+                )
+            }
+        ))
+        .keyboardType(.numberPad)
+        .multilineTextAlignment(.center)
+        .font(GType.headline)
+        .foregroundStyle(p.ink)
+        .frame(width: 56, height: 36)
+        .background(p.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityLabel("\(carry ? "Carry" : "Total") de \(club.name)")
     }
 }
 
