@@ -3,7 +3,7 @@
 (() => {
   const C = () => window.GolfletPlanCore;
   const e = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const K = { g: '#0B2545', gold: '#C8102E', red: '#B4553F', cel: '#75AADB' };
+  const K = { g: '#0B2545', gold: '#C8102E', red: '#C8102E', cel: '#C8A86A' };
   const f1 = v => (Math.round(v * 10) / 10).toString();
   const C16 = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'], c16 = d => C16[Math.round(((d % 360) + 360) % 360 / 22.5) % 16];
   const BRAND = () => (document.documentElement.dataset.brand || 'Golflet');   // t200u: white-label later via <html data-brand>

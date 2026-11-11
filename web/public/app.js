@@ -127,6 +127,7 @@ function yrList(items, dateOf, row, cls = 'list'){
 }
 const minOr = a => a.length ? Math.min(...a) : '—';
 const emptyData = (t) => `<div class="onboard"><img class="cad" src="/brand/caddie.png" alt=""><h2>${t||'Todavía no hay tarjetas'}</h2><p>Vinculá tu matrícula y Golflet trae las tarjetas de todos tus clubes.</p><a class="btn" href="#/vincular">Vincular tu matrícula</a></div>`;
+const caddieEmpty = (title, text) => `<div class="card cad-empty"><span class="cad-mark"><img class="cad" src="/brand/caddie.png" alt=""><i class="cad-flag" aria-hidden="true">18</i></span><b>${title}</b><p>${text}</p></div>`;
 
 /* ---------- INICIO ---------- */
 function clubsCard(){
@@ -172,14 +173,8 @@ function vInicio(){
     <div class="meta"><a href="${rlink('rounds',{scope:'all',course:'all',sort:'date',order:'desc'})}">Tarjetas<b class="num">${prAll.length}</b></a><a href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}">Mejor gross<b class="num">${bestR?bestR.gross:'—'}</b></a><a href="${rlink('average',{scope:'all',course:'all',sort:'date',order:'desc'})}">Promedio<b class="num">${f1(mean(pr.map(r=>r.gross)))}</b></a><a id="hcpimp" class="hi-imp" href="#/impacto${RANGE==='all'?'':'?range='+RANGE}">Impacto HCP<b class="num">…</b></a></div>
   </div></div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
-  ${roundRow(last, true, true)}</div>
-  <div class="o4"><div class="section"><h2>${rlabel(RANGE)}</h2></div>
-  <div class="grid3">
-    <a class="card mini stat vx-tap" href="${rlink('rounds',{scope:'all',course:'all',sort:'date',order:'desc'})}"><div class="k">Rondas</div><div class="v num">${prAll.length}</div></a>
-    <a class="card mini stat vx-tap" href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}"><div class="k">Mejor</div><div class="v num">${minOr(pr.map(r=>r.gross))}</div></a>
-    <a class="card mini stat vx-tap" href="${rlink('birdies',{scope:'all',course:'all',sort:'date',order:'desc'})}"><div class="k">Birdies</div><div class="v num">${prAll.reduce((s,r)=>s+(r.holes?.length?r.holes.filter(h=>h[1]!=null&&h[2]!=null&&h[2]-h[1]===-1).length:(r.summary_counts?.birdies||0)),0)}</div></a>
-  </div>${perRoundCard(prAll)}</div></div>
-  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3">${reconEntry()}</div><div class="o3" id="cardpull"></div><div class="o3" id="sorteocard"></div><div class="o3" id="improve"></div><div class="o3" id="recur"></div>
+  ${roundRow(last, true, true)}</div></div>
+  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3">${reconEntry()}</div><div class="o3" id="cardpull"></div>
   <div class="o3"><div class="section"><h2>Amigos</h2>${G.user?.group_invitations?`<span class="badge gold">${G.user.group_invitations} invitación${G.user.group_invitations===1?'':'es'}</span>`:''}</div><a class="card gg-home" href="#/amigos"><span class="gg-home-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="3.2"/><circle cx="16.5" cy="10" r="2.6"/><path d="M3.5 19c.9-3 3-4.6 5.5-4.6s4.6 1.6 5.5 4.6M14.5 15c2.6-.3 4.8 1 5.8 3.8"/></svg></span><div><b>${G.user?.group_invitations?'Te invitaron a un grupo':'Comparar con amigos'}</b><p>Tabla, evolución y hoyo por hoyo con tus amigos. Solo si cada uno acepta.</p></div>${ICON.chev}</a></div>
   <div class="o5"><div class="section"><h2>Mis clubes</h2></div>${clubsCard()}</div></div></div>${CT_LINKS}`;
 }
@@ -300,9 +295,11 @@ function nine(r, c, from){
   const hs=r.holes.slice(from,from+9), ch=c?c.holes.slice(from,from+9):[], tk=(r.tee||'').toUpperCase();
   if (!hs.length) return '';
   const tot = a => a.some(x=>x!=null) ? a.reduce((s,x)=>s+(x||0),0) : '—';
+  const yards = hs.map((h, i) => { const x = ch[i]; const y = x?.yards?.[tk]; return y ? `${y}${x?.data_warning ? '<span class="warnmark">*</span>' : ''}` : ''; });
+  const ydRow = yards.some(Boolean) ? `<span class="lab">Yds</span>${yards.map(y => `<span class="c yd" style="color:var(--color-ink3)">${y}</span>`).join('')}<span></span>` : '';
   return `<div class="sc">
     <span class="lab">Hoyo</span>${hs.map(h=>`<span class="h">${h[0]}</span>`).join('')}<span class="h">${from?'VTA':'IDA'}</span>
-    <span class="lab">Yds</span>${hs.map((h,i)=>{ const x=ch[i]; return `<span class="c yd" style="color:var(--color-ink3)">${x?.yards?.[tk]??''}${x?.data_warning?'<span class="warnmark">*</span>':''}</span>`; }).join('')}<span></span>
+    ${ydRow}
     <span class="lab">Par</span>${hs.map(h=>`<span class="c">${h[1]??''}</span>`).join('')}<span class="tot" style="color:var(--color-ink2);font-weight:var(--fw500,500)">${tot(hs.map(h=>h[1]))}</span>
     <span class="lab"></span>${hs.map(h=>`<span class="sc-s"><span class="b ${cls(h[2]==null||h[1]==null?null:h[2]-h[1])}">${h[2]??'·'}</span></span>`).join('')}<span class="tot">${tot(hs.map(h=>h[2]))}</span>
   </div>`;
@@ -329,7 +326,6 @@ function sRonda(id){
   <div class="stitle">${cup(r)+esc(short(r.tournament)||'Ronda')}</div><div style="font-size:calc(12.5px*var(--ts,1));color:var(--color-ink3);margin-top:2px">${esc(title(r.tournament))}</div>
   <div class="chips"><span class="badge">${esc(r.club_name)}</span>${r.course&&r.course!==r.club_name?`<span class="badge">${esc(r.course)}</span>`:''}${r.tee?`<span class="badge">${tc?`<i class="tee" style="background:${tc};margin-right:6px"></i>`:''}Tee ${esc(r.tee)}</span>`:''}${r.course_rating!=null||r.slope!=null?`<a class="badge dif-chip" href="#/diferencial/${encodeURIComponent(r.round_id)}">${r.course_rating!=null?`Rating ${f1(r.course_rating)}`:''}${r.course_rating!=null&&r.slope!=null?' · ':''}${r.slope!=null?`Slope ${esc(String(r.slope))}`:''} <span class="dif-i" aria-hidden="true">i</span></a>`:''}</div>
   <div class="r-partners" id="rpartners" hidden></div>
-  <div id="rwx"></div>
   ${r.valid_card?'':'<div class="note-warn">Tarjeta DES: no presentada, levantada o descalificada. No cuenta en promedios.</div>'}
   <div class="grid3 rstats" style="gap:8px;margin-top:16px">
     ${[['Gross',r.gross??'—'],['Neto',r.net??'—'],['Dif.*',f1(r.differential_computed)],['Puesto',r.position?r.position+'º':'—']].map(([kk,v],i)=>`<div class="card mini stat" style="padding:12px 10px;${i===0?'background:var(--color-primary);color:var(--color-onPrimary)':''}"><div class="k" style="${i===0?'color:rgba(247,245,240,.6)':''}">${kk}</div><div class="v num" style="font-size:calc(25px*var(--ts,1))">${v}</div></div>`).join('')}
@@ -338,8 +334,6 @@ function sRonda(id){
     ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
-  <div class="section"><h2>Tu juego</h2></div>
-  <a class="card row rt-track" id="round-track" href="#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&amp;hole=1"><span class="rt-mark">TRACK</span><span class="body"><span class="t">Registrar mis tiros</span><span class="s">Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.</span></span>${ICON.chev}</a>
   <div class="section"><h2>Estadísticas de la ronda</h2>${has?'':'<img class="cad xs" src="/brand/caddie.png" alt="">'}<span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
   <div class="rstats3" id="rstats3"><div><span>Putts</span><b class="num" id="rt-putts">${r.putts==null?'Sin cargar':r.putts}</b><small id="rt-putts-src">${r.putts==null?'':'Manual'}</small></div><div><span>Greens</span><b class="num" id="rt-gir">${r.gir==null?'Sin cargar':r.gir}</b><small id="rt-gir-src">${r.gir==null?'':'Manual'}</small></div><div><span>Fairways</span><b class="num" id="rt-fir">${r.fir==null?'Sin cargar':r.fir}</b><small id="rt-fir-src">${r.fir==null?'':'Manual'}</small></div></div>
   <button type="button" class="btn ghost" id="load-round-stats">Cargar putts, greens y fairways</button>
@@ -351,7 +345,10 @@ function sRonda(id){
   </div>
   <div class="saved" id="saved" style="margin:8px 4px 0">${r.notes_at?'<img class="cad xs" src="/brand/caddie.png" alt="">':''}${ICON.pencil}<span>${r.notes_at?'Guardado en tu cuenta · '+ago(r.notes_at):'Se guarda en tu cuenta'}</span></div>
   ${recapBox(r.round_id)}
-  ${r.gps_shots?`<div class="section"><h2>Golpes con GPS</h2><span class="badge">${r.gps_shots}</span></div><div id="rshots"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>`:''}`;
+  <div class="section"><h2>TRACK</h2></div>
+  <a class="card row rt-track" id="round-track" href="#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&amp;hole=1"><span class="rt-mark">TRACK</span><span class="body"><span class="t">Registrar mis tiros</span><span class="s">Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.</span></span>${ICON.chev}</a>
+  ${r.gps_shots?`<div class="section"><h2>Golpes con GPS</h2><span class="badge">${r.gps_shots}</span></div><div id="rshots"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>`:''}
+  <div class="section"><h2>Clima</h2></div><div id="rwx"></div>`;
 }
 function sDif(id){
   const r = rounds.find(x => x.round_id === id);
@@ -389,7 +386,7 @@ function sDif(id){
 /* ---------- CANCHA ---------- */
 let segC = null;
 function vCancha(){
-  if (!G.courses.length) return `<h1 class="ltitle">Cancha</h1>${emptyData()}`;
+  if (!G.courses.length) return `<h1 class="ltitle">Cancha</h1>${caddieEmpty('Sin cancha', 'Cuando tu club publique una cancha, la vas a ver acá. No inventamos hoyos ni tees.')}`;
   if (!course(segC)) segC = G.courses[0].key;
   const c = course(segC), ranged = RANGE!=='all', hs = ranged ? holeStats(valid.filter(inR), c.key) : null, HS = h => hstat(h, hs);
   const top = c.holes.filter(h=>HS(h).n).slice().sort((a,b)=>HS(b).avg_to_par-HS(a).avg_to_par).slice(0,3).map(h=>h.hole);
@@ -640,7 +637,7 @@ async function loadTeeCard(fresh){
       c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1800); }; }
   el.innerHTML = `<div class="section"><h2>Próximos tee times</h2>${ts.length?`<a href="#/tees">Ver todos</a>`:''}</div><p class="foot" id="teenote">${esc(TEE_NOTE)}</p>` + (ts.length
     ? `${yrList(ts.slice(0,3), t => t.date, teeRow)}`.replace('<a class="row" href="#/tee/', '<a class="row tt-next" href="#/tee/')
-    : `<div class="card tt-empty"><b>No tenés reservas próximas en tu club</b><span>Cuando reserves una salida en tu club, la vas a ver acá con fecha, hora, cancha y con quién jugás.</span></div>`);
+    : caddieEmpty('Sin reservas próximas', 'Cuando reserves una salida en tu club, la vas a ver acá con fecha, hora, cancha y con quién jugás.'));
   if (fresh) for (const id of [...(fresh.new || []), ...(fresh.changed || [])]) { const a = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"]`); if (a) { a.classList.add('tt-in'); setTimeout(() => a.classList.remove('tt-in'), 2600); } }
   if (fresh) for (const id of fresh.new || []) { const sp = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"] .score span`); if (sp) { sp.textContent = 'nueva'; sp.classList.add('tt-newb'); } }
   if (fresh && (fresh.new || []).length) el.insertAdjacentHTML('beforeend', `<span class="sr" role="status">${fresh.new.length === 1 ? 'Apareció una reserva nueva' : `Aparecieron ${fresh.new.length} reservas nuevas`}</span>`);
@@ -760,7 +757,7 @@ async function loadTees(opts){
     const cardNote = cards.error ? `<div class="msg err">${esc(cards.error.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>` : '';
     el.innerHTML = `<div class="stitle">Tee times</div>
       ${cardNote}
-      <div class="section"><h2>Próximos</h2><span class="badge">${u.tee_times.length}</span></div>${u.tee_times.length?`${yrList(mark(u.tee_times), t => t.date, teeRow)}`:`<div class="msg">No tenés reservas próximas en tu club.</div>`}
+      <div class="section"><h2>Próximos</h2><span class="badge">${u.tee_times.length}</span></div>${u.tee_times.length?`${yrList(mark(u.tee_times), t => t.date, teeRow)}`:caddieEmpty('Sin reservas próximas', 'Cuando reserves una salida en tu club, la vas a ver acá. No inventamos horarios ni tees.')}
       ${p.tee_times.length?`<div class="section"><h2>Pasados</h2></div>${yrList(mark(p.tee_times), t => t.date, teeRow, 'list tt-past')}`:''}
       <div class="section"><h2>De dónde salen</h2></div>${sourcesNote(u.clubs)}
       <p class="foot">Golflet lee tus reservas en el sitio de cada club con tu sesión, solo para mostrarlas: no reserva ni cancela nada. La tarjeta se busca sola a partir de cinco horas después de la salida. El servidor revisa cada quince minutos, así que la primera lectura puede llegar hasta un cuarto de hora más tarde, aunque la app esté cerrada.</p>`;
@@ -1035,12 +1032,12 @@ async function loadTrabajar(area){
     else if (area==='approach' || area==='salida') html += `<div class="msg">Todavía no cargaste ${area==='approach'?'greens':'fairways'} en tus rondas. Abrí una ronda y completalos al final.</div>`;
     if (d.by_distance?.some(b=>b.n)) html += `<div class="section"><h2>Tiros al green con GPS</h2></div><div class="list">${d.by_distance.filter(b=>b.n).map(b=>{ const er = [['corto',b.short],['largo',b.long],['izq.',b.left],['der.',b.right]].filter(x=>x[1]).map(x=>`${x[0]} ${x[1]}`).join(' · ');
       return `<div class="row"><div class="body"><div class="t num">${b.label}</div><div class="s">${b.n} tiros${er?` · errados: ${er}`:''}</div></div><div class="score"><b class="num">${b.green_pct}%</b><span>en el green</span></div></div>`; }).join('')}</div>`;
-    if (d.tee_results?.n) { const t = d.tee_results, K = [['fairway','Fairway','#0F3D2E'],['rough','Rough','#9DB8A6'],['bunker','Bunker','#C8A86A'],['ob','OB','#B4553F'],['water','Agua','#B4553F'],['other','Otro','#DCD6C8']];
+    if (d.tee_results?.n) { const t = d.tee_results, K = [['fairway','Fairway','#0F3D2E'],['rough','Rough','#9DB8A6'],['bunker','Bunker','#C8A86A'],['ob','OB','#C8102E'],['water','Agua','#C8102E'],['other','Otro','#DCD6C8']];
       html += `<div class="section"><h2>Salidas con GPS</h2><span class="badge">${t.n}</span></div><div class="card"><span class="bx-bar" style="height:18px">${K.map(([k,,c])=>t[k]?`<span style="flex:${t[k]};background:${c}"></span>`:'').join('')}</span><div class="gg-key">${K.filter(([k])=>t[k]).map(([k,l,c])=>`<span><i style="background:${c}"></i>${l} ${Math.round(t[k]/t.n*100)}%</span>`).join('')}</div></div>`; }
     if (d.list?.length) html += `<div class="section"><h2>Hoyos con penalidad</h2></div><div class="list">${d.list.map(x=>`<div class="row"><div class="date"><b class="num">${x.hole}</b><span>hoyo</span></div><div class="body"><div class="t">${esc(x.course_label)}</div><div class="s">${dmy(x.date)}</div></div><div class="score"><b class="num">${x.penalties}</b><span>golpe${x.penalties===1?'':'s'}</span></div></div>`).join('')}</div>`;
-    if (d.outcomes?.n){ const o = d.outcomes, K = [['birdie_or_better','Birdie o mejor','#C8A86A'],['par','Par','#0F3D2E'],['bogey','Bogey','#9DB8A6'],['double_or_worse','Doble o peor','#B4553F']];
+    if (d.outcomes?.n){ const o = d.outcomes, K = [['birdie_or_better','Birdie o mejor','#C8A86A'],['par','Par','#0F3D2E'],['bogey','Bogey','#9DB8A6'],['double_or_worse','Doble o peor','#C8102E']];
       html += `<div class="section"><h2>Cómo terminan</h2><span class="badge">${o.n} hoyos</span></div><div class="card"><span class="bx-bar" style="height:18px">${K.map(([k,,c])=>o[k]?`<span style="flex:${o[k]};background:${c}"></span>`:'').join('')}</span><div class="gg-key">${K.map(([k,l,c])=>`<span><i style="background:${c}"></i>${l} ${Math.round(o[k]/o.n*100)}%</span>`).join('')}</div></div>
-        <div class="section"><h2>Hoyo por hoyo</h2></div><div class="list">${d.holes.map(h=>`<a class="row" href="#/hoyo/${encodeURIComponent(h.course_key)}/${h.hole}"><div class="date"><b class="num">${h.hole}</b><span>hoyo</span></div><div class="body"><div class="t">${esc(h.course_label)}</div><div class="s">${h.n} veces · ${h.double_or_worse} doble o peor</div></div><div class="score"><b class="num" style="color:${h.avg_over>1?'#B4553F':'var(--color-ink)'}">+${nf(h.avg_over,2)}</b><span>sobre el par</span></div>${ICON.chev}</a>`).join('')}</div>`; }
+        <div class="section"><h2>Hoyo por hoyo</h2></div><div class="list">${d.holes.map(h=>`<a class="row" href="#/hoyo/${encodeURIComponent(h.course_key)}/${h.hole}"><div class="date"><b class="num">${h.hole}</b><span>hoyo</span></div><div class="body"><div class="t">${esc(h.course_label)}</div><div class="s">${h.n} veces · ${h.double_or_worse} doble o peor</div></div><div class="score"><b class="num" style="color:${h.avg_over>1?'#C8102E':'var(--color-ink)'}">+${nf(h.avg_over,2)}</b><span>sobre el par</span></div>${ICON.chev}</a>`).join('')}</div>`; }
     if (d.recap_mentions?.length) html += `<div class="section"><h2>Lo que dijiste en tus recaps</h2><span class="badge">${d.recap_mentions.length} de ${d.recaps_considered} recaps</span></div><div class="list">${d.recap_mentions.map(m=>`<div class="row"><div class="date"><b class="num">${m.hole??'—'}</b><span>hoyo</span></div><div class="body"><div class="t">${esc(m.text)}</div><div class="s">${dmy(m.date)}</div></div></div>`).join('')}</div>`;
     el.innerHTML = html;
   } catch(e){ el.innerHTML = errBox(e); }
@@ -1107,7 +1104,7 @@ async function loadPutting(m){
   } else if (m === 'one' || m === 'three'){
     const o = m === 'one' ? d.one_putts : d.three_putts, k = m === 'one' ? 'one_putt_pct' : 'three_putt_pct';
     h = `<div class="stitle">${PM[m]}</div>` + (!o.holes ? NOGPS : `<div class="pills"><div class="pill dark"><b class="num">${o.pct}%</b><span>De los hoyos</span></div><div class="pill"><b class="num">${o.count}</b><span>Hoyos</span></div><div class="pill"><b class="num">${nf(o.per_round)}</b><span>Por ronda</span></div></div>
-      ${d.distance.holes_yd?`<div class="section"><h2>Según la distancia del primer putt</h2></div><div class="card gg-bars">${d.distance.bins_yd.filter(b=>b.n).map(b=>`<div class="bx-dist"><span class="bx-dl">${b.label}<small class="num">${b.n} hoyos</small></span><span class="bx-bar"><span style="flex:${b[k]||0};background:${m==='one'?'#0F3D2E':'#B4553F'}"></span><span style="flex:${100-(b[k]||0)};background:#F1EEE6"></span></span><b class="num pt-pct">${b[k]}%</b></div>`).join('')}</div>`:''}
+      ${d.distance.holes_yd?`<div class="section"><h2>Según la distancia del primer putt</h2></div><div class="card gg-bars">${d.distance.bins_yd.filter(b=>b.n).map(b=>`<div class="bx-dist"><span class="bx-dl">${b.label}<small class="num">${b.n} hoyos</small></span><span class="bx-bar"><span style="flex:${b[k]||0};background:${m==='one'?'#0F3D2E':'#C8102E'}"></span><span style="flex:${100-(b[k]||0)};background:#F1EEE6"></span></span><b class="num pt-pct">${b[k]}%</b></div>`).join('')}</div>`:''}
       ${m==='three' && o.list.length?`<div class="section"><h2>Últimos 3 putts</h2></div><div class="list">${o.list.map(x=>`<div class="row"><div class="date"><b class="num">${x.hole}</b><span>hoyo</span></div><div class="body"><div class="t">${esc(x.course_label)}</div><div class="s">${dmy(x.date)}${x.first_putt_yd!=null?` · primer putt a ${nf(x.first_putt_yd)} yd`:''}</div></div><div class="score"><b class="num">${x.putts}</b><span>putts</span></div></div>`).join('')}</div>`:''}`);
   } else if (m === 'course'){
     h = `<div class="stitle">${PM.course}</div>` + (!d.by_course.length ? NONOTES : `<div class="list">${d.by_course.map(c=>`<div class="row"><div class="body"><div class="t">${esc(c.course_label)}</div><div class="s">${c.rounds_noted} ronda${c.rounds_noted===1?'':'s'} con putts${c.gps_holes?` · ${nf(c.putts_per_hole,2)} putts por hoyo con GPS · 3 putts ${c.three_putt_pct}%`:''}</div></div><div class="score"><b class="num">${nf(c.avg_putts)}</b><span>putts/ronda</span></div></div>`).join('')}</div>
@@ -1115,7 +1112,7 @@ async function loadPutting(m){
   } else if (m === 'hole'){
     const cs = d.by_course.filter(c=>c.by_hole.length);
     h = `<div class="stitle">${PM.hole}</div>` + (!cs.length ? NOGPS : cs.map(c=>{ const mx = Math.max(3, ...c.by_hole.map(x=>x.avg_putts));
-      return `<div class="section"><h2>${esc(c.course_label)}</h2><span class="badge">${c.gps_holes} hoyos</span></div><div class="card pt-holes">${c.by_hole.map(x=>`<a class="pt-hr" href="#/hoyo/${encodeURIComponent(c.course_key)}/${x.hole}"><span class="num pt-hn">${x.hole}</span><span class="pt-hb"><span style="width:${x.avg_putts/mx*100}%;background:${x.avg_putts>=2.2?'#B4553F':x.avg_putts<=1.6?'#0F3D2E':'#9DB8A6'}"></span></span><b class="num">${nf(x.avg_putts,2)}</b><small class="num">${x.three_putts?`${x.three_putts}× 3p`:''}</small></a>`).join('')}</div>`; }).join('') + `<p class="foot">Putts promedio por hoyo en tus rondas con GPS. Rojo: 2,2 o más; verde: 1,6 o menos.</p>`);
+      return `<div class="section"><h2>${esc(c.course_label)}</h2><span class="badge">${c.gps_holes} hoyos</span></div><div class="card pt-holes">${c.by_hole.map(x=>`<a class="pt-hr" href="#/hoyo/${encodeURIComponent(c.course_key)}/${x.hole}"><span class="num pt-hn">${x.hole}</span><span class="pt-hb"><span style="width:${x.avg_putts/mx*100}%;background:${x.avg_putts>=2.2?'#C8102E':x.avg_putts<=1.6?'#0F3D2E':'#9DB8A6'}"></span></span><b class="num">${nf(x.avg_putts,2)}</b><small class="num">${x.three_putts?`${x.three_putts}× 3p`:''}</small></a>`).join('')}</div>`; }).join('') + `<p class="foot">Putts promedio por hoyo en tus rondas con GPS. Rojo: 2,2 o más; verde: 1,6 o menos.</p>`);
   } else if (m === 'distance'){
     h = `<div class="stitle">${PM.distance}</div>` + (!d.distance.holes_yd ? NOGPS : `<div class="pills"><div class="pill dark"><b class="num">${nf(d.distance.avg_yd)} yd</b><span>Promedio</span></div><div class="pill"><b class="num">${d.distance.holes_yd}</b><span>Hoyos</span></div><div class="pill"><b class="num">${d.distance.at_pin}</b><span>Con bandera</span></div></div>
       <div class="card"><table class="gg-t pt-bins"><thead><tr><th>Primer putt</th><th>Hoyos</th><th>Putts</th><th>1 putt</th><th>3 putts</th></tr></thead><tbody>${d.distance.bins_yd.map(b=>`<tr><th>${b.label}</th><td class="num">${b.n}</td><td class="num">${nf(b.avg_putts,2)}</td><td class="num">${b.one_putt_pct==null?'—':b.one_putt_pct+'%'}</td><td class="num">${b.three_putt_pct==null?'—':b.three_putt_pct+'%'}</td></tr>`).join('')}</tbody></table></div>`)
@@ -1130,7 +1127,7 @@ const FLAGTXT = { club: 'bandera del club', day_pin: 'bandera de hoy', player_ma
 const MB = [['150-125','150–125'],['125-100','125–100'],['100-75','100–75'],['75-50','75–50'],['50-30','50–30']];
 let MET = null, METR = null;
 function metSrc(){ return `<div class="met-src" data-gpsn>${gpsLine()}</div>`; }
-const metEmpty = (title, what) => `<div class="card met-empty"><div class="me-t">${title}</div><p>${what}</p><p class="me-how">Jugá una ronda con GPS para ver tus datos.</p><a class="btn sm" href="#/jugar">Empezar ronda con GPS</a></div>`;
+const metEmpty = (title, what) => `${caddieEmpty(title, what + ' Jugá una ronda con GPS para ver tus datos.')}<a class="btn sm" href="#/jugar">Empezar ronda con GPS</a>`;
 const metTile = (h, k, v, s2) => `<a class="card stat vx-tap met-t" href="${h}"><div class="k">${k}</div><div class="v num">${v}</div><div class="d">${s2}</div></a>`;
 const sideTxt = t => t === 'left' ? 'izquierda' : t === 'right' ? 'derecha' : '';
 const missTxt = { short: 'corto', long: 'largo', left: 'a la izquierda', right: 'a la derecha' };
@@ -1176,9 +1173,11 @@ const missBars = (m, n) => { const L = [['short', 'Corto'], ['long', 'Largo'], [
   return `<div class="met-bars">${L.map(([k, l]) => `<div class="mb-r"><span>${l}</span><i><em style="width:${Math.round(m[k] / mx * 100)}%"></em></i><b class="num">${m[k]}${n ? ` <small>${Math.round(m[k] / n * 100)}%</small>` : ''}</b></div>`).join('')}</div>`; };
 async function loadMetricas(sub, b){
   const el = $('#metbody'); if (!el) return; const tab = metTab(sub);
+  const stopSpin = setTimeout(() => { const box = $('#metbody'); if (box && box.querySelector('.spin')) box.innerHTML = caddieEmpty('No pudimos cargar las métricas', 'La lectura no llegó. Reintentá. No inventamos números.'); }, 12000);
   let M, P;
   try { [M, P] = await Promise.all([api(`/api/game-metrics?${rq()}`), tab === 'putting' && !b ? api(`/api/putting?${rq()}`).catch(() => null) : Promise.resolve(null)]); }
-  catch(e){ el.innerHTML = errBox(e); el.querySelector('[data-retry]')?.addEventListener('click', () => loadMetricas(sub, b)); return; }
+  catch(e){ clearTimeout(stopSpin); el.innerHTML = errBox(e); el.querySelector('[data-retry]')?.addEventListener('click', () => loadMetricas(sub, b)); return; }
+  clearTimeout(stopSpin);
   if (!$('#metbody')) return; MET = M; METLIVE = { range: RANGE, live: M.live || [] }; paintGps();
   const T = M.tee, A = M.approach, Gi = M.gir, pu = M.putts;
   const play = `<a class="btn ghost met-play" href="#/jugar">Empezar ronda con GPS</a>`;
@@ -1450,7 +1449,7 @@ function drawJugar(msg){
   el.querySelectorAll('#jgend').forEach(b => b.onclick = () => lock(b, async () => { await savePutts(); await api(`/api/live-rounds/${encodeURIComponent(LV.id)}`, { method: 'PATCH', body: JSON.stringify({ ended: true }) }); await refresh(); location.hash = '#/metricas'; }));
 }
 /* ---------- VS JUGADORES DE TU NIVEL (benchmark ±3 de hándicap, anónimo) ---------- */
-const BGOOD = '#0F3D2E', BBAD = '#B4553F', BEVEN = '#DCD6C8';
+const BGOOD = '#0F3D2E', BBAD = '#C8102E', BEVEN = '#DCD6C8';
 const teeDot = t => `<i class="tee" style="background:${TEE[String(t||'').toUpperCase()]||'#ccc'}"></i>`;
 const nivelLink = (ck, tee, m, h) => `#/nivel/${encodeURIComponent(ck)}?${new URLSearchParams({ tee: tee||'', m, ...(h?{ h }:{}) })}`;
 let BENCH_TEE = {};
@@ -2259,7 +2258,7 @@ function hcpEvo(since, rangeLabel){
   const Y = v => pt + (hi-v)*ch/(hi-lo);
   let g = ''; [lo+(hi-lo)*.1, (lo+hi)/2, hi-(hi-lo)*.1].forEach(v=>{ g += `<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.hair}"/><text x="${pl-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10" fill="${C.ink3}" font-family="Geist">${f1(v)}</text>`; });
   let path = `M${X(pts[0].date)},${Y(pts[0].hi)}`; pts.slice(1).forEach(p=>{ path += ` H${X(p.date)} V${Y(p.hi)}`; }); path += ` H${X(today)}`;
-  const dots = changes.map((c,i)=>{ const x = X(c.date), y = Y(c.hi), col = c.d<0 ? C.primary : '#B4553F', above = c.d<0 ? y+15 : y-8;
+  const dots = changes.map((c,i)=>{ const x = X(c.date), y = Y(c.hi), col = c.d<0 ? C.primary : '#C8102E', above = c.d<0 ? y+15 : y-8;
     const lx = Math.min(W-pr-2, Math.max(pl+12, x));
     return `<a href="#/hi-cambio/${c.date}" aria-label="${dmy(c.date)}: ${f1(c.prev.hi)} a ${f1(c.hi)}"><circle cx="${x}" cy="${y}" r="13" fill="transparent"/><circle cx="${x}" cy="${y}" r="4" fill="#fff" stroke="${col}" stroke-width="2.2"/>${changes.length<=10||Math.abs(c.d)>=.3?`<text x="${lx}" y="${above}" text-anchor="middle" font-size="10" font-weight="600" fill="${col}" font-family="Geist" style="font-variant-numeric:tabular-nums">${sgnD(c.d)}</text>`:''}</a>`; }).join('');
   // month strip (birdies + pars from that month's rounds, same time axis)
@@ -3272,7 +3271,7 @@ const WX_IC = {
   despejado: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="#C8A86A"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" stroke="#C8A86A" stroke-width="1.8" stroke-linecap="round"/></svg>',
   nublado: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18.5h10.2a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.3A3.4 3.4 0 0 0 7 18.5z" fill="none" stroke="#7C8A84" stroke-width="1.8" stroke-linejoin="round"/></svg>',
   lluvia: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14.5h10.2a3.8 3.8 0 0 0 .4-7.6A5.3 5.3 0 0 0 7.4 8.2 3.2 3.2 0 0 0 7 14.5z" fill="none" stroke="#3F6E8C" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.5 17.5l-1 2.5M12.5 17.5l-1 2.5M16.5 17.5l-1 2.5" stroke="#3F6E8C" stroke-width="1.8" stroke-linecap="round"/></svg>',
-  tormenta: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14h10.2a3.8 3.8 0 0 0 .4-7.6A5.3 5.3 0 0 0 7.4 7.7 3.2 3.2 0 0 0 7 14z" fill="none" stroke="#B4553F" stroke-width="1.8" stroke-linejoin="round"/><path d="M12.8 14.5l-2.3 3.6h2.6l-1.6 3.4" fill="none" stroke="#B4553F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>' };
+  tormenta: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14h10.2a3.8 3.8 0 0 0 .4-7.6A5.3 5.3 0 0 0 7.4 7.7 3.2 3.2 0 0 0 7 14z" fill="none" stroke="#C8102E" stroke-width="1.8" stroke-linejoin="round"/><path d="M12.8 14.5l-2.3 3.6h2.6l-1.6 3.4" fill="none" stroke="#C8102E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>' };
 const WX_L = { despejado: 'Despejado', nublado: 'Nublado', lluvia: 'Lluvia', tormenta: 'Tormenta' };
 let WX = null, WXP = null;
 const loadWX = () => WXP || (WXP = api('/api/weather/rounds').then(d => (WX = d)).catch(() => { WXP = null; return null; }));

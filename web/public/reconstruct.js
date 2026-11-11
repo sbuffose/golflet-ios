@@ -267,6 +267,14 @@
         if (!mine()) return null;
         return saved;
       },
+      onEdit: async (shot) => {
+        if (!mine()) return null;
+        await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`, { method: "PATCH", body: JSON.stringify(shot) });
+        if (!mine()) return null;
+        const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
+        if (!mine()) return null;
+        return pack.shots || [];
+      },
       onUndo: async (shotId) => {
         if (!mine()) return null;
         await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots?shot=${encodeURIComponent(shotId)}`, { method: "DELETE" });
