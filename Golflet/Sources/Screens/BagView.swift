@@ -52,6 +52,7 @@ struct BagView: View {
             .padding(.top, 8)
         }
         .accessibilityIdentifier("screen-bolsa")
+        .metricDestinations()
         .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .onAppear(perform: restoreIron)
     }

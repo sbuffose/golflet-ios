@@ -187,6 +187,8 @@ final class GolfletUITests: XCTestCase {
             first(app, "home-mode-chip").tap()
             first(app, "home-mode-soc").tap()
             saveShot("73_inicio_social")
+            app.swipeDown()
+            XCTAssertTrue(first(app, "home-mode-chip").waitForExistence(timeout: 4))
             first(app, "home-mode-chip").tap()
             first(app, "home-mode-clasico").tap()
         }
