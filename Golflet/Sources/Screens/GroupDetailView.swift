@@ -433,11 +433,14 @@ struct GroupDetailView: View {
                         .font(GFont.ui(11, weight: .semibold))
                         .tracking(1.6)
                         .textCase(.uppercase)
+                        .foregroundStyle(p.accent)
                     Text(group.name)
                         .font(GFont.ui(28, weight: .bold))
                         .tracking(-0.8)
+                        .foregroundStyle(Color.white)
                     Text(meetLine())
                         .font(GFont.ui(14, weight: .semibold))
+                        .foregroundStyle(Color.white)
                 }
                 Spacer(minLength: 8)
                 Button { showsViewSettings = true } label: {
@@ -449,12 +452,16 @@ struct GroupDetailView: View {
                 .accessibilityLabel("Mi vista")
                 .accessibilityIdentifier("group-my-view")
             }
-            .foregroundStyle(Color.white)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background {
                 p.primary
+                    .padding(.horizontal, -20)
+            }
+            .overlay(alignment: .bottom) {
+                p.accent
+                    .frame(height: 4)
                     .padding(.horizontal, -20)
             }
 
@@ -507,6 +514,8 @@ struct GroupDetailView: View {
                     Text(line)
                         .font(GFont.ui(13, weight: .semibold))
                         .foregroundStyle(p.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .padding(.vertical, 10)
                         .accessibilityIdentifier("group-hero")
                         .accessibilityLabel("Tu puesto, \(line)")
@@ -606,8 +615,14 @@ struct GroupDetailView: View {
         guard let mineID = comparison?.hero?.memberID, row.rank(of: mineID) != nil else { return nil }
         let token = posToken(row, memberID: mineID)
         let gap = gapLine(row, memberID: mineID) ?? ""
-        let cards = comparison?.hero?.cards ?? ""
+        let cards = shortCards(comparison?.hero?.cards)
         return ["Tu posición", token, gap, cards].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private func shortCards(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "" }
+        guard let count = raw.split(separator: " ").first, Int(count) != nil else { return raw }
+        return "\(count) tarj."
     }
 
     private func leaderTable(_ row: GroupComparisonRow, group: GolfletGroup) -> some View {
