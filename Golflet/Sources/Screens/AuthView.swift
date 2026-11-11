@@ -25,15 +25,6 @@ struct AuthView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("Golflet. La libreta, el caddie y el 18.")
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Tu golf,")
-                            .font(GType.largeTitle)
-                            .foregroundStyle(p.ink2)
-                        Text("ordenado")
-                            .font(GType.largeTitle)
-                            .foregroundStyle(p.accentInk)
-                    }
-
                     Text("Entrá con tu matrícula y tu contraseña.")
                         .font(GType.body)
                         .foregroundStyle(p.ink2)

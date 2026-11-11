@@ -29,9 +29,6 @@ struct HomeView: View {
                                 .accessibilityIdentifier("home-ready")
                         }
                         header(scroll: proxy)
-                        modeChip
-                        if model.homeMode == .comp { competitiveLead }
-                        else if model.homeMode == .soc { socialLead }
                         handicapCard
                         if model.homeMode == .mej, !model.liveShots.isEmpty {
                             SGCard(shots: model.liveShots)
@@ -39,8 +36,6 @@ struct HomeView: View {
                         lastRound
                         teeTimesCard
                         scorecardFetchCard
-                        yearRow
-                        recurring
                         groups
                         clubs
                         moreLegacy
@@ -140,23 +135,20 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center) {
                 CaddieMark(height: 36)
-                GOverline(text: model.clubs.first?.name ?? "Golflet")
-                Spacer()
                 if let club = model.clubs.first {
+                    let extra = model.clubs.count > 1 ? " +\(model.clubs.count - 1)" : ""
                     Button {
                         model.requestSync(club)
                     } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(p.ink2)
-                            .frame(width: 36, height: 36)
-                            .background(p.surface)
-                            .clipShape(Circle())
+                        GOverline(text: club.name + extra)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Actualizar")
+                    .accessibilityLabel("Actualizar \(club.name)")
                     .accessibilityIdentifier("home-sync-\(club.accountId)")
+                } else {
+                    GOverline(text: "Golflet")
                 }
+                Spacer()
                 if let major = ProMajor.current(on: Date()) {
                     Link(destination: major.url) {
                         Text(major.short)
@@ -200,6 +192,21 @@ struct HomeView: View {
                 booking: model.nextTeeTime,
                 onTab: { revealPartners(scroll) }
             )
+            RangeMenuButton(
+                range: Binding(
+                    get: { model.statsRange },
+                    set: { model.setStatsRange($0) }
+                ),
+                count: model.rangeRoundCount
+            )
+            Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+        }
+    }
+
+    private var parkedHomeActions: some View {
+        VStack(alignment: .leading, spacing: 10) {
             NavigationLink {
                 PlayHubView()
             } label: {
@@ -209,27 +216,6 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("home-open-jugar")
-            Button { model.showsPlay = true } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Jugar")
-                            .font(GType.headline)
-                            .foregroundStyle(p.onPrimary)
-                        Text("Ronda con GPS")
-                            .font(GType.label)
-                            .foregroundStyle(p.onPrimary.opacity(0.65))
-                    }
-                    Spacer()
-                    Image(systemName: "location.fill")
-                        .foregroundStyle(p.accentOnNavy)
-                }
-                .padding(16)
-                .background(p.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("play-start")
-            .padding(.top, 6)
             Button { model.showsReconstruct = true } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Cargar una vuelta ya jugada")
@@ -288,18 +274,7 @@ struct HomeView: View {
                         .accessibilityIdentifier("home-hcp-people-above")
                 }
                 VStack(alignment: .leading, spacing: 12) {
-                    NavigationLink(value: MetricRoute.handicap) {
-                        HStack(alignment: .top) {
-                            GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
-                            Spacer()
-                            Text("Tendencia estimada · 40 rondas")
-                                .font(GType.label)
-                                .foregroundStyle(p.onPrimary.opacity(0.5))
-                            MetricChevron(color: p.onPrimary.opacity(0.4))
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                    GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
                     HStack(alignment: .top, spacing: 12) {
                         NavigationLink(value: MetricRoute.handicap) {
                             VStack(alignment: .leading, spacing: 10) {
@@ -310,13 +285,6 @@ struct HomeView: View {
                                     .foregroundStyle(p.onPrimary)
                                     .minimumScaleFactor(0.55)
                                     .lineLimit(1)
-                                HStack(spacing: 6) {
-                                    Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
-                                        .font(.system(size: 11, weight: .semibold))
-                                    Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
-                                        .font(GType.label)
-                                }
-                                .foregroundStyle(p.onPrimary.opacity(0.7))
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
@@ -325,10 +293,52 @@ struct HomeView: View {
                         .accessibilityIdentifier("metric-handicap")
                         .accessibilityElement(children: .contain)
                         .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
-                        if place == .beside {
-                            homeHcpPeople()
-                                .zIndex(2)
+                        VStack(alignment: .trailing, spacing: 10) {
+                            if place == .beside {
+                                homeHcpPeople()
+                            }
+                            Button { model.showsPlay = true } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "location.fill")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text("Jugar")
+                                        .font(GType.label)
+                                }
+                                .foregroundStyle(p.onPrimary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(p.accent)
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("play-start")
+                            .accessibilityLabel("Jugar")
                         }
+                        .zIndex(2)
+                    }
+                    HStack(alignment: .center, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let when = model.officialHistory.last?.date {
+                                Text("Índice al \(FormatAR.syncDay(when))")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.onPrimary.opacity(0.7))
+                            }
+                            HStack(spacing: 6) {
+                                Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
+                                    .font(GType.label)
+                            }
+                            .foregroundStyle(p.onPrimary.opacity(0.7))
+                        }
+                        Spacer(minLength: 8)
+                        Button { showsHcpImpact = true } label: {
+                            Text("Cambios")
+                                .font(GType.label)
+                                .foregroundStyle(p.onPrimary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-hcp-cambios")
                     }
                 }
                 .background {
@@ -355,7 +365,7 @@ struct HomeView: View {
                     .overlay { GProbe(id: "metric-best-gross", label: "Mejor gross") }
                     Spacer()
                     NavigationLink(value: MetricRoute.roundList(.average(yearOnly: true))) {
-                        heroMini("Promedio \(Calendar.gregorian.component(.year, from: Date()))", snap.yearAverage.map(FormatAR.one) ?? "—")
+                        heroMini("Promedio", model.summary.averageGross.map(FormatAR.one) ?? "—")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-average")
@@ -502,27 +512,44 @@ struct HomeView: View {
             NavigationLink {
                 TeeTimePrepView(booking: booking)
             } label: {
+                let parts = teeParts(booking.startsAt)
                 HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(booking.chipWhen)
-                            .font(GType.headline)
+                    VStack(spacing: 0) {
+                        Text(parts.day)
+                            .font(GFont.ui(22, weight: .semibold))
                             .tabular()
                             .foregroundStyle(p.ink)
+                        Text(parts.month)
+                            .font(GType.overline)
+                            .foregroundStyle(p.ink3)
+                    }
+                    .frame(width: 44)
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(booking.clubName)
-                            .font(GType.body)
+                            .font(GType.headline)
                             .foregroundStyle(p.ink)
-                        if !booking.course.isEmpty {
-                            Text(booking.course)
-                                .font(GType.label)
-                                .foregroundStyle(p.ink2)
-                        }
+                            .lineLimit(1)
+                        Text([booking.course, parts.weekday].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .lineLimit(1)
                         if let partners = booking.companionsLine {
                             Text(partners)
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
+                                .lineLimit(1)
                         }
                     }
                     Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(parts.time)
+                            .font(GType.headline)
+                            .tabular()
+                            .foregroundStyle(p.ink)
+                        Text("salida")
+                            .font(GType.overline)
+                            .foregroundStyle(p.ink3)
+                    }
                     Image(systemName: "chevron.right")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(p.ink3)
@@ -537,6 +564,21 @@ struct HomeView: View {
             }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private func teeParts(_ date: Date) -> (day: String, month: String, weekday: String, time: String) {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_AR")
+        f.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        f.dateFormat = "d"
+        let day = f.string(from: date)
+        f.dateFormat = "MMM"
+        let month = f.string(from: date).replacingOccurrences(of: ".", with: "").uppercased()
+        f.dateFormat = "EEEE"
+        let weekday = f.string(from: date).capitalized
+        f.dateFormat = "HH:mm"
+        let time = f.string(from: date)
+        return (day, month, weekday, time)
     }
 
     private func revealPartners(_ proxy: ScrollViewProxy) {
@@ -667,6 +709,10 @@ struct HomeView: View {
 
     private var moreLegacy: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if model.homeMode == .comp { competitiveLead }
+            else if model.homeMode == .soc { socialLead }
+            modeChip
+            parkedHomeActions
             Text("Más").font(GType.section).foregroundStyle(p.ink)
             ProtoCard {
                 VStack(spacing: 0) {
@@ -722,90 +768,6 @@ struct HomeView: View {
                 .buttonStyle(.plain)
                 .modifier(RoundZoomSource(id: round.roundId, space: roundZoom))
                 .accessibilityIdentifier("last-round-card")
-            }
-        }
-    }
-
-    private var yearRow: some View {
-        let snap = model.home
-        let year = Calendar.gregorian.component(.year, from: Date())
-        let valid = StatsEngine.eighteenHoleValid(model.rounds)
-        let yearRounds = valid.filter { Calendar.gregorian.component(.year, from: $0.date) == year }
-        let yearShare = valid.isEmpty ? 0 : Double(yearRounds.count) / Double(valid.count)
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("Este año")
-                .font(GType.section)
-                .foregroundStyle(p.ink)
-            HStack(spacing: 10) {
-                NavigationLink(value: MetricRoute.roundList(.yearRounds)) {
-                    AccentStatCard(
-                        tint: .primary,
-                        icon: "flag.fill",
-                        title: "Rondas",
-                        value: "\(snap.yearRoundCount)",
-                        share: yearShare,
-                        shareNoun: "las rondas",
-                        compact: true
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("metric-year-rounds")
-                NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: true))) {
-                    AccentStatCard(
-                        tint: .primary,
-                        icon: "trophy.fill",
-                        title: "Mejor",
-                        value: snap.yearBestGross.map(String.init) ?? "—",
-                        compact: true
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("metric-year-best")
-                NavigationLink(value: MetricRoute.scoreKind(.birdie, .yearRounds)) {
-                    AccentStatCard(
-                        tint: .accent,
-                        icon: ScoreKind.birdie.symbolName,
-                        title: "Birdies",
-                        value: "\(snap.yearBirdies)",
-                        share: StatsEngine.holeShare(.birdie, in: yearRounds),
-                        compact: true
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("metric-year-birdies")
-            }
-        }
-    }
-
-    private var recurring: some View {
-        Group {
-            if let report = model.recurring, let first = report.items.first {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Después de la ronda")
-                        .font(GType.section)
-                        .foregroundStyle(p.ink)
-                    NavigationLink(value: MetricRoute.recurring) {
-                        GCard(radius: 22, padding: 16) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Errores que se repiten")
-                                        .font(GType.headline)
-                                        .foregroundStyle(p.ink)
-                                    Spacer()
-                                    MetricChevron(color: p.ink3)
-                                }
-                                Text(first.text)
-                                    .font(GType.body)
-                                    .foregroundStyle(p.ink2)
-                                Text("En \(report.roundsConsidered) de las últimas \(report.lastN) rondas")
-                                    .font(GType.label)
-                                    .foregroundStyle(p.ink3)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("home-recurring")
-                }
             }
         }
     }
@@ -1097,7 +1059,7 @@ struct RoundRow: View {
                         .font(GType.statM)
                         .tabular()
                         .foregroundStyle(p.ink)
-                    Text(round.net.map(String.init) ?? "—")
+                    Text(round.net.map { "neto \($0)" } ?? "neto —")
                         .font(GType.label)
                         .tabular()
                         .foregroundStyle(p.ink3)
@@ -1137,7 +1099,7 @@ struct RoundRow: View {
             parts.append(round.tee)
         }
         if let pos = round.position, let field = round.fieldSize {
-            parts.append("\(pos)° de \(field)")
+            parts.append("\(pos)º de \(field)")
         }
         return parts.joined(separator: " · ")
     }

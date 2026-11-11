@@ -167,6 +167,26 @@ struct PlayHoleView: View {
                 GProbe(id: "pace-alert", label: paceAlertText)
             }
         }
+        .onAppear {
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") {
+                track = closedHolePreview()
+            }
+        }
+    }
+
+    private func closedHolePreview() -> TrackSession.State {
+        var state = TrackSession.State()
+        let pin = TrackPoint(lat: pinCoord.lat, lng: pinCoord.lng)
+        state.phase = .tracking
+        state.tee = pin
+        state.flag = pin
+        state.ball = pin
+        state.marks = [
+            TrackMark(id: 1, at: pin, club: "Hierro 7", countsStroke: true, holed: false, penalty: false, drop: false),
+            TrackMark(id: 2, at: pin, club: "Putter", countsStroke: true, holed: true, penalty: false, drop: false)
+        ]
+        state.nextID = 3
+        return state
     }
 
     private var current: GPSHole? {
@@ -385,21 +405,6 @@ struct PlayHoleView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("play-aim-label")
-                distances
-                holeNav
-                if let movingID = movingShotID, let moving = shots.first(where: { $0.id == movingID }) {
-                    Text("Mové el mapa y tocá Guardar punto.")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                    Button("Guardar punto") { Task { await moveShot(moving) } }
-                        .font(GType.headline)
-                        .foregroundStyle(p.onPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(p.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .accessibilityIdentifier("play-edit-save")
-                }
                 if holeClosed {
                     VStack(spacing: 8) {
                         Button("Editar hoyo") { editingClosed = true }
@@ -419,7 +424,23 @@ struct PlayHoleView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .accessibilityIdentifier("play-next-wide")
                     }
-                } else {
+                }
+                distances
+                holeNav
+                if let movingID = movingShotID, let moving = shots.first(where: { $0.id == movingID }) {
+                    Text("Mové el mapa y tocá Guardar punto.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                    Button("Guardar punto") { Task { await moveShot(moving) } }
+                        .font(GType.headline)
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier("play-edit-save")
+                }
+                if !holeClosed {
                     markActions
                     if track.phase == .tracking { lostActions }
                 }
@@ -1491,7 +1512,7 @@ struct PlayHoleView: View {
         mapCenter = nil
         waterAsk = false
         markMode = .track
-        track = TrackSession.State()
+        track = ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") ? closedHolePreview() : TrackSession.State()
         chosenClub = nil
         pinStep = .idle
         lastManualChange = Date()

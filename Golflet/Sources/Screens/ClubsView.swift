@@ -15,17 +15,47 @@ struct ClubsView: View {
         GScreen(id: "screen-clubes") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 12) {
                         GOverline(text: "Tu cuenta")
-                        GTitle(text: accountName)
-                        if let mail = accountMail {
-                            Text(mail)
-                                .font(GType.label)
+                        HStack(alignment: .center, spacing: 14) {
+                            Text(model.profile.initials)
+                                .font(GFont.ui(22, weight: .semibold))
+                                .foregroundStyle(p.onPrimary)
+                                .frame(width: 64, height: 64)
+                                .background(p.primary)
+                                .clipShape(Circle())
+                                .accessibilityIdentifier("cuenta-foto")
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(accountName)
+                                    .font(GType.sheetTitle)
+                                    .foregroundStyle(p.ink)
+                                    .lineLimit(2)
+                                if let mail = accountMail {
+                                    Text(mail)
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink2)
+                                }
+                                Text("HI \(FormatAR.one(model.profile.currentHandicap))")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color(hex: 0xC8A86A).opacity(0.35))
+                                    .clipShape(Capsule())
+                                    .accessibilityIdentifier("cuenta-hi")
+                            }
+                        }
+                        Button {} label: {
+                            Text("Elegir foto")
+                                .font(GType.headline)
                                 .foregroundStyle(p.ink2)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("cuenta-foto-elegir")
                     }
 
                     notificationsRow
+                    tuJuego
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Clubes")
@@ -114,6 +144,47 @@ struct ClubsView: View {
     private var accountMail: String? {
         if let mail = model.user?.visibleEmail { return mail }
         return model.user == nil ? nil : "Entrás con tu matrícula"
+    }
+
+    private var tuJuego: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Tu juego")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            GCard(radius: 18, padding: 4) {
+                VStack(spacing: 0) {
+                    NavigationLink { PelotaView() } label: {
+                        gearRow("Mi pelota", "La pelota con la que jugás")
+                    }
+                    .accessibilityIdentifier("cuenta-pelota")
+                    Hairline()
+                    NavigationLink { SorteosView() } label: {
+                        gearRow("Sorteos", "Los que jugás con el club")
+                    }
+                    .accessibilityIdentifier("cuenta-sorteos")
+                }
+            }
+        }
+    }
+
+    private func gearRow(_ title: String, _ subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Text(subtitle)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(p.ink3)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private var notificationsRow: some View {
