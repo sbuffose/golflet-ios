@@ -109,7 +109,7 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await shot("grupo-semana-390");
     await open("g1", "all");
     const hist = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
-    assert.match(hist, /8 tarjetas \(6 de 18 y 2 de 9\)/);
+    assert.match(hist, /Tu posición · .+ · 8 tarj\./);
     assert.match(hist, /Histórico/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Todo");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Histórico");
@@ -123,7 +123,7 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     assert.match(year, /20 rondas este año/);
     assert.match(year, /Pocas tarjetas/);
     assert.match(year, /Temporada 2026/);
-    assert.match(year, /8 tarjetas \(6 de 18 y 2 de 9\)/);
+    assert.match(year, /Tu posición · 1 · \+20 sobre Luis · 8 tarj\./);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
     await shot("grupo-2-anio-390");
     await open("g4", "all");
@@ -150,7 +150,13 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await open("gT", "all");
     assert.deepEqual(await placesOf(), ["T1", "T1", "3"]);
     assert.match(await page.evaluate(() => document.querySelector(".gg-you")?.textContent || ""), /Empate en la punta/);
-    await board("grupos5-empate-390");
+    const tieFits = await page.$eval(".gg-you", el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return el.scrollWidth <= el.clientWidth + 1 && range.getClientRects().length <= 1;
+    });
+    assert.equal(tieFits, true);
+    await board("grupos6-empate-390");
     await open("g1", "1w");
     const fit = await page.$eval(".gg-filters", el => {
       const row = el.getBoundingClientRect();
@@ -166,9 +172,21 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     assert.equal(fit.oneRow, true);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Pocas tarjetas/);
     assert.ok(await tableClearsNav() >= 8, "la última fila queda detrás de la barra");
-    await board("grupos5-semana-390");
+    const fits = await page.$eval(".gg-you", el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return el.scrollWidth <= el.clientWidth + 1 && range.getClientRects().length <= 1;
+    });
+    assert.equal(fits, true);
+    await board("grupos6-semana-390");
     await open("g1", "12y");
-    await board("grupos5-anio-390");
+    const yearFits = await page.$eval(".gg-you", el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return el.scrollWidth <= el.clientWidth + 1 && range.getClientRects().length <= 1;
+    });
+    assert.equal(yearFits, true);
+    await board("grupos6-anio-390");
   } finally {
     await browser.close();
     server.close();
