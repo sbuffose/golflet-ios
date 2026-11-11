@@ -51,6 +51,15 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
     const json = (data: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(data)); };
     if (url.pathname.startsWith("/api/groups/g4")) return json(four(url.searchParams.get("range") || "all", 4));
+    if (url.pathname.startsWith("/api/groups/gT")) return json({
+      ...payload("all", 3),
+      group: { id: "gT", name: "Empate", is_admin: true, admins: 1, photo_url: null },
+      members: [
+        member({ id: "a", name: "Ana Pérez", me: true, rounds: 4, birdies: 4, pars: 20, net: 74, avg: 80, cards18: 4, photo: "/fixture-ana.jpg" }),
+        member({ id: "b", name: "Luis Gómez", rounds: 4, birdies: 4, pars: 16, net: 76, avg: 82, cards18: 4 }),
+        member({ id: "c", name: "Sol Díaz", rounds: 4, birdies: 1, pars: 10, net: 80, avg: 86, cards18: 4 }),
+      ],
+    });
     if (url.pathname.startsWith("/api/groups/g1")) return json(payload(url.searchParams.get("range") || "all", url.searchParams.get("range") === "1w" ? 1 : 4));
     if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, rounds: [], courses: [], clubs: [] });
     if (url.pathname.startsWith("/api/")) return json({});
@@ -70,63 +79,114 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
     const open = async (id: string, range: string) => {
       await page.goto(`http://127.0.0.1:${port}/#/grupo/${id}?range=${range}`, { waitUntil: "networkidle0" });
-      await page.waitForSelector(".gg-steps");
-      await page.waitForFunction(() => [...document.querySelectorAll(".gg-hero .gg-count, .gg-stage:not([hidden]) .gg-count")].every(n => (n as HTMLElement).textContent === String(Math.round(Number((n as HTMLElement).dataset.n)))));
+      await page.waitForSelector(".gg-lb");
     };
+    const rowsOf = () => page.$$eval(".gg-stage:not([hidden]) .gg-lb tbody tr", els => els.length);
+    const placesOf = () => page.$$eval(".gg-stage:not([hidden]) .gg-lb td.pos b", els => els.map(el => el.textContent || ""));
     const shot = async (name: string) => {
-      await page.evaluate(() => {
-        const steps = document.querySelector(".gg-stage:not([hidden]) .gg-steps");
-        const bar = document.querySelector("#tabbar");
-        if (!steps || !bar) return;
-        const room = bar.getBoundingClientRect().top - 12;
-        const box = steps.getBoundingClientRect();
-        if (box.bottom > room) window.scrollBy(0, box.bottom - room);
-      });
+      await page.evaluate(() => document.querySelector(".gg-mast")?.scrollIntoView({ block: "start" }));
       await page.screenshot({ path: `${ART}/${name}.png` });
     };
     await open("g1", "1w");
     const week = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
-    assert.match(week, /Tu puesto/);
-    assert.match(week, /en birdies/);
+    assert.match(week, /Tu posición/);
+    assert.match(week, /Semana del 1 ene/);
     assert.match(week, /1 tarjeta/);
     assert.match(week, /Ver tabla completa/);
-    assert.match(week, /\+2 birdies sobre Luis Gómez/);
+    assert.match(week, /\+2 sobre Luis/);
+    assert.match(week, /Por ronda/);
     assert.match(week, /1 ronda esta semana/);
-    assert.match(week, /Rey del birdie/);
+    assert.match(week, /Pocas tarjetas/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Sem");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Semana");
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
-    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 2);
-    assert.equal(await page.$(".gg-step .cad"), null);
+    assert.equal(await rowsOf(), 2);
+    assert.deepEqual(await placesOf(), ["1", "2"]);
+    assert.ok(await page.$(".gg-stage:not([hidden]) .gg-move"));
+    assert.equal(await page.$(".gg-lb .cad"), null);
     const tableHidden = await page.$eval(".gg-full", el => (el as HTMLDetailsElement).open);
     assert.equal(tableHidden, false);
     await shot("grupo-semana-390");
     await open("g1", "all");
     const hist = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
-    assert.match(hist, /8 tarjetas \(6 de 18 y 2 de 9\)/);
+    assert.match(hist, /Tu posición · .+ · 8 tarj\./);
+    assert.match(hist, /Histórico/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Todo");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Histórico");
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
-    assert.ok(await page.$(".gg-step.p1 img.gg-img"));
-    const peek = await page.$$eval(".gg-trophy", els => els.length >= 2 && els[1].getBoundingClientRect().left < window.innerWidth);
-    assert.equal(peek, true);
+    assert.ok(await page.$(".gg-lb img.gg-img"));
+    const leaders = await page.$$eval(".gg-leaders button", els => els.length >= 3 && els[1].getBoundingClientRect().left < window.innerWidth && Math.abs(els[1].getBoundingClientRect().top - els[0].getBoundingClientRect().top) < 2);
+    assert.equal(leaders, true);
     await shot("grupo-2-historico-390");
     await open("g1", "12y");
     const year = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(year, /20 rondas este año/);
-    assert.match(year, /Pocas rondas/);
-    assert.match(year, /Rey del birdie/);
-    assert.match(year, /8 tarjetas \(6 de 18 y 2 de 9\)/);
+    assert.match(year, /Pocas tarjetas/);
+    assert.match(year, /Temporada 2026/);
+    assert.match(year, /Tu posición · 1 · \+20 sobre Luis · 8 tarj\./);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
     await shot("grupo-2-anio-390");
     await open("g4", "all");
-    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 3);
+    assert.equal(await rowsOf(), 4);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Mateo Ruiz/);
     await shot("grupo-4-historico-390");
     await open("g4", "12y");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
-    assert.equal(await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.length), 3);
+    assert.equal(await rowsOf(), 4);
     await shot("grupo-4-anio-390");
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    const board = async (name: string) => {
+      await page.evaluate(() => document.querySelector(".gg-mast")?.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: `${ART}/${name}.png` });
+    };
+    const tableClearsNav = async () => {
+      await page.evaluate(() => document.querySelector(".gg-stage:not([hidden]) .gg-lb tbody tr:last-child")?.scrollIntoView({ block: "end" }));
+      return page.evaluate(() => {
+        const bar = document.querySelector("#tabbar")?.getBoundingClientRect().top ?? window.innerHeight;
+        const row = document.querySelector(".gg-stage:not([hidden]) .gg-lb tbody tr:last-child");
+        return row ? bar - row.getBoundingClientRect().bottom : 0;
+      });
+    };
+    await open("gT", "all");
+    assert.deepEqual(await placesOf(), ["T1", "T1", "3"]);
+    assert.match(await page.evaluate(() => document.querySelector(".gg-you")?.textContent || ""), /Empate en la punta/);
+    const tieFits = await page.$eval(".gg-you", el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return el.scrollWidth <= el.clientWidth + 1 && range.getClientRects().length <= 1;
+    });
+    assert.equal(tieFits, true);
+    await board("grupos6-empate-390");
+    await open("g1", "1w");
+    const fit = await page.$eval(".gg-filters", el => {
+      const row = el.getBoundingClientRect();
+      const course = el.querySelector(".gg-course summary").getBoundingClientRect();
+      const pills = [...el.querySelectorAll(".gg-rng a")].map(a => a.getBoundingClientRect());
+      const last = pills[pills.length - 1];
+      return {
+        courseInside: course.right <= row.right + 1 && course.left >= last.right - 1 && course.top >= row.top - 1 && course.bottom <= row.bottom + 1,
+        oneRow: new Set(pills.map(p => Math.round(p.top))).size === 1,
+      };
+    });
+    assert.equal(fit.courseInside, true);
+    assert.equal(fit.oneRow, true);
+    assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Pocas tarjetas/);
+    assert.ok(await tableClearsNav() >= 8, "la última fila queda detrás de la barra");
+    const fits = await page.$eval(".gg-you", el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return el.scrollWidth <= el.clientWidth + 1 && range.getClientRects().length <= 1;
+    });
+    assert.equal(fits, true);
+    await board("grupos6-semana-390");
+    await open("g1", "12y");
+    const yearFits = await page.$eval(".gg-you", el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return el.scrollWidth <= el.clientWidth + 1 && range.getClientRects().length <= 1;
+    });
+    assert.equal(yearFits, true);
+    await board("grupos6-anio-390");
   } finally {
     await browser.close();
     server.close();
