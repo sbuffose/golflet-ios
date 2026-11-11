@@ -492,35 +492,60 @@ struct GroupDetailView: View {
     private func trophyCard(row: GroupComparisonRow, winners: [MemberMetricValue], group: GolfletGroup) -> some View {
         let winner = winners[0]
         let photo = winner.photoURL ?? group.members.first { $0.id == winner.memberID }?.photoURL
-        return HStack(spacing: 8) {
+        return HStack(spacing: 4) {
             Image(systemName: "medal.fill")
-                .font(.system(size: 14))
+                .font(.system(size: 11))
                 .foregroundStyle(Color(hex: 0xC8A86A))
                 .accessibilityHidden(true)
             Text(trophyTitle(row.metric))
-                .font(GType.label)
-                .foregroundStyle(p.ink)
+                .font(GFont.ui(12, weight: .semibold))
+                .foregroundStyle(p.ink.opacity(0.72))
                 .lineLimit(1)
-            GroupPhotoView(url: photo, initials: winner.initials, size: 22)
+            GroupPhotoView(url: photo, initials: winner.initials, size: 16)
             Text(winners.map(\.memberName).joined(separator: ", "))
-                .font(GType.label)
-                .foregroundStyle(p.ink)
+                .font(GFont.ui(12, weight: .semibold))
+                .foregroundStyle(p.ink.opacity(0.72))
                 .lineLimit(1)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 12)
-        .padding(.vertical, 6)
-        .background(p.surface)
-        .overlay(Capsule().stroke(Color(hex: 0xC8A86A), lineWidth: 1))
-        .clipShape(Capsule())
+    }
+
+    private struct PodiumCell: Identifiable {
+        let id: String
+        let slot: Int
+        let place: Int
+        let value: MemberMetricValue?
     }
 
     private func podium(_ row: GroupComparisonRow, group: GolfletGroup) -> some View {
-        let top = Array(row.ranked().prefix(3))
-        let order = top.count >= 3 ? [1, 0, 2] : top.count == 2 ? [1, 0] : Array(top.indices)
+        let ranked = Array(row.ranked().prefix(3))
+        let placed = ranked.enumerated().map { index, value in
+            (index: index, place: row.rank(of: value.memberID) ?? (index + 1), value: value)
+        }
+        let firsts = placed.filter { $0.place == 1 }
+        let seconds = placed.filter { $0.place == 2 }
+        let third = placed.first { $0.place == 3 }
+        var slots: [(index: Int, place: Int, value: MemberMetricValue)?] = []
+        if firsts.count >= 2 {
+            slots = [nil, Optional(firsts[0]), firsts.count > 1 ? Optional(firsts[1]) : nil, third]
+        } else if let lead = firsts.first {
+            slots = [seconds.first, Optional(lead), third ?? seconds.dropFirst().first]
+        }
+        let cells: [PodiumCell] = slots.enumerated().map { offset, item in
+            if let item {
+                return PodiumCell(id: "step-\(item.index)", slot: item.index + 1, place: item.place, value: item.value)
+            }
+            return PodiumCell(id: "pad-\(offset)", slot: 0, place: 0, value: nil)
+        }
         return HStack(alignment: .bottom, spacing: 8) {
-            ForEach(order, id: \.self) { index in
-                podiumStep(slot: index + 1, place: row.rank(of: top[index].memberID) ?? (index + 1), value: top[index], metric: row.metric, group: group)
+            ForEach(cells) { cell in
+                Group {
+                    if let value = cell.value {
+                        podiumStep(slot: cell.slot, place: cell.place, value: value, metric: row.metric, group: group)
+                    } else {
+                        Color.clear.frame(height: 1).accessibilityHidden(true)
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
         }
         .accessibilityIdentifier("group-podium")
@@ -528,8 +553,8 @@ struct GroupDetailView: View {
 
     private func podiumStep(slot: Int, place: Int, value: MemberMetricValue, metric: GroupMetricKind, group: GolfletGroup) -> some View {
         let photo = value.photoURL ?? group.members.first { $0.id == value.memberID }?.photoURL
-        let ring: Color = place == 1 ? Color(hex: 0xC8A86A) : place == 2 ? p.ink : p.accent
-        let height: CGFloat = place == 1 ? 112 : place == 2 ? 88 : 72
+        let ring: Color = place == 1 ? Color(hex: 0xC8A86A) : p.ink.opacity(0.45)
+        let height: CGFloat = place == 1 ? 112 : place == 2 ? 86 : 68
         return VStack(spacing: 4) {
             Text("\(place)º")
                 .font(GType.label)
@@ -544,31 +569,27 @@ struct GroupDetailView: View {
             VStack(spacing: 2) {
                 Text(display(value, metric: metric))
                     .font(GFont.ui(place == 1 ? 34 : 26, weight: .bold))
-                    .foregroundStyle(place == 1 ? Color(hex: 0xC8A86A) : place == 3 ? p.accent : p.ink)
+                    .foregroundStyle(place == 1 ? Color(hex: 0xC8A86A) : p.ink)
                 if let sample = value.sample, sample < 3 {
                     Text("Pocas tarjetas")
                         .font(GType.label)
-                        .foregroundStyle(place == 1 ? Color.white.opacity(0.85) : p.ink2)
+                        .foregroundStyle(place == 1 ? Color.white.opacity(0.85) : p.ink.opacity(0.72))
                 } else if let per = value.perRound {
                     Text("\(FormatAR.one(per)) por ronda")
                         .font(GType.label)
-                        .foregroundStyle(place == 1 ? Color.white.opacity(0.85) : p.ink2)
+                        .foregroundStyle(place == 1 ? Color.white.opacity(0.85) : p.ink.opacity(0.72))
                 }
                 if let sample = value.sample, sample > 0 {
                     Text(sample == 1 ? "1 tarjeta" : "\(sample) tarjetas")
                         .font(GType.label)
-                        .foregroundStyle(place == 1 ? Color.white.opacity(0.85) : p.ink2)
+                        .foregroundStyle(place == 1 ? Color.white.opacity(0.85) : p.ink.opacity(0.72))
                 }
             }
             .frame(maxWidth: .infinity)
             .frame(height: height, alignment: .top)
             .padding(.top, 8)
-            .background(place == 1 ? p.primary : p.surface)
+            .background(place == 1 ? p.primary : p.primary.opacity(place == 2 ? 0.22 : 0.14))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(place == 1 ? Color.clear : ring, lineWidth: 2)
-            )
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("group-podium-\(slot)")
@@ -628,70 +649,60 @@ struct GroupDetailView: View {
         let me = ranked.first { $0.memberID == mineID }
         return Group {
             if let me, let place = row.rank(of: me.memberID) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Tu puesto")
-                            .font(GType.label)
-                            .foregroundStyle(Color(hex: 0xC8A86A))
-                        Spacer()
-                        if let delta = placeDelta(row, memberID: me.memberID) {
-                            Text(delta > 0 ? "↑ \(delta)" : "↓ \(-delta)")
+                HStack(alignment: .center, spacing: 10) {
+                    Text("\(place)º")
+                        .font(GFont.ui(28, weight: .bold))
+                        .foregroundStyle(Color.white)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(valueLine(me, metric: row.metric))
+                            .font(GFont.ui(14, weight: .bold))
+                            .foregroundStyle(Color.white)
+                            .lineLimit(2)
+                        if let gap = gapLine(row, memberID: me.memberID) {
+                            Text(gap)
                                 .font(GType.label)
-                                .foregroundStyle(delta > 0 ? Color(hex: 0xC8A86A) : Color.white)
+                                .foregroundStyle(Color.white.opacity(0.92))
+                                .lineLimit(1)
+                        }
+                        if let meta = metaLine(me, metric: row.metric) {
+                            Text(meta)
+                                .font(GFont.ui(11, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.62))
+                                .lineLimit(2)
                         }
                     }
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("\(place)º")
-                            .font(GFont.ui(40, weight: .bold))
-                            .foregroundStyle(Color.white)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(whereLine(row.metric))
-                                .font(GType.body)
-                                .foregroundStyle(Color.white)
-                            Text(display(me, metric: row.metric))
-                                .font(GType.section)
-                                .foregroundStyle(Color.white)
-                            if let gap = gapLine(row, memberID: me.memberID) {
-                                Text(gap)
-                                    .font(GType.label)
-                                    .foregroundStyle(Color.white)
-                            }
-                        }
-                    }
-                    if let cards = comparison?.hero?.cards, row.metric == .birdies {
-                        Text(cards)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if let delta = placeDelta(row, memberID: me.memberID) {
+                        Text(delta > 0 ? "↑ \(delta)" : "↓ \(-delta)")
                             .font(GType.label)
-                            .foregroundStyle(Color.white)
-                    }
-                    if let sample = me.sample, sample < 3 {
-                        Text("Pocas tarjetas")
-                            .font(GType.label)
-                            .foregroundStyle(Color.white)
+                            .foregroundStyle(delta > 0 ? Color(hex: 0xC8A86A) : Color.white)
                     }
                 }
-                .padding(14)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(p.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .accessibilityElement(children: .combine)
+                .accessibilityLabel("Tu puesto, \(place)º, \(valueLine(me, metric: row.metric))")
                 .accessibilityIdentifier("group-hero")
             }
         }
     }
 
-    private func whereLine(_ metric: GroupMetricKind) -> String {
-        switch metric {
-        case .birdies: return "en birdies"
-        case .pars: return "en pares"
-        case .eagles: return "en águilas"
-        case .net: return "en mejor neto"
-        case .rounds: return "en rondas"
-        case .maxBirdies: return "en birdies por vuelta"
-        case .streak: return "en la racha"
-        case .regular: return "en regularidad"
-        case .aces: return "en hoyos en uno"
-        default: return "en \(metric.title.lowercased())"
+    private func valueLine(_ value: MemberMetricValue, metric: GroupMetricKind) -> String {
+        var line = "\(display(value, metric: metric)) \(gapUnit(metric))"
+        if let sample = value.sample, sample >= 3, let per = value.perRound {
+            line += " · \(FormatAR.one(per)) por ronda"
         }
+        return line
+    }
+
+    private func metaLine(_ value: MemberMetricValue, metric: GroupMetricKind) -> String? {
+        var bits: [String] = []
+        if metric == .birdies, let cards = comparison?.hero?.cards, !cards.isEmpty { bits.append(cards) }
+        if let sample = value.sample, sample < 3 { bits.append("Pocas tarjetas") }
+        return bits.isEmpty ? nil : bits.joined(separator: " · ")
     }
 
     private func gapUnit(_ metric: GroupMetricKind) -> String {
@@ -715,12 +726,12 @@ struct GroupDetailView: View {
         if place == 1, leaders.count > 1 { return "Empate en la punta." }
         if place == 1, let second = ranked.dropFirst().first?.value, let name = ranked.dropFirst().first?.memberName {
             let delta = row.metric.lowerIsBetter ? second - mine : mine - second
-            return "+\(shownDelta(delta)) \(gapUnit(row.metric)) sobre \(name)"
+            return "+\(shownDelta(delta)) sobre \(name)"
         }
         let ahead = ranked[..<index].last { row.rank(of: $0.memberID) != place }
         guard let ahead, let better = ahead.value else { return nil }
         let delta = row.metric.lowerIsBetter ? mine - better : better - mine
-        return "a \(shownDelta(delta)) \(gapUnit(row.metric)) de \(ahead.memberName)"
+        return "a \(shownDelta(delta)) de \(ahead.memberName)"
     }
 
     private func placeDelta(_ row: GroupComparisonRow, memberID: String) -> Int? {
