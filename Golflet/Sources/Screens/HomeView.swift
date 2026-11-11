@@ -1318,7 +1318,7 @@ enum HomeHcpPeopleLayout {
     static let groupOverlap: CGFloat = 12
     static let numberPeopleGap: CGFloat = 12
     static let accent: UInt32 = BrandHex.red
-    static let celeste: UInt32 = 0x75AADB
+    static let celeste: UInt32 = 0xC8A86A
     static let seWidth: CGFloat = 320
     static let seContentWidth: CGFloat = 280
     static let seCardWidth: CGFloat = 240

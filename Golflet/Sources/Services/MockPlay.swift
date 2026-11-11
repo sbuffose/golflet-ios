@@ -214,6 +214,16 @@ extension MockAPIClient {
         throw GolfletError.decoding("shot")
     }
 
+    func deleteShot(id: String) async throws {
+        Self.playLock.lock()
+        defer { Self.playLock.unlock() }
+        for (roundID, shots) in Self.shotsByRound where shots.contains(where: { $0.id == id }) {
+            Self.shotsByRound[roundID] = shots.filter { $0.id != id }
+            return
+        }
+        throw GolfletError.decoding("shot")
+    }
+
     func recap(roundId: String?, liveRoundId: String?) async throws -> Recap? {
         Self.playLock.lock()
         defer { Self.playLock.unlock() }

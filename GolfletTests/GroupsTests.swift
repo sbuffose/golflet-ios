@@ -101,6 +101,21 @@ final class GroupsTests: XCTestCase {
         XCTAssertFalse(remaining.contains { $0.id == "g-jockey" })
     }
 
+    func testTiedScoresShareThePlace() {
+        let row = GroupComparisonRow(metric: .birdies, values: [
+            MemberMetricValue(memberID: "a", memberName: "Ana", initials: "A", shared: true, value: 4, text: "4"),
+            MemberMetricValue(memberID: "b", memberName: "Luis", initials: "L", shared: true, value: 4, text: "4"),
+            MemberMetricValue(memberID: "c", memberName: "Sol", initials: "S", shared: true, value: 2, text: "2"),
+        ])
+        XCTAssertEqual(row.rank(of: "a"), 1)
+        XCTAssertEqual(row.rank(of: "b"), 1)
+        XCTAssertEqual(row.rank(of: "c"), 3)
+        XCTAssertEqual(GroupPeriod.semester.short, "6m")
+        XCTAssertEqual(GroupPeriod.semester.title, "Semestre")
+        XCTAssertTrue(GroupViewSettings.fewCards("2 tarjetas (2 de 18)"))
+        XCTAssertFalse(GroupViewSettings.fewCards("6 tarjetas (4 de 18 y 2 de 9)"))
+    }
+
     func testSharePrefsHideMetricFromRanking() async throws {
         let api = MockAPIClient(autoSession: true)
         let comparison = try await api.groupComparison(groupID: "g-jockey", config: .default)

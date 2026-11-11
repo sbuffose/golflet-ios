@@ -370,7 +370,7 @@ enum GroupPeriod: String, CaseIterable, Hashable, Codable, Sendable, Identifiabl
         case .week: return "Sem"
         case .month: return "Mes"
         case .quarter: return "Trim"
-        case .semester: return "Sem."
+        case .semester: return "6m"
         case .year: return "Año"
         case .all: return "Todo"
         }
@@ -464,7 +464,14 @@ struct GroupComparisonRow: Identifiable, Hashable, Sendable {
     }
 
     func rank(of memberID: String) -> Int? {
-        ranked().firstIndex { $0.memberID == memberID }.map { $0 + 1 }
+        let rows = ranked()
+        guard let index = rows.firstIndex(where: { $0.memberID == memberID }),
+              let mine = rows[index].value else { return nil }
+        let ahead = rows.filter { other in
+            guard let value = other.value else { return false }
+            return metric.lowerIsBetter ? value < mine : value > mine
+        }.count
+        return ahead + 1
     }
 }
 
