@@ -43,8 +43,8 @@ struct RoundDetailView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     header
+                    partners
                     scoreHero
-                    recapButton
                     if round.isOtherCourse || round.holes.isEmpty {
                         otherCourseNotice
                     } else {
@@ -52,6 +52,7 @@ struct RoundDetailView: View {
                         gameStats
                     }
                     notes
+                    recapButton
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -323,7 +324,7 @@ struct RoundDetailView: View {
     private var gameStats: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Tu juego")
+                Text("Estadísticas de la ronda")
                     .font(GType.section)
                     .foregroundStyle(p.ink)
                 Spacer()
@@ -345,7 +346,7 @@ struct RoundDetailView: View {
                         Text("Registrar mis tiros")
                             .font(GType.headline)
                             .foregroundStyle(p.onPrimary)
-                        Text("Cómo fueron los golpes en el mapa de esta vuelta. Los putts, el drive y el green quedan aparte.")
+                        Text("Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.")
                             .font(GType.label)
                             .foregroundStyle(p.onPrimary.opacity(0.72))
                             .fixedSize(horizontal: false, vertical: true)
@@ -383,12 +384,6 @@ struct RoundDetailView: View {
                             .accessibilityIdentifier("hole-source-\(hole.number)")
                     }
                 }
-            }
-            if let company = playedWith {
-                Text("Jugaste con \(company)")
-                    .font(GType.body)
-                    .foregroundStyle(p.ink)
-                    .accessibilityIdentifier("round-partners")
             }
             Text(scheduleLine)
                 .font(GType.label)
@@ -632,6 +627,24 @@ struct RoundDetailView: View {
         let day = fmt.string(from: round.date)
         let same = model.teeTimes.filter { fmt.string(from: $0.startsAt) == day }
         return same.count == 1 ? same[0] : nil
+    }
+
+    private var partners: some View {
+        Group {
+            if let company = playedWith {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Jugaste con")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    Text(company)
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("round-partners")
+                .accessibilityLabel("Jugaste con \(company)")
+            }
+        }
     }
 
     private var playedWith: String? {

@@ -79,37 +79,15 @@ struct RootView: View {
     @ViewBuilder
     private var mainTabs: some View {
         let bindings = Bindable(model)
-        TabView(selection: bindings.selectedTab) {
-            NavigationStack { HomeView() }
-                .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
-                .tag(AppTab.inicio)
-                .accessibilityIdentifier("tab-inicio")
-
-            NavigationStack { SummaryView(showsBack: false) }
-                .tabItem { Label(AppTab.resumen.title, systemImage: AppTab.resumen.systemImage) }
-                .tag(AppTab.resumen)
-                .accessibilityIdentifier("tab-resumen")
-
-            NavigationStack { RoundsView(showsBack: false) }
-                .tabItem { Label(AppTab.rondas.title, systemImage: AppTab.rondas.systemImage) }
-                .tag(AppTab.rondas)
-                .accessibilityIdentifier("tab-rondas")
-
-            NavigationStack { CourseView(showsBack: false) }
-                .tabItem { Label(AppTab.cancha.title, systemImage: AppTab.cancha.systemImage) }
-                .tag(AppTab.cancha)
-                .accessibilityIdentifier("tab-cancha")
-
-            NavigationStack { BagView(showsBack: false) }
-                .tabItem { Label(AppTab.bolsa.title, systemImage: AppTab.bolsa.systemImage) }
-                .tag(AppTab.bolsa)
-                .accessibilityIdentifier("tab-bolsa")
-        }
-        .toolbar(model.showsLiveHole || model.showsPlay ? .hidden : .visible, for: .tabBar)
-        .tint(p.primary)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedTab)
-        .modifier(GSelectionHaptic(reduce: reduceMotion, trigger: model.selectedTab))
-        .onAppear { configureTabBar() }
+        tabPages
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedTab)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !model.showsLiveHole && !model.showsPlay {
+                    GolfletTabBar(selection: bindings.selectedTab)
+                        .transition(.opacity)
+                }
+            }
+            .modifier(GSelectionHaptic(reduce: reduceMotion, trigger: model.selectedTab))
         .sheet(item: bindings.presentedRound) { round in
             NavigationStack {
                 RoundDetailView(round: round)
@@ -220,24 +198,22 @@ struct RootView: View {
         }
     }
 
-    private func configureTabBar() {
-        let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(p.bg)
-        appearance.shadowColor = UIColor(p.hairline)
-        let selectedColor = UIColor(p.primary)
-        let idle = UIColor(p.ink3)
-        let selectedFont = UIFont.systemFont(ofSize: 11, weight: .bold)
-        let idleFont = UIFont.systemFont(ofSize: 10, weight: .regular)
-        for layout in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
-            layout.selected.iconColor = selectedColor
-            layout.selected.titleTextAttributes = [.foregroundColor: selectedColor, .font: selectedFont]
-            layout.normal.iconColor = idle
-            layout.normal.titleTextAttributes = [.foregroundColor: idle, .font: idleFont]
+    @ViewBuilder
+    private var tabPages: some View {
+        ZStack {
+            switch model.selectedTab {
+            case .resumen:
+                NavigationStack { SummaryView(showsBack: false) }
+            case .rondas:
+                NavigationStack { RoundsView(showsBack: false) }
+            case .cancha:
+                NavigationStack { CourseView(showsBack: false) }
+            case .bolsa:
+                NavigationStack { BagView(showsBack: false) }
+            default:
+                NavigationStack { HomeView() }
+            }
         }
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
-        UITabBar.appearance().tintColor = selectedColor
-        UITabBar.appearance().unselectedItemTintColor = idle
+        .transition(reduceMotion ? .identity : .opacity)
     }
 }

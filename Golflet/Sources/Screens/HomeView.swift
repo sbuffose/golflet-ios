@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var highlightPartners = false
     @State private var modeOpen = false
     @State private var hcpCardWidth = HomeHcpPeopleLayout.cardInnerWidth(screenWidth: HomeHcpPeopleLayout.currentScreenWidth)
+    @Namespace private var roundZoom
 
     var body: some View {
         GScreen(id: "screen-inicio") {
@@ -59,6 +60,10 @@ struct HomeView: View {
             if tab == .inicio {
                 Task { await model.refreshTeeTimes() }
             }
+        }
+        .navigationDestination(for: Round.self) { round in
+            RoundDetailView(round: round)
+                .modifier(RoundZoomDestination(id: round.roundId, space: roundZoom))
         }
         .navigationDestination(for: HomeMoreRoute.self) { route in
             switch route {
@@ -702,10 +707,11 @@ struct HomeView: View {
                 .accessibilityIdentifier("ver-todas")
             }
             if let round = model.home.lastRound {
-                Button { model.presentedRound = round } label: {
+                NavigationLink(value: round) {
                     RoundRow(round: round, style: .home)
                 }
                 .buttonStyle(.plain)
+                .modifier(RoundZoomSource(id: round.roundId, space: roundZoom))
                 .accessibilityIdentifier("last-round-card")
             }
         }

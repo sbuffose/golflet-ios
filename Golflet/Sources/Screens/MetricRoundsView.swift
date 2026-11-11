@@ -12,6 +12,7 @@ struct MetricRoundsView: View {
     @State private var sort: MetricSortField
     @State private var order: MetricSortOrder
     @State private var apiRounds: [Round]?
+    @Namespace private var roundZoom
 
     init(query: RoundListQuery, showsBack: Bool = true, screenID: String = "screen-metric-rounds") {
         self.query = query
@@ -51,16 +52,22 @@ struct MetricRoundsView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 10, pinnedViews: .sectionHeaders) {
                         if rows.isEmpty {
-                            Text("No hay rondas con este filtro.")
-                                .font(GType.body)
-                                .foregroundStyle(p.ink3)
-                                .padding(.top, 24)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 10) {
+                                CaddieMark(height: 72)
+                                Text("Todavía no hay tarjetas")
+                                    .font(GType.section)
+                                    .foregroundStyle(p.ink)
+                                Text("No hay rondas con este filtro.")
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink3)
+                            }
+                            .padding(.top, 24)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         ForEach(yearSections) { section in
                             Section {
                                 ForEach(Array(section.rounds.enumerated()), id: \.element.id) { index, round in
-                                    Button { model.presentedRound = round } label: {
+                                    NavigationLink(value: round) {
                                         RoundRow(
                                             round: round,
                                             style: .list,
@@ -68,6 +75,7 @@ struct MetricRoundsView: View {
                                         )
                                     }
                                     .buttonStyle(.plain)
+                                    .modifier(RoundZoomSource(id: round.roundId, space: roundZoom))
                                     .accessibilityIdentifier("metric-round-\(section.id)-\(index)")
                                 }
                             } header: {
@@ -92,6 +100,10 @@ struct MetricRoundsView: View {
         .accessibilityIdentifier(screenID)
         .safeAreaInset(edge: .top) {
             if showsBack { MetricBackBar() }
+        }
+        .navigationDestination(for: Round.self) { round in
+            RoundDetailView(round: round)
+                .modifier(RoundZoomDestination(id: round.roundId, space: roundZoom))
         }
         .task(id: "\(period.rawValue)-\(course.rawValue)-\(sort.rawValue)-\(order.rawValue)") {
             await loadAPI()

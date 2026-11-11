@@ -32,17 +32,20 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(forecast.waitForExistence(timeout: 3))
         XCTAssertTrue(forecast.label.contains("pronóstico"), "Apareció un pronóstico inventado: \(forecast.label)")
         saveShot("07_reserva")
+        saveShot("parity-ios-tees")
         let strategy = first(app, "tee-prep-strategy")
         XCTAssertTrue(strategy.waitForExistence(timeout: 6), "Falta la estrategia")
         XCTAssertFalse(strategy.label.contains("Todavía no hay"), "La estrategia de Azul no cargó: \(strategy.label)")
         dismissIfPresent(app, "metric-back")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
         saveShot("01_inicio")
+        saveShot("parity-ios-inicio")
 
         if waitFor(app, "last-round-card", timeout: 4) {
             first(app, "last-round-card").tap()
             XCTAssertTrue(waitFor(app, "screen-ronda", timeout: 6))
             saveShot("04_ronda")
+            saveShot("parity-ios-ronda")
             let game = first(app, "edit-game")
             if game.waitForExistence(timeout: 2), game.isHittable {
                 game.tap()
@@ -55,6 +58,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(openClubsSheet(app, timeout: 3), "No abrió el perfil")
         XCTAssertTrue(waitFor(app, "screen-clubes", timeout: 6))
         saveShot("09_clubes")
+        saveShot("parity-ios-cuenta")
         dismissIfPresent(app, "close-clubes")
         if first(app, "screen-notificaciones").exists {
             dismissIfPresent(app, "close-notificaciones")
@@ -74,10 +78,12 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "range-menu").waitForExistence(timeout: 4), "Falta el selector de período")
         XCTAssertTrue(first(app, "metric-game").waitForExistence(timeout: 4), "Falta la tarjeta de Métricas")
         saveShot("02_resumen")
+        saveShot("parity-ios-resumen")
 
         tapTab(app, "Rondas")
         XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6))
         saveShot("03_rondas")
+        saveShot("parity-ios-rondas")
 
         tapTab(app, "Cancha")
         XCTAssertTrue(waitFor(app, "screen-cancha", timeout: 6))
@@ -86,6 +92,7 @@ final class GolfletUITests: XCTestCase {
             first(app, "filter-colorada").tap()
         }
         saveShot("05_cancha")
+        saveShot("parity-ios-cancha")
 
         if app.buttons["hole-1"].waitForExistence(timeout: 4) {
             app.buttons["hole-1"].tap()
@@ -122,6 +129,7 @@ final class GolfletUITests: XCTestCase {
         tapTab(app, "Mi bolsa")
         XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
         saveShot("08_bolsa")
+        saveShot("parity-ios-bolsa")
 
         if first(app, "bag-Driver").waitForExistence(timeout: 3) {
             first(app, "bag-Driver").tap()
@@ -142,6 +150,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(tee.waitForExistence(timeout: 4), "Quién juega cuándo no usa los tee times")
         XCTAssertFalse(first(app, "hub-tee-example").exists, "Hay un horario de ejemplo junto a los tee times reales")
         saveShot("60_grupos")
+        saveShot("parity-ios-grupos")
 
         tapTab(app, "Jugar")
         XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
@@ -162,6 +171,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-onboarding", timeout: 8), "No abrió el onboarding de Roberto")
         XCTAssertTrue(first(app, "roberto-guide").waitForExistence(timeout: 6), "Falta Roberto en el onboarding")
         saveShot("70_onboarding")
+        saveShot("parity-ios-onboarding")
         XCTAssertTrue(first(app, "ob-skip").waitForExistence(timeout: 6), "Falta Saltar")
         tapLargest(app, "ob-skip")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 10), "Saltar no llegó a Inicio")
@@ -354,6 +364,7 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-login", timeout: 10))
         saveShot("10_login")
+        saveShot("parity-ios-login")
         XCTAssertTrue(first(app, "auth-matricula").waitForExistence(timeout: 3))
         XCTAssertFalse(first(app, "auth-email").exists)
         XCTAssertFalse(first(app, "auth-tab-up").exists)
@@ -1425,6 +1436,20 @@ final class GolfletUITests: XCTestCase {
     }
 
     private func tapVisibleTab(_ app: XCUIApplication, _ name: String) {
+        let ids = [
+            "Inicio": "tab-inicio",
+            "Resumen": "tab-resumen",
+            "Rondas": "tab-rondas",
+            "Cancha": "tab-cancha",
+            "Mi bolsa": "tab-bolsa"
+        ]
+        if let id = ids[name], first(app, id).waitForExistence(timeout: 3) {
+            let button = first(app, id)
+            if button.isHittable { button.tap() } else {
+                button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            return
+        }
         let tab = app.tabBars.buttons[name]
         XCTAssertTrue(tab.waitForExistence(timeout: 5), "Missing tab \(name)")
         tab.tap()
@@ -1451,6 +1476,13 @@ final class GolfletUITests: XCTestCase {
             if app.navigationBars.buttons.firstMatch.exists {
                 app.navigationBars.buttons.firstMatch.tap()
                 continue
+            }
+            if first(app, "tab-inicio").exists {
+                let home = first(app, "tab-inicio")
+                if home.isHittable { home.tap() } else {
+                    home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                }
+                return
             }
             if app.tabBars.buttons["Inicio"].exists {
                 app.tabBars.buttons["Inicio"].tap()
