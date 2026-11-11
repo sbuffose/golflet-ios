@@ -77,7 +77,7 @@ enum CourseHandbook {
             return ["No hay un tee time reservado, así que esta libreta no trae viento."]
         }
         guard let kmh = booking.windKmh else {
-            return ["Este horario no trae viento. No inventamos km/h ni cambiamos el palo."]
+            return ["Este horario no trae viento. Sin dirección no cambiamos el palo."]
         }
         var lines = ["Viento \(kmh) km/h"]
         if let from = booking.windFrom, !from.isEmpty {

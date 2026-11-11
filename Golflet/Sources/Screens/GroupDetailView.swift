@@ -425,7 +425,7 @@ struct GroupDetailView: View {
                 VStack(spacing: 2) {
                     Text("Tu puesto")
                         .font(GType.label)
-                        .foregroundStyle(Color(hex: 0x8C6A2F))
+                        .foregroundStyle(p.ink)
                     Text("\(hero.rank)º")
                         .font(GFont.ui(52, weight: .bold))
                         .foregroundStyle(p.ink)
@@ -589,12 +589,12 @@ struct GroupDetailView: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
-        .frame(height: slot == 1 ? 228 : slot == 2 ? 184 : 156, alignment: .bottom)
+        .frame(height: place == 1 ? 228 : place == 2 ? 184 : 156, alignment: .top)
         .background(p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(slot == 1 ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 2)
+                .stroke(place == 1 ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 2)
         )
         .accessibilityIdentifier("group-podium-\(slot)")
     }
