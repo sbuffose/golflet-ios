@@ -96,10 +96,11 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await open("g1", "1w");
     const week = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(week, /Tu puesto/);
-    assert.match(week, /3 birdies/);
+    assert.match(week, /en birdies · 3 esta semana/);
     assert.match(week, /1 tarjeta/);
     assert.match(week, /Ver tabla completa/);
-    assert.match(week, /\+2 sobre Luis Gómez/);
+    assert.match(week, /\+2 sobre Luis/);
+    assert.match(week, /Birdies por ronda/);
     assert.match(week, /1 ronda esta semana/);
     assert.match(week, /Rey del birdie/);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Sem");
