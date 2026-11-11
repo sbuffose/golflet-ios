@@ -127,7 +127,7 @@ function yrList(items, dateOf, row, cls = 'list'){
 }
 const minOr = a => a.length ? Math.min(...a) : '—';
 const emptyData = (t) => `<div class="onboard"><img class="cad" src="/brand/caddie.png" alt=""><h2>${t||'Todavía no hay tarjetas'}</h2><p>Vinculá tu matrícula y Golflet trae las tarjetas de todos tus clubes.</p><a class="btn" href="#/vincular">Vincular tu matrícula</a></div>`;
-const caddieEmpty = (title, text) => `<div class="card cad-empty"><span class="cad-mark"><img class="cad" src="/brand/caddie.png" alt=""><i class="cad-flag" aria-hidden="true">18</i></span><span class="cad-copy"><b>${title}</b><p>${text}</p></span></div>`;
+const caddieEmpty = (title, text) => `<div class="card cad-empty"><span class="cad-mark"><img class="cad" src="/brand/caddie.png" alt=""></span><span class="cad-copy"><b>${title}</b><p>${text}</p></span></div>`;
 
 /* ---------- INICIO ---------- */
 function clubsCard(){

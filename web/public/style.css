@@ -896,7 +896,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-filters .gg-rng{flex:1;min-width:0;margin:0!important;flex-wrap:nowrap;overflow:hidden}
 .gg-filters .gg-rng a{white-space:nowrap;font-size:var(--type-11,11px);padding:7px 2px;flex:1 1 0;min-width:0}
 .gg-filters .gg-course{margin:0;flex:none}
-.gg-filters .gg-course summary{display:block;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 12px}
+.gg-filters .gg-course summary{display:block;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 12px;min-height:32px;font-size:13px}
 .gg-course{margin:8px 0 4px}
 .gg-course summary{list-style:none;display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:999px;background:#fff;color:#0B2545;font-weight:650;box-shadow:var(--shadow-card);cursor:pointer}
 .gg-course summary::-webkit-details-marker{display:none}
