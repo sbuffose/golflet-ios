@@ -43,6 +43,7 @@ struct SummaryView: View {
             }
         }
         .accessibilityIdentifier("screen-resumen")
+        .metricDestinations()
         .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
     }
 

@@ -79,15 +79,15 @@ struct RootView: View {
     @ViewBuilder
     private var mainTabs: some View {
         let bindings = Bindable(model)
-        tabPages
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedTab)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !model.showsLiveHole && !model.showsPlay {
-                    GolfletTabBar(selection: bindings.selectedTab)
-                        .transition(.opacity)
-                }
+        VStack(spacing: 0) {
+            tabPages
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if !model.showsLiveHole && !model.showsPlay {
+                GolfletTabBar(selection: bindings.selectedTab)
             }
-            .modifier(GSelectionHaptic(reduce: reduceMotion, trigger: model.selectedTab))
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedTab)
+        .modifier(GSelectionHaptic(reduce: reduceMotion, trigger: model.selectedTab))
         .sheet(item: bindings.presentedRound) { round in
             NavigationStack {
                 RoundDetailView(round: round)
