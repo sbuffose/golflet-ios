@@ -158,7 +158,7 @@ struct GroupDetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
-        .padding(.bottom, 28)
+        .padding(.bottom, 72)
     }
 
     private func header(_ group: GolfletGroup) -> some View {
@@ -426,38 +426,24 @@ struct GroupDetailView: View {
             }
 
             if !rows.isEmpty, let selected {
-                youCard(selected, group: group)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(rows) { row in
-                            let on = row.id == selected.id
-                            Button { compareMetric = row.metric.rawValue } label: {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    metricMark(row.metric)
-                                    Text(row.metric.title)
-                                        .font(GFont.ui(15, weight: .bold))
-                                        .foregroundStyle(p.ink)
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.leading)
-                                }
-                                .padding(14)
-                                .frame(minWidth: 118, minHeight: 92, alignment: .leading)
-                                .background(on ? Color(hex: 0xC8A86A) : p.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                                .shadow(color: p.primary.opacity(0.12), radius: 10, y: 6)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("group-metric-\(row.metric.rawValue)")
+                let showsHero = selected.ranked().contains { $0.memberID == comparison?.hero?.memberID }
+                VStack(alignment: .leading, spacing: 10) {
+                    if showsHero {
+                        VStack(alignment: .leading, spacing: 8) {
+                            youCard(selected, group: group)
+                            metricTiles(rows, selected: selected)
                         }
+                        .padding(.bottom, 14)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    } else {
+                        metricTiles(rows, selected: selected)
                     }
-                    .padding(.horizontal, 4)
+                    podium(selected, group: group)
+                    rateChart(selected)
+                    rankList(selected, group: group)
+                    trophyStrip(rows, group: group)
                 }
-                .padding(.top, -42)
-                .zIndex(1)
-                podium(selected, group: group)
-                rateChart(selected)
-                rankList(selected, group: group)
-                trophyStrip(rows, group: group)
             }
 
             if let comparison {
@@ -466,7 +452,34 @@ struct GroupDetailView: View {
                 }
             }
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, 24)
+    }
+
+    private func metricTiles(_ rows: [GroupComparisonRow], selected: GroupComparisonRow) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(rows) { row in
+                    let on = row.id == selected.id
+                    Button { compareMetric = row.metric.rawValue } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            metricMark(row.metric)
+                            Text(row.metric.title)
+                                .font(GFont.ui(15, weight: .bold))
+                                .foregroundStyle(p.ink)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .padding(14)
+                        .frame(minWidth: 118, minHeight: 92, alignment: .leading)
+                        .background(on ? Color(hex: 0xC8A86A) : p.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("group-metric-\(row.metric.rawValue)")
+                }
+            }
+            .padding(.horizontal, 12)
+        }
     }
 
     private func trophyTitle(_ metric: GroupMetricKind) -> String {
@@ -567,8 +580,12 @@ struct GroupDetailView: View {
         let seconds = placed.filter { $0.place == 2 }
         let third = placed.first { $0.place == 3 }
         var slots: [(index: Int, place: Int, value: MemberMetricValue)?] = []
+        var pair = false
         if firsts.count >= 2 {
             slots = [nil, Optional(firsts[0]), firsts.count > 1 ? Optional(firsts[1]) : nil, third]
+        } else if let lead = firsts.first, let side = seconds.first, third == nil, seconds.count == 1 {
+            pair = true
+            slots = [Optional(side), Optional(lead)]
         } else if let lead = firsts.first {
             slots = [seconds.first, Optional(lead), third ?? seconds.dropFirst().first]
         }
@@ -591,7 +608,9 @@ struct GroupDetailView: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 12)
+        .frame(maxWidth: pair ? 280 : .infinity)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
         .background(p.primary)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .accessibilityIdentifier("group-podium")
@@ -727,10 +746,8 @@ struct GroupDetailView: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
-                .padding(.bottom, 56)
+                .padding(.bottom, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(p.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Tu puesto, \(place)º, \(wherePhrase(row.metric)) \(display(me, metric: row.metric))")
                 .accessibilityIdentifier("group-hero")
@@ -818,10 +835,10 @@ struct GroupDetailView: View {
                     }()
                     VStack(spacing: 4) {
                         ZStack(alignment: .bottom) {
-                            Color.clear.frame(height: 84)
+                            Color.clear.frame(height: 60)
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(value.memberID == comparison?.hero?.memberID ? p.primary : Color(hex: 0xC8A86A))
-                                .frame(width: 36, height: 84 * ratio)
+                                .frame(width: 36, height: 60 * ratio)
                         }
                         Text(useRate ? FormatAR.one(amount) : display(value, metric: row.metric))
                             .font(GFont.ui(15, weight: .bold))
@@ -843,7 +860,9 @@ struct GroupDetailView: View {
                     .foregroundStyle(p.ink)
             }
         }
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 20)
         .background(p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
