@@ -55,7 +55,6 @@ struct ClubsView: View {
                     }
 
                     notificationsRow
-                    tuJuego
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Clubes")
@@ -69,6 +68,7 @@ struct ClubsView: View {
                         }
                     }
 
+                    tuJuego
                     groupsSection
                     shareSection
                     accessibilitySection
