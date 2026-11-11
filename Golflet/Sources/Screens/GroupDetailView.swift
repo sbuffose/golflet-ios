@@ -60,7 +60,7 @@ struct GroupDetailView: View {
         }
         .sheet(isPresented: $showsViewSettings) {
             NavigationStack {
-                GroupViewSettings(groupID: groupID, config: $config, cards: comparison?.hero?.cards) { updated in
+                GroupViewSettings(groupID: groupID, cards: comparison?.hero?.cards, config: $config) { updated in
                     config = updated
                     Task { await reloadComparison() }
                 }
