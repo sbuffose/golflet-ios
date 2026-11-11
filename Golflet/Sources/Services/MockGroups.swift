@@ -301,7 +301,10 @@ extension MockAPIClient {
                 }
             )
         }
-        return GroupComparison(groupID: groupID, config: config, rows: rows)
+        let me = group.members.first { $0.id == MockGroupStore.meID }
+        let rank = me.flatMap { rows.first { $0.metric == .birdies }?.rank(of: $0.id) }
+        let hero = rank.map { GroupHero(rank: $0, cards: nil, memberID: me?.id) }
+        return GroupComparison(groupID: groupID, config: config, rows: rows, hero: hero)
     }
 
     func groupPeriod(groupID: String, kind: ComparativoKind, off: Int) async throws -> ComparativoData {
@@ -447,6 +450,11 @@ struct MockGroupStore: Sendable {
         case .gpsDrive: return (228 + shift * 4, nil)
         case .bagCarry: return (214 + shift * 3, nil)
         case .ball: return (nil, memberID == anaID ? "Pro V1" : "TP5x")
+        case .rounds: return (12 + shift, nil)
+        case .maxBirdies: return (4, nil)
+        case .streak: return (3, nil)
+        case .regular: return (1.8 + abs(shift) * 0.1, nil)
+        case .aces: return (memberID == anaID ? 1 : 0, nil)
         }
     }
 }
