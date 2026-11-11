@@ -57,23 +57,35 @@ struct BagView: View {
         .onAppear(perform: restoreIron)
     }
 
+    private var yardClubs: [BagClub] {
+        model.bag.filter { !isPutter($0.name) }
+    }
+
     private var filled: Int {
-        model.bag.filter { $0.carry != nil || $0.total != nil }.count
+        yardClubs.filter { $0.carry != nil || $0.total != nil }.count
+    }
+
+    private func isPutter(_ name: String) -> Bool {
+        let club = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return club == "pt" || club == "putter" || club.hasPrefix("putter")
     }
 
     private var hint: some View {
         GCard(radius: 22, padding: 16) {
-            HStack(alignment: .top, spacing: 12) {
-                Text("\(filled)/\(model.bag.count)")
-                    .font(GFont.ui(16, weight: .semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(filled) de \(yardClubs.count)")
+                    .font(GType.statM)
                     .tabular()
-                    .foregroundStyle(p.onPrimary)
-                    .frame(width: 44, height: 44)
-                    .background(p.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Text("Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.")
+                    .foregroundStyle(p.ink)
+                    .accessibilityIdentifier("bag-count")
+                Text(filled == 0
+                     ? "Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo."
+                     : "Palos con una distancia que cargaste vos.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
+                Text("Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste. El putter no lleva yardas acá.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
             }
         }
     }

@@ -401,14 +401,24 @@ struct PlayHoleView: View {
                         .accessibilityIdentifier("play-edit-save")
                 }
                 if holeClosed {
-                    Button("Editar hoyo") { editingClosed = true }
-                        .font(GType.headline)
-                        .foregroundStyle(p.onPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(p.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .accessibilityIdentifier("play-edit-hole")
+                    VStack(spacing: 8) {
+                        Button("Editar hoyo") { editingClosed = true }
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .accessibilityIdentifier("play-edit-hole")
+                        Button("Siguiente hoyo ›") { changeHole(hole + 1) }
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .accessibilityIdentifier("play-next-wide")
+                    }
                 } else {
                     markActions
                     if track.phase == .tracking { lostActions }

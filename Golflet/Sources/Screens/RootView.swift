@@ -8,6 +8,7 @@ struct RootView: View {
     @AppStorage("golflet.launch.seen") private var seenLaunch = false
     @State private var showSplash = true
     @State private var splashWasFirst = !UserDefaults.standard.bool(forKey: "golflet.launch.seen")
+    @State private var tabRoots: [AppTab: Int] = [:]
 
     var body: some View {
         let _ = typeToken
@@ -83,7 +84,9 @@ struct RootView: View {
             tabPages
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             if !model.showsLiveHole && !model.showsPlay {
-                GolfletTabBar(selection: bindings.selectedTab)
+                GolfletTabBar(selection: bindings.selectedTab) { tab in
+                    tabRoots[tab, default: 0] += 1
+                }
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedTab)
@@ -204,14 +207,19 @@ struct RootView: View {
             switch model.selectedTab {
             case .resumen:
                 NavigationStack { SummaryView(showsBack: false) }
+                    .id(tabRoots[.resumen, default: 0])
             case .rondas:
                 NavigationStack { RoundsView(showsBack: false) }
+                    .id(tabRoots[.rondas, default: 0])
             case .cancha:
                 NavigationStack { CourseView(showsBack: false) }
+                    .id(tabRoots[.cancha, default: 0])
             case .bolsa:
                 NavigationStack { BagView(showsBack: false) }
+                    .id(tabRoots[.bolsa, default: 0])
             default:
                 NavigationStack { HomeView() }
+                    .id(tabRoots[.inicio, default: 0])
             }
         }
         .transition(reduceMotion ? .identity : .opacity)

@@ -270,6 +270,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "play-set").waitForExistence(timeout: 4), "Falta SET para confirmar el tee")
         XCTAssertTrue(first(app, "play-track").waitForExistence(timeout: 2), "Falta TRACK")
         saveShot("17_play_hoyo")
+        saveShot("parity-ios-track")
         if first(app, "play-hole-picker").waitForExistence(timeout: 3) {
             first(app, "play-hole-picker").tap()
             if first(app, "pick-hole-7").waitForExistence(timeout: 4) {
@@ -1467,7 +1468,10 @@ final class GolfletUITests: XCTestCase {
                 || first(app, "screen-antes").exists
                 || first(app, "screen-metricas").exists
                 || first(app, "screen-metric-chart").exists
-            if first(app, "screen-inicio").waitForExistence(timeout: 0.2) && !onLegacy { return }
+            let pushedHome = first(app, "screen-grupos").exists
+                || first(app, "screen-jugar").exists
+                || first(app, "screen-academia").exists
+            if first(app, "screen-inicio").waitForExistence(timeout: 0.2) && !onLegacy && !pushedHome { return }
             if first(app, "metric-back").exists {
                 let back = first(app, "metric-back")
                 if back.isHittable { back.tap() } else {

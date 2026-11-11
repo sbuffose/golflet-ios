@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GolfletTabBar: View {
     @Binding var selection: AppTab
+    var onReselect: (AppTab) -> Void = { _ in }
     @Environment(\.palette) private var p
 
     private let tabs: [AppTab] = [.inicio, .resumen, .rondas, .cancha, .bolsa]
@@ -11,6 +12,7 @@ struct GolfletTabBar: View {
             ForEach(tabs) { tab in
                 let on = selection == tab
                 Button {
+                    if on { onReselect(tab) }
                     selection = tab
                 } label: {
                     VStack(spacing: 3) {

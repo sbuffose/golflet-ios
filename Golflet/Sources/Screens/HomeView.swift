@@ -427,10 +427,19 @@ struct HomeView: View {
                 .foregroundStyle(p.ink)
             GCard(radius: 22, padding: 16) {
                 if model.upcomingTeeTimes.isEmpty {
-                    Text("No tenés reservas próximas en tu club")
-                        .font(GType.body)
-                        .foregroundStyle(p.ink2)
-                        .accessibilityIdentifier("home-tee-empty")
+                    HStack(alignment: .top, spacing: 12) {
+                        CaddieMark(height: 56)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sin reservas próximas")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text("Cuando reserves una salida en tu club, aparece acá.")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("home-tee-empty")
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(Array(model.upcomingTeeTimes.enumerated()), id: \.element.id) { index, booking in
