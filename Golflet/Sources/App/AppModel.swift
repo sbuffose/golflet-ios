@@ -1541,7 +1541,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case resumen, rondas, cancha, bolsa
     var id: String { rawValue }
 
-    static var visible: [AppTab] { [.inicio, .grupos, .jugar, .academia] }
+    static var visible: [AppTab] { [.inicio, .resumen, .rondas, .cancha, .bolsa] }
 
     var title: String {
         switch self {
