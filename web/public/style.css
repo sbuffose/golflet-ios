@@ -9,7 +9,7 @@ body{font-family:var(--font-ui);color:var(--color-ink);font-size:calc(16px*var(-
 #app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;background:var(--color-bg)}
 #view{padding:calc(env(safe-area-inset-top) + 18px) max(18px,env(safe-area-inset-right)) calc(108px + env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left))}
 html:not(.gp-fix) #view::after{content:"";display:block;height:calc(var(--tabh, 88px) + 12px);flex:none}
-html:not(.gp-fix) #view:has(.gg-hero)::after{height:calc(var(--tabh, 88px) + 36px)}
+html:not(.gp-fix) #view:has(.gg-hero)::after{height:calc(var(--tabh, 88px) + 72px)}
 a{color:inherit;text-decoration:none}
 button{font:inherit;color:inherit}
 .num{font-variant-numeric:tabular-nums}
@@ -921,7 +921,8 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-carousel{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 8px;margin:8px 0 4px}
 .gg-slide{flex:0 0 88%;scroll-snap-align:start;margin:0}
 .gg-pod.is-1{box-shadow:0 0 0 2px #C4A36A}
-.gg-hero{display:block;background:#0B2545;color:#fff;border-radius:28px;padding:16px 18px 56px;margin:8px 0 0;text-align:left;box-shadow:none}
+.gg-panel{background:#0B2545;color:#fff;border-radius:28px;margin:8px 0 0;padding:0 0 14px}
+.gg-hero{display:block;background:transparent;color:#fff;border-radius:0;padding:16px 18px 6px;margin:0;text-align:left;box-shadow:none}
 .gg-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .gg-hero .gg-ranknum,.gg-hero .gg-ranknum .num{color:#fff;font-size:64px;line-height:.84;font-weight:700;letter-spacing:-.04em;margin:0}
 .gg-hero-line{margin:8px 0 0;font-size:18px;font-weight:700;line-height:1.25;color:#fff}
@@ -948,11 +949,10 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-tw span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
 .gg-trophy .gg-av.sm{width:22px;height:22px;font-size:11px}
 .gg-av.sm{width:28px;height:28px;font-size:13px}
-.gg-catwrap{position:relative}
-.gg-catwrap.lap{margin-top:-48px;z-index:2;padding:0 6px}
-.gg-cats{display:flex;gap:10px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}
+.gg-catwrap{position:relative;z-index:2;padding:0 12px}
+.gg-cats{display:flex;gap:10px;overflow-x:auto;padding:0;scrollbar-width:none}
 .gg-cats::-webkit-scrollbar{display:none}
-.gg-cats button{flex:none;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:10px;min-width:118px;min-height:92px;border:0;background:#fff;color:#0B2545;border-radius:22px;padding:14px;font:inherit;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 10px 22px rgba(11,37,69,.14)}
+.gg-cats button{flex:none;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:10px;min-width:118px;min-height:92px;border:0;background:#fff;color:#0B2545;border-radius:22px;padding:14px;font:inherit;font-size:15px;font-weight:700;cursor:pointer;box-shadow:none}
 .gg-cats button.on{background:#C8A86A;color:#0B2545}
 .gg-cats svg{width:28px;height:28px;display:block}
 .gg-mine{margin:8px 0 14px;padding:14px;background:#fff;border-radius:16px;box-shadow:var(--shadow-card)}
@@ -962,9 +962,10 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-mine div{display:flex;align-items:baseline;gap:8px;padding:6px 0;border-top:1px solid var(--color-hairline)}
 .gg-mine div span{flex:1;font-size:var(--type-13,13px)}
 .gg-mine div b{font-size:var(--type-18,18px)}
-.gg-fairway{background:#0B2545;border-radius:28px;padding:12px 10px 12px;margin:4px 0 12px}
+.gg-fairway{background:#0B2545;border-radius:28px;padding:8px 10px 8px;margin:10px 0 12px}
 .gg-steps{display:grid;grid-template-columns:1fr 1.15fr 1fr;align-items:end;gap:8px;width:100%}
 .gg-steps.tie{grid-template-columns:0.72fr 1fr 1fr 0.72fr}
+.gg-steps.pair{grid-template-columns:1fr 1.15fr;width:72%;margin-inline:auto}
 .gg-slot{display:block}
 .gg-step{min-width:0;width:100%;max-width:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;gap:4px;background:transparent;border:0;padding:0;min-height:0;text-decoration:none;color:#fff;box-shadow:none}
 .gg-flag{display:block;color:#fff}
@@ -988,13 +989,13 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-meter::after{content:"";position:absolute;right:2px;top:-10px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid #C8102E}
 .gg-meter i{display:block;height:100%;border-radius:99px;background:#0B2545;position:relative;min-width:8px}
 .gg-meter i::after{content:"";position:absolute;right:-6px;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #0B2545;transform:translateY(-50%);box-shadow:inset -3px -2px 0 #C8A86A}
-.gg-weekbox{background:#fff;border-radius:24px;padding:14px 14px 12px;margin:0 0 14px;box-shadow:var(--shadow-card)}
+.gg-weekbox{background:#fff;border-radius:24px;padding:14px 14px 16px;margin:0 0 14px;box-shadow:var(--shadow-card);scroll-margin-bottom:calc(var(--tabh, 88px) + 28px)}
 .gg-weekbox h2{margin:0 0 6px;font-size:20px;font-weight:700;color:#0B2545}
 .gg-cols{display:flex;align-items:flex-end;gap:8px;position:relative;padding-top:18px}
 .gg-goal{position:absolute;left:0;right:36px;top:18px;border-top:2px dashed #C8A86A;height:0}
 .gg-goal b{position:absolute;right:-34px;top:-10px;font-size:12px;font-weight:700;color:#0B2545}
 .gg-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1}
-.gg-plot{height:84px;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.gg-plot{height:60px;width:100%;display:flex;align-items:flex-end;justify-content:center}
 .gg-col i{display:block;width:36px;height:12%;border-radius:12px 12px 4px 4px;background:#C8A86A;transform-origin:bottom;animation:gg-grow .6s ease}
 .gg-col.me i{background:#0B2545}
 .gg-col span{margin-top:6px;text-align:center;font-size:12px;font-weight:700;line-height:1.15;color:#0B2545}

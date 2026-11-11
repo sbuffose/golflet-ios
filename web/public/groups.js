@@ -288,9 +288,12 @@
       rows.forEach((x, i) => (places[i] === 1 ? firsts : others).push(i));
       const third = others.find(i => places[i] === 3);
       const seconds = others.filter(i => places[i] === 2);
+      const pair = firsts.length === 1 && !third && seconds.length === 1;
       const slots = firsts.length >= 2
         ? [null, firsts[0], firsts[1], third ?? null]
-        : [seconds[0] ?? null, firsts[0], third ?? seconds[1] ?? null];
+        : pair
+          ? [seconds[0], firsts[0]]
+          : [seconds[0] ?? null, firsts[0], third ?? seconds[1] ?? null];
       const leader = rows[0].v;
       const steps = slots.map(i => {
         if (i == null) return '<span class="gg-slot" aria-hidden="true"></span>';
@@ -348,7 +351,8 @@
         const line = `${where} · ${shown(key, rows[meAt])} ${when}`;
         hero = `<section class="gg-hero"><span class="sr">Tu puesto</span><div class="gg-hero-top"><b class="gg-ranknum"><span class="num gg-count" data-n="${mine}">${mine}</span>º</b>${arrow}</div><p class="gg-hero-line">${H.esc(line)}</p>${gap ? `<p class="gg-hero-gap">${H.esc(gap)}</p>` : ''}${meta ? `<p class="gg-hero-meta">${H.esc(meta)}</p>` : ''}</section>`;
       }
-      return { hero, rest: `<div class="gg-fairway" id="gg-${key}"><div class="gg-steps${firsts.length >= 2 ? ' tie' : ''}">${steps}</div></div>${chart}${list ? `<div class="gg-rest">${list}</div>` : ''}` };
+      const stepClass = firsts.length >= 2 ? ' tie' : pair ? ' pair' : '';
+      return { hero, rest: `<div class="gg-fairway" id="gg-${key}"><div class="gg-steps${stepClass}">${steps}</div></div>${chart}${list ? `<div class="gg-rest">${list}</div>` : ''}` };
     };
     const trophy = (title, rows) => {
       const live = rows.filter(x => x.v != null);
@@ -376,7 +380,7 @@
     const CATS = [['birdies', 'Birdies', 'en birdies'], ['pars', 'Pares', 'en pares'], ['eagles', 'Águilas', 'en águilas'], ['best_net', 'Mejor neto', 'en mejor neto'], ['regular', 'Más regular', 'en regularidad'], ['rounds', 'Rondas', 'en rondas'], ['max_birdies', 'Máx birdies por vuelta', 'en birdies por vuelta'], ['racha', 'Rachas', 'en la racha']];
     if (ms.some(m => !hid(m, 'aces') && Number(val(m, 'aces')) > 0)) CATS.push(['aces', 'Hoyos en uno', 'en hoyos en uno']);
     const catRow = active => `<div class="gg-cats" role="tablist" aria-label="Categoría">${CATS.map(([k, t]) => `<button type="button" role="tab" data-cat="${k}" aria-selected="${k === active ? 'true' : 'false'}" class="${k === active ? 'on' : ''}">${icon(k)}<span>${t}</span></button>`).join('')}</div>`;
-    const slides = !isVs ? `<div class="gg-stages">${CATS.map(([k, label, where], i) => { const card = rankCard(k, where, label); return `<div class="gg-stage" data-cat="${k}"${i ? ' hidden' : ''}>${card.hero}<div class="gg-catwrap${card.hero ? ' lap' : ''}">${catRow(k)}</div>${card.rest}</div>`; }).join('')}</div>${badges}` : '';
+    const slides = !isVs ? `<div class="gg-stages">${CATS.map(([k, label, where], i) => { const card = rankCard(k, where, label); const cats = `<div class="gg-catwrap">${catRow(k)}</div>`; return `<div class="gg-stage" data-cat="${k}"${i ? ' hidden' : ''}>${card.hero ? `<div class="gg-panel">${card.hero}${cats}</div>` : cats}${card.rest}</div>`; }).join('')}</div>${badges}` : '';
     const fullTable = !isVs && secs.includes('table') ? `<details class="gg-full"><summary>Ver tabla completa</summary>${sec.table()}</details>` : '';
     el.innerHTML = `${isVs ? bar(ms.map(m => m.name).join(' vs '), 'Mano a mano') : `<div class="gg-top"><div class="bar"><span class="overline">Grupo</span></div>${gear}</div><div class="gg-head">${photo(d.group, 'gg-hph')}<div class="stitle">${H.esc(d.group.name)}</div></div>`}
       ${legend(ms)}${filters(id, d, qs, base)}
