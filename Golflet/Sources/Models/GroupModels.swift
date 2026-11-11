@@ -260,13 +260,18 @@ enum GroupMetricKind: String, CaseIterable, Identifiable, Codable, Sendable {
     case gpsDrive
     case bagCarry
     case ball
+    case rounds
+    case maxBirdies = "max_birdies"
+    case streak
+    case regular
+    case aces
 
     var id: String { rawValue }
 
     static func parse(_ raw: String) -> GroupMetricKind? {
         if let value = GroupMetricKind(rawValue: raw) { return value }
         switch raw {
-        case "avg_gross", "best_gross", "rounds": return .gross
+        case "avg_gross", "best_gross": return .gross
         case "avg_net", "best_net": return .net
         default: return nil
         }
@@ -286,6 +291,11 @@ enum GroupMetricKind: String, CaseIterable, Identifiable, Codable, Sendable {
         case .gpsDrive: return "Drive GPS"
         case .bagCarry: return "Carry promedio"
         case .ball: return "Pelota"
+        case .rounds: return "Rondas"
+        case .maxBirdies: return "Máx birdies por vuelta"
+        case .streak: return "Rachas"
+        case .regular: return "Más regular"
+        case .aces: return "Hoyos en uno"
         }
     }
 
@@ -299,12 +309,14 @@ enum GroupMetricKind: String, CaseIterable, Identifiable, Codable, Sendable {
         case .gpsDrive: return .gpsDistances
         case .bagCarry: return .bag
         case .ball: return .ball
+        case .rounds, .regular, .streak: return .scoring
+        case .maxBirdies, .aces: return .birdiesPars
         }
     }
 
     var lowerIsBetter: Bool {
         switch self {
-        case .gross, .net, .handicap, .putts: return true
+        case .gross, .net, .handicap, .putts, .regular: return true
         default: return false
         }
     }
@@ -438,6 +450,10 @@ struct MemberMetricValue: Identifiable, Hashable, Sendable {
     var text: String?
     var photoURL: String? = nil
     var perRound: Double? = nil
+    /// Cards of 18 in the period. Rates stay hidden under 3.
+    var sample: Int? = nil
+    /// Same metric in the previous period, only when the API sent it.
+    var previous: Double? = nil
 
     static let hiddenLabel = "No compartido"
 
@@ -478,6 +494,7 @@ struct GroupComparisonRow: Identifiable, Hashable, Sendable {
 struct GroupHero: Hashable, Sendable {
     var rank: Int
     var cards: String?
+    var memberID: String? = nil
 }
 
 struct GroupComparison: Hashable, Sendable {
