@@ -229,7 +229,7 @@
       const n = Math.min(live.length, 3);
       const order = n >= 3 ? [1, 0, 2] : n === 2 ? [1, 0] : [0];
       const places = placesOf(live);
-      const pod = order.map(i => { const x = live[i], place = places[i]; return `<a class="gg-step p${i + 1}" href="${href}"><span class="gg-place">${place}º</span>${i === 0 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="num">${x.text}</span><small>${x.n} tarjetas</small></a>`; }).join('');
+      const pod = order.map(i => { const x = live[i], place = places[i], face = place === 1 ? 1 : place === 2 ? 2 : 3; return `<a class="gg-step p${face}" href="${href}"><span class="gg-place">${place}º</span>${i === 0 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="num">${x.text}</span><small>${x.n} tarjetas</small></a>`; }).join('');
       return `<section class="gg-rank"><h2>${title}</h2><div class="gg-steps n${n}">${pod}</div><p class="foot">${xNote(title)}</p></section>`;
     };
     const xNote = t => t.startsWith('Consistencia') ? 'Desvío del gross en tarjetas de 18. Menos es más parejo. Hacen falta 3.' : 'Rondas de 18 seguidas en el par o mejor. Una de 9 no corta ni suma la racha.';
@@ -259,7 +259,8 @@
         const num = quiet ? '<span class="gg-few">Pocas rondas</span>' : `<span class="num gg-count" data-n="${x.v}">${fmt(key, x.v)}</span>`;
         const rateLine = !quiet && rate != null ? `<small>${H.f1(rate)} por ronda</small>` : '';
         const gap = i === 0 ? gapLine(key, rows) : '';
-        return `<a class="gg-step p${i + 1}" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span class="gg-place">${place}º</span>${i === 0 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b>${num}${rateLine}${gap ? `<small class="gg-gap">${H.esc(gap)}</small>` : ''}</a>`;
+        const face = place === 1 ? 1 : place === 2 ? 2 : 3;
+        return `<a class="gg-step p${face}" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span class="gg-place">${place}º</span>${i === 0 ? SEAL : ''}${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b>${num}${rateLine}${gap ? `<small class="gg-gap">${H.esc(gap)}</small>` : ''}</a>`;
       }).join('');
       const rest = rows.slice(3).map((x, i) => `<a class="gg-rankrow" href="#/grupo/${id}/m/${key}${keepQs(qs)}"><span>${places[i + 3]}º ${H.esc(x.m.name)}</span><b class="num">${shy(key, x) ? 'Pocas rondas' : fmt(key, x.v)}</b></a>`).join('');
       return `<div class="gg-rank" id="gg-${key}"><div class="gg-steps n${n}">${steps}</div>${rest ? `<div class="gg-rest">${rest}</div>` : ''}</div>`;

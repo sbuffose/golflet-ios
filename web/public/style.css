@@ -900,7 +900,9 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-course{margin:8px 0 4px}
 .gg-course summary{list-style:none;display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:999px;background:#fff;color:#0B2545;font-weight:650;box-shadow:var(--shadow-card);cursor:pointer}
 .gg-course summary::-webkit-details-marker{display:none}
-.gg-course div{display:flex;flex-direction:column;gap:2px;margin-top:8px;background:#fff;border-radius:14px;padding:6px;box-shadow:var(--shadow-card)}
+.gg-course{display:inline-block;position:relative}
+.gg-course div{display:none}
+.gg-course[open] div{display:flex;flex-direction:column;gap:2px;position:absolute;z-index:6;right:0;top:calc(100% + 6px);min-width:180px;margin:0;background:#fff;border-radius:14px;padding:6px;box-shadow:var(--shadow-card)}
 .gg-course a{padding:10px 12px;border-radius:10px;color:#0B2545;text-decoration:none}
 .gg-course a.on{background:#0B2545;color:#fff}
 .gg-rank{margin:14px 0}
@@ -920,11 +922,11 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-slide{flex:0 0 88%;scroll-snap-align:start;margin:0}
 .gg-pod.is-1{box-shadow:0 0 0 2px #C4A36A}
 .gg-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:0;background:#fff;border-radius:18px;padding:12px 14px 10px;margin:10px 0;box-shadow:var(--shadow-card);color:#0B2545}
-.gg-kicker{margin:0;font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:#8C6A2F}
-.gg-ranknum{margin:0;font-size:48px;line-height:.95;font-weight:700;color:#0B2545}
-.gg-ranknum .num{font-size:48px;font-weight:700}
-.gg-where{font-size:15px;color:#0B2545}
-.gg-cards{margin:4px 0 0;font-size:14px;color:#3d4d5c}
+.gg-kicker{margin:0;font-size:var(--type-13,13px);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0B2545}
+.gg-ranknum{margin:2px 0 0;font-size:var(--type-40,40px);line-height:.95;font-weight:700;color:#0B2545}
+.gg-ranknum .num{font-size:var(--type-40,40px);font-weight:700;color:#0B2545}
+.gg-where{font-size:var(--type-15,15px);font-weight:650;color:#0B2545}
+.gg-cards{margin:4px 0 0;font-size:var(--type-13,13px);font-weight:650;color:#0B2545}
 .gg-move{margin:0}
 .gg-up{color:#0B2545}.gg-dn{color:#C8102E}.gg-eq{color:#0B2545}
 .gg-few{color:var(--color-ink3);font-size:12px}
@@ -952,7 +954,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-mine div span{flex:1;font-size:var(--type-13,13px)}
 .gg-mine div b{font-size:var(--type-18,18px)}
 .gg-steps{display:flex;align-items:flex-end;justify-content:center;gap:8px}
-.gg-step{flex:1;max-width:148px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;gap:4px;background:#fff;border-radius:18px 18px 10px 10px;padding:12px 8px 14px;text-decoration:none;color:#0B2545;box-shadow:var(--shadow-card)}
+.gg-step{flex:1;max-width:148px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;gap:4px;background:#fff;border-radius:18px 18px 10px 10px;padding:12px 8px 14px;text-decoration:none;color:#0B2545;box-shadow:var(--shadow-card)}
 .gg-step.p1{min-height:228px;border:2px solid #C8A86A}
 .gg-step.p2{min-height:184px}
 .gg-step.p3{min-height:156px}
@@ -1085,9 +1087,10 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 #putting .pills + .card,#putting .pills + .lede,#trabajar .pills + .foot{margin-top:12px}
 
 /* v13 — tee times */
-.cad-empty{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px}
-.cad-mark{position:relative;width:72px;height:84px}
-.cad-empty .cad{width:64px;height:80px;object-fit:contain}
+.cad-empty{display:flex;flex-direction:row;align-items:center;gap:14px;padding:16px;margin-bottom:22px}
+.cad-mark{position:relative;width:88px;height:104px;flex:none}
+.cad-empty .cad{width:80px;height:100px;object-fit:contain}
+.cad-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
 .cad-flag{position:absolute;right:0;top:6px;min-width:22px;height:16px;padding:0 4px;background:#C8A86A;color:#0B2545;font:700 11px/16px Geist,system-ui,sans-serif;font-style:normal;border-radius:2px 2px 2px 0}
 .cad-flag:before{content:"";position:absolute;left:0;top:16px;width:2px;height:18px;background:#0B2545}
 .cad-empty b{font-size:var(--type-18,18px);font-weight:700}
@@ -2858,7 +2861,8 @@ html.rc-map .tk-edit{position:absolute;left:56px;right:12px;top:200px;bottom:aut
 html.rc-map .tk-edit b{flex:1 0 100%;font-size:15px;font-weight:700}
 html.rc-map .tk-edit p{flex:1 0 100%;margin:0;font-size:13px}
 html.rc-map .tk-edit button{min-height:40px;border:0;border-radius:12px;background:#0B2545;color:#fff;font:650 13px/1 Geist,system-ui,sans-serif;padding:0 12px;cursor:pointer}
-html.rc-map .tk-edit #play-edit-del,html.rc-map .tk-edit #play-edit-yes{background:#C8102E}
+html.rc-map .tk-edit #play-edit-del{background:transparent;color:#C8102E;border:1.5px solid #C8102E}
+html.rc-map .tk-edit #play-edit-yes{background:#C8102E;color:#fff}
 html.rc-map .tk-shots-rail .tk-shot,html.rc-map .tk-shots-rail span{width:auto;max-width:148px;background:#fff;color:#0B2545;border:1px solid rgba(11,37,69,.18);border-radius:999px;padding:4px 10px;font-size:12px;line-height:1.2;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 12px rgba(0,0,0,.28)}
 html.rc-map .tk-shots-rail .tk-shot[hidden]{display:none!important}
 html.rc-map .tk-shots-rail .tk-more{background:#0B2545;color:#fff;border-color:#0B2545}
