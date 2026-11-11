@@ -379,71 +379,9 @@ struct GroupDetailView: View {
 
     private func comparisonSection(_ group: GolfletGroup) -> some View {
         let rows = comparison?.rows ?? []
-        let selected = rows.first { $0.metric.rawValue == compareMetric } ?? rows.first
         return VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Comparación")
-                    .font(GType.section)
-                    .foregroundStyle(p.ink)
-                Spacer()
-                Button { showsViewSettings = true } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(p.ink)
-                        .frame(width: 44, height: 44)
-                        .background(p.surface)
-                        .clipShape(Circle())
-                }
-                .accessibilityLabel("Mi vista")
-                .accessibilityIdentifier("group-my-view")
-            }
-            Text("Esta vista es tuya. El admin no te la arma.")
-                .font(GType.label)
-                .foregroundStyle(p.ink3)
-            Text("\(config.range.title)\(config.courseFilter.map { " · \($0)" } ?? " · Todas")")
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
-                .accessibilityIdentifier("group-view-range")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(GroupPeriod.allCases) { period in
-                        Button {
-                            selectPeriod(period)
-                        } label: {
-                            Text(period.short)
-                                .font(GType.label)
-                                .foregroundStyle(config.range == period ? p.onPrimary : p.ink)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(config.range == period ? p.primary : p.surface2)
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(period.title)
-                        .accessibilityIdentifier("group-period-\(period.rawValue)")
-                    }
-                }
-            }
-
-            if !rows.isEmpty, let selected {
-                let showsHero = selected.ranked().contains { $0.memberID == comparison?.hero?.memberID }
-                VStack(alignment: .leading, spacing: 10) {
-                    if showsHero {
-                        VStack(alignment: .leading, spacing: 8) {
-                            youCard(selected, group: group)
-                            metricTiles(rows, selected: selected)
-                        }
-                        .padding(.bottom, 14)
-                        .background(p.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    } else {
-                        metricTiles(rows, selected: selected)
-                    }
-                    podium(selected, group: group)
-                    rateChart(selected)
-                    rankList(selected, group: group)
-                    trophyStrip(rows, group: group)
-                }
+            if !rows.isEmpty {
+                classification(rows, group: group)
             }
 
             if let comparison {
@@ -453,6 +391,281 @@ struct GroupDetailView: View {
             }
         }
         .padding(.bottom, 24)
+    }
+
+    private var boardOrder: [GroupMetricKind] {
+        [.birdies, .pars, .eagles, .net, .regular, .rounds, .streak, .aces]
+    }
+
+    private func boardRows(_ rows: [GroupComparisonRow]) -> [GroupComparisonRow] {
+        boardOrder.compactMap { kind in rows.first { $0.metric == kind } }.filter { row in
+            if row.metric == .aces {
+                return row.ranked().contains { ($0.value ?? 0) > 0 }
+            }
+            return !row.ranked().isEmpty
+        }
+    }
+
+    private func meetLine() -> String {
+        switch config.range {
+        case .week: return "Esta semana"
+        case .month: return "Este mes"
+        case .quarter: return "Este trimestre"
+        case .semester: return "Este semestre"
+        case .year: return "Esta temporada"
+        case .all: return "Histórico"
+        }
+    }
+
+    private func posToken(_ row: GroupComparisonRow, memberID: String) -> String {
+        let place = row.rank(of: memberID) ?? 0
+        let tied = row.ranked().filter { row.rank(of: $0.memberID) == place }.count > 1
+        return (tied ? "T" : "") + String(place)
+    }
+
+    private func classification(_ rows: [GroupComparisonRow], group: GolfletGroup) -> some View {
+        let board = boardRows(rows)
+        let selected = board.first { $0.metric.rawValue == compareMetric } ?? board.first
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Clasificación")
+                        .font(GFont.ui(11, weight: .semibold))
+                        .tracking(1.6)
+                        .textCase(.uppercase)
+                    Text(group.name)
+                        .font(GFont.ui(28, weight: .bold))
+                        .tracking(-0.8)
+                    Text(meetLine())
+                        .font(GFont.ui(14, weight: .semibold))
+                }
+                Spacer(minLength: 8)
+                Button { showsViewSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Mi vista")
+                .accessibilityIdentifier("group-my-view")
+            }
+            .foregroundStyle(Color.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background {
+                p.primary
+                    .padding(.horizontal, -20)
+            }
+
+            HStack(spacing: 8) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 0) {
+                        ForEach(GroupPeriod.allCases) { period in
+                            let on = config.range == period
+                            Button {
+                                selectPeriod(period)
+                            } label: {
+                                Text(period.short)
+                                    .font(GFont.ui(12, weight: .semibold))
+                                    .foregroundStyle(on ? Color.white : p.ink)
+                                    .padding(.horizontal, 10)
+                                    .frame(height: 32)
+                                    .background(on ? p.primary : Color.white)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(period.title)
+                            .accessibilityIdentifier("group-period-\(period.rawValue)")
+                        }
+                    }
+                    .overlay(Rectangle().stroke(p.primary.opacity(0.22), lineWidth: 1))
+                }
+                Button { showsViewSettings = true } label: {
+                    HStack(spacing: 4) {
+                        Text(config.courseFilter ?? "Canchas")
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .font(GFont.ui(12, weight: .semibold))
+                    .foregroundStyle(p.ink)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: 96)
+                    .frame(height: 32)
+                    .overlay(Rectangle().stroke(p.primary.opacity(0.22), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(config.range.title). \(config.courseFilter ?? "Todas las canchas")")
+                .accessibilityIdentifier("group-view-range")
+            }
+            .padding(.top, 12)
+
+            leaderStrip(rows)
+            if let selected {
+                categoryTabs(board, selected: selected)
+                if let line = standingLine(selected) {
+                    Text(line)
+                        .font(GFont.ui(13, weight: .semibold))
+                        .foregroundStyle(p.ink)
+                        .padding(.vertical, 10)
+                        .accessibilityIdentifier("group-hero")
+                        .accessibilityLabel("Tu puesto, \(line)")
+                }
+                columnHeads
+                leaderTable(selected, group: group)
+            }
+        }
+    }
+
+    private func leaderStrip(_ rows: [GroupComparisonRow]) -> some View {
+        let keys: [GroupMetricKind] = [.birdies, .pars, .net, .rounds]
+        let chips = keys.compactMap { kind in rows.first { $0.metric == kind } }
+        return HStack(spacing: 0) {
+            ForEach(chips) { row in
+                let ranked = row.ranked()
+                let tops = ranked.filter { row.rank(of: $0.memberID) == 1 }
+                let who = tops.count > 1 ? "T1 · \(firstName(tops.first?.memberName ?? ""))" : firstName(tops.first?.memberName ?? "")
+                let value = tops.first.map { display($0, metric: row.metric) } ?? ""
+                Button { compareMetric = row.metric.rawValue } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(row.metric == .net ? "Mejor neto" : row.metric.title)
+                            .font(GFont.ui(10, weight: .semibold))
+                            .tracking(0.8)
+                            .textCase(.uppercase)
+                            .lineLimit(2)
+                        Text("\(who) \(value)")
+                            .font(GFont.ui(13, weight: .bold))
+                            .lineLimit(2)
+                    }
+                    .foregroundStyle(p.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 8)
+                }
+                .buttonStyle(.plain)
+                .overlay(alignment: .trailing) { Rectangle().fill(p.primary.opacity(0.16)).frame(width: 1) }
+            }
+        }
+        .overlay(alignment: .top) { Rectangle().fill(p.primary.opacity(0.16)).frame(height: 1) }
+        .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.16)).frame(height: 1) }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Líderes")
+    }
+
+    private func categoryTabs(_ rows: [GroupComparisonRow], selected: GroupComparisonRow) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(rows) { row in
+                    let on = row.id == selected.id
+                    Button { compareMetric = row.metric.rawValue } label: {
+                        Text(tabTitle(row.metric))
+                            .font(GFont.ui(12, weight: .bold))
+                            .tracking(0.8)
+                            .textCase(.uppercase)
+                            .foregroundStyle(on ? p.ink : p.ink.opacity(0.5))
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
+                            .overlay(alignment: .bottom) { Rectangle().fill(on ? p.accent : Color.clear).frame(height: 2) }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("group-metric-\(row.metric.rawValue)")
+                }
+            }
+        }
+        .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.18)).frame(height: 1) }
+    }
+
+    private func tabTitle(_ metric: GroupMetricKind) -> String {
+        switch metric {
+        case .net: return "Mejor neto"
+        case .regular: return "Regularidad"
+        case .streak: return "Rachas"
+        default: return metric.title
+        }
+    }
+
+    private var columnHeads: some View {
+        HStack(spacing: 4) {
+            Text("Pos").frame(width: 44, alignment: .leading)
+            Text("Jugador").frame(maxWidth: .infinity, alignment: .leading)
+            Text("Total").frame(width: 44, alignment: .trailing)
+            Text("Por ronda").frame(width: 64, alignment: .trailing)
+            Text("Tarj.").frame(width: 32, alignment: .trailing)
+        }
+        .font(GFont.ui(10, weight: .semibold))
+        .tracking(0.6)
+        .textCase(.uppercase)
+        .foregroundStyle(p.ink)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .overlay(alignment: .bottom) { Rectangle().fill(p.primary).frame(height: 1) }
+    }
+
+    private func standingLine(_ row: GroupComparisonRow) -> String? {
+        guard let mineID = comparison?.hero?.memberID, row.rank(of: mineID) != nil else { return nil }
+        let token = posToken(row, memberID: mineID)
+        let gap = gapLine(row, memberID: mineID) ?? ""
+        let cards = comparison?.hero?.cards ?? ""
+        return ["Tu posición", token, gap, cards].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private func leaderTable(_ row: GroupComparisonRow, group: GolfletGroup) -> some View {
+        let ranked = row.ranked()
+        return VStack(spacing: 0) {
+            ForEach(Array(ranked.enumerated()), id: \.element.id) { index, value in
+                let place = row.rank(of: value.memberID) ?? (index + 1)
+                let mine = value.memberID == comparison?.hero?.memberID
+                let few = value.sample.map { $0 < 3 } ?? false
+                let rate: String = {
+                    if let sample = value.sample, sample < 3 { return "Pocas tarjetas" }
+                    if let per = value.perRound { return FormatAR.one(per) }
+                    return "—"
+                }()
+                let cards = value.sample.map(String.init) ?? "—"
+                HStack(spacing: 4) {
+                    HStack(spacing: 2) {
+                        Text(posToken(row, memberID: value.memberID))
+                            .font(GFont.ui(15, weight: .bold))
+                        if let delta = placeDelta(row, memberID: value.memberID) {
+                            Image(systemName: delta > 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(delta > 0 ? p.ink : p.accent)
+                            Text("\(abs(delta))")
+                                .font(GFont.ui(11, weight: .bold))
+                                .foregroundStyle(delta > 0 ? p.ink : p.accent)
+                        }
+                    }
+                    .frame(width: 44, alignment: .leading)
+                    HStack(spacing: 8) {
+                        GroupPhotoView(url: value.photoURL ?? group.members.first { $0.id == value.memberID }?.photoURL, initials: value.initials, size: 26)
+                        Text(value.memberName)
+                            .font(GFont.ui(14, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(display(value, metric: row.metric))
+                        .font(GFont.ui(place == 1 ? 17 : 15, weight: .bold))
+                        .foregroundStyle(place == 1 ? p.accent : p.ink)
+                        .frame(width: 44, alignment: .trailing)
+                    Text(rate)
+                        .font(GFont.ui(few ? 10 : 13, weight: .semibold))
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 64, alignment: .trailing)
+                    Text(cards)
+                        .font(GFont.ui(14, weight: .semibold))
+                        .frame(width: 32, alignment: .trailing)
+                }
+                .foregroundStyle(p.ink)
+                .padding(.vertical, 10)
+                .padding(.leading, 8)
+                .background(mine ? p.primary.opacity(0.06) : (index.isMultiple(of: 2) ? p.primary.opacity(0.035) : Color.clear))
+                .overlay(alignment: .leading) { Rectangle().fill(mine ? p.primary : Color.clear).frame(width: 3) }
+                .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.14)).frame(height: 1) }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.bottom, 12)
     }
 
     private func metricTiles(_ rows: [GroupComparisonRow], selected: GroupComparisonRow) -> some View {
