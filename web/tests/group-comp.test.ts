@@ -140,7 +140,21 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
     const board = async (name: string) => {
       await page.evaluate(() => document.querySelector(".gg-filters")?.scrollIntoView({ block: "start" }));
+      const gap = await page.evaluate(() => {
+        const bar = document.querySelector("#tabbar")?.getBoundingClientRect().top ?? window.innerHeight;
+        const labels = [...document.querySelectorAll(".gg-stage:not([hidden]) .gg-col span")];
+        return Math.min(...labels.map(el => bar - el.getBoundingClientRect().bottom));
+      });
+      assert.ok(gap >= 8, `las etiquetas del gráfico quedan a ${gap}px de la barra`);
       await page.screenshot({ path: `${ART}/${name}.png` });
+    };
+    const labelsClearNav = async () => {
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      return page.evaluate(() => {
+        const bar = document.querySelector("#tabbar")?.getBoundingClientRect().top ?? window.innerHeight;
+        const labels = [...document.querySelectorAll(".gg-stage:not([hidden]) .gg-col span")];
+        return Math.min(...labels.map(el => bar - el.getBoundingClientRect().bottom));
+      });
     };
     await open("gT", "all");
     const tied = await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => els.map(el => {
@@ -154,7 +168,7 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     const pairMid = (tied[0].mid + tied[1].mid) / 2;
     assert.ok(Math.abs(pairMid - 195) < 24, `el par de 1º quedó en ${pairMid}`);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /3º/);
-    await board("grupos3-empate-390");
+    await board("grupos4-empate-390");
     await open("g1", "1w");
     const fit = await page.$eval(".gg-filters", el => {
       const row = el.getBoundingClientRect();
@@ -170,19 +184,29 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     });
     assert.equal(fit.courseInside, true);
     assert.equal(fit.oneRow, true);
-    const centered = await page.$$eval(".gg-stage:not([hidden]) .gg-step", els => {
-      const mid = window.innerWidth / 2;
-      const lead = els.find(el => el.classList.contains("p1"));
-      const side = els.find(el => el.classList.contains("p2"));
-      const box = lead.getBoundingClientRect();
-      return { delta: Math.abs((box.left + box.right) / 2 - mid), sideLeft: side.getBoundingClientRect().right <= box.left + 2 };
+    const centered = await page.$eval(".gg-stage:not([hidden]) .gg-fairway", el => {
+      const fair = el.getBoundingClientRect();
+      const lead = el.querySelector(".gg-step.p1").getBoundingClientRect();
+      const side = el.querySelector(".gg-step.p2").getBoundingClientRect();
+      const pairMid = (side.left + lead.right) / 2;
+      const fairMid = (fair.left + fair.right) / 2;
+      return {
+        delta: Math.abs(pairMid - fairMid),
+        leadRight: lead.left + 2 >= side.right,
+        leftGap: side.left - fair.left,
+        rightGap: fair.right - lead.right,
+        slots: el.querySelectorAll(".gg-slot").length,
+      };
     });
-    assert.ok(centered.delta < 28, `el 1º quedó a ${centered.delta}px del centro`);
-    assert.equal(centered.sideLeft, true);
+    assert.ok(centered.delta < 16, `el par quedó a ${centered.delta}px del centro`);
+    assert.equal(centered.leadRight, true);
+    assert.equal(centered.slots, 0);
+    assert.ok(Math.abs(centered.leftGap - centered.rightGap) < 18, `huecos ${centered.leftGap}/${centered.rightGap}`);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Pocas tarjetas/);
-    await board("grupos3-semana-390");
+    await board("grupos4-semana-390");
+    assert.ok(await labelsClearNav() >= 8, "al final del scroll las etiquetas quedan detrás de la barra");
     await open("g1", "12y");
-    await board("grupos3-anio-390");
+    await board("grupos4-anio-390");
   } finally {
     await browser.close();
     server.close();
