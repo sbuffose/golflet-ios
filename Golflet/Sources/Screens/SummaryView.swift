@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SummaryView: View {
+    var showsBack = true
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
 
@@ -11,6 +12,27 @@ struct SummaryView: View {
                     header
                     filters
                     metricsEntry
+                    NavigationLink { AcademiaView() } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Qué trabajar")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                Text("Prioridades a partir de tus tarjetas")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink2)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(p.ink3)
+                        }
+                        .padding(16)
+                        .background(p.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 0))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("resumen-trabajar")
                     grid
                     trend
                     hardest
@@ -21,7 +43,7 @@ struct SummaryView: View {
             }
         }
         .accessibilityIdentifier("screen-resumen")
-        .safeAreaInset(edge: .top) { MetricBackBar() }
+        .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
     }
 
     private var header: some View {
@@ -274,7 +296,7 @@ struct SummaryView: View {
                     Button {
                         model.selectedCourseName = course
                         model.presentedHole = hole.number
-                        model.selectedTab = .jugar
+                        model.selectedTab = .cancha
                     } label: {
                         HStack(spacing: 12) {
                             Text("\(hole.number)")

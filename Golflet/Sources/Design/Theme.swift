@@ -177,12 +177,12 @@ enum GFont {
 }
 
 enum GType {
-    static var largeTitle: Font { GFont.ui(42, weight: .semibold) }
-    static var sheetTitle: Font { GFont.ui(30, weight: .semibold) }
-    static var section: Font { GFont.ui(20, weight: .semibold) }
-    static var headline: Font { GFont.ui(15.5, weight: .semibold) }
-    static var body: Font { GFont.ui(16, weight: .regular) }
-    static var label: Font { GFont.ui(12.5, weight: .medium) }
+    static var largeTitle: Font { GFont.ui(40, weight: .semibold) }
+    static var sheetTitle: Font { GFont.ui(24, weight: .semibold) }
+    static var section: Font { GFont.ui(18, weight: .semibold) }
+    static var headline: Font { GFont.ui(15, weight: .semibold) }
+    static var body: Font { GFont.ui(15, weight: .regular) }
+    static var label: Font { GFont.ui(13, weight: .medium) }
     static var overline: Font { GFont.ui(11, weight: .semibold) }
     static var statHero: Font { GFont.ui(80, weight: .semibold) }
     static var statL: Font { GFont.ui(32, weight: .semibold) }

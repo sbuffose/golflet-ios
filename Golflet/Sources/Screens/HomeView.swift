@@ -195,6 +195,15 @@ struct HomeView: View {
                 booking: model.nextTeeTime,
                 onTab: { revealPartners(scroll) }
             )
+            NavigationLink {
+                PlayHubView()
+            } label: {
+                Text("Preparar la salida")
+                    .font(GType.headline)
+                    .foregroundStyle(p.primary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-open-jugar")
             Button { model.showsPlay = true } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -289,7 +298,7 @@ struct HomeView: View {
                     HStack(alignment: .top, spacing: 12) {
                         NavigationLink(value: MetricRoute.handicap) {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text(FormatAR.one(snap.handicapIndex))
+                                CountUpText(value: snap.handicapIndex, format: FormatAR.one)
                                     .font(GType.statHero)
                                     .tracking(-4.4)
                                     .tabular()
@@ -823,10 +832,10 @@ struct HomeView: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(p.primary)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(model.groups.isEmpty ? "Crear un grupo" : "\(model.groups.count) \(model.groups.count == 1 ? "grupo" : "grupos")")
+                            Text(model.groups.isEmpty ? "Comparar con amigos" : "\(model.groups.count) \(model.groups.count == 1 ? "grupo" : "grupos")")
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
-                            Text(model.groups.first?.name ?? "Compará tu juego con amigos")
+                            Text("Tabla, evolución y hoyo por hoyo con tus amigos. Solo si cada uno acepta.")
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
                         }
@@ -837,6 +846,15 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("home-grupos")
+            NavigationLink {
+                GroupsHubView()
+            } label: {
+                Text("Ver grupos y tee times")
+                    .font(GType.headline)
+                    .foregroundStyle(p.primary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-hub-grupos")
         }
     }
 

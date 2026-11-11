@@ -7,6 +7,7 @@ struct GroupDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let groupID: String
     @State private var comparison: GroupComparison?
     @State private var config = GroupViewConfig.default
@@ -522,8 +523,13 @@ struct GroupDetailView: View {
                 }
                 columnHeads
                 leaderTable(selected, group: group)
+                    .id(selected.id + config.range.rawValue)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(GMotion.spring(reduceMotion), value: compareMetric)
+        .animation(GMotion.spring(reduceMotion), value: config.range)
+        .modifier(GSelectionHaptic(reduce: reduceMotion, trigger: compareMetric ?? ""))
     }
 
     private func leaderStrip(_ rows: [GroupComparisonRow]) -> some View {

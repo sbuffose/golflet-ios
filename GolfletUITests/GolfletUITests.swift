@@ -1382,18 +1382,17 @@ final class GolfletUITests: XCTestCase {
     private func tapTab(_ app: XCUIApplication, _ name: String) {
         popTowardTabs(app)
         switch name {
-        case "Resumen":
+        case "Resumen", "Rondas", "Cancha", "Mi bolsa":
+            tapVisibleTab(app, name)
+        case "Grupos":
             tapVisibleTab(app, "Inicio")
-            tapHomeMore(app, "home-more-resumen", "Falta Más · Resumen")
-        case "Rondas":
+            tapHomeMore(app, "home-hub-grupos", "Falta el acceso a grupos")
+        case "Jugar":
             tapVisibleTab(app, "Inicio")
-            tapHomeMore(app, "home-more-rondas", "Falta Más · Rondas")
-        case "Cancha":
-            tapVisibleTab(app, "Inicio")
-            tapHomeMore(app, "home-more-cancha", "Falta Más · Cancha")
-        case "Mi bolsa":
-            tapVisibleTab(app, "Inicio")
-            tapHomeMore(app, "home-more-bolsa", "Falta Más · Bolsa")
+            tapHomeMore(app, "home-open-jugar", "Falta preparar la salida")
+        case "Academia":
+            tapVisibleTab(app, "Resumen")
+            tapHomeMore(app, "resumen-trabajar", "Falta Qué trabajar")
         default:
             tapVisibleTab(app, name)
         }

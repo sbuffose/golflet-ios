@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BagView: View {
+    var showsBack = true
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @State private var ironBrand = ""
@@ -51,7 +52,7 @@ struct BagView: View {
             .padding(.top, 8)
         }
         .accessibilityIdentifier("screen-bolsa")
-        .safeAreaInset(edge: .top) { MetricBackBar() }
+        .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .onAppear(perform: restoreIron)
     }
 

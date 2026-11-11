@@ -85,23 +85,30 @@ struct RootView: View {
                 .tag(AppTab.inicio)
                 .accessibilityIdentifier("tab-inicio")
 
-            NavigationStack { GroupsHubView() }
-                .tabItem { Label(AppTab.grupos.title, systemImage: AppTab.grupos.systemImage) }
-                .tag(AppTab.grupos)
-                .accessibilityIdentifier("tab-grupos")
+            NavigationStack { SummaryView(showsBack: false) }
+                .tabItem { Label(AppTab.resumen.title, systemImage: AppTab.resumen.systemImage) }
+                .tag(AppTab.resumen)
+                .accessibilityIdentifier("tab-resumen")
 
-            NavigationStack { PlayHubView() }
-                .tabItem { Label(AppTab.jugar.title, systemImage: AppTab.jugar.systemImage) }
-                .tag(AppTab.jugar)
-                .accessibilityIdentifier("tab-jugar")
+            NavigationStack { RoundsView(showsBack: false) }
+                .tabItem { Label(AppTab.rondas.title, systemImage: AppTab.rondas.systemImage) }
+                .tag(AppTab.rondas)
+                .accessibilityIdentifier("tab-rondas")
 
-            NavigationStack { AcademiaView() }
-                .tabItem { Label(AppTab.academia.title, systemImage: AppTab.academia.systemImage) }
-                .tag(AppTab.academia)
-                .accessibilityIdentifier("tab-academia")
+            NavigationStack { CourseView(showsBack: false) }
+                .tabItem { Label(AppTab.cancha.title, systemImage: AppTab.cancha.systemImage) }
+                .tag(AppTab.cancha)
+                .accessibilityIdentifier("tab-cancha")
+
+            NavigationStack { BagView(showsBack: false) }
+                .tabItem { Label(AppTab.bolsa.title, systemImage: AppTab.bolsa.systemImage) }
+                .tag(AppTab.bolsa)
+                .accessibilityIdentifier("tab-bolsa")
         }
         .toolbar(model.showsLiveHole || model.showsPlay ? .hidden : .visible, for: .tabBar)
         .tint(p.primary)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedTab)
+        .modifier(GSelectionHaptic(reduce: reduceMotion, trigger: model.selectedTab))
         .onAppear { configureTabBar() }
         .sheet(item: bindings.presentedRound) { round in
             NavigationStack {
@@ -218,7 +225,7 @@ struct RootView: View {
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(p.bg)
         appearance.shadowColor = UIColor(p.hairline)
-        let selectedColor = UIColor(p.accent)
+        let selectedColor = UIColor(p.primary)
         let idle = UIColor(p.ink3)
         let selectedFont = UIFont.systemFont(ofSize: 11, weight: .bold)
         let idleFont = UIFont.systemFont(ofSize: 10, weight: .regular)

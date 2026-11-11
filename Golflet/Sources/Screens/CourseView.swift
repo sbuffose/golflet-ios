@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct CourseView: View {
+    var showsBack = true
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @State private var holesWidth: CGFloat = 353
@@ -28,7 +29,7 @@ struct CourseView: View {
         }
         .accessibilityIdentifier("screen-cancha")
         .metricDestinations()
-        .safeAreaInset(edge: .top) { MetricBackBar() }
+        .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .task(id: model.selectedCourseName) {
             let name = model.selectedCourseName
             strategy = try? await model.api.courseStrategy(courseKey: CourseIdentity.key(for: name), courseId: nil)
