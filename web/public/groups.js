@@ -250,21 +250,31 @@
       const dlt = lowOf(key) ? live[1].v - live[0].v : live[0].v - live[1].v;
       return `+${numTxt(dlt)} sobre ${firstOf(live[1].m.name)}`;
     };
-    const WHEN = { '1w': 'esta semana', '1m': 'este mes', '3q': 'este trimestre', '6s': 'este semestre', '12y': 'este año', all: 'en el histórico' };
-    const when = WHEN[d.filters.range] || 'en el período';
-    const ICO = {
-      birdies: '<path fill="currentColor" d="M4 19c2.2-5 7-8.2 12.2-8.2.8 0 1.6 0 2.4.3C17.4 7.2 20.6 4.4 25 4.4c1.2 2.2-.6 4.4-2.2 5.4 3 .8 5.4 3 6.4 5.8-2.2-.2-4.2-1.2-6.2-1.4-2.2 3.6-6.2 5.6-10.4 5.6-3.2 0-6.2-.8-8.6-.8z"/><circle cx="23.2" cy="8.2" r="1" fill="currentColor"/>',
-      eagles: '<path fill="currentColor" d="M16 12C10 12 6 15 2 20c5-1.4 9-1.2 14-1.2S25 18.6 30 20C26 15 22 12 16 12z"/><circle cx="16" cy="9" r="2.4" fill="currentColor"/><path d="M16 15.2V23M11.5 24.5h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
-      pars: '<path d="M10 28V6M10 7h12l-3.2 5 3.2 5H10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
-      aces: '<path d="M8 20h16M11 20c.4 4 9.6 4 10 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
-      best_net: '<path d="M8 5h16v22H8zM8 11h16M8 17h16M14 5v22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
-      regular: '<path d="M5 20h22M8 20v-4M16 20V12M24 20V8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-      rounds: '<path d="M12 28V15M20 28V15M12 15c0-4 8-4 8 0M13 9V6h6v3M11 21h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-      max_birdies: '<path fill="currentColor" d="M4 19c2.2-5 7-8.2 12.2-8.2.8 0 1.6 0 2.4.3C17.4 7.2 20.6 4.4 25 4.4c1.2 2.2-.6 4.4-2.2 5.4 3 .8 5.4 3 6.4 5.8-2.2-.2-4.2-1.2-6.2-1.4-2.2 3.6-6.2 5.6-10.4 5.6-3.2 0-6.2-.8-8.6-.8z"/>',
-      racha: '<path d="M7 27V10M7 11h7l-2 3.2L14 18H7M16 27V14M16 15h7l-2 3L23 21h-7M25 27V18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>',
+    const MON = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const sinceDate = () => {
+      const raw = d.filters.since;
+      if (!raw) return null;
+      const dt = new Date(`${String(raw).slice(0, 10)}T12:00:00`);
+      return Number.isNaN(dt.getTime()) ? null : dt;
     };
-    const icon = key => `<svg viewBox="0 0 32 32" aria-hidden="true">${ICO[key] || ICO.pars}</svg>`;
-    const flag = (fill, dot) => `<span class="gg-flag" aria-hidden="true"><svg viewBox="0 0 28 56"><path d="M14 54V8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 8h12l-4 6.5L26 21H14z" fill="${fill}"/><circle cx="14" cy="8" r="2.3" fill="${dot}"/></svg></span>`;
+    const seasonYear = () => {
+      const listed = d.filters.years && d.filters.years[0];
+      if (listed) return String(listed);
+      const dt = sinceDate();
+      return dt ? String(dt.getFullYear()) : '';
+    };
+    const periodLine = () => {
+      const range = d.filters.range || 'all';
+      const dt = sinceDate();
+      const year = seasonYear();
+      if (range === '1w') return dt ? `Semana del ${dt.getDate()} ${MON[dt.getMonth()]}` : 'Esta semana';
+      if (range === '1m') return dt ? `${MESES[dt.getMonth()]} ${dt.getFullYear()}` : 'Este mes';
+      if (range === '3q') return year ? `Trimestre ${year}` : 'Trimestre';
+      if (range === '6s') return year ? `Semestre ${year}` : 'Semestre';
+      if (range === '12y') return year ? `Temporada ${year}` : 'Temporada';
+      return 'Histórico';
+    };
     const lowOf = key => key === 'regular' || key === 'best_net' || !!MT[key]?.[3];
     const boardRows = key => {
       if (key === 'regular') return ms.filter(m => !(m.hidden || []).includes('scores') && m.consistency?.sd != null).map(m => ({ m, v: m.consistency.sd, n: m.consistency.n || 0, low: true, rate: null, text: String(m.consistency.sd).replace('.', ',') }));
@@ -272,143 +282,102 @@
       return ms.map(m => ({ m, v: val(m, key), n: Number(m.cards_18 ?? m.rounds ?? 0), low: lowOf(key), rate: per(m, key), text: null })).filter(x => !hid(x.m, key) && x.v != null).sort((a, b) => lowOf(key) ? a.v - b.v : b.v - a.v);
     };
     const shown = (key, row) => row.text || (MT[key] ? fmt(key, row.v) : String(row.v).replace('.', ','));
-    const countEl = (v, text) => Number.isInteger(Number(v)) ? `<span class="num gg-count" data-n="${v}">${text}</span>` : `<span class="num">${text}</span>`;
     const hrefOf = key => `#/grupo/${id}/m/${key === 'regular' ? 'avg_gross' : key === 'racha' ? 'pars' : key}${keepQs(qs)}`;
     const emptyBoard = key => {
-      const title = key === 'regular' || key === 'racha' ? 'Pocas tarjetas' : 'Sin datos';
       const text = key === 'regular' ? 'Hacen falta 3 tarjetas de 18 para ver quién es más regular.' : key === 'racha' ? 'Todavía no hay una racha de rondas en el par o mejor.' : 'Sin tarjetas compartidas para este número.';
-      return `<div class="gg-rank" id="gg-${key}"><div class="card cad-empty"><span class="cad-mark"><img class="cad" src="/brand/caddie.png" alt=""></span><span class="cad-copy"><b>${title}</b><p>${text}</p></span></div></div>`;
+      return `<p class="gg-emptyline" id="gg-${key}">${text}</p>`;
     };
-    const rankCard = (key, where, label) => {
+    const cardN = m => Number(m.cards_18 ?? m.rounds ?? 0) + Number(m.cards_9 || 0);
+    const posToken = (place, places) => `${places.filter(p => p === place).length > 1 ? 'T' : ''}${place}`;
+    const moveMap = (key, rows, places) => {
+      const field = { birdies: 'birdies', pars: 'pars', eagles: 'eagles', rounds: 'rounds', best_net: 'best_net' }[key];
+      const out = new Map();
+      if (!field) return out;
+      const prev = rows.filter(x => x.m.prev && x.m.prev[field] != null).map(x => ({ id: x.m.member_id, v: x.m.prev[field] }));
+      if (prev.length < 2) return out;
+      prev.sort((a, b) => rows[0].low ? a.v - b.v : b.v - a.v);
+      const before = placesOf(prev);
+      prev.forEach((x, i) => {
+        const cur = rows.findIndex(r => r.m.member_id === x.id);
+        if (cur < 0) return;
+        const delta = before[i] - places[cur];
+        if (delta) out.set(x.id, delta);
+      });
+      return out;
+    };
+    const moveMark = delta => {
+      if (!delta) return '';
+      const up = delta > 0;
+      const path = up ? 'M4 0 8 8H0z' : 'M0 0h8L4 8z';
+      return `<span class="gg-move ${up ? 'up' : 'dn'}" aria-label="${up ? 'subió' : 'bajó'} ${Math.abs(delta)}"><svg viewBox="0 0 8 8" aria-hidden="true"><path d="${path}"/></svg>${Math.abs(delta)}</span>`;
+    };
+    const youLine = (key, rows, places) => {
+      const meAt = rows.findIndex(x => x.m.is_me);
+      if (meAt < 0) return '';
+      const place = places[meAt];
+      let gap = '';
+      if (rows.length > 1) {
+        if (place === 1 && places.filter(p => p === 1).length > 1) gap = 'Empate en la punta.';
+        else if (place === 1) gap = gapLine(key, rows);
+        else {
+          let ahead = meAt - 1;
+          while (ahead > 0 && places[ahead] === place) ahead -= 1;
+          const dlt = rows[meAt].low ? rows[meAt].v - rows[ahead].v : rows[ahead].v - rows[meAt].v;
+          gap = `a ${numTxt(dlt)} de ${firstOf(rows[ahead].m.name)}`;
+        }
+      }
+      const bits = ['Tu posición', posToken(place, places), gap, cardsLine(rows[meAt].m)].filter(Boolean);
+      return `<caption class="gg-you">${H.esc(bits.join(' · '))}</caption>`;
+    };
+    const rateCell = x => x.n < 3 ? 'Pocas tarjetas' : (x.rate != null ? H.f1(x.rate) : '—');
+    const leaderChip = (key, label) => {
       const rows = boardRows(key);
-      if (!rows.length) return { hero: '', rest: emptyBoard(key) };
+      if (!rows.length) return '';
       rows.sort((a, b) => (a.low ? a.v - b.v : b.v - a.v));
       const places = placesOf(rows);
-      const firsts = [], others = [];
-      rows.forEach((x, i) => (places[i] === 1 ? firsts : others).push(i));
-      const third = others.find(i => places[i] === 3);
-      const seconds = others.filter(i => places[i] === 2);
-      const pair = firsts.length === 1 && !third && seconds.length === 1;
-      const slots = firsts.length >= 2
-        ? [null, firsts[0], firsts[1], third ?? null]
-        : pair
-          ? [seconds[0], firsts[0]]
-          : [seconds[0] ?? null, firsts[0], third ?? seconds[1] ?? null];
-      const leader = rows[0].v;
-      const steps = slots.map(i => {
-        if (i == null) return '<span class="gg-slot" aria-hidden="true"></span>';
-        const x = rows[i], place = places[i], face = place === 1 ? 1 : place === 2 ? 2 : 3;
-        const rate = x.n >= 3 && x.rate != null ? `<small>${H.f1(x.rate)} por ronda</small>` : (x.n < 3 ? '<small>Pocas tarjetas</small>' : '');
-        const sample = shortCards(x.m);
-        const tone = face === 1 ? ['#C8A86A', '#C8102E'] : face === 3 ? ['#C8102E', '#C8A86A'] : ['#F6F7F9', '#C8A86A'];
-        return `<a class="gg-step p${face}" href="${hrefOf(key)}">${flag(tone[0], tone[1])}<span class="gg-place">${place}º</span>${photo(x.m, 'gg-av')}<b>${H.esc(x.m.name)}</b><span class="gg-ped">${countEl(x.v, shown(key, x))}${rate}${sample ? `<small>${H.esc(sample)}</small>` : ''}</span></a>`;
-      }).join('');
-      const list = rows.slice(3).map((x, i) => {
-        const pct = x.v === leader ? 100 : leader ? Math.max(6, Math.min(100, (x.low ? leader / x.v : x.v / leader) * 100)) : 0;
-        const rate = x.n >= 3 && x.rate != null ? `${H.f1(x.rate)} por ronda` : (x.n < 3 ? 'Pocas tarjetas' : '');
-        const sample = shortCards(x.m);
-        return `<a class="gg-line" href="${hrefOf(key)}"><span class="gg-rk num">${places[i + 3]}º</span>${photo(x.m, 'gg-av sm')}<span class="gg-nm">${H.esc(x.m.name)}<small>${[rate, sample].filter(Boolean).join(' · ')}</small><span class="gg-meter" aria-hidden="true"><i style="width:${pct}%"></i></span></span><b class="num">${shown(key, x)}</b></a>`;
-      }).join('');
-      const useRate = rows.some(x => x.rate != null);
-      const barOf = x => useRate && x.rate != null ? Number(x.rate) : Number(x.v);
-      const leadBar = barOf(rows[0]);
-      const chartTitle = useRate && !/por/.test(label || '') ? `${label} por ronda` : (label || where);
-      const cols = rows.slice(0, 6).map(x => {
-        const raw = barOf(x);
-        const h = !raw || !leadBar ? 12 : Math.max(12, Math.min(100, (x.low ? leadBar / raw : raw / leadBar) * 100));
-        const num = useRate && x.rate != null ? H.f1(x.rate) : shown(key, x);
-        return `<div class="gg-col${x.m.is_me ? ' me' : ''}"><div class="gg-plot"><i style="height:${Math.round(h)}%"></i></div><span><b>${num}</b>${H.esc(firstOf(x.m.name))}</span></div>`;
-      }).join('');
-      const goal = useRate && rows[0].rate != null ? H.f1(rows[0].rate) : shown(key, rows[0]);
-      const chart = `<section class="gg-weekbox"><h2>${H.esc(chartTitle)}</h2><div class="gg-cols"><span class="gg-goal" aria-hidden="true"><b>${goal}</b></span>${cols}</div></section>`;
-      const meAt = rows.findIndex(x => x.m.is_me);
-      let hero = '';
-      if (meAt >= 0) {
-        const mine = places[meAt], me = rows[meAt].m, cards = cardsLine(me);
-        let gap = '';
-        if (rows.length > 1) {
-          if (mine === 1 && rows.filter((_, j) => places[j] === 1).length > 1) gap = 'Empate en la punta.';
-          else if (mine === 1) gap = gapLine(key, rows);
-          else {
-            let ahead = meAt - 1;
-            while (ahead > 0 && places[ahead] === mine) ahead -= 1;
-            const dlt = rows[meAt].low ? rows[meAt].v - rows[ahead].v : rows[ahead].v - rows[meAt].v;
-            gap = `a ${numTxt(dlt)} de ${firstOf(rows[ahead].m.name)}`;
-          }
-        }
-        const field = { birdies: 'birdies', pars: 'pars', eagles: 'eagles', rounds: 'rounds', best_net: 'best_net' }[key];
-        let arrow = '';
-        if (field) {
-          const prev = rows.filter(x => x.m.prev && x.m.prev[field] != null).map(x => ({ id: x.m.member_id, v: x.m.prev[field] }));
-          if (prev.length >= 2 && prev.some(x => x.id === me.member_id)) {
-            prev.sort((a, b) => rows[0].low ? a.v - b.v : b.v - a.v);
-            const delta = placesOf(prev)[prev.findIndex(x => x.id === me.member_id)] - mine;
-            arrow = delta > 0 ? `<b class="gg-up">↑ ${delta}</b>` : delta < 0 ? `<b class="gg-dn">↓ ${-delta}</b>` : '';
-          }
-        }
-        const few = (Number(me.cards_18 ?? me.rounds ?? 0) + Number(me.cards_9 || 0)) < 3;
-        const meta = [cards, few ? 'Pocas tarjetas' : ''].filter(Boolean).join(' · ');
-        const line = `${where} · ${shown(key, rows[meAt])} ${when}`;
-        hero = `<section class="gg-hero"><span class="sr">Tu puesto</span><div class="gg-hero-top"><b class="gg-ranknum"><span class="num gg-count" data-n="${mine}">${mine}</span>º</b>${arrow}</div><p class="gg-hero-line">${H.esc(line)}</p>${gap ? `<p class="gg-hero-gap">${H.esc(gap)}</p>` : ''}${meta ? `<p class="gg-hero-meta">${H.esc(meta)}</p>` : ''}</section>`;
-      }
-      const stepClass = firsts.length >= 2 ? ' tie' : pair ? ' pair' : '';
-      return { hero, rest: `<div class="gg-fairway" id="gg-${key}"><div class="gg-steps${stepClass}">${steps}</div></div>${chart}${list ? `<div class="gg-rest">${list}</div>` : ''}` };
+      const tops = rows.filter((_, i) => places[i] === 1);
+      const who = tops.length > 1 ? `T1 · ${firstOf(tops[0].m.name)}` : firstOf(tops[0].m.name);
+      return `<button type="button" data-cat="${key}"><span>${H.esc(label)}</span><b>${H.esc(who)} ${H.esc(shown(key, tops[0]))}</b></button>`;
     };
-    const trophy = (title, rows) => {
-      const live = rows.filter(x => x.v != null);
-      if (!live.length || (!live[0].low && live.every(x => x.v === 0))) return '';
-      const best = live[0].low ? Math.min(...live.map(x => x.v)) : Math.max(...live.map(x => x.v));
-      const winners = live.filter(x => x.v === best);
-      return `<article class="gg-trophy"><span class="gg-medal">${SEAL}</span><b>${H.esc(title)}</b><span class="gg-tw">${photo(winners[0].m, 'gg-av sm')}<span>${H.esc(winners.map(x => x.m.name).join(', '))}</span></span></article>`;
+    const boardTable = key => {
+      const rows = boardRows(key);
+      if (!rows.length) return emptyBoard(key);
+      rows.sort((a, b) => (a.low ? a.v - b.v : b.v - a.v));
+      const places = placesOf(rows);
+      const moved = moveMap(key, rows, places);
+      const body = rows.map((x, i) => {
+        const place = places[i];
+        const lead = place === 1 ? ' lead' : '';
+        return `<tr class="${x.m.is_me ? 'me' : ''}"><td class="pos"><b>${posToken(place, places)}</b>${moveMark(moved.get(x.m.member_id) || 0)}</td><td class="who"><a href="${hrefOf(key)}">${photo(x.m, 'gg-av')}<span>${H.esc(x.m.name)}</span></a></td><td class="tot${lead}">${H.esc(shown(key, x))}</td><td class="rate${x.n < 3 ? ' few' : ''}">${H.esc(rateCell(x))}</td><td class="cards">${cardN(x.m) || '—'}</td></tr>`;
+      }).join('');
+      return `<table class="gg-lb" id="gg-${key}">${youLine(key, rows, places)}<thead><tr><th class="pos">Pos</th><th class="who">Jugador</th><th>Total</th><th>Por ronda</th><th>Tarj.</th></tr></thead><tbody>${body}</tbody></table>`;
     };
-    const badges = !isVs ? `<div class="gg-trophies">${[
-      trophy('Rey del birdie', ranked('birdies')),
-      trophy('Máquina de pares', ranked('pars')),
-      trophy('Rey del águila', ranked('eagles')),
-      trophy('Mejor neto', ranked('best_net').map(x => ({ ...x, low: true }))),
-      trophy('Más rondas', ranked('rounds')),
-      trophy('Máx birdies', ranked('max_birdies')),
-      trophy('Más regular', ms.filter(m => !(m.hidden || []).includes('scores') && m.consistency?.sd != null).map(m => ({ m, v: m.consistency.sd, low: true })).sort((a, b) => a.v - b.v)),
-      trophy('Racha', ms.filter(m => !(m.hidden || []).includes('scores') && m.streak != null).map(m => ({ m, v: m.streak, low: false })).sort((a, b) => b.v - a.v)),
-      ...(ms.some(m => !hid(m, 'aces') && Number(val(m, 'aces')) > 0) ? [trophy('Hoyo en uno', ranked('aces'))] : []),
-    ].join('')}</div>` : '';
     const GOALS = { '1w': [1, '1 ronda esta semana'], '1m': [3, '3 rondas este mes'], '3q': [6, '6 rondas este trimestre'], '6s': [12, '12 rondas este semestre'], '12y': [20, '20 rondas este año'] };
     const goal = GOALS[d.filters.range || ''];
     const me = ms.find(m => m.is_me);
     const challenge = !isVs && goal && me && !(me.hidden || []).includes('scores') ? `<section class="gg-rank gg-goal"><h2>${goal[1]}</h2>${meter(Math.round(Math.min(1, (me.cards_18 ?? 0) / goal[0]) * 100))}<p class="foot">${me.cards_18 ?? 0} de ${goal[0]} tarjetas de 18. Una de 9 no cuenta como ronda completa.</p></section>` : '';
     const secs = (V.sections && V.sections.length ? V.sections : SECTIONS.map(x => x[0])).filter(k => sec[k]);
-    const CATS = [['birdies', 'Birdies', 'en birdies'], ['pars', 'Pares', 'en pares'], ['eagles', 'Águilas', 'en águilas'], ['best_net', 'Mejor neto', 'en mejor neto'], ['regular', 'Más regular', 'en regularidad'], ['rounds', 'Rondas', 'en rondas'], ['max_birdies', 'Máx birdies por vuelta', 'en birdies por vuelta'], ['racha', 'Rachas', 'en la racha']];
-    if (ms.some(m => !hid(m, 'aces') && Number(val(m, 'aces')) > 0)) CATS.push(['aces', 'Hoyos en uno', 'en hoyos en uno']);
-    const catRow = active => `<div class="gg-cats" role="tablist" aria-label="Categoría">${CATS.map(([k, t]) => `<button type="button" role="tab" data-cat="${k}" aria-selected="${k === active ? 'true' : 'false'}" class="${k === active ? 'on' : ''}">${icon(k)}<span>${t}</span></button>`).join('')}</div>`;
-    const slides = !isVs ? `<div class="gg-stages">${CATS.map(([k, label, where], i) => { const card = rankCard(k, where, label); const cats = `<div class="gg-catwrap">${catRow(k)}</div>`; return `<div class="gg-stage" data-cat="${k}"${i ? ' hidden' : ''}>${card.hero ? `<div class="gg-panel">${card.hero}${cats}</div>` : cats}${card.rest}</div>`; }).join('')}</div>${badges}` : '';
+    const CATS = [['birdies', 'Birdies'], ['pars', 'Pares'], ['eagles', 'Águilas'], ['best_net', 'Mejor neto'], ['regular', 'Regularidad'], ['rounds', 'Rondas'], ['racha', 'Rachas']];
+    if (ms.some(m => !hid(m, 'aces') && Number(val(m, 'aces')) > 0)) CATS.push(['aces', 'Hoyos en uno']);
+    const leaderStrip = !isVs ? `<div class="gg-leaders" aria-label="Líderes">${[['birdies', 'Birdies'], ['pars', 'Pares'], ['best_net', 'Mejor neto'], ['rounds', 'Rondas']].map(([k, label]) => leaderChip(k, label)).join('')}</div>` : '';
+    const tabs = !isVs ? `<div class="gg-tabs" role="tablist" aria-label="Categoría">${CATS.map(([k, t], i) => `<button type="button" role="tab" data-cat="${k}" aria-selected="${i ? 'false' : 'true'}" class="${i ? '' : 'on'}">${H.esc(t)}</button>`).join('')}</div>` : '';
+    const slides = !isVs ? `<div class="gg-stages">${CATS.map(([k], i) => `<div class="gg-stage" data-cat="${k}"${i ? ' hidden' : ''}>${boardTable(k)}</div>`).join('')}</div>` : '';
     const fullTable = !isVs && secs.includes('table') ? `<details class="gg-full"><summary>Ver tabla completa</summary>${sec.table()}</details>` : '';
-    el.innerHTML = `${isVs ? bar(ms.map(m => m.name).join(' vs '), 'Mano a mano') : `<div class="gg-top"><div class="bar"><span class="overline">Grupo</span></div>${gear}</div><div class="gg-head">${photo(d.group, 'gg-hph')}<div class="stitle">${H.esc(d.group.name)}</div></div>`}
-      ${legend(ms)}${filters(id, d, qs, base)}
-      ${slides}${challenge}
+    const mast = !isVs ? `<header class="gg-mast"><div class="gg-mast-row"><div><p class="gg-event">Clasificación</p><h1>${H.esc(d.group.name)}</h1><p class="gg-meet">${H.esc(periodLine())}</p></div>${gear}</div></header>` : bar(ms.map(m => m.name).join(' vs '), 'Mano a mano');
+    el.innerHTML = `${mast}
+      ${filters(id, d, qs, base)}
+      ${leaderStrip}${tabs}${slides}${challenge}
       ${!isVs ? worst : ''}
       ${fullTable}
       ${ms.length < 2 ? `<div class="msg"><img class="cad" src="/brand/caddie.png" alt="">Todavía sos el único en el grupo. ${d.group.is_admin ? `<a class="link" href="#/grupo/${id}/ajustes">Compartí el link por WhatsApp</a> o invitá por matrícula.` : 'Cuando alguien más se sume, acá ves la comparación.'}</div>` : ''}
       ${secs.filter(k => k !== 'table').map(k => sec[k]()).join('')}
       ${!isVs ? `<div class="section"><h2>Jugadores</h2></div><a class="card gg-list row" href="#/grupo/${id}/miembros"><div class="gg-t"><b>${d.group.is_admin ? 'Jugadores, admins e invitaciones' : 'Ver jugadores y salir del grupo'}</b><span>${ms.length} en el grupo · ${d.group.admins} admin${d.group.admins === 1 ? '' : 's'}${d.pending.length ? ` · ${d.pending.length} pendiente${d.pending.length === 1 ? '' : 's'}` : ''}</span></div>${CHEV}</a>` : ''}`;
-    el.querySelectorAll('.gg-cats button').forEach(b => b.onclick = () => {
-      const cat = b.dataset.cat;
-      el.querySelectorAll('.gg-cats button').forEach(x => { const on = x.dataset.cat === cat; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); });
+    const selectCat = cat => {
+      el.querySelectorAll('.gg-tabs button').forEach(x => { const on = x.dataset.cat === cat; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); });
+      el.querySelectorAll('.gg-leaders button').forEach(x => x.classList.toggle('on', x.dataset.cat === cat));
       el.querySelectorAll('.gg-stage').forEach(s => { s.hidden = s.dataset.cat !== cat; });
-    });
-    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    el.querySelectorAll('.gg-count').forEach(node => {
-      const to = Number(node.dataset.n);
-      if (!Number.isFinite(to)) return;
-      const dec = String(node.dataset.n).includes('.');
-      const t0 = performance.now();
-      const tick = now => {
-        const k = Math.min(1, (now - t0) / 650), v = to * (1 - (1 - k) ** 3);
-        node.textContent = dec ? H.f1(v) : String(Math.round(v));
-        if (k < 1) requestAnimationFrame(tick);
-      };
-      node.textContent = dec ? H.f1(0) : '0';
-      requestAnimationFrame(tick);
-    });
+    };
+    el.querySelectorAll('.gg-tabs button, .gg-leaders button').forEach(b => { b.onclick = () => selectCat(b.dataset.cat); });
   }
 
   function drawMetric(el, id, d, k, qs) {

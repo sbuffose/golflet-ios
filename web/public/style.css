@@ -9,7 +9,7 @@ body{font-family:var(--font-ui);color:var(--color-ink);font-size:calc(16px*var(-
 #app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;background:var(--color-bg)}
 #view{padding:calc(env(safe-area-inset-top) + 18px) max(18px,env(safe-area-inset-right)) calc(108px + env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left))}
 html:not(.gp-fix) #view::after{content:"";display:block;height:calc(var(--tabh, 88px) + 12px);flex:none}
-html:not(.gp-fix) #view:has(.gg-hero)::after{height:calc(var(--tabh, 88px) + 72px)}
+html:not(.gp-fix) #view:has(.gg-mast)::after{height:calc(var(--tabh, 88px) + 48px)}
 a{color:inherit;text-decoration:none}
 button{font:inherit;color:inherit}
 .num{font-variant-numeric:tabular-nums}
@@ -921,8 +921,49 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-carousel{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 8px;margin:8px 0 4px}
 .gg-slide{flex:0 0 88%;scroll-snap-align:start;margin:0}
 .gg-pod.is-1{box-shadow:0 0 0 2px #C4A36A}
-.gg-panel{background:#0B2545;color:#fff;border-radius:28px;margin:8px 0 0;padding:0 0 14px}
-.gg-hero{display:block;background:transparent;color:#fff;border-radius:0;padding:16px 18px 6px;margin:0;text-align:left;box-shadow:none}
+#view:has(.gg-mast),#app:has(.gg-mast){background:#fff}
+.gg-mast{background:#0B2545;color:#fff;margin:-18px calc(-1 * max(18px, env(safe-area-inset-right))) 0 calc(-1 * max(18px, env(safe-area-inset-left)));margin-top:calc(-1 * (env(safe-area-inset-top) + 18px));padding:calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 18px max(18px, env(safe-area-inset-left));border-radius:0}
+.gg-mast-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.gg-event{margin:0;font-size:11px;font-weight:650;letter-spacing:.16em;text-transform:uppercase;color:#fff}
+.gg-mast h1{margin:6px 0 0;font-size:28px;line-height:.95;font-weight:700;letter-spacing:-.045em;color:#fff}
+.gg-meet{margin:8px 0 0;font-size:14px;font-weight:600;letter-spacing:.01em;color:#fff}
+.gg-mast .gg-gear summary{background:transparent;color:#fff;box-shadow:none;border-radius:0;width:36px;height:36px}
+.gg-leaders{display:flex;margin:14px 0 0;border-top:1px solid rgba(11,37,69,.16);border-bottom:1px solid rgba(11,37,69,.16)}
+.gg-leaders button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 8px;border:0;border-right:1px solid rgba(11,37,69,.16);border-radius:0;background:#fff;color:#0B2545;text-align:left;cursor:pointer}
+.gg-leaders button:last-child{border-right:0}
+.gg-leaders button.on{background:rgba(11,37,69,.04)}
+.gg-leaders span{font-size:10px;font-weight:650;letter-spacing:.1em;text-transform:uppercase}
+.gg-leaders b{font-size:13px;font-weight:700;letter-spacing:-.03em;line-height:1.2}
+.gg-tabs{display:flex;gap:0;overflow-x:auto;margin-top:4px;border-bottom:1px solid rgba(11,37,69,.18);scrollbar-width:none}
+.gg-tabs::-webkit-scrollbar{display:none}
+.gg-tabs button{flex:none;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;padding:12px 12px 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(11,37,69,.5);cursor:pointer}
+.gg-tabs button.on{color:#0B2545;border-bottom-color:#C8102E}
+.gg-lb{width:100%;border-collapse:collapse;margin:0 0 18px;scroll-margin-bottom:calc(var(--tabh, 88px) + 24px)}
+.gg-lb tbody tr{scroll-margin-bottom:calc(var(--tabh, 88px) + 16px)}
+.gg-lb caption{caption-side:top;text-align:left;padding:12px 0 8px;font-size:13px;font-weight:650;letter-spacing:-.01em;color:#0B2545;font-style:normal}
+.gg-lb th{padding:8px 4px 7px;border-bottom:1px solid #0B2545;font-size:10px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;text-align:right;color:#0B2545;font-style:normal}
+.gg-lb th.pos,.gg-lb th.who{text-align:left}
+.gg-lb td{padding:11px 4px;border-bottom:1px solid rgba(11,37,69,.14);text-align:right;font-size:15px;font-weight:650;letter-spacing:-.03em;color:#0B2545;font-variant-numeric:tabular-nums;vertical-align:middle}
+.gg-lb tbody tr:nth-child(even){background:rgba(11,37,69,.035)}
+.gg-lb tr.me{background:rgba(11,37,69,.06);box-shadow:inset 3px 0 0 #0B2545}
+.gg-lb td.pos,.gg-lb td.who{text-align:left}
+.gg-lb td.pos{white-space:nowrap;width:52px}
+.gg-lb td.pos b{font-weight:700}
+.gg-lb td.tot.lead{color:#C8102E;font-size:17px;font-weight:700}
+.gg-lb td.rate.few{font-size:10px;font-weight:650;letter-spacing:0;line-height:1.15;max-width:64px}
+.gg-lb td.who a{display:flex;align-items:center;gap:8px;min-width:0;color:#0B2545;text-decoration:none;font-weight:650;letter-spacing:-.02em}
+.gg-lb td.who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gg-lb .gg-av{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;background:#0B2545;color:#fff;font-size:12px;font-weight:700}
+.gg-move{display:inline-flex;align-items:center;gap:2px;margin-left:4px;font-size:11px;font-weight:700;letter-spacing:0;color:#0B2545;vertical-align:middle}
+.gg-move svg{width:8px;height:8px;display:block;fill:currentColor}
+.gg-move.dn{color:#C8102E}
+.gg-emptyline{margin:16px 0;padding:12px 0;border-top:1px solid rgba(11,37,69,.14);border-bottom:1px solid rgba(11,37,69,.14);font-size:14px;font-weight:650;color:#0B2545}
+.gg-filters .gg-rng{border:1px solid rgba(11,37,69,.22);border-radius:0;background:#fff;height:32px}
+.gg-filters .gg-rng a{border-radius:0!important;color:#0B2545;box-shadow:none!important}
+.gg-filters .gg-rng a.on{background:#0B2545;color:#fff}
+.gg-filters .gg-course summary{border-radius:0;box-shadow:none;border:1px solid rgba(11,37,69,.22);background:#fff;font-weight:650}
+.gg-panel{background:#0B2545;color:#fff;border-radius:0;margin:8px 0 0;padding:0}
+.gg-hero{display:block;background:transparent;color:#fff;border-radius:0;padding:0;margin:0}
 .gg-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .gg-hero .gg-ranknum,.gg-hero .gg-ranknum .num{color:#fff;font-size:64px;line-height:.84;font-weight:700;letter-spacing:-.04em;margin:0}
 .gg-hero-line{margin:8px 0 0;font-size:18px;font-weight:700;line-height:1.25;color:#fff}
@@ -992,8 +1033,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-weekbox{background:#fff;border-radius:24px;padding:14px 14px 16px;margin:0 0 14px;box-shadow:var(--shadow-card);scroll-margin-bottom:calc(var(--tabh, 88px) + 28px)}
 .gg-weekbox h2{margin:0 0 6px;font-size:20px;font-weight:700;color:#0B2545}
 .gg-cols{display:flex;align-items:flex-end;gap:8px;position:relative;padding-top:18px}
-.gg-goal{position:absolute;left:0;right:36px;top:18px;border-top:2px dashed #C8A86A;height:0}
-.gg-goal b{position:absolute;right:-34px;top:-10px;font-size:12px;font-weight:700;color:#0B2545}
+.gg-rank.gg-goal{position:static;margin:8px 0 16px}
 .gg-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1}
 .gg-plot{height:60px;width:100%;display:flex;align-items:flex-end;justify-content:center}
 .gg-col i{display:block;width:36px;height:12%;border-radius:12px 12px 4px 4px;background:#C8A86A;transform-origin:bottom;animation:gg-grow .6s ease}
@@ -1006,7 +1046,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-bar{display:block;height:8px;width:100%;background:#F1EEE6;border-radius:99px;margin-top:6px}
 .gg-bar i{display:block;height:100%;background:#0B2545;border-radius:99px;position:relative;min-width:0}
 .gg-bar b{position:absolute;right:-5px;top:50%;width:12px;height:12px;border-radius:50%;background:#C8102E;transform:translateY(-50%)}
-.gg-full{margin:12px 0;background:#fff;border-radius:22px;box-shadow:var(--shadow-card)}
+.gg-full{margin:12px 0;background:#fff;border-radius:0;box-shadow:none;border-top:1px solid rgba(11,37,69,.18);border-bottom:1px solid rgba(11,37,69,.18)}
 .gg-full summary{list-style:none;min-height:52px;display:flex;align-items:center;padding:0 16px;font-weight:700;font-size:16px;color:#0B2545;cursor:pointer}
 .gg-full summary::-webkit-details-marker{display:none}
 @media (prefers-reduced-motion: reduce){.gg-hero,.gg-trophy,.gg-col i{animation:none}}
