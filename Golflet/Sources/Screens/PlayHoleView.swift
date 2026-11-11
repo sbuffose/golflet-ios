@@ -1362,11 +1362,18 @@ struct PlayHoleView: View {
         }
     }
 
+    private func shotEditTitle(_ shot: Shot) -> String {
+        var bits = ["Golpe \(shot.shotNumber)"]
+        if let club = shot.club, !club.isEmpty { bits.append(club) }
+        if let yards = shot.distanceYd { bits.append("\(yards) yd") }
+        return bits.joined(separator: " · ")
+    }
+
     private func shotEditor(_ shot: Shot) -> some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Golpe \(shot.shotNumber)")
+                    Text(shotEditTitle(shot))
                         .font(GType.section)
                         .foregroundStyle(p.ink)
                     Button("Mover el punto") {
@@ -1389,19 +1396,25 @@ struct PlayHoleView: View {
                         }
                         .accessibilityIdentifier("play-edit-club-\(club.name)")
                     }
+                    Button("Cerrar") { editingShot = nil }
                     if askDeleteShot {
                         Text("¿Borrar este golpe?")
+                            .foregroundStyle(p.ink)
                         Button("Sí, borrar") { Task { await deleteShot(shot) } }
                             .accessibilityIdentifier("play-edit-yes")
                     } else {
                         Button("Borrar") { askDeleteShot = true }
+                            .font(GType.headline)
+                            .foregroundStyle(p.accent)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.accent, lineWidth: 1.5))
                             .accessibilityIdentifier("play-edit-del")
                     }
-                    Button("Cerrar") { editingShot = nil }
                 }
                 .padding(16)
             }
-            .navigationTitle("Editar golpe")
+            .navigationTitle(shotEditTitle(shot))
         }
         .accessibilityIdentifier("play-shot-editor")
     }
