@@ -55,11 +55,6 @@ struct PlayHoleView: View {
         self.course = course
         _liveRound = State(initialValue: liveRound)
         _hole = State(initialValue: liveRound.currentHole)
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") {
-            let current = course.holes.first { $0.number == liveRound.currentHole } ?? course.holes.first
-            let pin = current?.green.center ?? current?.tee ?? GPSCoord(lat: -34.48, lng: -58.53)
-            _track = State(initialValue: Self.closedPreview(at: pin))
-        }
     }
 
     var body: some View {
@@ -180,7 +175,7 @@ struct PlayHoleView: View {
             }
         }
         .onAppear {
-            if ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole"), !track.marks.contains(where: \.holed) {
+            if testingClosedHole {
                 track = Self.closedPreview(at: pinCoord)
             }
         }
@@ -396,8 +391,8 @@ struct PlayHoleView: View {
     }
 
     private var closeParts: (line: String, vs: String?) {
-        let strokes = track.strokeCount
-        let putterShots = track.marks.filter { mark in
+        let strokes = displayTrack.strokeCount
+        let putterShots = displayTrack.marks.filter { mark in
             mark.countsStroke && !mark.penalty && !mark.lost && isPutter(mark.club)
         }
         let putts = putterShots.isEmpty ? nil : putterShots.count
@@ -420,7 +415,7 @@ struct PlayHoleView: View {
     }
 
     private var closedShotMarks: [HoleShotMark] {
-        track.marks.filter(\.countsStroke).enumerated().map { index, mark in
+        displayTrack.marks.filter(\.countsStroke).enumerated().map { index, mark in
             HoleShotMark(number: index + 1, coord: GPSCoord(lat: mark.at.lat, lng: mark.at.lng))
         }
     }
@@ -684,8 +679,20 @@ struct PlayHoleView: View {
         .background(Color.white.opacity(0.96))
     }
 
+    /// UI test flag. Read in `body` so the closed hole stays up even if `@State` is reset.
+    private var testingClosedHole: Bool {
+        ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole")
+    }
+
+    private var displayTrack: TrackSession.State {
+        if testingClosedHole, !track.marks.contains(where: \.holed) {
+            return Self.closedPreview(at: pinCoord)
+        }
+        return track
+    }
+
     private var holeClosed: Bool {
-        track.marks.contains(where: \.holed) && !editingClosed
+        !editingClosed && (testingClosedHole || track.marks.contains(where: \.holed))
     }
 
     private var aimTitle: String {
@@ -1239,10 +1246,10 @@ struct PlayHoleView: View {
     }
 
     private var closedStrokes: [(n: Int, club: String, yards: Int)] {
-        let marks = track.marks.filter(\.countsStroke)
+        let marks = displayTrack.marks.filter(\.countsStroke)
         if !marks.isEmpty {
             return marks.enumerated().map { index, mark in
-                let previous = index == 0 ? track.tee : marks[index - 1].at
+                let previous = index == 0 ? displayTrack.tee : marks[index - 1].at
                 return (index + 1, mark.club ?? "—", strokeYards(from: previous, to: mark.at))
             }
         }
@@ -1802,7 +1809,7 @@ struct PlayHoleView: View {
         mapCenter = nil
         waterAsk = false
         markMode = .track
-        track = ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") ? Self.closedPreview(at: pinCoord) : TrackSession.State()
+        track = testingClosedHole ? Self.closedPreview(at: pinCoord) : TrackSession.State()
         chosenClub = nil
         pinStep = .idle
         lastManualChange = Date()
