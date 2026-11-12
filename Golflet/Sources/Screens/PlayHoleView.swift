@@ -344,22 +344,31 @@ struct PlayHoleView: View {
             .padding(.bottom, 8)
 
             VStack(spacing: 8) {
-                Button("Editar hoyo") { editingClosed = true }
-                    .font(GFont.ui(16, weight: .semibold))
-                    .foregroundStyle(p.onPrimary)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(p.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .accessibilityIdentifier("play-edit-hole")
-                Button("Siguiente hoyo ›") { changeHole(hole + 1) }
-                    .font(GFont.ui(16, weight: .semibold))
-                    .foregroundStyle(p.onPrimary)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(p.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .accessibilityIdentifier("play-next-wide")
+                Button { editingClosed = true } label: {
+                    Text("Editar hoyo")
+                        .font(GFont.ui(16, weight: .semibold))
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-edit-hole")
+                .accessibilityLabel("Editar hoyo")
+                Button { changeHole(hole + 1) } label: {
+                    Text("Siguiente hoyo ›")
+                        .font(GFont.ui(16, weight: .semibold))
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-next-wide")
+                .accessibilityLabel("Siguiente hoyo")
             }
             .padding(.horizontal, 10)
+            .accessibilityElement(children: .contain)
 
             closedNav
                 .padding(.horizontal, 10)
