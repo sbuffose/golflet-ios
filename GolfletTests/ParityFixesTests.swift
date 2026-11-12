@@ -236,6 +236,21 @@ final class ParityFixesTests: XCTestCase {
         ], tee: teePoint, pin: pinPoint)
         XCTAssertEqual(legacy?.marks.first?.holed, true)
         XCTAssertEqual(legacy?.marks.first?.at, pinPoint)
+        let putt = Shot(
+            id: "p", clientId: "p", hole: 1, shotNumber: 2,
+            lat: pinPoint.lat, lng: pinPoint.lng, accuracyM: 4, takenAt: nil,
+            club: "Putter", lie: "green", result: "holed",
+            direction: nil, length: nil, mishit: false,
+            distanceM: nil, distanceYd: nil, toGreenYd: nil
+        )
+        XCTAssertEqual(SavedRoundShots.keepingHoledShots(local: [putt], incoming: []).map(\.id), ["p"])
+        XCTAssertTrue(SavedRoundShots.keepingHoledShots(local: [], incoming: []).isEmpty)
+        let emptiedTrack = TrackSession.State()
+        let stillClosed = TrackSession.restored(shots: [
+            TrackSession.SavedShot(lat: pinPoint.lat, lng: pinPoint.lng, club: "Putter", result: "holed")
+        ], tee: teePoint, pin: pinPoint)
+        XCTAssertFalse(emptiedTrack.marks.contains(where: \.holed))
+        XCTAssertEqual(stillClosed?.marks.contains(where: \.holed), true)
         let open = TrackCard.derive(par: 4, shots: [TrackCard.Fact(putt: true, originGreen: true)])
         XCTAssertEqual(open.putts.state, "unconfirmed")
         let closed = TrackCard.derive(par: 4, shots: [
