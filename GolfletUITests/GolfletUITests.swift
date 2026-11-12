@@ -667,6 +667,8 @@ final class GolfletUITests: XCTestCase {
         if openClubsSheet(app, timeout: 4) {
             XCTAssertTrue(first(app, "setting-pace-alert").waitForExistence(timeout: 4), "Falta el aviso de ritmo")
             dismissIfPresent(app, "close-clubes")
+            XCTAssertTrue(first(app, "screen-clubes").waitForNonExistence(timeout: 4))
+            XCTAssertTrue(first(app, "screen-notificaciones").waitForNonExistence(timeout: 4))
         }
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
         first(app, "play-start").tap()
