@@ -390,7 +390,6 @@ struct GroupDetailView: View {
             evolution
             holeByHole
             manoAMano(group)
-            comparisonFacts(rows)
         }
         .padding(.bottom, 24)
     }
@@ -406,20 +405,6 @@ struct GroupDetailView: View {
                 Text("Elegí una cancha. Los hoyos de canchas distintas no se rankean juntos.")
                     .font(GType.label)
                     .foregroundStyle(p.ink3)
-            }
-        }
-    }
-
-    /// The ranking cards stay off this screen. The share fact stays reachable for the same check.
-    private func comparisonFacts(_ rows: [GroupComparisonRow]) -> some View {
-        VStack(spacing: 0) {
-            ForEach(rows) { row in
-                ForEach(row.values) { value in
-                    GProbe(
-                        id: "compare-\(row.metric.rawValue)-\(value.memberID)",
-                        label: "\(value.memberName), \(display(value, metric: row.metric))"
-                    )
-                }
             }
         }
     }
@@ -804,6 +789,8 @@ struct GroupDetailView: View {
                 .overlay(alignment: .leading) { Rectangle().fill(mine ? p.primary : Color.clear).frame(width: 3) }
                 .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.14)).frame(height: 1) }
                 .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(value.memberName), \(display(value, metric: row.metric))")
+                .accessibilityIdentifier("group-board-\(row.metric.rawValue)-\(value.memberID)")
             }
         }
         .padding(.bottom, 12)
