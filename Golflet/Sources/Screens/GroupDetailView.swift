@@ -123,6 +123,7 @@ struct GroupDetailView: View {
     @ViewBuilder
     private func content(_ group: GolfletGroup) -> some View {
         VStack(alignment: .leading, spacing: 22) {
+            comparisonSection(group)
             header(group)
             if group.isAdmin {
                 adminTools(group)
@@ -136,7 +137,6 @@ struct GroupDetailView: View {
                     _ = await model.saveMatchPhoto(groupID: group.id, matchID: matchID, jpeg: data)
                 }
             )
-            comparisonSection(group)
             comparativoEntry
             Button {
                 confirmLeave = true
@@ -384,7 +384,6 @@ struct GroupDetailView: View {
             if !rows.isEmpty {
                 classification(rows, group: group)
             }
-
             if let comparison {
                 ForEach(comparison.rows) { row in
                     comparisonCard(row)

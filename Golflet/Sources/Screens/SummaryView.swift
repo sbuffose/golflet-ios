@@ -23,7 +23,12 @@ struct SummaryView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("resumen-clima")
                     filters
+                    period
                     metricsEntry
+                    grid
+                    trend
+                    holeResults
+                    hardest
                     NavigationLink { AcademiaView() } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -45,10 +50,6 @@ struct SummaryView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("resumen-trabajar")
-                    grid
-                    trend
-                    holeResults
-                    hardest
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -64,10 +65,11 @@ struct SummaryView: View {
         VStack(alignment: .leading, spacing: 10) {
             GOverline(text: "\(model.summary.firstYear) – \(model.summary.lastYear)")
             GTitle(text: "Resumen")
-            Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
-                .accessibilityIdentifier("range-count")
+        }
+    }
+
+    private var period: some View {
+        VStack(alignment: .leading, spacing: 8) {
             RangeMenuButton(
                 range: Binding(
                     get: { model.statsRange },
@@ -75,6 +77,10 @@ struct SummaryView: View {
                 ),
                 count: model.rangeRoundCount
             )
+            Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .accessibilityIdentifier("range-count")
         }
     }
 

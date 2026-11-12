@@ -284,19 +284,34 @@ extension MockAPIClient {
     func groupComparison(groupID: String, config: GroupViewConfig) async throws -> GroupComparison {
         let group = try await group(id: groupID)
         let prefsByMember = mutate { store, _ in store.share }
-        let rows = config.metrics.map { metric in
+        var metrics = config.metrics
+        for kind in [GroupMetricKind.birdies, .pars, .eagles, .net, .regular, .rounds, .streak, .aces] where !metrics.contains(kind) {
+            metrics.append(kind)
+        }
+        let rows = metrics.map { metric in
             GroupComparisonRow(
                 metric: metric,
                 values: group.members.map { member in
                     let shared = (prefsByMember[member.id] ?? .allShared).isShared(metric.category)
                     let sample = MockGroupStore.sample(metric: metric, memberID: member.id)
+                    let perRound: Double? = {
+                        guard shared, let value = sample.value else { return nil }
+                        switch metric {
+                        case .birdies, .pars, .eagles, .rounds:
+                            return (value / 18 * 10).rounded() / 10
+                        default:
+                            return nil
+                        }
+                    }()
                     return MemberMetricValue(
                         memberID: member.id,
                         memberName: member.name,
                         initials: member.initials,
                         shared: shared,
                         value: shared ? sample.value : nil,
-                        text: shared ? sample.text : nil
+                        text: shared ? sample.text : nil,
+                        perRound: perRound,
+                        sample: shared ? 18 : nil
                     )
                 }
             )
@@ -430,7 +445,11 @@ struct MockGroupStore: Sendable {
         return MockGroupStore(
             groups: [jockey],
             pending: [pending],
-            views: ["g-jockey": .default],
+            views: ["g-jockey": {
+                var view = GroupViewConfig.default
+                view.range = .all
+                return view
+            }()],
             share: [meID: meShare, anaID: anaShare, luisID: luisShare]
         )
     }
@@ -446,22 +465,31 @@ struct MockGroupStore: Sendable {
         }()
         switch metric {
         case .gross: return (80 + shift, nil)
-        case .net: return (73 + shift, nil)
+        case .net:
+            if memberID == meID { return (67, nil) }
+            if memberID == luisID { return (69, nil) }
+            return (nil, nil)
         case .handicap: return (3.1 + shift, nil)
-        case .birdies: return (18 - shift, nil)
-        case .pars: return (42 + shift, nil)
-        case .eagles: return (memberID == meID ? 3 : 1, nil)
+        case .birdies:
+            if memberID == meID { return (43, nil) }
+            if memberID == luisID { return (28, nil) }
+            return (0, nil)
+        case .pars:
+            if memberID == meID { return (164, nil) }
+            if memberID == luisID { return (140, nil) }
+            return (0, nil)
+        case .eagles: return (memberID == meID ? 2 : 0, nil)
         case .gir: return (48 + shift, nil)
         case .fir: return (56 + shift, nil)
         case .putts: return (31.2 + shift * 0.4, nil)
         case .gpsDrive: return (228 + shift * 4, nil)
         case .bagCarry: return (214 + shift * 3, nil)
         case .ball: return (nil, memberID == anaID ? "Pro V1" : "TP5x")
-        case .rounds: return (12 + shift, nil)
+        case .rounds: return (18, nil)
         case .maxBirdies: return (4, nil)
-        case .streak: return (3, nil)
-        case .regular: return (1.8 + abs(shift) * 0.1, nil)
-        case .aces: return (memberID == anaID ? 1 : 0, nil)
+        case .streak: return (memberID == meID ? 2 : 1, nil)
+        case .regular: return (memberID == meID ? 3.2 : 4.1, nil)
+        case .aces: return (0, nil)
         }
     }
 }

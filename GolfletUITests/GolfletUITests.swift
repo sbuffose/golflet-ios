@@ -159,9 +159,9 @@ final class GolfletUITests: XCTestCase {
         }
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
         let board = first(app, "group-usga")
-        for _ in 0..<8 {
-            if board.exists, board.frame.minY < 220, board.frame.minY > 20 { break }
-            app.swipeUp()
+        for _ in 0..<4 {
+            if board.exists, board.frame.minY < 320, board.frame.minY > 0 { break }
+            app.swipeUp(velocity: .slow)
         }
         saveShot("parity-ios-grupos-usga")
 

@@ -143,16 +143,18 @@ struct ClubsView: View {
         }
         .safeAreaInset(edge: .top) {
             HStack {
-                Spacer()
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(p.ink2)
-                        .frame(width: 32, height: 32)
-                        .background(p.surface)
-                        .clipShape(Circle())
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Inicio")
+                            .font(GType.headline)
+                    }
+                    .foregroundStyle(p.ink)
                 }
                 .accessibilityIdentifier("close-clubes")
+                .accessibilityLabel("Inicio")
+                Spacer()
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)

@@ -12,8 +12,8 @@ final class StatsEngineTests: XCTestCase {
 
     func testEighteenHoleAveragesMatchSeed() async throws {
         let snap = try await MockAPIClient().bootstrap()
-        XCTAssertEqual(snap.clubs.map(\.accountId), ["118", "209"])
-        XCTAssertEqual(snap.clubs.map(\.cardCount).reduce(0, +), 98)
+        XCTAssertEqual(snap.clubs.map(\.accountId), ["118"])
+        XCTAssertEqual(snap.clubs.map(\.cardCount).reduce(0, +), 97)
         let rounds = snap.rounds
         XCTAssertEqual(rounds.count, 97)
         XCTAssertEqual(rounds.filter(\.isOtherCourse).count, 0)
@@ -37,6 +37,8 @@ final class StatsEngineTests: XCTestCase {
         XCTAssertEqual(home.yearBirdies, 42)
         XCTAssertEqual(home.yearAverage ?? 0, 78.7, accuracy: 0.05)
         XCTAssertEqual(home.handicapIndex, 3.1, accuracy: 0.001)
+        XCTAssertEqual(home.trendDelta, -7.9, accuracy: 0.05)
+        XCTAssertEqual(home.trendSinceLabel, "desde feb. 2013")
         XCTAssertEqual(home.lastRound?.roundId, "118:94506:15300")
 
         let summary = StatsEngine.summary(rounds: rounds, filter: .all)

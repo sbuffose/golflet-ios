@@ -6,8 +6,6 @@ struct MockAPIClient: GolfletAPI {
     private let demoName = "Jockey Club Buenos Aires"
     private let demoURL = URL(string: "https://golf.e-jockeyclub.org.ar/golf")!
     private let mdpCode = "209"
-    private let mdpName = "Mar del Plata Golf Club"
-    private let mdpURL = URL(string: "https://golf.mardelplata.com")!
 
     private static let sessionLock = NSLock()
     private static var mockSignedIn = false
@@ -176,7 +174,7 @@ struct MockAPIClient: GolfletAPI {
             tees: tees,
             holeStats: stats,
             bag: DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) },
-            hiHistory: [],
+            hiHistory: Self.handicapHistory(rounds),
             teeTimes: linked ? (try? await teeTimes()) ?? [] : [],
             profesores: linked ? (try? await profesores()) ?? [] : []
         )
@@ -342,34 +340,27 @@ struct MockAPIClient: GolfletAPI {
                 source: "app",
                 roundsStored: 97,
                 roundsWithHoles: 97
-            ),
-            LinkedClub(
-                accountId: mdpCode,
-                code: mdpCode,
-                name: mdpName,
-                baseURL: mdpURL,
-                matricula: "94506",
-                isDemo: true,
-                passwordSaved: saved,
-                lastSyncStatus: "ok",
-                lastSyncMessage: "Datos de demostración",
-                cardCount: 1,
-                source: "app",
-                roundsStored: 1,
-                roundsWithHoles: 0
             )
         ]
+    }
+
+    /// First and last index, same endpoints the web uses for «↓ 7,9 desde feb. 2013».
+    private static func handicapHistory(_ rounds: [Round]) -> [HIPoint] {
+        let series = StatsEngine.handicapSeries(rounds)
+        guard let first = series.first, let newest = rounds.max(by: { $0.date < $1.date }) else { return [] }
+        let last = HIPoint(date: newest.date, handicap: newest.handicapIndex)
+        if first.date == last.date { return [last] }
+        return [HIPoint(date: first.date, handicap: first.handicap), last]
     }
 
     private func demoSyncResult(message: String, newCards: Int) -> SyncResult {
         SyncResult(
             ok: true,
             message: message,
-            cardCount: 98,
+            cardCount: 97,
             newCards: newCards,
             clubs: [
-                SyncClubResult(accountId: demoCode, clubName: demoName, ok: true, newRounds: newCards > 0 ? 97 : 0, listTotal: 97),
-                SyncClubResult(accountId: mdpCode, clubName: mdpName, ok: true, newRounds: newCards > 0 ? 1 : 0, listTotal: 1)
+                SyncClubResult(accountId: demoCode, clubName: demoName, ok: true, newRounds: newCards > 0 ? 97 : 0, listTotal: 97)
             ]
         )
     }
@@ -473,8 +464,7 @@ struct MockAPIClient: GolfletAPI {
         let fast = RuntimeFlags.isUITesting
         let pause: UInt64 = fast ? 80_000_000 : 350_000_000
         let clubs: [(name: String, code: String, logo: String?, initials: String, listed: Int, cards: Int)] = [
-            (demoName, demoCode, "/clubs/118@2x.png", "JC", 97, 97),
-            (mdpName, mdpCode, "/clubs/209@2x.png", "MD", 1, 1)
+            (demoName, demoCode, "/clubs/118@2x.png", "JC", 97, 97)
         ]
         var steps: [SyncAPIProgress] = [
             SyncAPIProgress(club: "Golfistics App", clubIndex: 1, clubCount: clubs.count, clubInitials: "G", stage: .connect)

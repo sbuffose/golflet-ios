@@ -41,14 +41,14 @@ struct RoundDetailView: View {
     var body: some View {
         GScreen(id: "screen-ronda") {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 12) {
                     header
                     partners
                     scoreHero
                     if round.isOtherCourse || round.holes.isEmpty {
                         otherCourseNotice
                     } else {
-                        GCard(radius: 16, padding: 12) {
+                        GCard(radius: 16, padding: 10) {
                             scorecard
                         }
                         gameStats
@@ -57,8 +57,8 @@ struct RoundDetailView: View {
                     recapButton
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 120)
+                .padding(.top, 4)
+                .padding(.bottom, 24)
             }
         }
         .accessibilityIdentifier("screen-ronda")
@@ -227,17 +227,17 @@ struct RoundDetailView: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .padding(.horizontal, 4)
         .background(emphasize ? p.primary : p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var scorecard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 8) {
             holeTable(Array(round.holes.prefix(9)), totalLabel: "IDA", total: round.outScore)
             holeTable(Array(round.holes.suffix(from: min(9, round.holes.count))), totalLabel: "VTA", total: round.inScore)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
                 ForEach(ScoreLegend.items(holes: round.holes, counts: round.counts)) { item in
                     legend(item)
                 }
@@ -251,7 +251,7 @@ struct RoundDetailView: View {
     }
 
     private func holeTable(_ holes: [HoleScore], totalLabel: String, total: Int?) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 3) {
             row("HOYO", holes.map { "\($0.number)" }, totalLabel)
             row("YDS", holes.map { yardLabel($0) }, "")
             row("PAR", holes.map { "\($0.par)" }, "\(holes.reduce(0) { $0 + $1.par })")
@@ -260,7 +260,7 @@ struct RoundDetailView: View {
                     .font(GType.overline)
                     .frame(width: 44, alignment: .leading)
                 ForEach(holes) { hole in
-                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 26)
+                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 22)
                         .frame(maxWidth: .infinity)
                 }
                 Text(total.map(String.init) ?? "—")
@@ -302,14 +302,14 @@ struct RoundDetailView: View {
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.55)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.count) \(item.spoken)")
     }
 
     private func legendMark(_ result: HoleResult, _ count: Int) -> some View {
-        ScoreMark(strokes: count, result: result, diameter: 26)
+        ScoreMark(strokes: count, result: result, diameter: 18)
     }
 
     private func statPill(_ title: String, _ value: String) -> some View {

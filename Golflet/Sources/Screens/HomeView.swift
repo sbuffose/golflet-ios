@@ -255,18 +255,17 @@ struct HomeView: View {
                         .accessibilityIdentifier("metric-handicap")
                         .accessibilityElement(children: .contain)
                         .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
-                        if let when = model.officialHistory.last?.date {
-                            Text("Índice al \(FormatAR.syncDay(when))")
+                        if let when = model.officialHistory.max(by: { $0.date < $1.date })?.date ?? snap.lastRound?.date {
+                            Text("Índice al \(FormatAR.webDay(when))")
                                 .font(GType.label)
                                 .foregroundStyle(p.onPrimary.opacity(0.7))
                         }
-                        HStack(spacing: 6) {
-                            Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
+                        if !snap.trendSinceLabel.isEmpty {
+                            let arrow = snap.trendDelta < 0 ? "↓" : "↑"
+                            Text("\(arrow) \(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
                                 .font(GType.label)
+                                .foregroundStyle(p.onPrimary.opacity(0.7))
                         }
-                        .foregroundStyle(p.onPrimary.opacity(0.7))
                         Button { showsHcpImpact = true } label: {
                             Text("Cambios")
                                 .font(GType.label)
@@ -280,26 +279,15 @@ struct HomeView: View {
                     }
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 8) {
-                        if model.profesores.isEmpty {
-                            Button { showsAgregarProfesor = true } label: {
-                                Text("Agregar profesor")
-                                    .font(GType.label)
-                                    .foregroundStyle(p.onPrimary.opacity(0.85))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("home-hcp-add-profesor")
-                            .accessibilityLabel("Agregar profesor")
-                            .overlay { GProbe(id: "home-hcp-add-profesor", label: "Agregar profesor") }
-                        }
-                        Button { model.presentCreateGroup() } label: {
-                            Text("Crear grupo")
-                                .font(GType.label)
-                                .foregroundStyle(p.onPrimary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("home-hcp-crear-grupo")
-                        .accessibilityLabel("Crear grupo")
-                        .overlay { GProbe(id: "home-hcp-crear-grupo", label: "Crear grupo") }
+                        HomeHcpPeople(
+                            profesores: model.profesores,
+                            groups: model.groups,
+                            onProfesor: { presentProfesor($0) },
+                            onProfesores: { showsHomeProfesores = true },
+                            onAddProfesor: { showsAgregarProfesor = true },
+                            onGroups: { showsHomeGroups = true },
+                            onCreate: { model.presentCreateGroup() }
+                        )
                         Button { model.showsPlay = true } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "location.fill")
