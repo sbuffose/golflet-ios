@@ -149,14 +149,12 @@ struct RoundDetailView: View {
                 .font(GType.label)
                 .foregroundStyle(p.ink3)
                 .lineLimit(2)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    roundChip(round.clubName)
-                    if !round.displayCourse.isEmpty { roundChip(round.displayCourse) }
-                    if !round.tee.isEmpty { roundChip("Tee \(round.tee)") }
-                    if !round.isOtherCourse {
-                        roundChip("Rating \(FormatAR.one(round.courseRating)) · Slope \(Int(round.slope))")
-                    }
+            ChipWrap(spacing: 8) {
+                roundChip(round.clubName)
+                if !round.displayCourse.isEmpty { roundChip(round.displayCourse) }
+                if !round.tee.isEmpty { roundChip("Tee \(round.tee)") }
+                if !round.isOtherCourse {
+                    roundChip("Rating \(FormatAR.one(round.courseRating)) · Slope \(Int(round.slope))")
                 }
             }
         }
@@ -729,7 +727,7 @@ struct RoundDetailView: View {
     }
 
     private var position: String {
-        if let pos = round.position { return "\(pos)°" }
+        if let pos = round.position { return "\(pos)º" }
         return "—"
     }
 
@@ -1059,6 +1057,45 @@ struct RoundDetailView: View {
                 didFillTrack = true
                 Task { await self.fillFromTrack(identity: identity) }
             }
+        }
+    }
+}
+
+private struct ChipWrap: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 0
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: width, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

@@ -1478,8 +1478,13 @@ final class GolfletUITests: XCTestCase {
 
     private func tapHomeMore(_ app: XCUIApplication, _ id: String, _ message: String) {
         let item = first(app, id)
-        XCTAssertTrue(item.waitForExistence(timeout: 5), message)
         var attempts = 0
+        while !item.exists && attempts < 8 {
+            app.swipeUp()
+            attempts += 1
+        }
+        XCTAssertTrue(item.waitForExistence(timeout: 3), message)
+        attempts = 0
         while !item.isHittable && attempts < 12 {
             app.swipeUp()
             attempts += 1
@@ -1524,7 +1529,15 @@ final class GolfletUITests: XCTestCase {
             let pushedHome = first(app, "screen-grupos").exists
                 || first(app, "screen-jugar").exists
                 || first(app, "screen-academia").exists
-            if first(app, "screen-inicio").waitForExistence(timeout: 0.2) && !onLegacy && !pushedHome { return }
+            if first(app, "close-grupo").exists {
+                let close = first(app, "close-grupo")
+                if close.isHittable { close.tap() } else {
+                    close.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                }
+                continue
+            }
+            let groupOpen = first(app, "screen-grupo").exists
+            if first(app, "screen-inicio").waitForExistence(timeout: 0.2) && !onLegacy && !pushedHome && !groupOpen { return }
             if first(app, "metric-back").exists {
                 let back = first(app, "metric-back")
                 if back.isHittable { back.tap() } else {

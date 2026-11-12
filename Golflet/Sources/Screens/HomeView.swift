@@ -301,6 +301,7 @@ struct HomeView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "location.fill")
                                         .font(.system(size: 12, weight: .semibold))
+                                        .accessibilityHidden(true)
                                     Text("Jugar")
                                         .font(GType.label)
                                 }
@@ -309,10 +310,12 @@ struct HomeView: View {
                                 .padding(.vertical, 8)
                                 .background(p.accent)
                                 .clipShape(Capsule())
+                                .accessibilityElement(children: .combine)
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityLabel("Jugar")
+                                .accessibilityIdentifier("play-start")
                             }
                             .buttonStyle(.plain)
-                            .accessibilityIdentifier("play-start")
-                            .accessibilityLabel("Jugar")
                         }
                         .zIndex(2)
                     }
@@ -569,7 +572,7 @@ struct HomeView: View {
     private func teeParts(_ date: Date) -> (day: String, month: String, weekday: String, time: String) {
         let f = DateFormatter()
         f.locale = Locale(identifier: "es_AR")
-        f.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        f.timeZone = .current
         f.dateFormat = "d"
         let day = f.string(from: date)
         f.dateFormat = "MMM"
@@ -926,7 +929,7 @@ struct HomeView: View {
     }
 
     private func hcpImpactLabel(_ impact: HcpImpact) -> String {
-        impact.estimated ? "Handicap estimado" : "Handicap"
+        "Impacto HCP"
     }
 
     private func hcpImpactValue(_ impact: HcpImpact) -> String {

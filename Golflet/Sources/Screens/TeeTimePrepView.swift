@@ -137,6 +137,8 @@ struct TeeTimePrepView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    companionsBlock
+                    playingHandicap
                     VStack(alignment: .leading, spacing: 6) {
                         Text(shown.chipWhen)
                             .font(GType.label)
@@ -167,8 +169,6 @@ struct TeeTimePrepView: View {
                         "tee-prep-forecast"
                     )
                     strategyBlock
-                    companionsBlock
-                    playingHandicap
                 }
                 .padding(20)
                 .padding(.bottom, 108)
@@ -188,7 +188,7 @@ struct TeeTimePrepView: View {
 
     private var relativeDay: String {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires") ?? .current
+        calendar.timeZone = .current
         if calendar.isDateInToday(shown.startsAt) { return "Hoy" }
         if calendar.isDateInTomorrow(shown.startsAt) { return "Mañana" }
         if calendar.isDateInYesterday(shown.startsAt) { return "Ayer" }
@@ -198,7 +198,7 @@ struct TeeTimePrepView: View {
     private var teeClock: String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "es_AR")
-        f.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        f.timeZone = .current
         f.dateFormat = "HH:mm"
         return f.string(from: shown.startsAt)
     }
@@ -206,7 +206,7 @@ struct TeeTimePrepView: View {
     private var teeDateLine: String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "es_AR")
-        f.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        f.timeZone = .current
         f.dateFormat = "EEEE d 'de' MMMM"
         return f.string(from: shown.startsAt).capitalized
     }
