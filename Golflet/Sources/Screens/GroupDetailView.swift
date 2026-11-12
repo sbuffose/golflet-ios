@@ -22,6 +22,7 @@ struct GroupDetailView: View {
     @State private var comparativoRoute: ComparativoRoute?
     @State private var profileRoute: MemberProfileRoute?
     @State private var compareMetric: String?
+    @State private var showsFullTable = false
 
     private var group: GolfletGroup? {
         model.groups.first { $0.id == groupID }
@@ -384,13 +385,117 @@ struct GroupDetailView: View {
             if !rows.isEmpty {
                 classification(rows, group: group)
             }
-            if let comparison {
-                ForEach(comparison.rows) { row in
+            worstHoles
+            fullTable(rows)
+            evolution
+            holeByHole
+            manoAMano(group)
+        }
+        .padding(.bottom, 24)
+    }
+
+    @ViewBuilder
+    private var worstHoles: some View {
+        if config.courseFilter == nil {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Peores hoyos")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                    .accessibilityIdentifier("group-peores")
+                Text("Elegí una cancha. Los hoyos de canchas distintas no se rankean juntos.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+            }
+        }
+    }
+
+    private func fullTable(_ rows: [GroupComparisonRow]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button { showsFullTable.toggle() } label: {
+                HStack {
+                    Text("Ver tabla completa")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Spacer()
+                    Image(systemName: showsFullTable ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(p.ink3)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("group-full-table")
+            if showsFullTable {
+                ForEach(rows) { row in
                     comparisonCard(row)
+                }
+                Text("Dorado: el mejor de cada fila, solo entre quienes la comparten. Tocá cualquier número para ver el detalle.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+            }
+        }
+    }
+
+    private var evolution: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Evolución")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+                .accessibilityIdentifier("group-evolucion")
+            Text("Con más rondas aparece la evolución mes a mes.")
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+        }
+    }
+
+    private var holeByHole: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Hoyo por hoyo")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+                .accessibilityIdentifier("group-hoyos")
+            GCard(radius: 16, padding: 0) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Azul")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        Text("2 jugadores con tarjetas · quién hace más birdies y pares en cada hoyo")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(p.ink3)
+                }
+                .padding(14)
+            }
+            .accessibilityIdentifier("group-hoyos-azul")
+        }
+    }
+
+    private func manoAMano(_ group: GolfletGroup) -> some View {
+        let me = comparison?.hero?.memberID ?? MockGroupStore.meID
+        let others = group.members.filter { $0.id != me && !$0.isPending }
+        return VStack(alignment: .leading, spacing: 8) {
+            if others.count >= 1, group.members.count > 2 {
+                Text("Mano a mano")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(others) { member in
+                        Text("Vos vs \(member.name)")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(p.surface)
+                            .clipShape(Capsule())
+                            .accessibilityIdentifier("group-vs-\(member.id)")
+                    }
                 }
             }
         }
-        .padding(.bottom, 24)
     }
 
     private var boardOrder: [GroupMetricKind] {

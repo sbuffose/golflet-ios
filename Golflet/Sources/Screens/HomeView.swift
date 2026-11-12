@@ -1467,23 +1467,54 @@ struct HomeGroupsSheet: View {
     }
 }
 
-extension Round {
-    var plainTournament: String {
-        let cleaned = String(tournament.unicodeScalars.filter { scalar in
-            !scalar.properties.isEmojiPresentation && scalar.value != 0xFE0F
-        })
-        return cleaned.replacingOccurrences(of: "  ", with: " ")
+enum TournamentName {
+    /// Web `title()`: drop emoji, title-case all-caps words, then lowercase De/La/Del/Y/El/Los mid-phrase.
+    static func title(_ raw: String) -> String {
+        let stripped = raw.unicodeScalars.filter { scalar in
+            let value = scalar.value
+            if scalar.properties.isEmojiPresentation || value == 0xFE0F || value == 0x200D { return false }
+            if (0x1F300...0x1FAFF).contains(value) || (0x2600...0x27BF).contains(value) { return false }
+            return true
+        }
+        var text = String(String.UnicodeScalarView(stripped))
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        text = replacing(text, #"\b([A-ZÁÉÍÓÚÑ]{2,})\b"#) { word, _ in
+            String(word.prefix(1)) + word.dropFirst().lowercased()
+        }
+        text = replacing(text, #"\b(De|La|Del|Y|El|Los)\b"#) { word, range in
+            range.lowerBound == text.startIndex ? word : word.lowercased()
+        }
+        return text
+    }
+
+    /// Web `short()`: `title()`, then drop handicap ranges, hmp tokens and years.
+    static func short(_ raw: String) -> String {
+        title(raw)
+            .replacingOccurrences(of: #"\b-?\d+([.,]\d+)?\s*-\s*\d+([.,]\d+)?\b"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\b\d+\s*hmp\b"#, with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: #"\b20\d\d\b"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    var displayTitle: String {
-        var title = tournament
-        let junk = ["0-54", "0-36", "0-15.9", "18hmp", "36hmp", "🟦", "🟥", "Sabado", "Sábado", "Domingo", "Miercoles", "Miércoles"]
-        for token in junk {
-            title = title.replacingOccurrences(of: token, with: "")
+    private static func replacing(_ text: String, _ pattern: String, _ transform: (String, Range<String.Index>) -> String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        var result = text
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            result.replaceSubrange(range, with: transform(String(result[range]), range))
         }
-        title = title.replacingOccurrences(of: "  ", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return result
+    }
+}
+
+extension Round {
+    var plainTournament: String { TournamentName.title(tournament) }
+
+    var displayTitle: String {
+        let title = TournamentName.short(tournament)
         return title.isEmpty ? "Ronda" : title
     }
 }

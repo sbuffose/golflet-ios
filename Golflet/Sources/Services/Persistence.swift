@@ -55,6 +55,19 @@ enum DefaultBag {
     ]
 }
 
+/// The bag both captures show. Same clubs, codes and yardages as the web fixture.
+enum FixtureBag {
+    static let clubs: [BagClub] = [
+        BagClub(name: "Driver", carry: 230, total: 245, code: "DR"),
+        BagClub(name: "Madera 3", carry: 210, total: 220, code: "3W"),
+        BagClub(name: "Híbrido", carry: 190, total: 200, code: "HY"),
+        BagClub(name: "Hierro 7", carry: 150, total: 158, code: "7i"),
+        BagClub(name: "PW", carry: 110, total: 115, code: "PW"),
+        BagClub(name: "SW", carry: nil, total: nil, code: "SW"),
+        BagClub(name: "Putter", carry: nil, total: nil, code: "PT"),
+    ]
+}
+
 @MainActor
 final class NotesStore {
     let context: ModelContext

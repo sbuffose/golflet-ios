@@ -5,13 +5,19 @@ struct MockAPIClient: GolfletAPI {
     private let demoCode = "118"
     private let demoName = "Jockey Club Buenos Aires"
     private let demoURL = URL(string: "https://golf.e-jockeyclub.org.ar/golf")!
+    /// Same instant the web capture uses for «hace N días».
+    private static let demoSyncedAt: Date = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 15)) ?? Date()
+    }()
     private let mdpCode = "209"
 
     private static let sessionLock = NSLock()
     private static var mockSignedIn = false
     private static var mockLinked = true
     private static var mockPasswordSaved = true
-    private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
+    private static var mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
     private static var holeMarksByRound: [String: [Int: HoleMark]] = [:]
     private static var noteClock = 0
@@ -54,9 +60,9 @@ struct MockAPIClient: GolfletAPI {
         self.autoSession = autoSession
         Self.sessionLock.lock()
         if let greeting = RuntimeFlags.testingGreetingName {
-            Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: greeting, firstName: greeting)
+            Self.mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: greeting, firstName: greeting)
         } else {
-            Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
+            Self.mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: "Jugador Demo", firstName: "Jugador")
         }
         if autoSession {
             Self.mockSignedIn = true
@@ -173,7 +179,7 @@ struct MockAPIClient: GolfletAPI {
             courses: courses,
             tees: tees,
             holeStats: stats,
-            bag: DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) },
+            bag: FixtureBag.clubs,
             hiHistory: Self.handicapHistory(rounds),
             teeTimes: linked ? (try? await teeTimes()) ?? [] : [],
             profesores: linked ? (try? await profesores()) ?? [] : []
@@ -336,8 +342,9 @@ struct MockAPIClient: GolfletAPI {
                 passwordSaved: saved,
                 lastSyncStatus: "ok",
                 lastSyncMessage: "Datos de demostración",
+                lastSyncAt: demoSyncedAt,
                 cardCount: 97,
-                source: "app",
+                source: "site",
                 roundsStored: 97,
                 roundsWithHoles: 97
             )

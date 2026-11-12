@@ -58,7 +58,10 @@ struct RoundDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
-                .padding(.bottom, 24)
+                .padding(.bottom, 8)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: 16)
             }
         }
         .accessibilityIdentifier("screen-ronda")
