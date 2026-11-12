@@ -39,7 +39,7 @@ struct MetricRoundsView: View {
                 }
                 if query.showCourseFilter {
                     ScrollFilterPills(
-                        options: MetricCourseBucket.allCases.map(\.rawValue),
+                        options: courseOptions,
                         selection: Binding(
                             get: { course.rawValue },
                             set: { course = MetricCourseBucket(rawValue: $0) ?? .all }
@@ -112,7 +112,7 @@ struct MetricRoundsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            GOverline(text: "\(rows.count) \(rows.count == 1 ? "ronda" : "rondas")")
+            GOverline(text: countLine)
             GTitle(text: query.title, size: 34)
             if let footnote = query.footnote {
                 Text(footnote)
@@ -168,8 +168,23 @@ struct MetricRoundsView: View {
         }
     }
 
+    private var countLine: String {
+        if screenID == "screen-rondas" {
+            let n = model.rounds.count
+            return "\(n) \(n == 1 ? "tarjeta" : "tarjetas")"
+        }
+        return "\(rows.count) \(rows.count == 1 ? "ronda" : "rondas")"
+    }
+
+    private var courseOptions: [String] {
+        let present = Set(model.rounds.map { MetricCourseBucket.bucket(for: $0) })
+        return MetricCourseBucket.allCases
+            .filter { $0 == .all || present.contains($0) }
+            .map(\.rawValue)
+    }
+
     private var rows: [Round] {
-        if let apiRounds, !apiRounds.isEmpty { return apiRounds }
+        if screenID != "screen-rondas", let apiRounds, !apiRounds.isEmpty { return apiRounds }
         let filtered = StatsEngine.filter(model.rounds, query: query, period: period, course: course)
         return StatsEngine.sorted(filtered, field: sort, order: order)
     }

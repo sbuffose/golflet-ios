@@ -13,11 +13,11 @@ struct SummaryView: View {
                     NavigationLink { ClimaView() } label: {
                         Text("Ver cómo afecta el clima")
                             .font(GType.headline)
-                            .foregroundStyle(p.ink)
+                            .foregroundStyle(p.onPrimary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
-                            .background(p.surface)
+                            .background(p.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
@@ -107,8 +107,9 @@ struct SummaryView: View {
     }
 
     private var filters: some View {
-        ScrollFilterPills(
-            options: model.courseFilterOptions.map(\.title),
+        let shown = model.courseFilterOptions.filter { $0.kind != .other }
+        return ScrollFilterPills(
+            options: shown.map(\.title),
             selection: Binding(
                 get: { model.courseFilter.title },
                 set: { title in

@@ -192,19 +192,22 @@ enum TrackSession {
     }
 
     static func holeClose(par: Int?, strokes: Int, putts: Int?) -> String {
+        let n = max(0, strokes)
+        let golpe = n == 1 ? "golpe" : "golpes"
         let putt = putts.map { "\($0) \($0 == 1 ? "putt" : "putts")" } ?? "Putts sin confirmar"
-        guard let par else { return "\(strokes) golpes · \(putt)" }
-        let delta = strokes - par
+        guard let par else { return "\(n) \(golpe) · \(putt)" }
+        let delta = n - par
         let vs: String
         switch delta {
-        case ..<(-1): vs = "Águila"
+        case -2: vs = "Águila"
         case -1: vs = "Birdie"
         case 0: vs = "Par"
         case 1: vs = "Bogey"
         case 2: vs = "Doble bogey"
-        default: vs = delta > 0 ? "+\(delta)" : "\(delta)"
+        case 3: vs = "Triple bogey"
+        default: vs = delta > 0 ? "\(delta) sobre el par" : "\(abs(delta)) bajo el par"
         }
-        return "\(strokes) golpes · \(putt) · \(vs)"
+        return "\(n) \(golpe) · \(putt) · \(vs)"
     }
 
     /// Closest non-putter carry. A chosen club is left alone.

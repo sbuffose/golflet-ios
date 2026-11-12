@@ -553,10 +553,7 @@ extension MockAPIClient {
                     dropped: []
                 )
             }(),
-            courseGroups: [
-                CourseFilter(id: "jockey", title: "Jockey Club", courseNames: ["Azul", "Colorada"], kind: .group),
-                CourseFilter(id: "mdp", title: "Mar del Plata", courseNames: ["Cancha Vieja", "Cancha Nueva"], kind: .group)
-            ]
+            courseGroups: [.azul, .colorada]
         )
     }
 

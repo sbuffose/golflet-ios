@@ -48,7 +48,9 @@ struct RoundDetailView: View {
                     if round.isOtherCourse || round.holes.isEmpty {
                         otherCourseNotice
                     } else {
-                        scorecard
+                        GCard(radius: 16, padding: 12) {
+                            scorecard
+                        }
                         gameStats
                     }
                     notes
@@ -56,7 +58,7 @@ struct RoundDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
-                .padding(.bottom, 32)
+                .padding(.bottom, 120)
             }
         }
         .accessibilityIdentifier("screen-ronda")
@@ -132,27 +134,21 @@ struct RoundDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            GOverline(text: FormatAR.longDate(round.date).uppercased())
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if round.isCompetition {
-                    Image(systemName: "trophy.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(p.accentInk)
-                        .accessibilityIdentifier("round-trophy")
-                }
-                Text(round.displayTitle)
-                    .font(GType.sheetTitle)
-                    .tracking(-1.2)
-                    .foregroundStyle(p.ink)
-            }
-            Text(round.tournament)
+            GOverline(text: FormatAR.syncDay(round.date))
+            Text(round.displayTitle)
+                .font(GType.sheetTitle)
+                .tracking(-1.2)
+                .foregroundStyle(p.ink)
+            Text(round.plainTournament)
                 .font(GType.label)
                 .foregroundStyle(p.ink3)
                 .lineLimit(2)
             ChipWrap(spacing: 8) {
                 roundChip(round.clubName)
-                if !round.displayCourse.isEmpty { roundChip(round.displayCourse) }
-                if !round.tee.isEmpty { roundChip("Tee \(round.tee)") }
+                if !round.displayCourse.isEmpty, round.displayCourse.caseInsensitiveCompare(round.clubName) != .orderedSame {
+                    roundChip(round.displayCourse)
+                }
+                if !round.tee.isEmpty { teeChip(round.tee) }
                 if !round.isOtherCourse {
                     roundChip("Rating \(FormatAR.one(round.courseRating)) · Slope \(Int(round.slope))")
                 }
@@ -169,6 +165,20 @@ struct RoundDetailView: View {
             .padding(.vertical, 6)
             .background(p.surface)
             .clipShape(Capsule())
+    }
+
+    private func teeChip(_ name: String) -> some View {
+        HStack(spacing: 6) {
+            TeeDot(name: name)
+            Text("Tee \(name)")
+                .font(GType.label)
+                .foregroundStyle(p.ink)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(p.surface)
+        .clipShape(Capsule())
     }
 
     private var otherCourseNotice: some View {
@@ -298,34 +308,8 @@ struct RoundDetailView: View {
         .accessibilityLabel("\(item.count) \(item.spoken)")
     }
 
-    @ViewBuilder
     private func legendMark(_ result: HoleResult, _ count: Int) -> some View {
-        let mark = Text("\(count)")
-            .font(GFont.ui(13, weight: .semibold))
-            .tabular()
-            .foregroundStyle(legendInk(result))
-            .frame(minWidth: 26, minHeight: 26)
-            .padding(.horizontal, 4)
-        switch result {
-        case .eagleOrBetter:
-            mark.background(p.primary).clipShape(Circle())
-        case .birdie:
-            mark.background(p.accent).clipShape(Circle())
-        case .par, .unknown:
-            mark
-        case .bogey:
-            mark.background(p.sand).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        case .doubleOrWorse:
-            mark.background(Color(red: 74 / 255, green: 81 / 255, blue: 76 / 255)).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-    }
-
-    private func legendInk(_ result: HoleResult) -> Color {
-        switch result {
-        case .eagleOrBetter: return p.accent
-        case .birdie, .doubleOrWorse: return p.onPrimary
-        default: return p.ink
-        }
+        ScoreMark(strokes: count, result: result, diameter: 26)
     }
 
     private func statPill(_ title: String, _ value: String) -> some View {
@@ -355,12 +339,17 @@ struct RoundDetailView: View {
                     .font(GType.section)
                     .foregroundStyle(p.ink)
                 Spacer()
-                Button(showsGameEditor ? "Listo" : "Cargar") { showsGameEditor.toggle() }
-                    .font(GType.headline)
-                    .foregroundStyle(p.ink2)
+                let empty = puttsText.isEmpty && girText.isEmpty && firText.isEmpty
+                Button(showsGameEditor ? "Listo" : (empty ? "Sin cargar" : "Cargado")) { showsGameEditor.toggle() }
+                    .font(GType.label)
+                    .foregroundStyle(p.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(p.surface)
+                    .clipShape(Capsule())
                     .accessibilityIdentifier("edit-game")
             }
-            if !showsGameEditor {
+            if !showsGameEditor, !puttsText.isEmpty || !girText.isEmpty || !firText.isEmpty {
                 HStack(spacing: 8) {
                     statPill("Putts", puttsText)
                     statPill("GIR", girText)

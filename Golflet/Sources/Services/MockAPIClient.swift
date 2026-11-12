@@ -376,13 +376,7 @@ struct MockAPIClient: GolfletAPI {
 
     private func loadRounds() async throws -> [Round] {
         let raw: [[String: Any]] = try FixtureLoader.array("rounds")
-        let extra: [[String: Any]] = (try? FixtureLoader.array("other_course")) ?? []
-        return (raw + extra).compactMap(Self.parseRound).enumerated().map { index, round in
-            guard index == 0, !round.isCompetition else { return round }
-            var copy = round
-            copy.isCompetition = true
-            return copy
-        }
+        return raw.compactMap(Self.parseRound)
     }
 
     private func loadCourses() async throws -> [Course] {
