@@ -277,22 +277,20 @@ struct HomeView: View {
                     GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
                     HStack(alignment: .top, spacing: 12) {
                         NavigationLink(value: MetricRoute.handicap) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                CountUpText(value: snap.handicapIndex, format: FormatAR.one)
-                                    .font(GType.statHero)
-                                    .tracking(-4.4)
-                                    .tabular()
-                                    .foregroundStyle(p.onPrimary)
-                                    .minimumScaleFactor(0.55)
-                                    .lineLimit(1)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+                            CountUpText(value: snap.handicapIndex, format: FormatAR.one)
+                                .font(GType.statHero)
+                                .tracking(-4.4)
+                                .tabular()
+                                .foregroundStyle(p.onPrimary)
+                                .minimumScaleFactor(0.55)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("metric-handicap")
-                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("Handicap index")
                         .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
+                        Spacer(minLength: 8)
                         VStack(alignment: .trailing, spacing: 10) {
                             if place == .beside {
                                 homeHcpPeople()
@@ -312,12 +310,9 @@ struct HomeView: View {
                                 .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("play-start")
                             .accessibilityLabel("Jugar")
-                            .overlay {
-                                GProbe(id: "play-start", label: "Jugar")
-                            }
                         }
-                        .zIndex(2)
                     }
                     HStack(alignment: .center, spacing: 8) {
                         VStack(alignment: .leading, spacing: 4) {
