@@ -31,20 +31,14 @@ struct GroupDetailView: View {
 
     var body: some View {
         GScreen(id: "screen-grupo") {
-            ScrollViewReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    if let group {
-                        content(group)
-                    } else {
-                        Text("Este grupo ya no está.")
-                            .font(GType.body)
-                            .foregroundStyle(p.ink2)
-                            .padding(20)
-                    }
-                }
-                .onChange(of: comparison?.rows.count ?? 0) { _, count in
-                    guard count > 0 else { return }
-                    pinCategoryTabs(proxy)
+            ScrollView(showsIndicators: false) {
+                if let group {
+                    content(group)
+                } else {
+                    Text("Este grupo ya no está.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                        .padding(20)
                 }
             }
         }
@@ -727,18 +721,6 @@ struct GroupDetailView: View {
         .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.18)).frame(height: 1) }
         .id("group-category-tabs")
         .accessibilityIdentifier("group-category-tabs")
-    }
-
-    private func pinCategoryTabs(_ proxy: ScrollViewProxy) {
-        guard RuntimeFlags.testingScrollGroupTabs else { return }
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(250))
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                proxy.scrollTo("group-category-tabs", anchor: .top)
-            }
-        }
     }
 
     private func tabTitle(_ metric: GroupMetricKind) -> String {

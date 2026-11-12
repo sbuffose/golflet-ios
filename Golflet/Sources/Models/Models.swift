@@ -572,11 +572,6 @@ enum RuntimeFlags {
         return TextPrefs(size: .extraLarge, weight: .marked)
     }
 
-    /// Parity capture pins the group to the category tabs. Other tests stay at the top.
-    static var testingScrollGroupTabs: Bool {
-        ProcessInfo.processInfo.arguments.contains("-ui-testing-group-tabs")
-    }
-
     static var testingGreetingName: String? {
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "-ui-testing-greeting"),
