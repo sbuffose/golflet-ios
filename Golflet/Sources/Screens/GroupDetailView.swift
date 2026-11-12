@@ -44,13 +44,29 @@ struct GroupDetailView: View {
         }
         .accessibilityIdentifier("screen-grupo")
         .safeAreaInset(edge: .top) {
-            closeBar(action: {
-                if model.presentedGroupID != nil {
-                    model.presentedGroupID = nil
-                } else {
-                    model.presentedInvite = nil
+            HStack {
+                Button {
+                    if model.presentedGroupID != nil {
+                        model.presentedGroupID = nil
+                    } else {
+                        model.presentedInvite = nil
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Amigos")
+                            .font(GFont.ui(15, weight: .semibold))
+                    }
+                    .foregroundStyle(p.primary)
                 }
-            }, id: "close-grupo")
+                .accessibilityIdentifier("close-grupo")
+                .accessibilityLabel("Amigos")
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 44)
+            .background(p.bg)
         }
         .task(id: groupID) { await load() }
         .onAppear { Task { await load() } }
@@ -298,7 +314,7 @@ struct GroupDetailView: View {
                 GCard(radius: 16, padding: 14) {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 12) {
-                            GroupPhotoView(url: member.photoURL, initials: member.initials, size: 36)
+                            GroupPhotoView(url: member.photoURL, initials: faceLetter(member.name), size: 36)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(member.name)
                                     .font(GType.headline)
@@ -665,7 +681,7 @@ struct GroupDetailView: View {
     private func leaderStrip(_ rows: [GroupComparisonRow]) -> some View {
         let keys: [GroupMetricKind] = [.birdies, .pars, .net, .rounds]
         let chips = keys.compactMap { kind in rows.first { $0.metric == kind } }
-        return HStack(spacing: 0) {
+        return HStack(alignment: .top, spacing: 0) {
             ForEach(chips) { row in
                 let ranked = row.ranked()
                 let tops = ranked.filter { row.rank(of: $0.memberID) == 1 }
@@ -678,9 +694,11 @@ struct GroupDetailView: View {
                             .tracking(0.8)
                             .textCase(.uppercase)
                             .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text("\(who) \(value)")
                             .font(GFont.ui(13, weight: .bold))
-                            .lineLimit(2)
+                            .lineLimit(4)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(p.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -791,7 +809,7 @@ struct GroupDetailView: View {
                     }
                     .frame(width: 44, alignment: .leading)
                     HStack(spacing: 8) {
-                        GroupPhotoView(url: value.photoURL ?? group.members.first { $0.id == value.memberID }?.photoURL, initials: value.initials, size: 26)
+                        GroupPhotoView(url: value.photoURL ?? group.members.first { $0.id == value.memberID }?.photoURL, initials: faceLetter(value.memberName), size: 26)
                         Text(value.memberName)
                             .font(GFont.ui(14, weight: .semibold))
                             .lineLimit(1)
@@ -892,7 +910,7 @@ struct GroupDetailView: View {
                 .foregroundStyle(p.ink)
                 .lineLimit(2)
             HStack(spacing: 6) {
-                GroupPhotoView(url: photo, initials: winner.initials, size: 22)
+                GroupPhotoView(url: photo, initials: faceLetter(winner.memberName), size: 22)
                 Text(winners.map(\.memberName).joined(separator: ", "))
                     .font(GFont.ui(13, weight: .semibold))
                     .foregroundStyle(p.ink)
@@ -995,7 +1013,7 @@ struct GroupDetailView: View {
             Text("\(place)º")
                 .font(GType.label)
                 .foregroundStyle(Color(hex: 0xC8A86A))
-            GroupPhotoView(url: photo, initials: value.initials, size: place == 1 ? 52 : 40)
+            GroupPhotoView(url: photo, initials: faceLetter(value.memberName), size: place == 1 ? 52 : 40)
                 .overlay(Circle().stroke(ring, lineWidth: 3))
             Text(value.memberName)
                 .font(GFont.ui(13, weight: .bold))
@@ -1040,7 +1058,7 @@ struct GroupDetailView: View {
                         .font(GType.label)
                         .foregroundStyle(p.ink)
                         .frame(width: 28, alignment: .leading)
-                    GroupPhotoView(url: photo, initials: value.initials, size: 28)
+                    GroupPhotoView(url: photo, initials: faceLetter(value.memberName), size: 28)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(value.memberName)
                             .font(GType.label)
@@ -1132,6 +1150,13 @@ struct GroupDetailView: View {
 
     private func firstName(_ name: String) -> String {
         name.split(separator: " ").first.map(String.init) ?? name
+    }
+
+    /// The web avatar is the first letter of the name, not the two-letter monogram.
+    private func faceLetter(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return "?" }
+        return String(first).uppercased()
     }
 
     private func wherePhrase(_ metric: GroupMetricKind) -> String {
@@ -1327,6 +1352,9 @@ struct GroupDetailView: View {
         switch metric {
         case .birdies, .pars, .eagles, .aces, .rounds, .maxBirdies, .streak:
             return FormatAR.int(Int(number.rounded()))
+        case .gross, .net:
+            if number.rounded() == number { return FormatAR.int(Int(number.rounded())) }
+            return FormatAR.one(number)
         case .gir, .fir:
             return "\(FormatAR.int(Int(number.rounded())))%"
         case .gpsDrive, .bagCarry:

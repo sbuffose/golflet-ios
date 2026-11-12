@@ -318,7 +318,7 @@ extension MockAPIClient {
         }
         let me = group.members.first { $0.id == MockGroupStore.meID }
         let rank = me.flatMap { rows.first { $0.metric == .birdies }?.rank(of: $0.id) }
-        let hero = rank.map { GroupHero(rank: $0, cards: nil, memberID: me?.id) }
+        let hero = rank.map { GroupHero(rank: $0, cards: "18 tarjetas", memberID: me?.id) }
         return GroupComparison(groupID: groupID, config: config, rows: rows, hero: hero)
     }
 

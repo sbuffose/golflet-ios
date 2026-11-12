@@ -539,9 +539,14 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
-        XCTAssertTrue(openClubsSheet(app), "No se abrió la cuenta para ver profesores")
-        XCTAssertTrue(first(app, "home-hcp-profesor").waitForExistence(timeout: 4), "Falta Mis profesores")
-        largest(app, "home-hcp-profesor").tap()
+        let profesores = first(app, "home-hcp-profesor")
+        XCTAssertTrue(profesores.waitForExistence(timeout: 4), "Falta Mis profesores")
+        reveal(app, profesores)
+        if profesores.isHittable {
+            profesores.tap()
+        } else {
+            profesores.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(waitFor(app, "screen-home-profesores", timeout: 6), "No se abrió Mis profesores")
         XCTAssertFalse(first(app, "profesor-search").waitForExistence(timeout: 1), "La búsqueda vive en Agregar, no en Mis profesores")
         XCTAssertTrue(first(app, "profesores-encontrar").waitForExistence(timeout: 3), "Falta Encontrar un profesor")
