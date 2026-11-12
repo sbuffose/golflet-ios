@@ -591,10 +591,8 @@ struct GroupDetailView: View {
                         Button("Ajustes y link de invitación") { showsGroupAdmin = true }
                     }
                 } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .frame(width: 44, height: 44)
+                    GroupGearMark()
+                        .frame(width: 36, height: 36)
                 }
                 .accessibilityLabel("Ajustes del grupo")
                 .accessibilityIdentifier("group-my-view")
@@ -737,6 +735,7 @@ struct GroupDetailView: View {
             }
         }
         .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.18)).frame(height: 1) }
+        .padding(.horizontal, 8)
         .id("group-category-tabs")
         .accessibilityIdentifier("group-category-tabs")
     }
@@ -1659,5 +1658,35 @@ struct GroupCameraPicker: UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             onImage(Data())
         }
+    }
+}
+
+/// The web group gear: a circle with eight spokes, not the system gear.
+private struct GroupGearMark: View {
+    var body: some View {
+        Canvas { context, size in
+            let scale = min(size.width, size.height) / 24
+            var circle = Path()
+            circle.addEllipse(in: CGRect(x: 9 * scale, y: 9 * scale, width: 6 * scale, height: 6 * scale))
+            context.stroke(circle, with: .color(.white), lineWidth: 1.8 * scale)
+            var spokes = Path()
+            let lines: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+                (12, 3.5, 12, 5.7),
+                (12, 18.3, 12, 20.5),
+                (3.5, 12, 5.7, 12),
+                (18.3, 12, 20.5, 12),
+                (6, 6, 7.6, 7.6),
+                (16.4, 16.4, 18, 18),
+                (18, 6, 16.4, 7.6),
+                (7.6, 16.4, 6, 18)
+            ]
+            for line in lines {
+                spokes.move(to: CGPoint(x: line.0 * scale, y: line.1 * scale))
+                spokes.addLine(to: CGPoint(x: line.2 * scale, y: line.3 * scale))
+            }
+            context.stroke(spokes, with: .color(.white), style: StrokeStyle(lineWidth: 1.8 * scale, lineCap: .round))
+        }
+        .frame(width: 22, height: 22)
+        .accessibilityHidden(true)
     }
 }

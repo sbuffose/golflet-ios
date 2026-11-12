@@ -34,6 +34,7 @@ struct PlayHoleView: View {
     @State private var shotsExpanded = false
     @State private var sawDragHint = false
     @State private var showsClubs = false
+    @State private var mapZoom = 0
     @State private var editingClosed = false
     @State private var editingShot: Shot?
     @State private var askDeleteShot = false
@@ -62,6 +63,9 @@ struct PlayHoleView: View {
                 .ignoresSafeArea()
             reticle
                 .allowsHitTesting(false)
+            if holeClosed {
+                closedChrome
+            } else {
             VStack(spacing: 8) {
                 topBar
                 HStack(alignment: .top) {
@@ -84,6 +88,10 @@ struct PlayHoleView: View {
                 dock
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+            if showsClubs {
+                clubCover
+            }
         }
         .accessibilityIdentifier("screen-play-hole")
         .background(Color.black.ignoresSafeArea())
@@ -154,7 +162,6 @@ struct PlayHoleView: View {
         }
         .sheet(isPresented: $showsHoles) { holePicker }
         .sheet(isPresented: $showsStrategy) { strategySheet }
-        .sheet(isPresented: $showsClubs) { clubSheet }
         .sheet(item: $editingShot) { shot in shotEditor(shot) }
         .alert("Ritmo de juego", isPresented: $showsPaceAlert) {
             Button("Listo", role: .cancel) {}
@@ -263,6 +270,9 @@ struct PlayHoleView: View {
             animateCamera: !reduceMotion,
             focus: focusPoint,
             focusID: focusID,
+            framesHole: holeClosed,
+            zoom: mapZoom,
+            shotMarks: holeClosed ? closedShotMarks : [],
             onCenter: { next in
                 if let mapCenter, abs(mapCenter.lat - next.lat) < 0.0000004, abs(mapCenter.lng - next.lng) < 0.0000004 {
                     return
@@ -272,6 +282,203 @@ struct PlayHoleView: View {
             },
             onTarget: { aimTarget = $0 }
         )
+    }
+
+    /// Closed hole, matching the web: score card, shot pills and zoom sit on the map.
+    private var closedChrome: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button { model.showsPlay = false } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(p.ink)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Color.white))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-close")
+                .accessibilityLabel("Volver a la tarjeta")
+                Text(course.course)
+                    .font(GFont.ui(14, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                    .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
+                    .frame(maxWidth: .infinity)
+                Color.clear.frame(width: 44, height: 44)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+
+            closeCard
+                .padding(.top, 36)
+
+            Spacer(minLength: 0)
+
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(closedStrokes, id: \.n) { stroke in
+                        Text("\(stroke.n). \(stroke.club) · \(stroke.yards) yd")
+                            .font(GFont.ui(12, weight: .semibold))
+                            .foregroundStyle(p.ink)
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.white)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(p.primary.opacity(0.18), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
+                            .accessibilityIdentifier("play-stroke-\(stroke.n)")
+                    }
+                }
+                .frame(maxWidth: 148, alignment: .leading)
+                Spacer(minLength: 8)
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+
+            VStack(spacing: 8) {
+                Button { editingClosed = true } label: {
+                    Text("Editar hoyo")
+                        .font(GFont.ui(16, weight: .semibold))
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-edit-hole")
+                Button { changeHole(hole + 1) } label: {
+                    Text("Siguiente hoyo ›")
+                        .font(GFont.ui(16, weight: .semibold))
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-next-wide")
+            }
+            .padding(.horizontal, 10)
+
+            closedNav
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+        }
+        .overlay(alignment: .trailing) {
+            VStack(spacing: 8) {
+                mapZoomButton(system: "plus", delta: 1, id: "play-zoom-in", label: "Acercar")
+                mapZoomButton(system: "minus", delta: -1, id: "play-zoom-out", label: "Alejar")
+            }
+            .padding(.trailing, 10)
+            .offset(y: 70)
+        }
+    }
+
+    private var closeCard: some View {
+        let parts = closeParts
+        return VStack(spacing: 2) {
+            CaddieMark(height: 36)
+            Text(parts.line)
+                .font(GFont.ui(15, weight: .bold))
+                .foregroundStyle(Color.white)
+                .multilineTextAlignment(.center)
+            if let vs = parts.vs {
+                Text(vs)
+                    .font(GFont.ui(12, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 210)
+        .background(p.primary.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("play-aim-label")
+    }
+
+    private var closeParts: (line: String, vs: String?) {
+        let strokes = track.strokeCount
+        let putterShots = track.marks.filter { mark in
+            mark.countsStroke && !mark.penalty && !mark.lost && isPutter(mark.club)
+        }
+        let putts = putterShots.isEmpty ? nil : putterShots.count
+        let n = max(0, strokes)
+        let putt = putts.map { "\($0) \($0 == 1 ? "putt" : "putts")" } ?? "Putts sin confirmar"
+        let line = "\(n) \(n == 1 ? "golpe" : "golpes") · \(putt)"
+        guard let par = current?.par else { return (line, nil) }
+        let delta = n - par
+        let vs: String
+        switch delta {
+        case -2: vs = "Águila"
+        case -1: vs = "Birdie"
+        case 0: vs = "Par"
+        case 1: vs = "Bogey"
+        case 2: vs = "Doble bogey"
+        case 3: vs = "Triple bogey"
+        default: vs = delta > 0 ? "\(delta) sobre el par" : "\(abs(delta)) bajo el par"
+        }
+        return (line, vs)
+    }
+
+    private var closedShotMarks: [HoleShotMark] {
+        track.marks.filter(\.countsStroke).enumerated().map { index, mark in
+            HoleShotMark(number: index + 1, coord: GPSCoord(lat: mark.at.lat, lng: mark.at.lng))
+        }
+    }
+
+    private func mapZoomButton(system: String, delta: Int, id: String, label: String) -> some View {
+        Button {
+            mapZoom = min(6, max(-2, mapZoom + delta))
+        } label: {
+            Image(systemName: system)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color(hex: 0xF6F7F9))
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(p.primary.opacity(0.92)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+        .accessibilityLabel(label)
+    }
+
+    private var closedNav: some View {
+        HStack {
+            Button { changeHole(hole - 1) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .bold))
+                    .frame(width: 32, height: 32)
+            }
+            .accessibilityIdentifier("play-hole-prev")
+            Spacer(minLength: 4)
+            Button { showsHoles = true } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Hoyo \(hole)")
+                        .font(GFont.ui(13, weight: .semibold))
+                    Text(holeChrome)
+                        .font(GFont.ui(13, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-hole-picker")
+            Spacer(minLength: 4)
+            Button { changeHole(hole + 1) } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .frame(width: 32, height: 32)
+            }
+            .accessibilityIdentifier("play-hole-next")
+        }
+        .foregroundStyle(p.ink)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(Color.white)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
     }
 
     private var reticle: some View {
@@ -667,31 +874,46 @@ struct PlayHoleView: View {
         return TrackSession.suggest(yards: yards, bag: model.bag.map { ($0.name, $0.carry) })
     }
 
-    private var clubSheet: some View {
+    /// Same dark sheet as the web: a centered bag grid on `#070b10`, not a light page.
+    private var clubCover: some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
-        return NavigationStack {
-            ScrollView {
+        return ZStack {
+            Color(hex: 0x070B10).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Palo")
+                    .font(GFont.ui(16, weight: .bold))
+                    .foregroundStyle(p.ink)
+                    .padding(.leading, 4)
+                    .padding(.trailing, 44)
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(model.bag, id: \.name) { club in
+                        let on = chosenClub == club.name
                         Button {
                             chosenClub = club.name
                             showsClubs = false
                         } label: {
                             VStack(spacing: 2) {
-                                Text(club.name)
-                                    .font(GType.label)
+                                Text(shortClub(club.name))
+                                    .font(GFont.ui(15, weight: .bold))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
                                 if let yards = savedYards(club) {
                                     Text(yards)
                                         .font(GFont.ui(10, weight: .semibold))
+                                        .foregroundStyle(on ? Color.white.opacity(0.85) : Color(hex: 0x3E4C62))
                                         .lineLimit(1)
                                 }
                             }
-                            .foregroundStyle(chosenClub == club.name ? p.onPrimary : p.ink)
-                            .frame(maxWidth: .infinity, minHeight: 64)
-                            .background(chosenClub == club.name ? p.primary : p.surface2)
+                            .foregroundStyle(on ? Color.white : p.ink)
+                            .frame(maxWidth: .infinity)
+                            .aspectRatio(1, contentMode: .fit)
+                            .frame(minHeight: 52)
+                            .background(on ? p.primary : Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(on ? Color.clear : Color(hex: 0xE6E2D8), lineWidth: 1)
+                            )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .stroke(suggestedName == club.name ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 3)
@@ -701,15 +923,45 @@ struct PlayHoleView: View {
                         .accessibilityIdentifier("play-club-\(club.name)")
                     }
                 }
-                .padding(16)
             }
-            .navigationTitle("Palo")
-            .toolbar {
-                Button("Cerrar") { showsClubs = false }
-                    .accessibilityIdentifier("play-club-close")
+            .padding(.horizontal, 12)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
+            .frame(maxWidth: 360)
+            .background(Color(hex: 0xF6F7F9))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                Button { showsClubs = false } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(p.ink)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Color.white))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-club-close")
+                .accessibilityLabel("Cerrar")
+                .padding(8)
             }
+            .padding(.horizontal, 14)
+            .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("play-club-sheet")
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private func shortClub(_ label: String) -> String {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "—" }
+        let folded = trimmed.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
+        if folded == "pt" || folded.hasPrefix("putter") { return "Pt" }
+        if folded == "dr" || folded.hasPrefix("driver") { return "Dr" }
+        if folded.hasPrefix("hierro") {
+            let face = folded.split(separator: " ").last.map(String.init) ?? ""
+            if face.allSatisfy(\.isNumber), !face.isEmpty { return "\(face)i" }
+        }
+        return trimmed.count > 4 ? String(trimmed.prefix(4)) : trimmed
     }
 
     private var suggestedName: String? {

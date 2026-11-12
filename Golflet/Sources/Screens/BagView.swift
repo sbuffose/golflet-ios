@@ -208,7 +208,7 @@ struct BagView: View {
                         .frame(width: 40, height: 40)
                         .background(Color(hex: 0xF1EDE3))
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(club.name)
                             .font(GType.headline)
                             .foregroundStyle(p.ink)
@@ -228,7 +228,7 @@ struct BagView: View {
                         .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.vertical, 14)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(club.name), \(club.equipmentLine)")
                 .accessibilityIdentifier("equip-\(club.name)")
@@ -253,7 +253,7 @@ struct BagView: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .background(Color(hex: 0xF1EDE3))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
@@ -464,7 +464,7 @@ struct BagEditSheet: View {
 }
 
 /// Same ball mark as the web `BALL_IC`: a circle with dimples, on a pale disc.
-private struct BallMark: View {
+struct BallMark: View {
     var body: some View {
         ZStack {
             Circle()

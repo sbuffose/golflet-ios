@@ -155,7 +155,7 @@ struct RoundDetailView: View {
                 }
                 if !round.tee.isEmpty { teeChip(round.tee) }
                 if !round.isOtherCourse {
-                    roundChip("Rating \(FormatAR.one(round.courseRating)) · Slope \(Int(round.slope))")
+                    roundChip("Rating \(FormatAR.one(round.courseRating)) · Slope \(Int(round.slope.rounded()))i")
                 }
             }
         }
