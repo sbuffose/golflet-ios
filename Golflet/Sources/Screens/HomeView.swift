@@ -310,12 +310,12 @@ struct HomeView: View {
                                 .padding(.vertical, 8)
                                 .background(p.accent)
                                 .clipShape(Capsule())
-                                .accessibilityElement(children: .combine)
-                                .accessibilityAddTraits(.isButton)
-                                .accessibilityLabel("Jugar")
-                                .accessibilityIdentifier("play-start")
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Jugar")
+                            .overlay {
+                                GProbe(id: "play-start", label: "Jugar")
+                            }
                         }
                         .zIndex(2)
                     }
