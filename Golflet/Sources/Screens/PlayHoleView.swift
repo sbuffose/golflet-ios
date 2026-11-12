@@ -104,6 +104,15 @@ struct PlayHoleView: View {
             }
         }
         .accessibilityIdentifier("screen-play-hole")
+        .overlay(alignment: .topLeading) {
+            Text(playStatus)
+                .font(.system(size: 1))
+                .foregroundStyle(.clear)
+                .accessibilityIdentifier("play-hole-status")
+                .accessibilityLabel(playStatus)
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+        }
         .background(Color.black.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -184,7 +193,10 @@ struct PlayHoleView: View {
                 GProbe(id: "pace-alert", label: paceAlertText)
             }
         }
-        .onAppear { adoptSavedTrackIfNeeded() }
+        .onAppear {
+            installClosedFixtureIfNeeded()
+            adoptSavedTrackIfNeeded()
+        }
     }
 
     private var current: GPSHole? {
@@ -708,6 +720,23 @@ struct PlayHoleView: View {
     private func adoptSavedTrackIfNeeded() {
         guard track.marks.isEmpty, let restoredTrack else { return }
         track = restoredTrack
+    }
+
+    /// Test rounds can open with the shots already played. This writes those shots once.
+    /// The closed layout still comes from the holed shot.
+    private func installClosedFixtureIfNeeded() {
+        guard SavedRoundShots.closedHoleFixtureRequested else { return }
+        guard !shotsOnHole.contains(where: { TrackSession.isHoled($0.result) }) else { return }
+        let fixture = SavedRoundShots.closedHoleFixture(hole: hole, tee: teeCoord, pin: pinCoord)
+        shots = fixture
+        receivedShots = true
+        SavedRoundShots.replace(roundID: liveRound.id, shots: fixture)
+    }
+
+    private var playStatus: String {
+        let holed = shotsOnHole.contains { TrackSession.isHoled($0.result) }
+        let flag = SavedRoundShots.closedHoleFixtureRequested
+        return "flag \(flag ? 1 : 0) shots \(shots.count) open \(openingShots.count) store \(SavedRoundShots.load(roundID: liveRound.id).count) holed \(holed ? 1 : 0)"
     }
 
     private var aimTitle: String {
@@ -1937,7 +1966,12 @@ struct PlayHoleView: View {
     private func refresh() async {
         if let detail = try? await model.api.liveRound(id: liveRound.id) {
             liveRound = detail.liveRound
-            shots = detail.shots
+            let local = shots.isEmpty && !receivedShots ? openingShots : shots
+            let kept = SavedRoundShots.keepingHoledShots(local: local, incoming: detail.shots)
+            shots = kept
+            if !kept.isEmpty {
+                SavedRoundShots.replace(roundID: liveRound.id, shots: kept)
+            }
             receivedShots = true
             adoptSavedTrackIfNeeded()
         }

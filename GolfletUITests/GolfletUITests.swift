@@ -265,8 +265,9 @@ final class GolfletUITests: XCTestCase {
 
     func testParityClosedHoleAndClub() throws {
         let app = XCUIApplication()
-        // The mock round already has the holed shots. The screen closes from those shots.
+        // The round already has the holed shots. The screen closes from those shots.
         app.launchArguments = ["-ui-testing", "-ui-testing-closed-hole", "YES"]
+        app.launchEnvironment["GOLFLET_CLOSED_HOLE"] = "1"
         app.launch()
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
@@ -276,7 +277,12 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
-        XCTAssertTrue(first(app, "play-edit-hole").waitForExistence(timeout: 6), "El hoyo cerrado no mostró Editar hoyo")
+        let status = first(app, "play-hole-status")
+        _ = status.waitForExistence(timeout: 2)
+        XCTAssertTrue(
+            first(app, "play-edit-hole").waitForExistence(timeout: 6),
+            "El hoyo cerrado no mostró Editar hoyo (\(status.label))"
+        )
         saveShot("parity-ios-track-closed")
         first(app, "play-edit-hole").tap()
         XCTAssertTrue(first(app, "play-club").waitForExistence(timeout: 4), "Falta el palo al editar el hoyo")

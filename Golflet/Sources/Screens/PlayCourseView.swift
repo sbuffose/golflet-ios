@@ -6,9 +6,9 @@ struct PlayCourseView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var location = PlayLocation()
     @State private var list: GPSCourseList?
-    @State private var selected: GPSCourseDetail?
-    @State private var live: LiveRound?
-    @State private var openingShots: [Shot] = []
+    /// Course, round and the shots already saved travel together. A separate shot list
+    /// can be left behind when the hole screen is created, and the hole then looks unplayed.
+    @State private var started: StartedRound?
     @State private var message: String?
     @State private var pendingStart: GPSCourseSummary?
     @State private var startPlayers = PaceDefaults.players
@@ -44,10 +44,8 @@ struct PlayCourseView: View {
             .padding(.top, 8)
         }
         .accessibilityIdentifier("screen-play-courses")
-        .navigationDestination(item: $selected) { course in
-            if let live {
-                PlayHoleView(course: course, liveRound: live, openingShots: openingShots)
-            }
+        .navigationDestination(item: $started) { started in
+            PlayHoleView(course: started.course, liveRound: started.round, openingShots: started.shots)
         }
         .sheet(item: $pendingStart) { summary in
             startSheet(summary)
@@ -334,11 +332,11 @@ struct PlayCourseView: View {
                 modality: startModality.rawValue
             )
             let played = try? await model.api.liveRound(id: round.id)
-            model.rememberPlay(course: detail, round: played?.liveRound ?? round)
+            let liveRound = played?.liveRound ?? round
+            model.rememberPlay(course: detail, round: liveRound)
             model.pendingMatch = nil
-            openingShots = played?.shots ?? []
-            live = played?.liveRound ?? round
-            selected = detail
+            let saved = shotsForStart(round: liveRound, course: detail, loaded: played?.shots ?? [])
+            started = StartedRound(course: detail, round: liveRound, shots: saved)
             pendingStart = nil
         } catch {
             if let cached = CourseCache.load(courseId: summary.courseId) {
@@ -350,9 +348,7 @@ struct PlayCourseView: View {
                 )
                 model.rememberPlay(course: cached.detail, round: round)
                 model.pendingMatch = nil
-                openingShots = []
-                live = round
-                selected = cached.detail
+                started = StartedRound(course: cached.detail, round: round, shots: [])
                 pendingStart = nil
                 message = "Sin red. Jugás con la cancha cacheada; los golpes se encolan."
             } else {
@@ -360,4 +356,26 @@ struct PlayCourseView: View {
             }
         }
     }
+
+    /// Shots saved for this round. A test can open a hole that was already finished;
+    /// those shots are the same records a player would have posted.
+    private func shotsForStart(round: LiveRound, course: GPSCourseDetail, loaded: [Shot]) -> [Shot] {
+        if loaded.contains(where: { TrackSession.isHoled($0.result) }) { return loaded }
+        let stored = SavedRoundShots.load(roundID: round.id)
+        if stored.contains(where: { TrackSession.isHoled($0.result) }) { return stored }
+        guard SavedRoundShots.closedHoleFixtureRequested,
+              let hole = course.holes.first(where: { $0.number == round.currentHole }) ?? course.holes.first
+        else { return loaded }
+        let tee = hole.tee ?? hole.green.center ?? GPSCoord(lat: -34.485427, lng: -58.532351)
+        let pin = hole.green.center ?? tee
+        let fixture = SavedRoundShots.closedHoleFixture(hole: hole.number, tee: tee, pin: pin)
+        SavedRoundShots.replace(roundID: round.id, shots: fixture)
+        return fixture
+    }
+}
+
+private struct StartedRound: Hashable {
+    var course: GPSCourseDetail
+    var round: LiveRound
+    var shots: [Shot]
 }

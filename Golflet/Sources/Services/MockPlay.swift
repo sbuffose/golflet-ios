@@ -64,7 +64,7 @@ extension MockAPIClient {
         )
         Self.playLock.lock()
         Self.liveByID[round.id] = round
-        let seeded = Self.closedHoleFixtureRequested ? Self.closedHoleShots() : []
+        let seeded = SavedRoundShots.closedHoleFixtureRequested ? Self.closedHoleShots() : []
         Self.shotsByRound[round.id] = seeded
         SavedRoundShots.replace(roundID: round.id, shots: seeded)
         if !seeded.isEmpty, var stored = Self.liveByID[round.id] {
@@ -76,48 +76,14 @@ extension MockAPIClient {
         return round
     }
 
-    private static var closedHoleFixtureRequested: Bool {
-        let args = ProcessInfo.processInfo.arguments
-        if args.contains("-ui-testing-closed-hole") { return true }
-        let defaults = UserDefaults.standard
-        return defaults.bool(forKey: "ui-testing-closed-hole") || defaults.bool(forKey: "-ui-testing-closed-hole")
-    }
-
     /// Hole 1 of the Azul already played: an iron and a putt in the cup.
     /// The play screen closes from these shots, the same way a reloaded round does.
     private static func closedHoleShots() -> [Shot] {
-        let tee = (lat: -34.485427, lng: -58.532351)
-        let pin = (lat: -34.48305197, lng: -58.52881)
-        let approach = (
-            lat: tee.lat + (pin.lat - tee.lat) * 0.62,
-            lng: tee.lng + (pin.lng - tee.lng) * 0.62
+        SavedRoundShots.closedHoleFixture(
+            hole: 1,
+            tee: GPSCoord(lat: -34.485427, lng: -58.532351),
+            pin: GPSCoord(lat: -34.48305197, lng: -58.52881)
         )
-        let start = Date()
-        func shot(_ id: String, number: Int, lat: Double, lng: Double, club: String, lie: String?, result: String?, at: Date) -> Shot {
-            Shot(
-                id: id,
-                clientId: id,
-                hole: 1,
-                shotNumber: number,
-                lat: lat,
-                lng: lng,
-                accuracyM: 4,
-                takenAt: at,
-                club: club,
-                lie: lie,
-                result: result,
-                direction: nil,
-                length: nil,
-                mishit: false,
-                distanceM: nil,
-                distanceYd: nil,
-                toGreenYd: nil
-            )
-        }
-        return [
-            shot("closed-iron", number: 1, lat: approach.lat, lng: approach.lng, club: "Hierro 7", lie: "fairway", result: nil, at: start),
-            shot("closed-putt", number: 2, lat: pin.lat, lng: pin.lng, club: "Putter", lie: "green", result: "holed", at: start.addingTimeInterval(40))
-        ]
     }
 
     func liveRound(id: String) async throws -> LiveRoundDetail {
