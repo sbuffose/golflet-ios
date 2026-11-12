@@ -743,3 +743,22 @@ enum PlayMath {
         isFar(yards) ? nil : yards
     }
 }
+
+/// Shots already stored for a live round. The hole screen reads this on the first frame,
+/// before the reload request returns, so a finished hole does not flash open.
+enum SavedRoundShots {
+    private static let lock = NSLock()
+    private static var byRound: [String: [Shot]] = [:]
+
+    static func replace(roundID: String, shots: [Shot]) {
+        lock.lock()
+        byRound[roundID] = shots
+        lock.unlock()
+    }
+
+    static func load(roundID: String) -> [Shot] {
+        lock.lock()
+        defer { lock.unlock() }
+        return byRound[roundID] ?? []
+    }
+}

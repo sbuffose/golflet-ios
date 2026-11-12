@@ -8,6 +8,7 @@ struct PlayCourseView: View {
     @State private var list: GPSCourseList?
     @State private var selected: GPSCourseDetail?
     @State private var live: LiveRound?
+    @State private var openingShots: [Shot] = []
     @State private var message: String?
     @State private var pendingStart: GPSCourseSummary?
     @State private var startPlayers = PaceDefaults.players
@@ -45,7 +46,7 @@ struct PlayCourseView: View {
         .accessibilityIdentifier("screen-play-courses")
         .navigationDestination(item: $selected) { course in
             if let live {
-                PlayHoleView(course: course, liveRound: live)
+                PlayHoleView(course: course, liveRound: live, openingShots: openingShots)
             }
         }
         .sheet(item: $pendingStart) { summary in
@@ -332,9 +333,11 @@ struct PlayCourseView: View {
                 players: startPlayers,
                 modality: startModality.rawValue
             )
-            model.rememberPlay(course: detail, round: round)
+            let played = try? await model.api.liveRound(id: round.id)
+            model.rememberPlay(course: detail, round: played?.liveRound ?? round)
             model.pendingMatch = nil
-            live = round
+            openingShots = played?.shots ?? []
+            live = played?.liveRound ?? round
             selected = detail
             pendingStart = nil
         } catch {
@@ -347,6 +350,7 @@ struct PlayCourseView: View {
                 )
                 model.rememberPlay(course: cached.detail, round: round)
                 model.pendingMatch = nil
+                openingShots = []
                 live = round
                 selected = cached.detail
                 pendingStart = nil

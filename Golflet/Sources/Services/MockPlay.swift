@@ -64,8 +64,9 @@ extension MockAPIClient {
         )
         Self.playLock.lock()
         Self.liveByID[round.id] = round
-        let seeded = ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") ? Self.closedHoleShots() : []
+        let seeded = Self.closedHoleFixtureRequested ? Self.closedHoleShots() : []
         Self.shotsByRound[round.id] = seeded
+        SavedRoundShots.replace(roundID: round.id, shots: seeded)
         if !seeded.isEmpty, var stored = Self.liveByID[round.id] {
             stored.shots = seeded.count
             Self.liveByID[round.id] = stored
@@ -73,6 +74,13 @@ extension MockAPIClient {
         Self.holesByRound[round.id] = [:]
         Self.playLock.unlock()
         return round
+    }
+
+    private static var closedHoleFixtureRequested: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-ui-testing-closed-hole") { return true }
+        let defaults = UserDefaults.standard
+        return defaults.bool(forKey: "ui-testing-closed-hole") || defaults.bool(forKey: "-ui-testing-closed-hole")
     }
 
     /// Hole 1 of the Azul already played: an iron and a putt in the cup.
@@ -118,6 +126,7 @@ extension MockAPIClient {
         guard var round = Self.liveByID[id] else { throw GolfletError.decoding("live_round") }
         let shots = Self.shotsByRound[id] ?? []
         round.shots = shots.count
+        SavedRoundShots.replace(roundID: id, shots: shots)
         return LiveRoundDetail(liveRound: round, shots: shots, recap: Self.recapsByKey["live:\(id)"])
     }
 
@@ -223,6 +232,7 @@ extension MockAPIClient {
         }
         Self.recomputeDistances(&existing)
         Self.shotsByRound[liveRoundId] = existing
+        SavedRoundShots.replace(roundID: liveRoundId, shots: existing)
         if var round = Self.liveByID[liveRoundId] {
             round.shots = existing.count
             if let last = existing.last { round.currentHole = last.hole }
@@ -251,6 +261,7 @@ extension MockAPIClient {
             next[index] = shot
             Self.recomputeDistances(&next)
             Self.shotsByRound[roundID] = next
+            SavedRoundShots.replace(roundID: roundID, shots: next)
             return next[index]
         }
         throw GolfletError.decoding("shot")
@@ -260,7 +271,9 @@ extension MockAPIClient {
         Self.playLock.lock()
         defer { Self.playLock.unlock() }
         for (roundID, shots) in Self.shotsByRound where shots.contains(where: { $0.id == id }) {
-            Self.shotsByRound[roundID] = shots.filter { $0.id != id }
+            let next = shots.filter { $0.id != id }
+            Self.shotsByRound[roundID] = next
+            SavedRoundShots.replace(roundID: roundID, shots: next)
             return
         }
         throw GolfletError.decoding("shot")
