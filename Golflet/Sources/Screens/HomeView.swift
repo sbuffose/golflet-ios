@@ -288,7 +288,7 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("metric-handicap")
-                        .accessibilityLabel("Handicap index")
+                        .accessibilityElement(children: .contain)
                         .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
                         Spacer(minLength: 8)
                         VStack(alignment: .trailing, spacing: 10) {
@@ -310,8 +310,8 @@ struct HomeView: View {
                                 .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityIdentifier("play-start")
                             .accessibilityLabel("Jugar")
+                            .accessibilityIdentifier("play-start")
                         }
                     }
                     HStack(alignment: .center, spacing: 8) {
@@ -384,8 +384,9 @@ struct HomeView: View {
         .onPreferenceChange(HomeHcpCardWidthKey.self) { width in
             if width > 0 { hcpCardWidth = width }
         }
-        .accessibilityIdentifier("handicap-card")
-        .accessibilityElement(children: .contain)
+        .background(alignment: .topLeading) {
+            GProbe(id: "handicap-card", label: "Handicap index")
+        }
     }
 
     private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
