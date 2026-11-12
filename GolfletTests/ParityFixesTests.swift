@@ -236,14 +236,14 @@ final class ParityFixesTests: XCTestCase {
         ], tee: teePoint, pin: pinPoint)
         XCTAssertEqual(legacy?.marks.first?.holed, true)
         XCTAssertEqual(legacy?.marks.first?.at, pinPoint)
-        let putt = Shot(
+        let savedPutt = Shot(
             id: "p", clientId: "p", hole: 1, shotNumber: 2,
             lat: pinPoint.lat, lng: pinPoint.lng, accuracyM: 4, takenAt: nil,
             club: "Putter", lie: "green", result: "holed",
             direction: nil, length: nil, mishit: false,
             distanceM: nil, distanceYd: nil, toGreenYd: nil
         )
-        XCTAssertEqual(SavedRoundShots.keepingHoledShots(local: [putt], incoming: []).map(\.id), ["p"])
+        XCTAssertEqual(SavedRoundShots.keepingHoledShots(local: [savedPutt], incoming: []).map(\.id), ["p"])
         XCTAssertTrue(SavedRoundShots.keepingHoledShots(local: [], incoming: []).isEmpty)
         let emptiedTrack = TrackSession.State()
         let stillClosed = TrackSession.restored(shots: [
