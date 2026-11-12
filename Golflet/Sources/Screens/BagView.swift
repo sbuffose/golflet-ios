@@ -17,6 +17,7 @@ struct BagView: View {
     ]
     var body: some View {
         GScreen(id: "screen-bolsa") {
+            ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     GOverline(text: "Mis distancias")
@@ -50,6 +51,7 @@ struct BagView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("bag-add-club")
                 }
+                equipmentList
                 NavigationLink { PelotaView() } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -71,11 +73,23 @@ struct BagView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("bag-pelota")
+                HStack {
+                    Text("Distancias")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    Spacer()
+                    Text("yardas")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(p.surface2)
+                        .clipShape(Capsule())
+                }
                 hint
                 headerRow
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        ForEach(model.bag) { club in
+                VStack(spacing: 0) {
+                        ForEach(orderedBag) { club in
                             HStack(spacing: 8) {
                                 NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: club.name))) {
                                     HStack {
@@ -126,15 +140,79 @@ struct BagView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.bottom, 24)
                     }
-                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
+            }
         }
         .accessibilityIdentifier("screen-bolsa")
         .metricDestinations()
         .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .onAppear(perform: restoreIron)
+    }
+
+    private var orderedBag: [BagClub] {
+        model.bag.sorted { equipmentRank($0.name) < equipmentRank($1.name) }
+    }
+
+    /// Same groups as the web catalog: Driver, Maderas, Híbridos, Hierros, Wedges, Putter.
+    private func equipmentRank(_ name: String) -> Int {
+        let club = name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
+        if club == "driver" { return 0 }
+        if club.contains("madera") { return 1 }
+        if club.contains("hibrido") { return 2 }
+        if club.contains("hierro") { return 3 }
+        if isPutter(name) { return 5 }
+        return 4
+    }
+
+    private func equipmentCode(_ name: String) -> String {
+        let club = name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
+        if club == "driver" { return "DR" }
+        if club.hasPrefix("madera"), let face = club.split(separator: " ").last { return "\(face)W".uppercased() }
+        if club.contains("hibrido") { return "HY" }
+        if club.hasPrefix("hierro"), let face = name.split(separator: " ").last { return "\(face)i" }
+        if isPutter(name) { return "PT" }
+        return name
+    }
+
+    private var equipmentList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("\(model.bag.count) palos · cargá marca y modelo de cada uno.")
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .padding(.bottom, 8)
+            ForEach(orderedBag) { club in
+                HStack(spacing: 10) {
+                    Text(equipmentCode(club.name))
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink2)
+                        .frame(width: 36, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(club.name)
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                            .lineLimit(1)
+                        Text("Sin marca ni modelo")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                    }
+                    Spacer(minLength: 8)
+                    if isPutter(club.name) {
+                        Text("Sin yardas")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                    } else {
+                        Text(club.carry.map { "\($0) yd" } ?? "— yd")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink2)
+                    }
+                }
+                .padding(.vertical, 10)
+                .accessibilityIdentifier("equip-\(club.name)")
+                Hairline()
+            }
+        }
     }
 
     private var yardClubs: [BagClub] {

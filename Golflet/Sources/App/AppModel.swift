@@ -161,7 +161,8 @@ final class AppModel {
     var home: HomeSnapshot {
         StatsEngine.home(
             rounds: rounds,
-            officialIndex: OfficialHandicap.latest(player: profile.currentHandicap, history: officialHistory)
+            officialIndex: OfficialHandicap.latest(player: profile.currentHandicap, history: officialHistory),
+            history: officialHistory
         )
     }
     var groupedCourseNames: [String] { StatsEngine.groupedCourseNames(from: courseFilterOptions) }

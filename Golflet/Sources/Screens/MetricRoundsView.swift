@@ -79,14 +79,8 @@ struct MetricRoundsView: View {
                                     .accessibilityIdentifier("metric-round-\(section.id)-\(index)")
                                 }
                             } header: {
-                                if sort == .date, !section.isCurrent {
-                                    Text(section.id)
-                                        .font(GType.overline)
-                                        .foregroundStyle(p.ink3)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.vertical, 4)
-                                        .background(p.bg.opacity(0.94))
-                                        .accessibilityIdentifier("year-marker-\(section.id)")
+                                if sort == .date, screenID == "screen-rondas" || !section.isCurrent {
+                                    yearHeader(section)
                                 }
                             }
                         }
@@ -123,16 +117,17 @@ struct MetricRoundsView: View {
     }
 
     private var sortRow: some View {
-        HStack(spacing: 8) {
-            Text("Ordenar")
-                .font(GType.label)
-                .foregroundStyle(p.ink3)
+        HStack(spacing: 4) {
             sortChip("Fecha", field: .date, id: "sort-date")
             sortChip("Mejor gross", field: .gross, id: "sort-gross")
             sortChip("Mejor neto", field: .net, id: "sort-net")
         }
+        .padding(3)
+        .background(Color(hex: 0xECE8DE))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("metric-sort-menu")
+        .accessibilityLabel("Ordenar")
     }
 
     private func sortChip(_ title: String, field: MetricSortField, id: String) -> some View {
@@ -142,16 +137,36 @@ struct MetricRoundsView: View {
             order = .bestFirst
         } label: {
             Text(title)
-                .font(GType.label)
-                .foregroundStyle(on ? p.onPrimary : p.ink)
+                .font(GFont.ui(13, weight: .semibold))
+                .foregroundStyle(on ? p.ink : p.ink2)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(on ? p.primary : p.surface)
-                .clipShape(Capsule())
+                .padding(.vertical, 6)
+                .background(on ? p.surface : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func yearHeader(_ section: RoundYearSection) -> some View {
+        let valid = StatsEngine.eighteenHoleValid(section.rounds)
+        let average = StatsEngine.average(valid.compactMap(\.gross))
+        return HStack {
+            Text(section.isCurrent ? "Este año" : section.id)
+                .font(GFont.ui(13, weight: .semibold))
+                .foregroundStyle(p.ink2)
+            Spacer()
+            if let average {
+                Text("prom. \(FormatAR.one(average))")
+                    .font(GFont.ui(13, weight: .semibold))
+                    .foregroundStyle(p.ink2)
+            }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(p.bg.opacity(0.94))
+        .accessibilityIdentifier("year-marker-\(section.id)")
     }
 
     private var yearSections: [RoundYearSection] {
@@ -171,7 +186,14 @@ struct MetricRoundsView: View {
     private var countLine: String {
         if screenID == "screen-rondas" {
             let n = model.rounds.count
-            return "\(n) \(n == 1 ? "tarjeta" : "tarjetas")"
+            let word = n == 1 ? "tarjeta" : "tarjetas"
+            if model.clubs.count == 1, let name = model.clubs.first?.name {
+                return "\(n) \(word) · \(name)"
+            }
+            if model.clubs.count > 1 {
+                return "\(n) \(word) · \(model.clubs.count) clubes"
+            }
+            return "\(n) \(word)"
         }
         return "\(rows.count) \(rows.count == 1 ? "ronda" : "rondas")"
     }

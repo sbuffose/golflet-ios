@@ -270,6 +270,21 @@ enum FormatAR {
         return f.string(from: date).replacingOccurrences(of: ".", with: "")
     }
 
+    /// Web `MES` abbreviations: ene, feb, mar…
+    static let webMonths = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+
+    static func webMonthYear(_ date: Date) -> String {
+        let parts = Calendar.gregorian.dateComponents([.month, .year], from: date)
+        let month = webMonths[max(0, min(11, (parts.month ?? 1) - 1))]
+        return "\(month). \(parts.year ?? 0)"
+    }
+
+    static func webDay(_ date: Date) -> String {
+        let parts = Calendar.gregorian.dateComponents([.day, .month, .year], from: date)
+        let month = webMonths[max(0, min(11, (parts.month ?? 1) - 1))]
+        return "\(parts.day ?? 0) \(month) \(parts.year ?? 0)"
+    }
+
     static func signedInt(_ value: Int) -> String {
         if value > 0 { return "+\(value)" }
         if value < 0 { return "−\(-value)" }

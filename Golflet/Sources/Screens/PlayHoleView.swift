@@ -388,7 +388,7 @@ struct PlayHoleView: View {
     private var dock: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
-                if track.marks.contains(where: \.holed) {
+                if track.marks.contains(where: \.holed), !holeClosed {
                     CaddieMark(height: 48)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -405,6 +405,23 @@ struct PlayHoleView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("play-aim-label")
+                if holeClosed, !closedStrokes.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(closedStrokes, id: \.n) { stroke in
+                            Text("\(stroke.n). \(stroke.club) · \(stroke.yards) yd")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(p.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .accessibilityIdentifier("play-stroke-\(stroke.n)")
+                        }
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Golpes")
+                }
                 if holeClosed {
                     VStack(spacing: 8) {
                         Button("Editar hoyo") { editingClosed = true }
@@ -445,7 +462,9 @@ struct PlayHoleView: View {
                     if track.phase == .tracking { lostActions }
                 }
                 greenTools
-                holeShots
+                if !holeClosed {
+                    holeShots
+                }
                 accuracy
                 Text("El palo lo marca el Apple Watch o el sensor, cuando estén conectados.")
                     .font(GType.label)
@@ -458,7 +477,7 @@ struct PlayHoleView: View {
             .padding(.top, 10)
             .padding(.bottom, 16)
         }
-        .frame(maxHeight: 248)
+        .frame(maxHeight: holeClosed ? 360 : 248)
         .background(Color.white.opacity(0.96))
     }
 
@@ -969,6 +988,29 @@ struct PlayHoleView: View {
                 .tabular()
                 .foregroundStyle(p.ink3)
         }
+    }
+
+    private var closedStrokes: [(n: Int, club: String, yards: Int)] {
+        let marks = track.marks.filter(\.countsStroke)
+        if !marks.isEmpty {
+            return marks.enumerated().map { index, mark in
+                let previous = index == 0 ? track.tee : marks[index - 1].at
+                return (index + 1, mark.club ?? "—", strokeYards(from: previous, to: mark.at))
+            }
+        }
+        let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
+        return rows.map { shot in
+            (shot.shotNumber, shot.club ?? "—", shot.distanceYd ?? 0)
+        }
+    }
+
+    private func strokeYards(from: TrackPoint?, to: TrackPoint) -> Int {
+        guard let from else { return 0 }
+        let meters = PlayMath.meters(
+            from: GPSCoord(lat: from.lat, lng: from.lng),
+            to: GPSCoord(lat: to.lat, lng: to.lng)
+        )
+        return PlayMath.yards(meters)
     }
 
     private var holeShots: some View {
