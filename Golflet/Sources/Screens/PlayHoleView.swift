@@ -319,7 +319,7 @@ struct PlayHoleView: View {
 
             Spacer(minLength: 0)
 
-            HStack(alignment: .bottom) {
+            HStack(alignment: .bottom, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(closedStrokes, id: \.n) { stroke in
                         Text("\(stroke.n). \(stroke.club) · \(stroke.yards) yd")
@@ -337,31 +337,29 @@ struct PlayHoleView: View {
                 }
                 .frame(maxWidth: 148, alignment: .leading)
                 Spacer(minLength: 8)
+                VStack(spacing: 8) {
+                    mapZoomButton(system: "plus", delta: 1, id: "play-zoom-in", label: "Acercar")
+                    mapZoomButton(system: "minus", delta: -1, id: "play-zoom-out", label: "Alejar")
+                }
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
 
             VStack(spacing: 8) {
-                Button { editingClosed = true } label: {
-                    Text("Editar hoyo")
-                        .font(GFont.ui(16, weight: .semibold))
-                        .foregroundStyle(p.onPrimary)
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(p.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("play-edit-hole")
-                Button { changeHole(hole + 1) } label: {
-                    Text("Siguiente hoyo ›")
-                        .font(GFont.ui(16, weight: .semibold))
-                        .foregroundStyle(p.onPrimary)
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(p.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("play-next-wide")
+                Button("Editar hoyo") { editingClosed = true }
+                    .font(GFont.ui(16, weight: .semibold))
+                    .foregroundStyle(p.onPrimary)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(p.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityIdentifier("play-edit-hole")
+                Button("Siguiente hoyo ›") { changeHole(hole + 1) }
+                    .font(GFont.ui(16, weight: .semibold))
+                    .foregroundStyle(p.onPrimary)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(p.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityIdentifier("play-next-wide")
             }
             .padding(.horizontal, 10)
 
@@ -371,14 +369,6 @@ struct PlayHoleView: View {
                 .padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .overlay(alignment: .trailing) {
-            VStack(spacing: 8) {
-                mapZoomButton(system: "plus", delta: 1, id: "play-zoom-in", label: "Acercar")
-                mapZoomButton(system: "minus", delta: -1, id: "play-zoom-out", label: "Alejar")
-            }
-            .padding(.trailing, 10)
-            .offset(y: 70)
-        }
     }
 
     private var closeCard: some View {
