@@ -55,6 +55,11 @@ struct PlayHoleView: View {
         self.course = course
         _liveRound = State(initialValue: liveRound)
         _hole = State(initialValue: liveRound.currentHole)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") {
+            let current = course.holes.first { $0.number == liveRound.currentHole } ?? course.holes.first
+            let pin = current?.green.center ?? current?.tee ?? GPSCoord(lat: -34.48, lng: -58.53)
+            _track = State(initialValue: Self.closedPreview(at: pin))
+        }
     }
 
     var body: some View {
@@ -175,15 +180,15 @@ struct PlayHoleView: View {
             }
         }
         .onAppear {
-            if ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") {
-                track = closedHolePreview()
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole"), !track.marks.contains(where: \.holed) {
+                track = Self.closedPreview(at: pinCoord)
             }
         }
     }
 
-    private func closedHolePreview() -> TrackSession.State {
+    private static func closedPreview(at coord: GPSCoord) -> TrackSession.State {
         var state = TrackSession.State()
-        let pin = TrackPoint(lat: pinCoord.lat, lng: pinCoord.lng)
+        let pin = TrackPoint(lat: coord.lat, lng: coord.lng)
         state.phase = .tracking
         state.tee = pin
         state.flag = pin
@@ -365,6 +370,7 @@ struct PlayHoleView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 12)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .overlay(alignment: .trailing) {
             VStack(spacing: 8) {
                 mapZoomButton(system: "plus", delta: 1, id: "play-zoom-in", label: "Acercar")
@@ -1806,7 +1812,7 @@ struct PlayHoleView: View {
         mapCenter = nil
         waterAsk = false
         markMode = .track
-        track = ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") ? closedHolePreview() : TrackSession.State()
+        track = ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole") ? Self.closedPreview(at: pinCoord) : TrackSession.State()
         chosenClub = nil
         pinStep = .idle
         lastManualChange = Date()
