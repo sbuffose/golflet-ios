@@ -158,12 +158,14 @@ final class GolfletUITests: XCTestCase {
             liveGroup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
-        let tabs = first(app, "group-metric-birdies")
-        for _ in 0..<8 {
-            guard tabs.exists else { break }
+        let tabs = first(app, "group-category-tabs")
+        XCTAssertTrue(tabs.waitForExistence(timeout: 4), "Faltan las pestañas de categoría")
+        for _ in 0..<6 {
             let y = tabs.frame.minY
-            if y > 36, y < 160 { break }
-            if y >= 160 { app.swipeUp(velocity: .slow) } else { app.swipeDown(velocity: .slow) }
+            if y > 88, y < 150 { break }
+            let from: CGFloat = (y > 260 || y <= 1) ? 0.78 : 0.64
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from))
+                .press(forDuration: 0.02, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from - 0.24)))
         }
         saveShot("parity-ios-grupos-usga")
 

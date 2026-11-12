@@ -41,7 +41,7 @@ struct RoundDetailView: View {
     var body: some View {
         GScreen(id: "screen-ronda") {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     header
                     partners
                     scoreHero
@@ -296,7 +296,7 @@ struct RoundDetailView: View {
                 .foregroundStyle(p.ink2)
                 .frame(width: 32)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 1)
     }
 
     private func legend(_ item: ScoreLegend.Item) -> some View {
