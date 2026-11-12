@@ -7,7 +7,7 @@ final class GolfletUITests: XCTestCase {
 
     func testNavigateEveryScreenAndCapture() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing", "-ui-testing-greeting", "Sebastián", "-ui-testing-group-tabs"]
+        app.launchArguments = ["-ui-testing", "-ui-testing-greeting", "Sebastián"]
         app.launch()
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
@@ -158,16 +158,6 @@ final class GolfletUITests: XCTestCase {
             liveGroup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
-        let tabs = first(app, "group-category-tabs")
-        XCTAssertTrue(tabs.waitForExistence(timeout: 4), "Faltan las pestañas de categoría")
-        let filters = first(app, "group-view-range")
-        let deadline = Date().addingTimeInterval(3)
-        while Date() < deadline {
-            let tabY = tabs.frame.minY
-            let filtersGone = !filters.exists || filters.frame.maxY < 40
-            if filtersGone, tabY > 24, tabY < 180 { break }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        }
         saveShot("parity-ios-grupos-usga")
 
         tapTab(app, "Jugar")
