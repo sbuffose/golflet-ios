@@ -266,7 +266,7 @@ final class GolfletUITests: XCTestCase {
     func testParityClosedHoleAndClub() throws {
         let app = XCUIApplication()
         // The mock round already has the holed shots. The screen closes from those shots.
-        app.launchArguments = ["-ui-testing", "-ui-testing-closed-hole"]
+        app.launchArguments = ["-ui-testing", "-ui-testing-closed-hole", "YES"]
         app.launch()
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")

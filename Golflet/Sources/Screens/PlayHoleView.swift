@@ -9,9 +9,13 @@ struct PlayHoleView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let course: GPSCourseDetail
+    /// Shots already saved when the hole opened. Used until the reload replaces them.
+    let openingShots: [Shot]
     @State var liveRound: LiveRound
     @State private var location = PlayLocation()
     @State private var shots: [Shot] = []
+    /// True once this screen has its own shot list, so a later undo is not replaced by the opening fixture.
+    @State private var receivedShots = false
     @State private var hole: Int
     @State private var message: String?
     @State private var showsHoles = false
@@ -51,16 +55,22 @@ struct PlayHoleView: View {
         case report
     }
 
-    init(course: GPSCourseDetail, liveRound: LiveRound) {
+    init(course: GPSCourseDetail, liveRound: LiveRound, openingShots: [Shot] = []) {
         self.course = course
+        self.openingShots = openingShots
         _liveRound = State(initialValue: liveRound)
         _hole = State(initialValue: liveRound.currentHole)
+        if !openingShots.isEmpty {
+            _shots = State(initialValue: openingShots)
+            _receivedShots = State(initialValue: true)
+        }
     }
 
     var body: some View {
         ZStack {
             holeMap
                 .ignoresSafeArea()
+                .accessibilityHidden(true)
             reticle
                 .allowsHitTesting(false)
             if holeClosed {
@@ -174,6 +184,7 @@ struct PlayHoleView: View {
                 GProbe(id: "pace-alert", label: paceAlertText)
             }
         }
+        .onAppear { adoptSavedTrackIfNeeded() }
     }
 
     private var current: GPSHole? {
@@ -659,21 +670,32 @@ struct PlayHoleView: View {
         .background(Color.white.opacity(0.96))
     }
 
-    /// Saved shots win when the in-memory track was cleared or never restored.
+    /// A holed shot that is already saved keeps the hole closed when the in-memory track is empty or unfinished.
     private var activeTrack: TrackSession.State {
+        if track.marks.contains(where: \.holed) { return track }
+        if let restoredTrack, restoredTrack.marks.contains(where: \.holed) { return restoredTrack }
         if !track.marks.isEmpty { return track }
         return restoredTrack ?? track
     }
 
+    private var shotsOnHole: [Shot] {
+        var byID: [String: Shot] = [:]
+        func keep(_ shot: Shot) {
+            guard shot.hole == hole else { return }
+            if let client = shot.clientId, droppedClientIDs.contains(client) { return }
+            byID[shot.id] = shot
+        }
+        SavedRoundShots.load(roundID: liveRound.id).forEach(keep)
+        if !receivedShots { openingShots.forEach(keep) }
+        visibleShots.forEach(keep)
+        return byID.values.sorted { $0.shotNumber < $1.shotNumber }
+    }
+
     private var restoredTrack: TrackSession.State? {
-        let saved = visibleShots
-            .filter { $0.hole == hole }
-            .sorted { $0.shotNumber < $1.shotNumber }
-            .map {
+        TrackSession.restored(
+            shots: shotsOnHole.map {
                 TrackSession.SavedShot(lat: $0.lat, lng: $0.lng, club: $0.club, result: $0.result)
-            }
-        return TrackSession.restored(
-            shots: saved,
+            },
             tee: TrackPoint(lat: teeCoord.lat, lng: teeCoord.lng),
             pin: TrackPoint(lat: pinCoord.lat, lng: pinCoord.lng)
         )
@@ -1916,6 +1938,7 @@ struct PlayHoleView: View {
         if let detail = try? await model.api.liveRound(id: liveRound.id) {
             liveRound = detail.liveRound
             shots = detail.shots
+            receivedShots = true
             adoptSavedTrackIfNeeded()
         }
         if let holes = try? await model.api.liveRoundHoles(id: liveRound.id) {
