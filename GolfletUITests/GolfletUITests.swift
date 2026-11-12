@@ -161,13 +161,18 @@ final class GolfletUITests: XCTestCase {
         let tabs = first(app, "group-category-tabs")
         let filters = first(app, "group-view-range")
         XCTAssertTrue(tabs.waitForExistence(timeout: 4), "Faltan las pestañas de categoría")
-        for _ in 0..<8 {
+        for _ in 0..<6 {
             let tabY = tabs.frame.minY
-            let filtersGone = !filters.exists || filters.frame.maxY < 55
-            if filtersGone, tabY > 48, tabY < 170 { break }
-            if tabY > 1, tabY < 48 { break }
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.80))
-                .press(forDuration: 0.25, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.62)))
+            let tabsOnScreen = tabs.isHittable && tabY > 24
+            let filtersGone = !filters.exists || !filters.isHittable || filters.frame.maxY < 48
+            if filtersGone, tabsOnScreen, tabY < 150 { break }
+            if filtersGone, !tabsOnScreen {
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.42))
+                    .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.58)), withVelocity: .slow, thenHoldForDuration: 0.3)
+                break
+            }
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.72))
+                .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.58)), withVelocity: .slow, thenHoldForDuration: 0.3)
         }
         saveShot("parity-ios-grupos-usga")
 
