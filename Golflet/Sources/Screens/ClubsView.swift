@@ -27,10 +27,22 @@ struct ClubsView: View {
                                 .clipShape(Circle())
                                 .accessibilityIdentifier("cuenta-foto")
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(accountName)
-                                    .font(GType.sheetTitle)
-                                    .foregroundStyle(p.ink)
-                                    .lineLimit(2)
+                                HStack(spacing: 8) {
+                                    Text(accountName)
+                                        .font(GType.sheetTitle)
+                                        .foregroundStyle(p.ink)
+                                        .lineLimit(2)
+                                    if !model.profile.firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        Button {} label: {
+                                            PencilMark()
+                                                .frame(width: 44, height: 44)
+                                                .background(Circle().fill(Color(hex: 0xECE8DF)))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Editar nombre")
+                                        .accessibilityIdentifier("cuenta-nick")
+                                    }
+                                }
                                 if let mail = accountMail {
                                     Text(mail)
                                         .font(GType.label)
@@ -191,12 +203,12 @@ struct ClubsView: View {
             GCard(radius: 18, padding: 4) {
                 VStack(spacing: 0) {
                     NavigationLink { PelotaView() } label: {
-                        gearRow("Mi pelota", "Contanos con qué pelota jugás")
+                        gearRow("Mi pelota", "Contanos con qué pelota jugás") { BallMark() }
                     }
                     .accessibilityIdentifier("cuenta-pelota")
                     Hairline()
                     NavigationLink { SorteosView() } label: {
-                        gearRow("Sorteos", "Los que jugás con el club")
+                        gearRow("Sorteos", sorteosLine)
                     }
                     .accessibilityIdentifier("cuenta-sorteos")
                 }
@@ -204,8 +216,17 @@ struct ClubsView: View {
         }
     }
 
+    private var sorteosLine: String {
+        "No hay sorteos abiertos"
+    }
+
     private func gearRow(_ title: String, _ subtitle: String) -> some View {
+        gearRow(title, subtitle) { EmptyView() }
+    }
+
+    private func gearRow<Mark: View>(_ title: String, _ subtitle: String, @ViewBuilder mark: () -> Mark) -> some View {
         HStack(spacing: 12) {
+            mark()
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(GType.headline)
@@ -445,12 +466,17 @@ struct ClubsView: View {
             Button {
                 Task { await model.syncClub(club, password: club.passwordSaved ? nil : syncPassword, savePassword: saveOnSync) }
             } label: {
-                Text(clubSyncTitle(club))
-                    .font(GType.label)
-                    .foregroundStyle(p.ink)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.hairline, lineWidth: 1))
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(clubSyncTitle(club))
+                        .font(GFont.ui(14, weight: .semibold))
+                }
+                .foregroundStyle(p.ink)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
+                .background(Color(hex: 0xECE8DF))
+                .clipShape(Capsule())
             }
             .buttonStyle(.plain)
             .disabled(model.isBusy)
@@ -616,5 +642,24 @@ struct ClubsView: View {
                 matricula = pending
             }
         }
+    }
+}
+
+/// The web nickname pencil (`ICON.pencil`), on the beige circle next to the name.
+private struct PencilMark: View {
+    var body: some View {
+        Canvas { context, size in
+            let scale = min(size.width, size.height) / 16
+            var path = Path()
+            path.move(to: CGPoint(x: 2 * scale, y: 14 * scale))
+            path.addLine(to: CGPoint(x: 3 * scale, y: 10 * scale))
+            path.addLine(to: CGPoint(x: 11 * scale, y: 2 * scale))
+            path.addLine(to: CGPoint(x: 14 * scale, y: 5 * scale))
+            path.addLine(to: CGPoint(x: 6 * scale, y: 13 * scale))
+            path.closeSubpath()
+            context.stroke(path, with: .color(Color(hex: 0x3E4C62)), lineWidth: 1.6 * scale)
+        }
+        .frame(width: 16, height: 16)
+        .accessibilityHidden(true)
     }
 }
