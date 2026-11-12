@@ -7,7 +7,7 @@ final class GolfletUITests: XCTestCase {
 
     func testNavigateEveryScreenAndCapture() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing", "-ui-testing-greeting", "Sebastián"]
+        app.launchArguments = ["-ui-testing", "-ui-testing-greeting", "Sebastián", "-ui-testing-group-tabs"]
         app.launch()
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
@@ -159,20 +159,14 @@ final class GolfletUITests: XCTestCase {
         }
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
         let tabs = first(app, "group-category-tabs")
-        let filters = first(app, "group-view-range")
         XCTAssertTrue(tabs.waitForExistence(timeout: 4), "Faltan las pestañas de categoría")
-        for _ in 0..<6 {
+        let filters = first(app, "group-view-range")
+        let deadline = Date().addingTimeInterval(3)
+        while Date() < deadline {
             let tabY = tabs.frame.minY
-            let tabsOnScreen = tabs.isHittable && tabY > 24
-            let filtersGone = !filters.exists || !filters.isHittable || filters.frame.maxY < 48
-            if filtersGone, tabsOnScreen, tabY < 150 { break }
-            if filtersGone, !tabsOnScreen {
-                app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.42))
-                    .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.58)), withVelocity: .slow, thenHoldForDuration: 0.3)
-                break
-            }
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.72))
-                .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.58)), withVelocity: .slow, thenHoldForDuration: 0.3)
+            let filtersGone = !filters.exists || filters.frame.maxY < 40
+            if filtersGone, tabY > 24, tabY < 180 { break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
         saveShot("parity-ios-grupos-usga")
 
