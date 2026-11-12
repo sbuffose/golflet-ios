@@ -158,6 +158,11 @@ final class GolfletUITests: XCTestCase {
             liveGroup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
+        let board = first(app, "group-usga")
+        for _ in 0..<8 {
+            if board.exists, board.frame.minY < 220, board.frame.minY > 20 { break }
+            app.swipeUp()
+        }
         saveShot("parity-ios-grupos-usga")
 
         tapTab(app, "Jugar")
@@ -539,7 +544,8 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
-        XCTAssertTrue(first(app, "home-hcp-profesor").waitForExistence(timeout: 4), "Falta el stack de profesores")
+        XCTAssertTrue(openClubsSheet(app), "No se abrió la cuenta para ver profesores")
+        XCTAssertTrue(first(app, "home-hcp-profesor").waitForExistence(timeout: 4), "Falta Mis profesores")
         largest(app, "home-hcp-profesor").tap()
         XCTAssertTrue(waitFor(app, "screen-home-profesores", timeout: 6), "No se abrió Mis profesores")
         XCTAssertFalse(first(app, "profesor-search").waitForExistence(timeout: 1), "La búsqueda vive en Agregar, no en Mis profesores")
@@ -559,11 +565,16 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
-        XCTAssertTrue(first(app, "home-hcp-groups").waitForExistence(timeout: 4), "Falta el stack de grupos en HCP")
-        largest(app, "home-hcp-groups").tap()
-        XCTAssertTrue(waitFor(app, "screen-home-groups", timeout: 6), "No se abrió la lista de grupos")
-        XCTAssertTrue(first(app, "home-group-g-jockey").waitForExistence(timeout: 4))
-        first(app, "home-group-g-jockey").tap()
+        tapTab(app, "Grupos")
+        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
+        let liveGroup = first(app, "hub-group-g-jockey")
+        reveal(app, liveGroup)
+        XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "Falta el grupo de la cuenta")
+        if liveGroup.isHittable {
+            liveGroup.tap()
+        } else {
+            liveGroup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No entró al grupo")
         saveShot("41_inicio_hcp_grupos")
         let photo = first(app, "group-edit-photo")

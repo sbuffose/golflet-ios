@@ -83,7 +83,7 @@ struct RootView: View {
         VStack(spacing: 0) {
             tabPages
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if !model.showsLiveHole && !model.showsPlay {
+            if !model.showsLiveHole && !model.showsPlay && !model.showsClubs {
                 GolfletTabBar(selection: bindings.selectedTab) { tab in
                     tabRoots[tab, default: 0] += 1
                 }
@@ -94,13 +94,6 @@ struct RootView: View {
         .sheet(item: bindings.presentedRound) { round in
             NavigationStack {
                 RoundDetailView(round: round)
-            }
-            .golfletChrome()
-            .environment(model)
-        }
-        .sheet(isPresented: bindings.showsClubs) {
-            NavigationStack {
-                ClubsView()
             }
             .golfletChrome()
             .environment(model)

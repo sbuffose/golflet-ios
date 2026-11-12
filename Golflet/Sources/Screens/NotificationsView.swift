@@ -57,7 +57,7 @@ struct NotificationsView: View {
     }
 
     private var cuentaRow: some View {
-        Button { model.presentClubs() } label: {
+        NavigationLink { ClubsView() } label: {
             GCard(radius: 16, padding: 14) {
                 HStack(spacing: 12) {
                     AvatarCircle(initials: model.profile.initials)

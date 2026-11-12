@@ -10,6 +10,7 @@ struct ClubsView: View {
     @State private var syncPassword = ""
     @State private var saveOnSync = false
     @State private var showsTextPrefs = false
+    @State private var showsProfesores = false
 
     var body: some View {
         GScreen(id: "screen-clubes") {
@@ -37,10 +38,10 @@ struct ClubsView: View {
                                 }
                                 Text("HI \(FormatAR.one(model.profile.currentHandicap))")
                                     .font(GType.label)
-                                    .foregroundStyle(p.primary)
+                                    .foregroundStyle(p.onPrimary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(Color(hex: 0xC8A86A).opacity(0.35))
+                                    .background(p.accent)
                                     .clipShape(Capsule())
                                     .accessibilityIdentifier("cuenta-hi")
                             }
@@ -48,10 +49,24 @@ struct ClubsView: View {
                         Button {} label: {
                             Text("Elegir foto")
                                 .font(GType.headline)
-                                .foregroundStyle(p.ink2)
+                                .foregroundStyle(p.onPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(p.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("cuenta-foto-elegir")
+                        if !model.profesores.isEmpty {
+                            Button { showsProfesores = true } label: {
+                                Text("Mis profesores")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("home-hcp-profesor")
+                            .accessibilityLabel("Mis profesores")
+                        }
                     }
 
                     notificationsRow
@@ -109,6 +124,16 @@ struct ClubsView: View {
             }
         }
         .accessibilityIdentifier("screen-clubes")
+        .sheet(isPresented: $showsProfesores) {
+            NavigationStack {
+                HomeProfesoresSheet { profesor in
+                    showsProfesores = false
+                    model.presentProfesor(profesor)
+                }
+            }
+            .golfletChrome()
+            .environment(model)
+        }
         .sheet(isPresented: $showsTextPrefs) {
             NavigationStack {
                 TextPrefsView()

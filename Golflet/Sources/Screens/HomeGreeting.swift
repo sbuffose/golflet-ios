@@ -203,7 +203,7 @@ struct HomeGreetingHeader: View {
             Text("Hola,")
                 .foregroundStyle(p.ink2)
             Text(name)
-                .foregroundStyle(p.accent)
+                .foregroundStyle(p.primary)
         }
         .font(GFont.ui(size, weight: .semibold))
         .tracking(tracking)

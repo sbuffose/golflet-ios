@@ -431,6 +431,7 @@ struct GroupDetailView: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Clasificación")
+                        .accessibilityIdentifier("group-usga")
                         .font(GFont.ui(11, weight: .semibold))
                         .tracking(1.6)
                         .textCase(.uppercase)

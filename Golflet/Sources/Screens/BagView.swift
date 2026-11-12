@@ -27,6 +27,17 @@ struct BagView: View {
                         .font(GType.section)
                         .foregroundStyle(p.ink)
                     Spacer()
+                    NavigationLink { ironSet.padding(20) } label: {
+                        Text("Juego de hierros")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(p.surface2)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("bag-iron-set")
                     NavigationLink { AddClubView() } label: {
                         Text("+ Agregar palo")
                             .font(GType.label)
@@ -113,9 +124,7 @@ struct BagView: View {
                                 .accessibilityIdentifier("bag-gps")
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.bottom, 12)
-                        ironSet
-                            .padding(.bottom, 24)
+                        .padding(.bottom, 24)
                     }
                 }
             }
