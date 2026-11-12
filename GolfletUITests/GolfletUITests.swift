@@ -158,9 +158,9 @@ final class GolfletUITests: XCTestCase {
             liveGroup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
-        let board = first(app, "group-usga")
-        for _ in 0..<4 {
-            if board.exists, board.frame.minY < 320, board.frame.minY > 0 { break }
+        let peores = first(app, "group-peores")
+        for _ in 0..<8 {
+            if peores.exists, peores.frame.minY > 0, peores.frame.minY < 460 { break }
             app.swipeUp(velocity: .slow)
         }
         saveShot("parity-ios-grupos-usga")
@@ -985,6 +985,10 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "group-g-jockey").waitForExistence(timeout: 4))
         first(app, "group-g-jockey").tap()
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 6))
+        let fullTable = first(app, "group-full-table")
+        reveal(app, fullTable)
+        XCTAssertTrue(fullTable.waitForExistence(timeout: 4), "Falta Ver tabla completa")
+        fullTable.tap()
         reveal(app, first(app, "compare-handicap-ana"))
         XCTAssertTrue(first(app, "compare-handicap-ana").waitForExistence(timeout: 4))
         let hidden = first(app, "compare-handicap-ana").label

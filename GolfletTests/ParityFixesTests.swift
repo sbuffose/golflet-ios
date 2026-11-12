@@ -240,5 +240,9 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertEqual(HoleWind.shotNote(kmh: nil, tempC: nil, rainMm: nil, from: nil), "Clima no disponible")
         XCTAssertFalse(HoleWind.shotNote(kmh: 18, tempC: 21, rainMm: 1, from: nil).contains("yd"))
         XCTAssertTrue(HoleWind.shotNote(kmh: 18, tempC: 21, rainMm: 1, from: nil).contains("18 km/h"))
+        XCTAssertEqual(TournamentName.short("F Programa 0-54 18hmp Dom AZUL 🟦"), "F Programa Dom Azul")
+        XCTAssertEqual(TournamentName.title("F Programa 0-54 18hmp Dom AZUL 🟦"), "F Programa 0-54 18hmp Dom Azul")
+        XCTAssertEqual(FixtureBag.clubs.map(\.code), ["DR", "3W", "HY", "7i", "PW", "SW", "PT"])
+        XCTAssertEqual(FixtureBag.clubs.map(\.carry), [230, 210, 190, 150, 110, nil, nil])
     }
 }

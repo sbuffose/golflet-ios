@@ -11,6 +11,7 @@ struct ClubsView: View {
     @State private var saveOnSync = false
     @State private var showsTextPrefs = false
     @State private var showsProfesores = false
+    @State private var showsMissingClub = false
 
     var body: some View {
         GScreen(id: "screen-clubes") {
@@ -71,15 +72,23 @@ struct ClubsView: View {
 
                     notificationsRow
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Clubes")
-                            .font(GType.section)
-                            .foregroundStyle(p.ink)
-                        Text("Golflet entra con tu matrícula y contraseña y trae todos tus clubes. Nunca cambia nada en tu cuenta.")
-                            .font(GType.body)
-                            .foregroundStyle(p.ink2)
-                        ForEach(model.clubs) { club in
-                            clubCard(club)
+                    if !model.clubs.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Clubes")
+                                .font(GType.section)
+                                .foregroundStyle(p.ink)
+                            GCard(radius: 18, padding: 4) {
+                                VStack(spacing: 0) {
+                                    ForEach(model.clubs) { club in
+                                        clubCard(club)
+                                        Hairline()
+                                    }
+                                    missingClubRow
+                                }
+                            }
+                            if showsMissingClub {
+                                linkForm
+                            }
                         }
                     }
 
@@ -412,40 +421,100 @@ struct ClubsView: View {
     }
 
     private func clubCard(_ club: LinkedClub) -> some View {
-        GCard(radius: 18, padding: 14) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(club.name)
-                            .font(GType.headline)
-                            .foregroundStyle(p.ink)
-                        Text("Matrícula \(club.matricula) · \(club.cardCount) tarjetas")
-                            .font(GType.label)
-                            .foregroundStyle(p.ink2)
-                        if club.roundsWithHoles > 0 || club.roundsStored > 0 {
-                            Text("\(club.roundsWithHoles) con hoyos · \(club.roundsStored) guardadas")
-                                .font(GType.label)
-                                .foregroundStyle(p.ink3)
-                        }
-                    }
-                    Spacer()
-                    Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 8, height: 8)
-                }
-                Button {
-                    Task { await model.syncClub(club, password: club.passwordSaved ? nil : syncPassword, savePassword: saveOnSync) }
-                } label: {
-                    Text(model.syncSession != nil ? "Actualizando…" : "Actualizar todos los clubes")
-                        .font(GType.headline)
-                        .foregroundStyle(p.onPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(p.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .disabled(model.isBusy)
-                .accessibilityIdentifier("club-sync-\(club.accountId)")
+        HStack(spacing: 12) {
+            Text(clubMark(club.name))
+                .font(GFont.ui(15, weight: .semibold))
+                .foregroundStyle(p.primary)
+                .frame(width: 36, height: 36)
+                .background(p.surface2)
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(club.name)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                    .lineLimit(1)
+                Text(clubStatus(club))
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                    .lineLimit(2)
             }
+            Spacer(minLength: 8)
+            Button {
+                Task { await model.syncClub(club, password: club.passwordSaved ? nil : syncPassword, savePassword: saveOnSync) }
+            } label: {
+                Text(clubSyncTitle(club))
+                    .font(GType.label)
+                    .foregroundStyle(p.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.hairline, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isBusy)
+            .accessibilityIdentifier("club-sync-\(club.accountId)")
+            .accessibilityLabel("Actualizar")
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+    }
+
+    private var missingClubRow: some View {
+        Button { showsMissingClub = true } label: {
+            HStack(spacing: 12) {
+                Text("?")
+                    .font(GFont.ui(16, weight: .semibold))
+                    .foregroundStyle(p.ink2)
+                    .frame(width: 36, height: 36)
+                    .background(p.surface2)
+                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Tengo otro club y no aparece")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text("Contanos cuál y lo revisamos")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(p.ink3)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("cuenta-club-faltante")
+    }
+
+    private func clubMark(_ name: String) -> String {
+        let trimmed = name.replacingOccurrences(of: #"^(Club|Golf)\s+"#, with: "", options: .regularExpression)
+        return String(trimmed.first ?? "?").uppercased()
+    }
+
+    private func clubSyncTitle(_ club: LinkedClub) -> String {
+        if model.syncSession != nil || club.lastSyncStatus == "running" { return "Actualizando…" }
+        return "Actualizar"
+    }
+
+    private func clubStatus(_ club: LinkedClub) -> String {
+        if club.lastSyncStatus == "error" {
+            return club.lastSyncMessage ?? "Error al actualizar"
+        }
+        if club.lastSyncStatus == "running" { return "Actualizando…" }
+        let via = club.source == "app" ? " · con tu matrícula" : ""
+        return "\(club.cardCount) tarjetas · \(ago(club.lastSyncAt))\(via)"
+    }
+
+    private func ago(_ date: Date?) -> String {
+        guard let date else { return "nunca" }
+        let seconds = Date().timeIntervalSince(date)
+        if seconds < 90 { return "recién" }
+        if seconds < 3600 { return "hace \(Int((seconds / 60).rounded())) min" }
+        if seconds < 86400 { return "hace \(Int((seconds / 3600).rounded())) h" }
+        let days = Int((seconds / 86400).rounded())
+        return days == 1 ? "ayer" : "hace \(days) días"
     }
 
     private var sharedActions: some View {

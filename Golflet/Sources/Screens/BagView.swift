@@ -176,43 +176,78 @@ struct BagView: View {
         return name
     }
 
+    private var equipmentFoot: String {
+        let branded = model.bag.filter { !($0.brand ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+        if branded == 0 {
+            return "\(model.bag.count) palos · cargá marca y modelo de cada uno."
+        }
+        return "\(model.bag.count) palos · \(branded) con marca y modelo."
+    }
+
     private var equipmentList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("\(model.bag.count) palos · cargá marca y modelo de cada uno.")
+            Text(equipmentFoot)
                 .font(GType.label)
                 .foregroundStyle(p.ink3)
                 .padding(.bottom, 8)
             ForEach(orderedBag) { club in
-                HStack(spacing: 10) {
-                    Text(equipmentCode(club.name))
-                        .font(GType.headline)
-                        .foregroundStyle(p.ink2)
-                        .frame(width: 36, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 0) {
+                    Text(club.code ?? equipmentCode(club.name))
+                        .font(GFont.ui(13, weight: .bold))
+                        .foregroundStyle(p.primary)
+                        .frame(width: 40, height: 40)
+                        .background(Color(hex: 0xF1EDE3))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 1) {
                         Text(club.name)
                             .font(GType.headline)
                             .foregroundStyle(p.ink)
                             .lineLimit(1)
-                        Text("Sin marca ni modelo")
-                            .font(GType.label)
+                        Text(club.equipmentLine)
+                            .font(GFont.ui(13))
                             .foregroundStyle(p.ink3)
+                            .lineLimit(1)
                     }
+                    .padding(.leading, 12)
                     Spacer(minLength: 8)
-                    if isPutter(club.name) {
-                        Text("Sin yardas")
-                            .font(GType.label)
-                            .foregroundStyle(p.ink3)
-                    } else {
-                        Text(club.carry.map { "\($0) yd" } ?? "— yd")
-                            .font(GType.headline)
-                            .foregroundStyle(p.ink2)
-                    }
+                    equipmentYards(club)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(p.ink3)
+                        .padding(.leading, 6)
+                        .accessibilityHidden(true)
                 }
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(club.name), \(club.equipmentLine)")
                 .accessibilityIdentifier("equip-\(club.name)")
                 Hairline()
             }
         }
+    }
+
+    private func equipmentYards(_ club: BagClub) -> some View {
+        Group {
+            if isPutter(club.name) {
+                Text("Sin yardas")
+                    .font(GFont.ui(13))
+                    .foregroundStyle(p.ink2)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(club.carry.map(String.init) ?? "—")
+                        .font(GFont.ui(17, weight: .semibold))
+                        .foregroundStyle(p.primary)
+                        .monospacedDigit()
+                    Text("yd")
+                        .font(GFont.ui(12))
+                        .foregroundStyle(p.ink2)
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color(hex: 0xF1EDE3))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var yardClubs: [BagClub] {
