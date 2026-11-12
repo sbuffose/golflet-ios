@@ -273,7 +273,7 @@ struct HomeView: View {
                                 .foregroundStyle(p.onPrimary)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
-                                .overlay(Capsule().stroke(p.onPrimary.opacity(0.7), lineWidth: 1))
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(p.onPrimary.opacity(0.72), lineWidth: 1.5))
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("home-hcp-cambios")
