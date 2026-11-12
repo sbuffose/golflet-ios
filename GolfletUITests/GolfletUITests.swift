@@ -271,7 +271,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
-        first(app, "play-start").tap()
+        tapIdentified(app, "play-start")
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
@@ -294,7 +294,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
 
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
-        first(app, "play-start").tap()
+        tapIdentified(app, "play-start")
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6), "No se abrió la lista de canchas")
         saveShot("16_play_canchas")
         startAzulRound(app)
@@ -474,7 +474,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
-        first(app, "play-start").tap()
+        tapIdentified(app, "play-start")
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
@@ -637,7 +637,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
-        first(app, "play-start").tap()
+        tapIdentified(app, "play-start")
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
@@ -658,7 +658,7 @@ final class GolfletUITests: XCTestCase {
             dismissIfPresent(app, "close-clubes")
         }
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
-        first(app, "play-start").tap()
+        tapIdentified(app, "play-start")
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
@@ -681,7 +681,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
-        first(app, "play-start").tap()
+        tapIdentified(app, "play-start")
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         XCTAssertTrue(first(app, "course-118-jockey-azul").waitForExistence(timeout: 4))
         first(app, "course-118-jockey-azul").tap()
@@ -907,7 +907,7 @@ final class GolfletUITests: XCTestCase {
         dismissIfPresent(app, "metric-back")
         tapTab(app, "Inicio")
         XCTAssertTrue(first(app, "play-start").waitForExistence(timeout: 4))
-        first(app, "play-start").tap()
+        tapIdentified(app, "play-start")
         XCTAssertTrue(waitFor(app, "screen-play-courses", timeout: 6))
         startAzulRound(app)
         XCTAssertTrue(waitFor(app, "screen-play-hole", timeout: 8))
@@ -1473,6 +1473,15 @@ final class GolfletUITests: XCTestCase {
             }
         } else if app.navigationBars.buttons.firstMatch.exists {
             app.navigationBars.buttons.firstMatch.tap()
+        }
+    }
+
+    private func tapIdentified(_ app: XCUIApplication, _ id: String) {
+        let item = first(app, id)
+        if item.isHittable {
+            item.tap()
+        } else {
+            item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
     }
 
