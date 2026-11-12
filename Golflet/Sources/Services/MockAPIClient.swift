@@ -60,7 +60,8 @@ struct MockAPIClient: GolfletAPI {
         self.autoSession = autoSession
         Self.sessionLock.lock()
         if let greeting = RuntimeFlags.testingGreetingName {
-            Self.mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: greeting, firstName: greeting)
+            let ficha = greeting == "Sebastián" ? "Sebastián Buffo" : greeting
+            Self.mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: ficha, firstName: greeting)
         } else {
             Self.mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: "Jugador Demo", firstName: "Jugador")
         }
@@ -173,7 +174,7 @@ struct MockAPIClient: GolfletAPI {
         let hi = rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 3.1
         return AppSnapshot(
             user: Self.mockUser,
-            profile: PlayerProfile(displayName: Self.mockUser.name, initials: initials(Self.mockUser.name), currentHandicap: hi, firstName: Self.mockUser.firstName),
+            profile: PlayerProfile(displayName: Self.mockUser.name, initials: Self.mockUser.name == "Sebastián Buffo" ? faceInitials(Self.mockUser.name) : initials(Self.mockUser.name), currentHandicap: hi, firstName: Self.mockUser.firstName),
             clubs: clubs,
             rounds: rounds,
             courses: courses,
@@ -639,6 +640,21 @@ struct MockAPIClient: GolfletAPI {
         let parts = name.split(separator: " ")
         let letters = parts.prefix(2).compactMap { $0.first }.map(String.init)
         return letters.joined().uppercased()
+    }
+
+    /// Same face as the web `initials()`: the first Capitalized word, twice.
+    /// «Sebastián Buffo» is SS.
+    private func faceInitials(_ name: String) -> String {
+        let parts = name.split(separator: " ").map(String.init).filter { !$0.isEmpty }
+        guard let first = parts.first, let firstLetter = first.first else { return "·" }
+        let capital = parts.first { word in
+            guard let head = word.first, head.isLetter else { return false }
+            let tail = word.dropFirst().first
+            return String(head) == String(head).uppercased() && tail?.isLowercase == true
+        }
+        let lead = capital?.first ?? firstLetter
+        let second: Character = capital == nil ? (parts.dropFirst().first?.first ?? " ") : firstLetter
+        return String([lead, second]).uppercased()
     }
 
     private static func parseRound(_ item: [String: Any]) -> Round? {

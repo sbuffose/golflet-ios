@@ -12,6 +12,7 @@ struct GroupDetailView: View {
     @State private var comparison: GroupComparison?
     @State private var config = GroupViewConfig.default
     @State private var showsViewSettings = false
+    @State private var showsGroupAdmin = false
     @State private var editingName = ""
     @State private var pickerItem: PhotosPickerItem?
     @State private var showPhotoChoices = false
@@ -65,6 +66,28 @@ struct GroupDetailView: View {
                 GroupViewSettings(groupID: groupID, cards: comparison?.hero?.cards, config: $config) { updated in
                     config = updated
                     Task { await reloadComparison() }
+                }
+            }
+            .golfletChrome()
+            .environment(model)
+        }
+        .sheet(isPresented: $showsGroupAdmin) {
+            NavigationStack {
+                ScrollView {
+                    if let group {
+                        VStack(alignment: .leading, spacing: 22) {
+                            header(group)
+                            if group.isAdmin { adminTools(group) }
+                        }
+                        .padding(20)
+                    }
+                }
+                .navigationTitle("Ajustes")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cerrar") { showsGroupAdmin = false }
+                    }
                 }
             }
             .golfletChrome()
@@ -125,10 +148,6 @@ struct GroupDetailView: View {
     private func content(_ group: GolfletGroup) -> some View {
         VStack(alignment: .leading, spacing: 22) {
             comparisonSection(group)
-            header(group)
-            if group.isAdmin {
-                adminTools(group)
-            }
             members(group)
             MatchHistorySection(
                 records: group.matchRecords,
@@ -549,13 +568,19 @@ struct GroupDetailView: View {
                         .foregroundStyle(Color.white)
                 }
                 Spacer(minLength: 8)
-                Button { showsViewSettings = true } label: {
+                Menu {
+                    Button("Personalizar mi vista") { showsViewSettings = true }
+                    if group.isAdmin {
+                        Button("Cambiar foto") { showPhotoChoices = true }
+                        Button("Ajustes y link de invitación") { showsGroupAdmin = true }
+                    }
+                } label: {
                     Image(systemName: "gearshape")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Color.white)
                         .frame(width: 44, height: 44)
                 }
-                .accessibilityLabel("Mi vista")
+                .accessibilityLabel("Ajustes del grupo")
                 .accessibilityIdentifier("group-my-view")
             }
             .frame(maxWidth: .infinity, alignment: .leading)

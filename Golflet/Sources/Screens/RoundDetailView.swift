@@ -41,15 +41,20 @@ struct RoundDetailView: View {
     var body: some View {
         GScreen(id: "screen-ronda") {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 16) {
                     header
                     partners
                     scoreHero
                     if round.isOtherCourse || round.holes.isEmpty {
                         otherCourseNotice
                     } else {
-                        GCard(radius: 16, padding: 10) {
+                        GCard(radius: 16, padding: 14) {
                             scorecard
+                        }
+                        if !caption.isEmpty {
+                            Text(caption)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink3)
                         }
                         gameStats
                     }
@@ -59,9 +64,6 @@ struct RoundDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
                 .padding(.bottom, 8)
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear.frame(height: 16)
             }
         }
         .accessibilityIdentifier("screen-ronda")
@@ -230,31 +232,28 @@ struct RoundDetailView: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
         .padding(.horizontal, 4)
         .background(emphasize ? p.primary : p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var scorecard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             holeTable(Array(round.holes.prefix(9)), totalLabel: "IDA", total: round.outScore)
+            Hairline()
+                .padding(.vertical, 4)
             holeTable(Array(round.holes.suffix(from: min(9, round.holes.count))), totalLabel: "VTA", total: round.inScore)
-            HStack(spacing: 6) {
+            ChipWrap(spacing: 10) {
                 ForEach(ScoreLegend.items(holes: round.holes, counts: round.counts)) { item in
                     legend(item)
                 }
-            }
-            if !caption.isEmpty {
-                Text(caption)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
             }
         }
     }
 
     private func holeTable(_ holes: [HoleScore], totalLabel: String, total: Int?) -> some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 2) {
             row("HOYO", holes.map { "\($0.number)" }, totalLabel)
             row("YDS", holes.map { yardLabel($0) }, "")
             row("PAR", holes.map { "\($0.par)" }, "\(holes.reduce(0) { $0 + $1.par })")
@@ -263,8 +262,9 @@ struct RoundDetailView: View {
                     .font(GType.overline)
                     .frame(width: 44, alignment: .leading)
                 ForEach(holes) { hole in
-                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 22)
+                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 28)
                         .frame(maxWidth: .infinity)
+                        .frame(height: 34)
                 }
                 Text(total.map(String.init) ?? "—")
                     .font(GFont.ui(13, weight: .semibold))
@@ -296,6 +296,7 @@ struct RoundDetailView: View {
                 .foregroundStyle(p.ink2)
                 .frame(width: 32)
         }
+        .padding(.vertical, 6)
     }
 
     private func legend(_ item: ScoreLegend.Item) -> some View {
@@ -352,12 +353,10 @@ struct RoundDetailView: View {
                     .clipShape(Capsule())
                     .accessibilityIdentifier("edit-game")
             }
-            if !showsGameEditor, !puttsText.isEmpty || !girText.isEmpty || !firText.isEmpty {
-                HStack(spacing: 8) {
-                    statPill("Putts", puttsText)
-                    statPill("GIR", girText)
-                    statPill("FIR", firText)
-                }
+            HStack(spacing: 8) {
+                statPill("Putts", puttsText)
+                statPill("Greens", girText)
+                statPill("Fairways", firText)
             }
             Button { showsTrack = true } label: {
                 HStack(spacing: 12) {

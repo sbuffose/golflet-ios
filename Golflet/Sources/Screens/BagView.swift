@@ -58,7 +58,7 @@ struct BagView: View {
                             Text("Pelota")
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
-                            Text("La pelota con la que jugás")
+                            Text("Sin cargar")
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
                         }
@@ -185,13 +185,23 @@ struct BagView: View {
     }
 
     private var equipmentList: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(equipmentFoot)
                 .font(GType.label)
                 .foregroundStyle(p.ink3)
-                .padding(.bottom, 8)
-            ForEach(orderedBag) { club in
-                HStack(spacing: 0) {
+            GCard(radius: 22, padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(orderedBag.enumerated()), id: \.element.id) { index, club in
+                        equipmentRow(club)
+                        if index < orderedBag.count - 1 { Hairline() }
+                    }
+                }
+            }
+        }
+    }
+
+    private func equipmentRow(_ club: BagClub) -> some View {
+        HStack(spacing: 0) {
                     Text(club.code ?? equipmentCode(club.name))
                         .font(GFont.ui(13, weight: .bold))
                         .foregroundStyle(p.primary)
@@ -217,13 +227,11 @@ struct BagView: View {
                         .padding(.leading, 6)
                         .accessibilityHidden(true)
                 }
-                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(club.name), \(club.equipmentLine)")
                 .accessibilityIdentifier("equip-\(club.name)")
-                Hairline()
-            }
-        }
     }
 
     private func equipmentYards(_ club: BagClub) -> some View {

@@ -37,14 +37,26 @@ struct ClubsView: View {
                                         .font(GType.label)
                                         .foregroundStyle(p.ink2)
                                 }
-                                Text("HI \(FormatAR.one(model.profile.currentHandicap))")
-                                    .font(GType.label)
-                                    .foregroundStyle(p.onPrimary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(p.accent)
-                                    .clipShape(Capsule())
-                                    .accessibilityIdentifier("cuenta-hi")
+                                HStack(spacing: 6) {
+                                    if !fichaName.isEmpty {
+                                        Text(fichaName)
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink2)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(p.surface2)
+                                            .clipShape(Capsule())
+                                            .accessibilityIdentifier("cuenta-ficha")
+                                    }
+                                    Text("HI \(FormatAR.one(model.profile.currentHandicap))")
+                                        .font(GType.label)
+                                        .foregroundStyle(p.accent)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(p.accentSoft)
+                                        .clipShape(Capsule())
+                                        .accessibilityIdentifier("cuenta-hi")
+                                }
                             }
                         }
                         Button {} label: {
@@ -171,10 +183,17 @@ struct ClubsView: View {
     }
 
     private var accountName: String {
+        let call = model.profile.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !call.isEmpty { return call }
         let named = model.user?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !named.isEmpty { return named }
         let shown = model.profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         return shown.isEmpty ? "Tu cuenta" : shown
+    }
+
+    private var fichaName: String {
+        let ficha = model.profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ficha == accountName ? "" : ficha
     }
 
     private var accountMail: String? {
@@ -432,7 +451,9 @@ struct ClubsView: View {
                 Text(club.name)
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(clubStatus(club))
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
