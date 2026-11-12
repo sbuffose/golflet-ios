@@ -218,6 +218,24 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertEqual(TrackSession.holeClose(par: 4, strokes: 5, putts: 2), "5 golpes · 2 putts · Bogey")
         XCTAssertEqual(TrackSession.holeClose(par: 4, strokes: 5, putts: nil), "5 golpes · Putts sin confirmar · Bogey")
         XCTAssertEqual(TrackSession.suggest(yards: 150, bag: [("Driver", 230), ("7i", 155), ("Putter", nil)]), "7i")
+        let teePoint = TrackPoint(lat: -34.485427, lng: -58.532351)
+        let pinPoint = TrackPoint(lat: -34.48305197, lng: -58.52881)
+        XCTAssertNil(TrackSession.restored(shots: [], tee: teePoint, pin: pinPoint))
+        let emptied = TrackSession.State()
+        XCTAssertFalse(emptied.marks.contains(where: \.holed))
+        let restored = TrackSession.restored(shots: [
+            TrackSession.SavedShot(lat: -34.4841, lng: -58.5304, club: "Hierro 7", result: nil),
+            TrackSession.SavedShot(lat: pinPoint.lat, lng: pinPoint.lng, club: "Putter", result: "holed")
+        ], tee: teePoint, pin: pinPoint)
+        XCTAssertEqual(restored?.phase, .tracking)
+        XCTAssertEqual(restored?.strokeCount, 2)
+        XCTAssertEqual(restored?.marks.contains(where: \.holed), true)
+        XCTAssertEqual(restored?.ball, pinPoint)
+        let legacy = TrackSession.restored(shots: [
+            TrackSession.SavedShot(lat: nil, lng: nil, club: "Putter", result: "hoyo")
+        ], tee: teePoint, pin: pinPoint)
+        XCTAssertEqual(legacy?.marks.first?.holed, true)
+        XCTAssertEqual(legacy?.marks.first?.at, pinPoint)
         let open = TrackCard.derive(par: 4, shots: [TrackCard.Fact(putt: true, originGreen: true)])
         XCTAssertEqual(open.putts.state, "unconfirmed")
         let closed = TrackCard.derive(par: 4, shots: [
