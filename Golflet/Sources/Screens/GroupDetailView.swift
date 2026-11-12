@@ -719,6 +719,7 @@ struct GroupDetailView: View {
             }
         }
         .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.18)).frame(height: 1) }
+        .accessibilityIdentifier("group-category-tabs")
     }
 
     private func tabTitle(_ metric: GroupMetricKind) -> String {
