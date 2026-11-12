@@ -174,26 +174,6 @@ struct PlayHoleView: View {
                 GProbe(id: "pace-alert", label: paceAlertText)
             }
         }
-        .onAppear {
-            if testingClosedHole {
-                track = Self.closedPreview(at: pinCoord)
-            }
-        }
-    }
-
-    private static func closedPreview(at coord: GPSCoord) -> TrackSession.State {
-        var state = TrackSession.State()
-        let pin = TrackPoint(lat: coord.lat, lng: coord.lng)
-        state.phase = .tracking
-        state.tee = pin
-        state.flag = pin
-        state.ball = pin
-        state.marks = [
-            TrackMark(id: 1, at: pin, club: "Hierro 7", countsStroke: true, holed: false, penalty: false, drop: false),
-            TrackMark(id: 2, at: pin, club: "Putter", countsStroke: true, holed: true, penalty: false, drop: false)
-        ]
-        state.nextID = 3
-        return state
     }
 
     private var current: GPSHole? {
@@ -391,8 +371,8 @@ struct PlayHoleView: View {
     }
 
     private var closeParts: (line: String, vs: String?) {
-        let strokes = displayTrack.strokeCount
-        let putterShots = displayTrack.marks.filter { mark in
+        let strokes = activeTrack.strokeCount
+        let putterShots = activeTrack.marks.filter { mark in
             mark.countsStroke && !mark.penalty && !mark.lost && isPutter(mark.club)
         }
         let putts = putterShots.isEmpty ? nil : putterShots.count
@@ -415,7 +395,7 @@ struct PlayHoleView: View {
     }
 
     private var closedShotMarks: [HoleShotMark] {
-        displayTrack.marks.filter(\.countsStroke).enumerated().map { index, mark in
+        activeTrack.marks.filter(\.countsStroke).enumerated().map { index, mark in
             HoleShotMark(number: index + 1, coord: GPSCoord(lat: mark.at.lat, lng: mark.at.lng))
         }
     }
@@ -679,20 +659,33 @@ struct PlayHoleView: View {
         .background(Color.white.opacity(0.96))
     }
 
-    /// UI test flag. Read in `body` so the closed hole stays up even if `@State` is reset.
-    private var testingClosedHole: Bool {
-        ProcessInfo.processInfo.arguments.contains("-ui-testing-closed-hole")
+    /// Saved shots win when the in-memory track was cleared or never restored.
+    private var activeTrack: TrackSession.State {
+        if !track.marks.isEmpty { return track }
+        return restoredTrack ?? track
     }
 
-    private var displayTrack: TrackSession.State {
-        if testingClosedHole, !track.marks.contains(where: \.holed) {
-            return Self.closedPreview(at: pinCoord)
-        }
-        return track
+    private var restoredTrack: TrackSession.State? {
+        let saved = visibleShots
+            .filter { $0.hole == hole }
+            .sorted { $0.shotNumber < $1.shotNumber }
+            .map {
+                TrackSession.SavedShot(lat: $0.lat, lng: $0.lng, club: $0.club, result: $0.result)
+            }
+        return TrackSession.restored(
+            shots: saved,
+            tee: TrackPoint(lat: teeCoord.lat, lng: teeCoord.lng),
+            pin: TrackPoint(lat: pinCoord.lat, lng: pinCoord.lng)
+        )
     }
 
     private var holeClosed: Bool {
-        !editingClosed && (testingClosedHole || track.marks.contains(where: \.holed))
+        !editingClosed && activeTrack.marks.contains(where: \.holed)
+    }
+
+    private func adoptSavedTrackIfNeeded() {
+        guard track.marks.isEmpty, let restoredTrack else { return }
+        track = restoredTrack
     }
 
     private var aimTitle: String {
@@ -1246,10 +1239,10 @@ struct PlayHoleView: View {
     }
 
     private var closedStrokes: [(n: Int, club: String, yards: Int)] {
-        let marks = displayTrack.marks.filter(\.countsStroke)
+        let marks = activeTrack.marks.filter(\.countsStroke)
         if !marks.isEmpty {
             return marks.enumerated().map { index, mark in
-                let previous = index == 0 ? displayTrack.tee : marks[index - 1].at
+                let previous = index == 0 ? activeTrack.tee : marks[index - 1].at
                 return (index + 1, mark.club ?? "—", strokeYards(from: previous, to: mark.at))
             }
         }
@@ -1809,7 +1802,8 @@ struct PlayHoleView: View {
         mapCenter = nil
         waterAsk = false
         markMode = .track
-        track = testingClosedHole ? Self.closedPreview(at: pinCoord) : TrackSession.State()
+        track = TrackSession.State()
+        adoptSavedTrackIfNeeded()
         chosenClub = nil
         pinStep = .idle
         lastManualChange = Date()
@@ -1871,7 +1865,7 @@ struct PlayHoleView: View {
             takenAt: Date(),
             club: chosenClub,
             lie: penalty ? SGLie.agua.rawValue : markLie?.rawValue,
-            result: confirmed ? "hoyo" : nil,
+            result: confirmed ? "holed" : nil,
             direction: nil,
             length: nil,
             mishit: false,
@@ -1922,6 +1916,7 @@ struct PlayHoleView: View {
         if let detail = try? await model.api.liveRound(id: liveRound.id) {
             liveRound = detail.liveRound
             shots = detail.shots
+            adoptSavedTrackIfNeeded()
         }
         if let holes = try? await model.api.liveRoundHoles(id: liveRound.id) {
             holeRecords = Dictionary(uniqueKeysWithValues: holes.map { ($0.number, $0) })

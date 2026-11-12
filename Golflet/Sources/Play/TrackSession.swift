@@ -210,6 +210,55 @@ enum TrackSession {
         return "\(n) \(golpe) · \(putt) · \(vs)"
     }
 
+    struct SavedShot: Equatable, Sendable {
+        var lat: Double?
+        var lng: Double?
+        var club: String?
+        var result: String?
+    }
+
+    static func isHoled(_ result: String?) -> Bool {
+        result == "holed" || result == "hoyo"
+    }
+
+    /// Rebuilds a hole from the shots already saved. An empty in-memory track
+    /// must not reopen a hole the player already finished.
+    static func restored(shots: [SavedShot], tee: TrackPoint, pin: TrackPoint) -> State? {
+        guard !shots.isEmpty else { return nil }
+        var state = State()
+        state.phase = .tracking
+        state.tee = tee
+        state.flag = pin
+        state.ball = tee
+        for shot in shots {
+            let holed = isHoled(shot.result)
+            let penalty = shot.result == "penalty"
+            let lost = shot.result == "lost"
+            let point: TrackPoint
+            if let lat = shot.lat, let lng = shot.lng {
+                point = TrackPoint(lat: lat, lng: lng)
+            } else if holed {
+                point = pin
+            } else {
+                continue
+            }
+            state.marks.append(TrackMark(
+                id: state.nextID,
+                at: point,
+                club: penalty ? nil : shot.club,
+                countsStroke: true,
+                holed: holed,
+                penalty: penalty,
+                drop: false,
+                lost: lost
+            ))
+            state.nextID += 1
+            if !penalty && !lost { state.ball = point }
+        }
+        guard !state.marks.isEmpty else { return nil }
+        return state
+    }
+
     /// Closest non-putter carry. A chosen club is left alone.
     static func suggest(yards: Int, bag: [(name: String, carry: Int?)]) -> String? {
         let choices = bag.filter { item in
