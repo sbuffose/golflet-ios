@@ -102,6 +102,8 @@ struct HoleSatelliteMap: UIViewRepresentable {
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()
         map.mapType = .satellite
+        map.isAccessibilityElement = false
+        map.accessibilityElementsHidden = true
         map.isRotateEnabled = false
         map.isPitchEnabled = false
         map.showsCompass = false
