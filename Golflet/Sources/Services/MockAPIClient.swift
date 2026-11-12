@@ -342,7 +342,7 @@ struct MockAPIClient: GolfletAPI {
                 passwordSaved: saved,
                 lastSyncStatus: "ok",
                 lastSyncMessage: "Datos de demostración",
-                lastSyncAt: demoSyncedAt,
+                lastSyncAt: Self.demoSyncedAt,
                 cardCount: 97,
                 source: "site",
                 roundsStored: 97,
