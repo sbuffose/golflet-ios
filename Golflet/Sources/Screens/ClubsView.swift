@@ -10,7 +10,6 @@ struct ClubsView: View {
     @State private var syncPassword = ""
     @State private var saveOnSync = false
     @State private var showsTextPrefs = false
-    @State private var showsProfesores = false
     @State private var showsMissingClub = false
 
     var body: some View {
@@ -61,25 +60,18 @@ struct ClubsView: View {
                         }
                         Button {} label: {
                             Text("Elegir foto")
-                                .font(GType.headline)
-                                .foregroundStyle(p.onPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
+                                .font(GFont.ui(14, weight: .semibold))
+                                .foregroundStyle(Color(hex: 0xF6F7F9))
+                                .padding(.horizontal, 16)
+                                .frame(minHeight: 44)
                                 .background(p.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("cuenta-foto-elegir")
-                        if !model.profesores.isEmpty {
-                            Button { showsProfesores = true } label: {
-                                Text("Mis profesores")
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("home-hcp-profesor")
-                            .accessibilityLabel("Mis profesores")
-                        }
+                        Text("Sin foto. Se ven tus iniciales.")
+                            .font(GFont.ui(13))
+                            .foregroundStyle(p.ink3)
                     }
 
                     notificationsRow
@@ -145,16 +137,6 @@ struct ClubsView: View {
             }
         }
         .accessibilityIdentifier("screen-clubes")
-        .sheet(isPresented: $showsProfesores) {
-            NavigationStack {
-                HomeProfesoresSheet { profesor in
-                    showsProfesores = false
-                    model.presentProfesor(profesor)
-                }
-            }
-            .golfletChrome()
-            .environment(model)
-        }
         .sheet(isPresented: $showsTextPrefs) {
             NavigationStack {
                 TextPrefsView()
@@ -168,13 +150,13 @@ struct ClubsView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 14, weight: .semibold))
-                        Text("Inicio")
-                            .font(GType.headline)
+                        Text("Mi bolsa")
+                            .font(GFont.ui(15, weight: .semibold))
                     }
-                    .foregroundStyle(p.ink)
+                    .foregroundStyle(p.primary)
                 }
                 .accessibilityIdentifier("close-clubes")
-                .accessibilityLabel("Inicio")
+                .accessibilityLabel("Mi bolsa")
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -209,7 +191,7 @@ struct ClubsView: View {
             GCard(radius: 18, padding: 4) {
                 VStack(spacing: 0) {
                     NavigationLink { PelotaView() } label: {
-                        gearRow("Mi pelota", "La pelota con la que jugás")
+                        gearRow("Mi pelota", "Contanos con qué pelota jugás")
                     }
                     .accessibilityIdentifier("cuenta-pelota")
                     Hairline()
@@ -442,11 +424,11 @@ struct ClubsView: View {
     private func clubCard(_ club: LinkedClub) -> some View {
         HStack(spacing: 12) {
             Text(clubMark(club.name))
-                .font(GFont.ui(15, weight: .semibold))
-                .foregroundStyle(p.primary)
-                .frame(width: 36, height: 36)
-                .background(p.surface2)
-                .clipShape(Circle())
+                .font(GFont.ui(18, weight: .semibold))
+                .foregroundStyle(p.accent)
+                .frame(width: 42, height: 42)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(club.name)
                     .font(GType.headline)

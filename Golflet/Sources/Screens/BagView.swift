@@ -21,55 +21,45 @@ struct BagView: View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     GOverline(text: "Mis distancias")
-                    GTitle(text: "Mi bolsa")
+                    GTitle(text: "Mi bolsa", size: 40)
                 }
-                HStack {
+                HStack(alignment: .firstTextBaseline) {
                     Text("Mis palos")
                         .font(GType.section)
                         .foregroundStyle(p.ink)
-                    Spacer()
+                    Spacer(minLength: 8)
                     NavigationLink { ironSet.padding(20) } label: {
-                        Text("Juego de hierros")
-                            .font(GType.label)
-                            .foregroundStyle(p.ink)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(p.surface2)
-                            .clipShape(Capsule())
+                        bagChip("Juego de hierros")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("bag-iron-set")
                     NavigationLink { AddClubView() } label: {
-                        Text("+ Agregar palo")
-                            .font(GType.label)
-                            .foregroundStyle(p.ink)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(p.surface2)
-                            .clipShape(Capsule())
+                        bagChip("+ Agregar palo")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("bag-add-club")
                 }
                 equipmentList
                 NavigationLink { PelotaView() } label: {
-                    HStack {
+                    HStack(spacing: 12) {
+                        BallMark()
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Pelota")
-                                .font(GType.headline)
+                                .font(GFont.ui(15, weight: .semibold))
                                 .foregroundStyle(p.ink)
                             Text("Sin cargar")
-                                .font(GType.label)
-                                .foregroundStyle(p.ink2)
+                                .font(GFont.ui(13))
+                                .foregroundStyle(p.ink3)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(p.ink3)
                     }
-                    .padding(14)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                     .background(p.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("bag-pelota")
@@ -149,6 +139,16 @@ struct BagView: View {
         .metricDestinations()
         .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .onAppear(perform: restoreIron)
+    }
+
+    private func bagChip(_ title: String) -> some View {
+        Text(title)
+            .font(GFont.ui(12, weight: .semibold))
+            .foregroundStyle(p.ink2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(p.surface2)
+            .clipShape(Capsule())
     }
 
     private var orderedBag: [BagClub] {
@@ -460,5 +460,25 @@ struct BagEditSheet: View {
             carry = club.carry.map(String.init) ?? ""
             total = club.total.map(String.init) ?? ""
         }
+    }
+}
+
+/// Same ball mark as the web `BALL_IC`: a circle with dimples, on a pale disc.
+private struct BallMark: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color(hex: 0x0B2545), lineWidth: 1.4)
+                .frame(width: 16, height: 16)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: -2.5, y: -3.5)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: 1.2, y: -4.2)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: -1, y: 0)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: 2.6, y: -0.4)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: 0.8, y: 3.4)
+        }
+        .frame(width: 34, height: 34)
+        .background(Color(hex: 0x0F3D2E).opacity(0.07))
+        .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 }

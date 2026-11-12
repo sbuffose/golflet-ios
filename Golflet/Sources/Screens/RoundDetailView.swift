@@ -123,13 +123,13 @@ struct RoundDetailView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 14, weight: .semibold))
-                        Text("Tee time")
-                            .font(GType.headline)
+                        Text("Tee times")
+                            .font(GFont.ui(15, weight: .semibold))
                     }
-                    .foregroundStyle(p.ink)
+                    .foregroundStyle(p.primary)
                 }
                 .accessibilityIdentifier("close-round")
-                .accessibilityLabel("Tee time")
+                .accessibilityLabel("Tee times")
                 Spacer()
             }
             .padding(.horizontal, 20)
