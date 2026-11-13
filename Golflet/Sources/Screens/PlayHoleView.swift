@@ -1002,9 +1002,7 @@ struct PlayHoleView: View {
             .padding(.horizontal, 14)
             .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
         }
-        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("play-club-sheet")
-        .accessibilityAddTraits(.isModal)
     }
 
     private func shortClub(_ label: String) -> String {
