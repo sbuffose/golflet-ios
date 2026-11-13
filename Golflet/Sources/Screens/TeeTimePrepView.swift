@@ -116,19 +116,34 @@ struct TeeTimePrepView: View {
         GScreen(id: "screen-tee-prep") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
+                    GCard(fill: p.primary, radius: 24, padding: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(relativeDay.uppercased())
+                                .font(GType.overline)
+                                .foregroundStyle(p.onPrimary.opacity(0.6))
+                            Text(teeClock)
+                                .font(GType.largeTitle)
+                                .tabular()
+                                .foregroundStyle(p.onPrimary)
+                            Text(teeDateLine)
+                                .font(GType.body)
+                                .foregroundStyle(p.onPrimary.opacity(0.75))
+                            Text(shown.clubName)
+                                .font(GType.headline)
+                                .foregroundStyle(p.onPrimary)
+                            Text(place.hasCourse ? "Cancha \(place.canchaTitle)" : place.canchaTitle)
+                                .font(GType.label)
+                                .foregroundStyle(p.onPrimary.opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    companionsBlock
+                    playingHandicap
                     VStack(alignment: .leading, spacing: 6) {
                         Text(shown.chipWhen)
-                            .font(GType.largeTitle)
-                            .foregroundStyle(p.ink)
-                        Text(shown.clubName)
-                            .font(GType.section)
-                            .foregroundStyle(p.ink)
-                        if let partners = shown.companionsLine {
-                            Text(partners)
-                                .font(GType.body)
-                                .foregroundStyle(p.ink2)
-                                .accessibilityIdentifier("tee-prep-players")
-                        }
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                            .accessibilityHidden(true)
                         Button {
                             Task { await model.refreshReservation(id: booking.id) }
                         } label: {
@@ -169,6 +184,114 @@ struct TeeTimePrepView: View {
             await loadWindHoles()
             await loadForecast()
         }
+    }
+
+    private var relativeDay: String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        if calendar.isDateInToday(shown.startsAt) { return "Hoy" }
+        if calendar.isDateInTomorrow(shown.startsAt) { return "Mañana" }
+        if calendar.isDateInYesterday(shown.startsAt) { return "Ayer" }
+        return "Salida"
+    }
+
+    private var teeClock: String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_AR")
+        f.timeZone = .current
+        f.dateFormat = "HH:mm"
+        return f.string(from: shown.startsAt)
+    }
+
+    private var teeDateLine: String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_AR")
+        f.timeZone = .current
+        f.dateFormat = "EEEE d 'de' MMMM"
+        return f.string(from: shown.startsAt).capitalized
+    }
+
+    private var companionsBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Jugás con")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            if shown.companions.isEmpty {
+                Text("Sin otros jugadores en la línea por ahora.")
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+                    .accessibilityIdentifier("tee-prep-players")
+            } else {
+                GCard(radius: 18, padding: 8) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(shown.companions.enumerated()), id: \.offset) { _, name in
+                            HStack(spacing: 10) {
+                                AvatarCircle(initials: String(name.prefix(1)).uppercased())
+                                    .frame(width: 32, height: 32)
+                                Text(name)
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 8)
+                        }
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("tee-prep-players")
+                .accessibilityLabel(shown.companions.joined(separator: ", "))
+            }
+        }
+    }
+
+    private var playingHandicap: some View {
+        let rows = playingRows
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Tu hándicap de juego")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            GCard(radius: 18, padding: 14) {
+                if rows.isEmpty {
+                    Text("La reserva no trae un tee con rating para calcularlo.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(rows, id: \.name) { row in
+                            HStack {
+                                Text(row.name)
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                Spacer()
+                                Text("\(row.value)")
+                                    .font(GType.statM)
+                                    .tabular()
+                                    .foregroundStyle(p.ink)
+                            }
+                        }
+                    }
+                }
+            }
+            .accessibilityIdentifier("tee-prep-playing")
+        }
+    }
+
+    private var playingRows: [(name: String, value: Int)] {
+        let courseName = shown.course
+        let par = model.courses.first { $0.name.caseInsensitiveCompare(courseName) == .orderedSame }?.par ?? 72
+        let index = model.profile.currentHandicap
+        return model.tees
+            .filter { $0.course.caseInsensitiveCompare(courseName) == .orderedSame }
+            .map { tee in
+                let value = HandicapMath.courseHandicap(
+                    index: index,
+                    slope: Double(tee.slope),
+                    rating: tee.courseRating,
+                    par: par
+                )
+                return (tee.tee, value)
+            }
     }
 
     private var strategyBlock: some View {

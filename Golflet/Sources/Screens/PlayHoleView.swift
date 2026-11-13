@@ -9,9 +9,13 @@ struct PlayHoleView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let course: GPSCourseDetail
+    /// Shots already saved when the hole opened. Used until the reload replaces them.
+    let openingShots: [Shot]
     @State var liveRound: LiveRound
     @State private var location = PlayLocation()
     @State private var shots: [Shot] = []
+    /// True once this screen has its own shot list, so a later undo is not replaced by the opening fixture.
+    @State private var receivedShots = false
     @State private var hole: Int
     @State private var message: String?
     @State private var showsHoles = false
@@ -34,6 +38,11 @@ struct PlayHoleView: View {
     @State private var shotsExpanded = false
     @State private var sawDragHint = false
     @State private var showsClubs = false
+    @State private var mapZoom = 0
+    @State private var editingClosed = false
+    @State private var editingShot: Shot?
+    @State private var askDeleteShot = false
+    @State private var movingShotID: String?
     @State private var recovery = false
     @State private var waterAsk = false
     @State private var droppedClientIDs: Set<String> = []
@@ -46,18 +55,27 @@ struct PlayHoleView: View {
         case report
     }
 
-    init(course: GPSCourseDetail, liveRound: LiveRound) {
+    init(course: GPSCourseDetail, liveRound: LiveRound, openingShots: [Shot] = []) {
         self.course = course
+        self.openingShots = openingShots
         _liveRound = State(initialValue: liveRound)
         _hole = State(initialValue: liveRound.currentHole)
+        if !openingShots.isEmpty {
+            _shots = State(initialValue: openingShots)
+            _receivedShots = State(initialValue: true)
+        }
     }
 
     var body: some View {
         ZStack {
             holeMap
                 .ignoresSafeArea()
+                .accessibilityHidden(true)
             reticle
                 .allowsHitTesting(false)
+            if holeClosed {
+                closedChrome
+            } else {
             VStack(spacing: 8) {
                 topBar
                 HStack(alignment: .top) {
@@ -80,8 +98,21 @@ struct PlayHoleView: View {
                 dock
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+            if showsClubs {
+                clubCover
+            }
         }
         .accessibilityIdentifier("screen-play-hole")
+        .overlay(alignment: .topLeading) {
+            Text(playStatus)
+                .font(.system(size: 1))
+                .foregroundStyle(.clear)
+                .accessibilityIdentifier("play-hole-status")
+                .accessibilityLabel(playStatus)
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+        }
         .background(Color.black.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -150,7 +181,7 @@ struct PlayHoleView: View {
         }
         .sheet(isPresented: $showsHoles) { holePicker }
         .sheet(isPresented: $showsStrategy) { strategySheet }
-        .sheet(isPresented: $showsClubs) { clubSheet }
+        .sheet(item: $editingShot) { shot in shotEditor(shot) }
         .alert("Ritmo de juego", isPresented: $showsPaceAlert) {
             Button("Listo", role: .cancel) {}
                 .accessibilityIdentifier("pace-alert-ok")
@@ -161,6 +192,10 @@ struct PlayHoleView: View {
             if showsPaceAlert {
                 GProbe(id: "pace-alert", label: paceAlertText)
             }
+        }
+        .onAppear {
+            installClosedFixtureIfNeeded()
+            adoptSavedTrackIfNeeded()
         }
     }
 
@@ -238,6 +273,9 @@ struct PlayHoleView: View {
             animateCamera: !reduceMotion,
             focus: focusPoint,
             focusID: focusID,
+            framesHole: holeClosed,
+            zoom: mapZoom,
+            shotMarks: holeClosed ? closedShotMarks : [],
             onCenter: { next in
                 if let mapCenter, abs(mapCenter.lat - next.lat) < 0.0000004, abs(mapCenter.lng - next.lng) < 0.0000004 {
                     return
@@ -247,6 +285,203 @@ struct PlayHoleView: View {
             },
             onTarget: { aimTarget = $0 }
         )
+    }
+
+    /// Closed hole, matching the web: score card, shot pills and zoom sit on the map.
+    private var closedChrome: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button { model.showsPlay = false } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(p.ink)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Color.white))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-close")
+                .accessibilityLabel("Volver a la tarjeta")
+                Text(course.course)
+                    .font(GFont.ui(14, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                    .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
+                    .frame(maxWidth: .infinity)
+                Color.clear.frame(width: 44, height: 44)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+
+            closeCard
+                .padding(.top, 36)
+
+            Spacer(minLength: 0)
+
+            HStack(alignment: .bottom, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(closedStrokes, id: \.n) { stroke in
+                        Text("\(stroke.n). \(stroke.club) · \(stroke.yards) yd")
+                            .font(GFont.ui(12, weight: .semibold))
+                            .foregroundStyle(p.ink)
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.white)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(p.primary.opacity(0.18), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
+                            .accessibilityIdentifier("play-stroke-\(stroke.n)")
+                    }
+                }
+                .frame(maxWidth: 148, alignment: .leading)
+                Spacer(minLength: 8)
+                VStack(spacing: 8) {
+                    mapZoomButton(system: "plus", delta: 1, id: "play-zoom-in", label: "Acercar")
+                    mapZoomButton(system: "minus", delta: -1, id: "play-zoom-out", label: "Alejar")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+
+            VStack(spacing: 8) {
+                Button { editingClosed = true } label: {
+                    Text("Editar hoyo")
+                        .font(GFont.ui(16, weight: .semibold))
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-edit-hole")
+                .accessibilityLabel("Editar hoyo")
+                Button { changeHole(hole + 1) } label: {
+                    Text("Siguiente hoyo ›")
+                        .font(GFont.ui(16, weight: .semibold))
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-next-wide")
+                .accessibilityLabel("Siguiente hoyo")
+            }
+            .padding(.horizontal, 10)
+            .accessibilityElement(children: .contain)
+
+            closedNav
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var closeCard: some View {
+        let parts = closeParts
+        return VStack(spacing: 2) {
+            CaddieMark(height: 36)
+            Text(parts.line)
+                .font(GFont.ui(15, weight: .bold))
+                .foregroundStyle(Color.white)
+                .multilineTextAlignment(.center)
+            if let vs = parts.vs {
+                Text(vs)
+                    .font(GFont.ui(12, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 210)
+        .background(p.primary.opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("play-aim-label")
+    }
+
+    private var closeParts: (line: String, vs: String?) {
+        let strokes = activeTrack.strokeCount
+        let putterShots = activeTrack.marks.filter { mark in
+            mark.countsStroke && !mark.penalty && !mark.lost && isPutter(mark.club)
+        }
+        let putts = putterShots.isEmpty ? nil : putterShots.count
+        let n = max(0, strokes)
+        let putt = putts.map { "\($0) \($0 == 1 ? "putt" : "putts")" } ?? "Putts sin confirmar"
+        let line = "\(n) \(n == 1 ? "golpe" : "golpes") · \(putt)"
+        guard let par = current?.par else { return (line, nil) }
+        let delta = n - par
+        let vs: String
+        switch delta {
+        case -2: vs = "Águila"
+        case -1: vs = "Birdie"
+        case 0: vs = "Par"
+        case 1: vs = "Bogey"
+        case 2: vs = "Doble bogey"
+        case 3: vs = "Triple bogey"
+        default: vs = delta > 0 ? "\(delta) sobre el par" : "\(abs(delta)) bajo el par"
+        }
+        return (line, vs)
+    }
+
+    private var closedShotMarks: [HoleShotMark] {
+        activeTrack.marks.filter(\.countsStroke).enumerated().map { index, mark in
+            HoleShotMark(number: index + 1, coord: GPSCoord(lat: mark.at.lat, lng: mark.at.lng))
+        }
+    }
+
+    private func mapZoomButton(system: String, delta: Int, id: String, label: String) -> some View {
+        Button {
+            mapZoom = min(6, max(-2, mapZoom + delta))
+        } label: {
+            Image(systemName: system)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color(hex: 0xF6F7F9))
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(p.primary.opacity(0.92)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+        .accessibilityLabel(label)
+    }
+
+    private var closedNav: some View {
+        HStack {
+            Button { changeHole(hole - 1) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .bold))
+                    .frame(width: 32, height: 32)
+            }
+            .accessibilityIdentifier("play-hole-prev")
+            Spacer(minLength: 4)
+            Button { showsHoles = true } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Hoyo \(hole)")
+                        .font(GFont.ui(13, weight: .semibold))
+                    Text(holeChrome)
+                        .font(GFont.ui(13, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-hole-picker")
+            Spacer(minLength: 4)
+            Button { changeHole(hole + 1) } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .frame(width: 32, height: 32)
+            }
+            .accessibilityIdentifier("play-hole-next")
+        }
+        .foregroundStyle(p.ink)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(Color.white)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
     }
 
     private var reticle: some View {
@@ -363,7 +598,7 @@ struct PlayHoleView: View {
     private var dock: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
-                if track.marks.contains(where: \.holed) {
+                if track.marks.contains(where: \.holed), !holeClosed {
                     CaddieMark(height: 48)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -380,12 +615,66 @@ struct PlayHoleView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("play-aim-label")
+                if holeClosed, !closedStrokes.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(closedStrokes, id: \.n) { stroke in
+                            Text("\(stroke.n). \(stroke.club) · \(stroke.yards) yd")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(p.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .accessibilityIdentifier("play-stroke-\(stroke.n)")
+                        }
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Golpes")
+                }
+                if holeClosed {
+                    VStack(spacing: 8) {
+                        Button("Editar hoyo") { editingClosed = true }
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .accessibilityIdentifier("play-edit-hole")
+                        Button("Siguiente hoyo ›") { changeHole(hole + 1) }
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .accessibilityIdentifier("play-next-wide")
+                    }
+                }
                 distances
                 holeNav
-                markActions
-                if track.phase == .tracking { lostActions }
+                if let movingID = movingShotID, let moving = shots.first(where: { $0.id == movingID }) {
+                    Text("Mové el mapa y tocá Guardar punto.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                    Button("Guardar punto") { Task { await moveShot(moving) } }
+                        .font(GType.headline)
+                        .foregroundStyle(p.onPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier("play-edit-save")
+                }
+                if !holeClosed {
+                    markActions
+                    if track.phase == .tracking { lostActions }
+                }
                 greenTools
-                holeShots
+                if !holeClosed {
+                    holeShots
+                }
                 accuracy
                 Text("El palo lo marca el Apple Watch o el sensor, cuando estén conectados.")
                     .font(GType.label)
@@ -398,8 +687,65 @@ struct PlayHoleView: View {
             .padding(.top, 10)
             .padding(.bottom, 16)
         }
-        .frame(maxHeight: 248)
+        .frame(maxHeight: holeClosed ? 360 : 248)
         .background(Color.white.opacity(0.96))
+    }
+
+    /// A holed shot that is already saved keeps the hole closed when the in-memory track is empty or unfinished.
+    private var activeTrack: TrackSession.State {
+        if track.marks.contains(where: \.holed) { return track }
+        if let restoredTrack, restoredTrack.marks.contains(where: \.holed) { return restoredTrack }
+        if !track.marks.isEmpty { return track }
+        return restoredTrack ?? track
+    }
+
+    private var shotsOnHole: [Shot] {
+        var byID: [String: Shot] = [:]
+        func keep(_ shot: Shot) {
+            guard shot.hole == hole else { return }
+            if let client = shot.clientId, droppedClientIDs.contains(client) { return }
+            byID[shot.id] = shot
+        }
+        SavedRoundShots.load(roundID: liveRound.id).forEach(keep)
+        if !receivedShots { openingShots.forEach(keep) }
+        visibleShots.forEach(keep)
+        return byID.values.sorted { $0.shotNumber < $1.shotNumber }
+    }
+
+    private var restoredTrack: TrackSession.State? {
+        TrackSession.restored(
+            shots: shotsOnHole.map {
+                TrackSession.SavedShot(lat: $0.lat, lng: $0.lng, club: $0.club, result: $0.result)
+            },
+            tee: TrackPoint(lat: teeCoord.lat, lng: teeCoord.lng),
+            pin: TrackPoint(lat: pinCoord.lat, lng: pinCoord.lng)
+        )
+    }
+
+    private var holeClosed: Bool {
+        !editingClosed && activeTrack.marks.contains(where: \.holed)
+    }
+
+    private func adoptSavedTrackIfNeeded() {
+        guard track.marks.isEmpty, let restoredTrack else { return }
+        track = restoredTrack
+    }
+
+    /// Test rounds can open with the shots already played. This writes those shots once.
+    /// The closed layout still comes from the holed shot.
+    private func installClosedFixtureIfNeeded() {
+        guard SavedRoundShots.closedHoleFixtureRequested else { return }
+        guard !shotsOnHole.contains(where: { TrackSession.isHoled($0.result) }) else { return }
+        let fixture = SavedRoundShots.closedHoleFixture(hole: hole, tee: teeCoord, pin: pinCoord)
+        shots = fixture
+        receivedShots = true
+        SavedRoundShots.replace(roundID: liveRound.id, shots: fixture)
+    }
+
+    private var playStatus: String {
+        let holed = shotsOnHole.contains { TrackSession.isHoled($0.result) }
+        let flag = SavedRoundShots.closedHoleFixtureRequested
+        return "flag \(flag ? 1 : 0) shots \(shots.count) open \(openingShots.count) store \(SavedRoundShots.load(roundID: liveRound.id).count) holed \(holed ? 1 : 0)"
     }
 
     private var aimTitle: String {
@@ -584,31 +930,46 @@ struct PlayHoleView: View {
         return TrackSession.suggest(yards: yards, bag: model.bag.map { ($0.name, $0.carry) })
     }
 
-    private var clubSheet: some View {
+    /// Same dark sheet as the web: a centered bag grid on `#070b10`, not a light page.
+    private var clubCover: some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
-        return NavigationStack {
-            ScrollView {
+        return ZStack {
+            Color(hex: 0x070B10).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Palo")
+                    .font(GFont.ui(16, weight: .bold))
+                    .foregroundStyle(p.ink)
+                    .padding(.leading, 4)
+                    .padding(.trailing, 44)
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(model.bag, id: \.name) { club in
+                        let on = chosenClub == club.name
                         Button {
                             chosenClub = club.name
                             showsClubs = false
                         } label: {
                             VStack(spacing: 2) {
-                                Text(club.name)
-                                    .font(GType.label)
+                                Text(shortClub(club.name))
+                                    .font(GFont.ui(15, weight: .bold))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
                                 if let yards = savedYards(club) {
                                     Text(yards)
                                         .font(GFont.ui(10, weight: .semibold))
+                                        .foregroundStyle(on ? Color.white.opacity(0.85) : Color(hex: 0x3E4C62))
                                         .lineLimit(1)
                                 }
                             }
-                            .foregroundStyle(chosenClub == club.name ? p.onPrimary : p.ink)
-                            .frame(maxWidth: .infinity, minHeight: 64)
-                            .background(chosenClub == club.name ? p.primary : p.surface2)
+                            .foregroundStyle(on ? Color.white : p.ink)
+                            .frame(maxWidth: .infinity)
+                            .aspectRatio(1, contentMode: .fit)
+                            .frame(minHeight: 52)
+                            .background(on ? p.primary : Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(on ? Color.clear : Color(hex: 0xE6E2D8), lineWidth: 1)
+                            )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .stroke(suggestedName == club.name ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 3)
@@ -618,15 +979,45 @@ struct PlayHoleView: View {
                         .accessibilityIdentifier("play-club-\(club.name)")
                     }
                 }
-                .padding(16)
             }
-            .navigationTitle("Palo")
-            .toolbar {
-                Button("Cerrar") { showsClubs = false }
-                    .accessibilityIdentifier("play-club-close")
+            .padding(.horizontal, 12)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
+            .frame(maxWidth: 360)
+            .background(Color(hex: 0xF6F7F9))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                Button { showsClubs = false } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(p.ink)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Color.white))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-club-close")
+                .accessibilityLabel("Cerrar")
+                .padding(8)
             }
+            .padding(.horizontal, 14)
+            .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("play-club-sheet")
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private func shortClub(_ label: String) -> String {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "—" }
+        let folded = trimmed.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
+        if folded == "pt" || folded.hasPrefix("putter") { return "Pt" }
+        if folded == "dr" || folded.hasPrefix("driver") { return "Dr" }
+        if folded.hasPrefix("hierro") {
+            let face = folded.split(separator: " ").last.map(String.init) ?? ""
+            if face.allSatisfy(\.isNumber), !face.isEmpty { return "\(face)i" }
+        }
+        return trimmed.count > 4 ? String(trimmed.prefix(4)) : trimmed
     }
 
     private var suggestedName: String? {
@@ -640,8 +1031,9 @@ struct PlayHoleView: View {
                     Button("Deshacer") { undoGroup() }
                         .font(GType.label)
                         .foregroundStyle(p.ink)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(p.surface2))
+                        .padding(.horizontal, 12)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .background(Capsule().fill(p.surface2))
                         .accessibilityIdentifier("play-undo")
                 }
                 Button(recovery ? "Sacada" : "Sacada") { recovery.toggle() }
@@ -906,6 +1298,29 @@ struct PlayHoleView: View {
         }
     }
 
+    private var closedStrokes: [(n: Int, club: String, yards: Int)] {
+        let marks = activeTrack.marks.filter(\.countsStroke)
+        if !marks.isEmpty {
+            return marks.enumerated().map { index, mark in
+                let previous = index == 0 ? activeTrack.tee : marks[index - 1].at
+                return (index + 1, mark.club ?? "—", strokeYards(from: previous, to: mark.at))
+            }
+        }
+        let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
+        return rows.map { shot in
+            (shot.shotNumber, shot.club ?? "—", shot.distanceYd ?? 0)
+        }
+    }
+
+    private func strokeYards(from: TrackPoint?, to: TrackPoint) -> Int {
+        guard let from else { return 0 }
+        let meters = PlayMath.meters(
+            from: GPSCoord(lat: from.lat, lng: from.lng),
+            to: GPSCoord(lat: to.lat, lng: to.lng)
+        )
+        return PlayMath.yards(meters)
+    }
+
     private var holeShots: some View {
         let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
         return VStack(alignment: .leading, spacing: 10) {
@@ -920,6 +1335,7 @@ struct PlayHoleView: View {
                 GCard(radius: 18, padding: 14) {
                     VStack(spacing: 10) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, shot in
+                            Button { editingShot = shot; askDeleteShot = false; movingShotID = nil } label: {
                             HStack {
                                 Text("\(shot.shotNumber)")
                                     .font(GType.label)
@@ -945,6 +1361,8 @@ struct PlayHoleView: View {
                                     .foregroundStyle(p.ink)
                             }
                             .accessibilityIdentifier("play-shot-\(index)")
+                            }
+                            .buttonStyle(.plain)
                             if index < rows.count - 1 { Hairline() }
                         }
                     }
@@ -1325,6 +1743,108 @@ struct PlayHoleView: View {
         }
     }
 
+    private func shotEditTitle(_ shot: Shot) -> String {
+        var bits = ["Golpe \(shot.shotNumber)"]
+        if let club = shot.club, !club.isEmpty { bits.append(club) }
+        if let yards = shot.distanceYd { bits.append("\(yards) yd") }
+        return bits.joined(separator: " · ")
+    }
+
+    private func shotEditor(_ shot: Shot) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(shotEditTitle(shot))
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    Button("Mover el punto") {
+                        movingShotID = shot.id
+                        editingShot = nil
+                    }
+                    .accessibilityIdentifier("play-edit-move")
+                    Text("Palo")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], spacing: 8) {
+                        ForEach(model.bag, id: \.name) { club in
+                            Button {
+                                Task { await retarget(shot, club: club.name) }
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Text(club.name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                    if let yards = club.carry ?? club.total {
+                                        Text("\(yards) yd")
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink3)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(p.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: 0))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("play-edit-club-\(club.name)")
+                        }
+                    }
+                    Button("Cerrar") { editingShot = nil }
+                    if askDeleteShot {
+                        Text("¿Borrar este golpe?")
+                            .foregroundStyle(p.ink)
+                        Button("Sí, borrar") { Task { await deleteShot(shot) } }
+                            .accessibilityIdentifier("play-edit-yes")
+                    } else {
+                        Button("Borrar") { askDeleteShot = true }
+                            .font(GType.headline)
+                            .foregroundStyle(p.accent)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.accent, lineWidth: 1.5))
+                            .accessibilityIdentifier("play-edit-del")
+                    }
+                }
+                .padding(16)
+            }
+            .navigationTitle(shotEditTitle(shot))
+        }
+        .accessibilityIdentifier("play-shot-editor")
+    }
+
+    private func retarget(_ shot: Shot, club: String) async {
+        do {
+            let saved = try await model.api.patchShot(id: shot.id, body: ["club": club])
+            if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
+            editingShot = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func moveShot(_ shot: Shot) async {
+        do {
+            let saved = try await model.api.patchShot(id: shot.id, body: ["lat": cursor.lat, "lng": cursor.lng])
+            if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
+            movingShotID = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func deleteShot(_ shot: Shot) async {
+        do {
+            try await model.api.deleteShot(id: shot.id)
+            shots.removeAll { $0.id == shot.id }
+            editingShot = nil
+            askDeleteShot = false
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func changeHole(_ next: Int) {
         Task { await changeHoleAsync(next) }
     }
@@ -1333,6 +1853,9 @@ struct PlayHoleView: View {
         await savePuttsIfNeeded()
         let clamped = min(max(next, 1), max(course.holes.count, 1))
         hole = clamped
+        editingClosed = false
+        editingShot = nil
+        movingShotID = nil
         shotsExpanded = false
         sawDragHint = false
         aimTarget = nil
@@ -1340,6 +1863,7 @@ struct PlayHoleView: View {
         waterAsk = false
         markMode = .track
         track = TrackSession.State()
+        adoptSavedTrackIfNeeded()
         chosenClub = nil
         pinStep = .idle
         lastManualChange = Date()
@@ -1401,7 +1925,7 @@ struct PlayHoleView: View {
             takenAt: Date(),
             club: chosenClub,
             lie: penalty ? SGLie.agua.rawValue : markLie?.rawValue,
-            result: confirmed ? "hoyo" : nil,
+            result: confirmed ? "holed" : nil,
             direction: nil,
             length: nil,
             mishit: false,
@@ -1451,7 +1975,14 @@ struct PlayHoleView: View {
     private func refresh() async {
         if let detail = try? await model.api.liveRound(id: liveRound.id) {
             liveRound = detail.liveRound
-            shots = detail.shots
+            let local = shots.isEmpty && !receivedShots ? openingShots : shots
+            let kept = SavedRoundShots.keepingHoledShots(local: local, incoming: detail.shots)
+            shots = kept
+            if !kept.isEmpty {
+                SavedRoundShots.replace(roundID: liveRound.id, shots: kept)
+            }
+            receivedShots = true
+            adoptSavedTrackIfNeeded()
         }
         if let holes = try? await model.api.liveRoundHoles(id: liveRound.id) {
             holeRecords = Dictionary(uniqueKeysWithValues: holes.map { ($0.number, $0) })

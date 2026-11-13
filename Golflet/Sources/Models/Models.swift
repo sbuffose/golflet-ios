@@ -665,6 +665,16 @@ struct BagClub: Identifiable, Hashable, Sendable {
     var name: String
     var carry: Int?
     var total: Int?
+    var brand: String? = nil
+    var modelName: String? = nil
+    var code: String? = nil
+
+    var equipmentLine: String {
+        let brand = brand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let model = modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if brand.isEmpty { return "Sin marca ni modelo" }
+        return model.isEmpty ? brand : "\(brand) · \(model)"
+    }
 }
 
 struct ClubCredential: Codable, Hashable, Sendable {

@@ -234,6 +234,10 @@ struct LiveGolfletAPI: GolfletAPI {
         return shot
     }
 
+    func deleteShot(id: String) async throws {
+        _ = try await request("DELETE", "/api/shots/\(id)")
+    }
+
     func recap(roundId: String?, liveRoundId: String?) async throws -> Recap? {
         var query: [String] = []
         if let roundId { query.append("round_id=\(roundId)") }

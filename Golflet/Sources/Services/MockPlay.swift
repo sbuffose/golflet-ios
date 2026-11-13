@@ -64,10 +64,26 @@ extension MockAPIClient {
         )
         Self.playLock.lock()
         Self.liveByID[round.id] = round
-        Self.shotsByRound[round.id] = []
+        let seeded = SavedRoundShots.closedHoleFixtureRequested ? Self.closedHoleShots() : []
+        Self.shotsByRound[round.id] = seeded
+        SavedRoundShots.replace(roundID: round.id, shots: seeded)
+        if !seeded.isEmpty, var stored = Self.liveByID[round.id] {
+            stored.shots = seeded.count
+            Self.liveByID[round.id] = stored
+        }
         Self.holesByRound[round.id] = [:]
         Self.playLock.unlock()
         return round
+    }
+
+    /// Hole 1 of the Azul already played: an iron and a putt in the cup.
+    /// The play screen closes from these shots, the same way a reloaded round does.
+    private static func closedHoleShots() -> [Shot] {
+        SavedRoundShots.closedHoleFixture(
+            hole: 1,
+            tee: GPSCoord(lat: -34.485427, lng: -58.532351),
+            pin: GPSCoord(lat: -34.48305197, lng: -58.52881)
+        )
     }
 
     func liveRound(id: String) async throws -> LiveRoundDetail {
@@ -76,6 +92,7 @@ extension MockAPIClient {
         guard var round = Self.liveByID[id] else { throw GolfletError.decoding("live_round") }
         let shots = Self.shotsByRound[id] ?? []
         round.shots = shots.count
+        SavedRoundShots.replace(roundID: id, shots: shots)
         return LiveRoundDetail(liveRound: round, shots: shots, recap: Self.recapsByKey["live:\(id)"])
     }
 
@@ -181,6 +198,7 @@ extension MockAPIClient {
         }
         Self.recomputeDistances(&existing)
         Self.shotsByRound[liveRoundId] = existing
+        SavedRoundShots.replace(roundID: liveRoundId, shots: existing)
         if var round = Self.liveByID[liveRoundId] {
             round.shots = existing.count
             if let last = existing.last { round.currentHole = last.hole }
@@ -209,7 +227,20 @@ extension MockAPIClient {
             next[index] = shot
             Self.recomputeDistances(&next)
             Self.shotsByRound[roundID] = next
+            SavedRoundShots.replace(roundID: roundID, shots: next)
             return next[index]
+        }
+        throw GolfletError.decoding("shot")
+    }
+
+    func deleteShot(id: String) async throws {
+        Self.playLock.lock()
+        defer { Self.playLock.unlock() }
+        for (roundID, shots) in Self.shotsByRound where shots.contains(where: { $0.id == id }) {
+            let next = shots.filter { $0.id != id }
+            Self.shotsByRound[roundID] = next
+            SavedRoundShots.replace(roundID: roundID, shots: next)
+            return
         }
         throw GolfletError.decoding("shot")
     }
@@ -543,10 +574,7 @@ extension MockAPIClient {
                     dropped: []
                 )
             }(),
-            courseGroups: [
-                CourseFilter(id: "jockey", title: "Jockey Club", courseNames: ["Azul", "Colorada"], kind: .group),
-                CourseFilter(id: "mdp", title: "Mar del Plata", courseNames: ["Cancha Vieja", "Cancha Nueva"], kind: .group)
-            ]
+            courseGroups: [.azul, .colorada]
         )
     }
 

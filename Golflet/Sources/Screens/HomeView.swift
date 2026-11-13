@@ -13,7 +13,7 @@ struct HomeView: View {
     @State private var showsAgregarProfesor = false
     @State private var highlightPartners = false
     @State private var modeOpen = false
-    @State private var hcpCardWidth = HomeHcpPeopleLayout.cardInnerWidth(screenWidth: HomeHcpPeopleLayout.currentScreenWidth)
+    @Namespace private var roundZoom
 
     var body: some View {
         GScreen(id: "screen-inicio") {
@@ -28,9 +28,6 @@ struct HomeView: View {
                                 .accessibilityIdentifier("home-ready")
                         }
                         header(scroll: proxy)
-                        modeChip
-                        if model.homeMode == .comp { competitiveLead }
-                        else if model.homeMode == .soc { socialLead }
                         handicapCard
                         if model.homeMode == .mej, !model.liveShots.isEmpty {
                             SGCard(shots: model.liveShots)
@@ -38,15 +35,15 @@ struct HomeView: View {
                         lastRound
                         teeTimesCard
                         scorecardFetchCard
-                        yearRow
-                        recurring
                         groups
                         clubs
                         moreLegacy
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 96)
+                    .padding(.bottom, 160)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear.frame(height: 24)
                 }
             }
         }
@@ -60,6 +57,10 @@ struct HomeView: View {
                 Task { await model.refreshTeeTimes() }
             }
         }
+        .navigationDestination(for: Round.self) { round in
+            RoundDetailView(round: round)
+                .modifier(RoundZoomDestination(id: round.roundId, space: roundZoom))
+        }
         .navigationDestination(for: HomeMoreRoute.self) { route in
             switch route {
             case .resumen: SummaryView()
@@ -70,6 +71,9 @@ struct HomeView: View {
             }
         }
         .metricDestinations()
+        .navigationDestination(isPresented: Bindable(model).showsClubs) {
+            ClubsView()
+        }
         .navigationDestination(for: Profesor.self) { profesor in
             ProfesorDetailView(profesor: profesor)
                 .golfletChrome()
@@ -119,39 +123,23 @@ struct HomeView: View {
         model.presentedProfesor = profesor
     }
 
-    private func homeHcpPeople() -> HomeHcpPeople {
-        HomeHcpPeople(
-            profesores: model.profesores,
-            groups: model.groups,
-            onProfesor: { presentProfesor($0) },
-            onProfesores: { showsHomeProfesores = true },
-            onAddProfesor: { showsAgregarProfesor = true },
-            onGroups: { showsHomeGroups = true },
-            onCreate: { model.presentCreateGroup() }
-        )
-    }
-
     private func header(scroll: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center) {
                 CaddieMark(height: 36)
-                GOverline(text: model.clubs.first?.name ?? "Golflet")
-                Spacer()
                 if let club = model.clubs.first {
                     Button {
                         model.requestSync(club)
                     } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(p.ink2)
-                            .frame(width: 36, height: 36)
-                            .background(p.surface)
-                            .clipShape(Circle())
+                        GOverline(text: club.name)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Actualizar")
+                    .accessibilityLabel("Actualizar \(club.name)")
                     .accessibilityIdentifier("home-sync-\(club.accountId)")
+                } else {
+                    GOverline(text: "Golflet")
                 }
+                Spacer()
                 if let major = ProMajor.current(on: Date()) {
                     Link(destination: major.url) {
                         Text(major.short)
@@ -175,47 +163,39 @@ struct HomeView: View {
                     .accessibilityIdentifier("avatar-button")
                     .accessibilityLabel(model.unreadBadgeText.map { "Notificaciones, \($0) sin leer" } ?? "Tu cuenta")
                     if let badge = model.unreadBadgeText {
-                        Text(badge)
-                            .font(GFont.ui(10, weight: .semibold))
-                            .foregroundStyle(p.onPrimary)
-                            .padding(.horizontal, badge.count > 1 ? 4 : 0)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .background(p.accent)
-                            .clipShape(Capsule())
-                            .offset(x: 6, y: -5)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
                         GProbe(id: "avatar-badge", label: "\(badge) sin leer")
                     }
                 }
-                .padding(.top, 4)
             }
             HomeGreetingHeader(
                 name: model.profile.greetingName,
                 booking: model.nextTeeTime,
                 onTab: { revealPartners(scroll) }
             )
-            Button { model.showsPlay = true } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Jugar")
-                            .font(GType.headline)
-                            .foregroundStyle(p.onPrimary)
-                        Text("Ronda con GPS")
-                            .font(GType.label)
-                            .foregroundStyle(p.onPrimary.opacity(0.65))
-                    }
-                    Spacer()
-                    Image(systemName: "location.fill")
-                        .foregroundStyle(p.accentOnNavy)
-                }
-                .padding(16)
-                .background(p.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            RangeMenuButton(
+                range: Binding(
+                    get: { model.statsRange },
+                    set: { model.setStatsRange($0) }
+                ),
+                count: model.rangeRoundCount
+            )
+            Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+        }
+    }
+
+    private var parkedHomeActions: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            NavigationLink {
+                PlayHubView()
+            } label: {
+                Text("Preparar la salida")
+                    .font(GType.headline)
+                    .foregroundStyle(p.primary)
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("play-start")
-            .padding(.top, 6)
+            .accessibilityIdentifier("home-open-jugar")
             Button { model.showsReconstruct = true } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Cargar una vuelta ya jugada")
@@ -256,70 +236,75 @@ struct HomeView: View {
 
     private var handicapCard: some View {
         let snap = model.home
-        let peopleWidth = HomeHcpPeopleLayout.columnWidth(
-            profesorCount: model.profesores.count,
-            groupCount: model.groups.count
-        )
-        let numberWidth = HomeHcpPeopleLayout.numberWidth(snap.handicapIndex)
-        let place = HomeHcpPeopleLayout.place(
-            cardWidth: hcpCardWidth,
-            numberWidth: numberWidth,
-            peopleWidth: peopleWidth
-        )
         return GCard(fill: p.primary, radius: 28, padding: 20) {
             VStack(alignment: .leading, spacing: 18) {
-                if place == .above {
-                    homeHcpPeople()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .accessibilityIdentifier("home-hcp-people-above")
-                }
-                VStack(alignment: .leading, spacing: 12) {
-                    NavigationLink(value: MetricRoute.handicap) {
-                        HStack(alignment: .top) {
-                            GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
-                            Spacer()
-                            Text("Tendencia estimada · 40 rondas")
-                                .font(GType.label)
-                                .foregroundStyle(p.onPrimary.opacity(0.5))
-                            MetricChevron(color: p.onPrimary.opacity(0.4))
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
                         NavigationLink(value: MetricRoute.handicap) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(FormatAR.one(snap.handicapIndex))
-                                    .font(GType.statHero)
-                                    .tracking(-4.4)
-                                    .tabular()
-                                    .foregroundStyle(p.onPrimary)
-                                    .minimumScaleFactor(0.55)
-                                    .lineLimit(1)
-                                HStack(spacing: 6) {
-                                    Image(systemName: snap.trendDelta <= 0 ? "arrow.down" : "arrow.up")
-                                        .font(.system(size: 11, weight: .semibold))
-                                    Text("\(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
-                                        .font(GType.label)
-                                }
-                                .foregroundStyle(p.onPrimary.opacity(0.7))
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+                            CountUpText(value: snap.handicapIndex, format: FormatAR.one)
+                                .font(GType.statHero)
+                                .tracking(-4.4)
+                                .tabular()
+                                .foregroundStyle(p.onPrimary)
+                                .minimumScaleFactor(0.55)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("metric-handicap")
                         .accessibilityElement(children: .contain)
                         .overlay { GProbe(id: "metric-handicap", label: "Handicap index") }
-                        if place == .beside {
-                            homeHcpPeople()
-                                .zIndex(2)
+                        if let when = model.officialHistory.max(by: { $0.date < $1.date })?.date ?? snap.lastRound?.date {
+                            Text("Índice al \(FormatAR.webDay(when))")
+                                .font(GType.label)
+                                .foregroundStyle(p.onPrimary.opacity(0.7))
                         }
+                        if !snap.trendSinceLabel.isEmpty {
+                            let arrow = snap.trendDelta < 0 ? "↓" : "↑"
+                            Text("\(arrow) \(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
+                                .font(GType.label)
+                                .foregroundStyle(p.onPrimary.opacity(0.7))
+                        }
+                        Button { showsHcpImpact = true } label: {
+                            Text("Cambios")
+                                .font(GType.label)
+                                .foregroundStyle(p.onPrimary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(p.onPrimary.opacity(0.72), lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-hcp-cambios")
                     }
-                }
-                .background {
-                    GeometryReader { geo in
-                        Color.clear.preference(key: HomeHcpCardWidthKey.self, value: geo.size.width)
+                    Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 8) {
+                        HomeHcpPeople(
+                            profesores: model.profesores,
+                            groups: model.groups,
+                            onProfesor: { presentProfesor($0) },
+                            onProfesores: { showsHomeProfesores = true },
+                            onAddProfesor: { showsAgregarProfesor = true },
+                            onGroups: { showsHomeGroups = true },
+                            onCreate: { model.presentCreateGroup() }
+                        )
+                        Button { model.showsPlay = true } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .accessibilityHidden(true)
+                                Text("Jugar")
+                                    .font(GType.label)
+                            }
+                            .foregroundStyle(p.onPrimary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(p.accent)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Jugar")
+                        .accessibilityIdentifier("play-start")
                     }
                 }
 
@@ -341,7 +326,7 @@ struct HomeView: View {
                     .overlay { GProbe(id: "metric-best-gross", label: "Mejor gross") }
                     Spacer()
                     NavigationLink(value: MetricRoute.roundList(.average(yearOnly: true))) {
-                        heroMini("Promedio \(Calendar.gregorian.component(.year, from: Date()))", snap.yearAverage.map(FormatAR.one) ?? "—")
+                        heroMini("Promedio", model.summary.averageGross.map(FormatAR.one) ?? "—")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-average")
@@ -359,11 +344,9 @@ struct HomeView: View {
                 .padding(.top, 4)
             }
         }
-        .onPreferenceChange(HomeHcpCardWidthKey.self) { width in
-            if width > 0 { hcpCardWidth = width }
+        .background(alignment: .topLeading) {
+            GProbe(id: "handicap-card", label: "Handicap index")
         }
-        .accessibilityIdentifier("handicap-card")
-        .accessibilityElement(children: .contain)
     }
 
     private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
@@ -413,10 +396,19 @@ struct HomeView: View {
                 .foregroundStyle(p.ink)
             GCard(radius: 22, padding: 16) {
                 if model.upcomingTeeTimes.isEmpty {
-                    Text("No tenés reservas próximas en tu club")
-                        .font(GType.body)
-                        .foregroundStyle(p.ink2)
-                        .accessibilityIdentifier("home-tee-empty")
+                    HStack(alignment: .top, spacing: 12) {
+                        CaddieMark(height: 56)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sin reservas próximas")
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                            Text("Cuando reserves una salida en tu club, aparece acá.")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("home-tee-empty")
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(Array(model.upcomingTeeTimes.enumerated()), id: \.element.id) { index, booking in
@@ -479,27 +471,44 @@ struct HomeView: View {
             NavigationLink {
                 TeeTimePrepView(booking: booking)
             } label: {
+                let parts = teeParts(booking.startsAt)
                 HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(booking.chipWhen)
-                            .font(GType.headline)
+                    VStack(spacing: 0) {
+                        Text(parts.day)
+                            .font(GFont.ui(22, weight: .semibold))
                             .tabular()
                             .foregroundStyle(p.ink)
+                        Text(parts.month)
+                            .font(GType.overline)
+                            .foregroundStyle(p.ink3)
+                    }
+                    .frame(width: 44)
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(booking.clubName)
-                            .font(GType.body)
+                            .font(GType.headline)
                             .foregroundStyle(p.ink)
-                        if !booking.course.isEmpty {
-                            Text(booking.course)
-                                .font(GType.label)
-                                .foregroundStyle(p.ink2)
-                        }
+                            .lineLimit(1)
+                        Text([booking.course, parts.weekday].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .lineLimit(1)
                         if let partners = booking.companionsLine {
                             Text(partners)
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
+                                .lineLimit(1)
                         }
                     }
                     Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(parts.time)
+                            .font(GType.headline)
+                            .tabular()
+                            .foregroundStyle(p.ink)
+                        Text("salida")
+                            .font(GType.overline)
+                            .foregroundStyle(p.ink3)
+                    }
                     Image(systemName: "chevron.right")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(p.ink3)
@@ -514,6 +523,21 @@ struct HomeView: View {
             }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private func teeParts(_ date: Date) -> (day: String, month: String, weekday: String, time: String) {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_AR")
+        f.timeZone = .current
+        f.dateFormat = "d"
+        let day = f.string(from: date)
+        f.dateFormat = "MMM"
+        let month = f.string(from: date).replacingOccurrences(of: ".", with: "").uppercased()
+        f.dateFormat = "EEEE"
+        let weekday = f.string(from: date).capitalized
+        f.dateFormat = "HH:mm"
+        let time = f.string(from: date)
+        return (day, month, weekday, time)
     }
 
     private func revealPartners(_ proxy: ScrollViewProxy) {
@@ -644,6 +668,10 @@ struct HomeView: View {
 
     private var moreLegacy: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if model.homeMode == .comp { competitiveLead }
+            else if model.homeMode == .soc { socialLead }
+            modeChip
+            parkedHomeActions
             Text("Más").font(GType.section).foregroundStyle(p.ink)
             ProtoCard {
                 VStack(spacing: 0) {
@@ -693,95 +721,12 @@ struct HomeView: View {
                 .accessibilityIdentifier("ver-todas")
             }
             if let round = model.home.lastRound {
-                Button { model.presentedRound = round } label: {
+                NavigationLink(value: round) {
                     RoundRow(round: round, style: .home)
                 }
                 .buttonStyle(.plain)
+                .modifier(RoundZoomSource(id: round.roundId, space: roundZoom))
                 .accessibilityIdentifier("last-round-card")
-            }
-        }
-    }
-
-    private var yearRow: some View {
-        let snap = model.home
-        let year = Calendar.gregorian.component(.year, from: Date())
-        let valid = StatsEngine.eighteenHoleValid(model.rounds)
-        let yearRounds = valid.filter { Calendar.gregorian.component(.year, from: $0.date) == year }
-        let yearShare = valid.isEmpty ? 0 : Double(yearRounds.count) / Double(valid.count)
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("Este año")
-                .font(GType.section)
-                .foregroundStyle(p.ink)
-            HStack(spacing: 10) {
-                NavigationLink(value: MetricRoute.roundList(.yearRounds)) {
-                    AccentStatCard(
-                        tint: .primary,
-                        icon: "flag.fill",
-                        title: "Rondas",
-                        value: "\(snap.yearRoundCount)",
-                        share: yearShare,
-                        shareNoun: "las rondas",
-                        compact: true
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("metric-year-rounds")
-                NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: true))) {
-                    AccentStatCard(
-                        tint: .primary,
-                        icon: "trophy.fill",
-                        title: "Mejor",
-                        value: snap.yearBestGross.map(String.init) ?? "—",
-                        compact: true
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("metric-year-best")
-                NavigationLink(value: MetricRoute.scoreKind(.birdie, .yearRounds)) {
-                    AccentStatCard(
-                        tint: .accent,
-                        icon: ScoreKind.birdie.symbolName,
-                        title: "Birdies",
-                        value: "\(snap.yearBirdies)",
-                        share: StatsEngine.holeShare(.birdie, in: yearRounds),
-                        compact: true
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("metric-year-birdies")
-            }
-        }
-    }
-
-    private var recurring: some View {
-        Group {
-            if let report = model.recurring, let first = report.items.first {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Después de la ronda")
-                        .font(GType.section)
-                        .foregroundStyle(p.ink)
-                    NavigationLink(value: MetricRoute.recurring) {
-                        GCard(radius: 22, padding: 16) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Errores que se repiten")
-                                        .font(GType.headline)
-                                        .foregroundStyle(p.ink)
-                                    Spacer()
-                                    MetricChevron(color: p.ink3)
-                                }
-                                Text(first.text)
-                                    .font(GType.body)
-                                    .foregroundStyle(p.ink2)
-                                Text("En \(report.roundsConsidered) de las últimas \(report.lastN) rondas")
-                                    .font(GType.label)
-                                    .foregroundStyle(p.ink3)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("home-recurring")
-                }
             }
         }
     }
@@ -823,10 +768,10 @@ struct HomeView: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(p.primary)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(model.groups.isEmpty ? "Crear un grupo" : "\(model.groups.count) \(model.groups.count == 1 ? "grupo" : "grupos")")
+                            Text(model.groups.isEmpty ? "Comparar con amigos" : "\(model.groups.count) \(model.groups.count == 1 ? "grupo" : "grupos")")
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
-                            Text(model.groups.first?.name ?? "Compará tu juego con amigos")
+                            Text("Tabla, evolución y hoyo por hoyo con tus amigos. Solo si cada uno acepta.")
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
                         }
@@ -837,6 +782,15 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("home-grupos")
+            NavigationLink {
+                GroupsHubView()
+            } label: {
+                Text("Ver grupos y tee times")
+                    .font(GType.headline)
+                    .foregroundStyle(p.primary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-hub-grupos")
         }
     }
 
@@ -931,7 +885,7 @@ struct HomeView: View {
     }
 
     private func hcpImpactLabel(_ impact: HcpImpact) -> String {
-        impact.estimated ? "Handicap estimado" : "Handicap"
+        "Impacto HCP"
     }
 
     private func hcpImpactValue(_ impact: HcpImpact) -> String {
@@ -1023,18 +977,10 @@ struct RoundRow: View {
                 }
                 .frame(width: 44)
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        if round.isCompetition {
-                            Image(systemName: "trophy.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(p.accentInk)
-                                .accessibilityIdentifier("round-trophy")
-                        }
-                        Text(round.displayTitle)
-                            .font(GType.headline)
-                            .foregroundStyle(p.ink)
-                            .lineLimit(2)
-                    }
+                    Text(round.displayTitle)
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                        .lineLimit(2)
                     HStack(spacing: 6) {
                         if !round.isOtherCourse, !round.tee.isEmpty {
                             TeeDot(name: round.tee)
@@ -1044,7 +990,7 @@ struct RoundRow: View {
                             .foregroundStyle(p.ink2)
                             .lineLimit(1)
                     }
-                    if style == .list, !chips.isEmpty {
+                    if !chips.isEmpty {
                         HStack(spacing: 4) {
                             ForEach(chips, id: \.label) { chip in
                                 Text(chip.label)
@@ -1064,7 +1010,7 @@ struct RoundRow: View {
                         .font(GType.statM)
                         .tabular()
                         .foregroundStyle(p.ink)
-                    Text(round.net.map(String.init) ?? "—")
+                    Text(round.net.map { "neto \($0)" } ?? "neto —")
                         .font(GType.label)
                         .tabular()
                         .foregroundStyle(p.ink3)
@@ -1077,16 +1023,18 @@ struct RoundRow: View {
     }
 
     private var chips: [(label: String, fill: Color, ink: Color)] {
-        var items: [(String, Color, Color)] = []
+        guard round.gross != nil else { return [] }
+        let birdie = round.counts.birdies == 1 ? "birdie" : "birdies"
+        let bogey = round.counts.bogeys == 1 ? "bogey" : "bogeys"
+        var items: [(String, Color, Color)] = [
+            ("\(round.counts.birdies) \(birdie)", Color(hex: 0x0B2545), Color(hex: 0xF6F7F9)),
+            ("\(round.counts.pars) pares", Color(hex: 0xECE7DB), p.ink),
+            ("\(round.counts.bogeys) \(bogey)", Color(hex: 0xC8102E), Color(hex: 0xFFF7F2))
+        ]
         let eagles = max(round.counts.eagles, StatsEngine.count(.eagle, in: round).count)
-        if eagles > 0 { items.append(("\(eagles) Á", p.accentSoft, p.accentInk)) }
-        if round.counts.birdies > 0 { items.append(("\(round.counts.birdies) B", p.primary.opacity(0.12), p.primary)) }
-        if round.counts.pars > 0 { items.append(("\(round.counts.pars) P", p.surface2, p.ink2)) }
-        if round.counts.bogeys > 0 { items.append(("\(round.counts.bogeys) G", p.sand, p.ink)) }
-        let doubles = round.counts.doubles + round.counts.triples + round.counts.worse
-        if doubles > 0 { items.append(("\(doubles)+", p.negative.opacity(0.14), p.negative)) }
-        if let putts = round.putts {
-            items.append(("\(putts) putts", p.surface2, p.ink2))
+        if eagles > 0 {
+            let word = eagles == 1 ? "águila" : "águilas"
+            items.insert(("\(eagles) \(word)", Color(hex: 0xC8102E), Color(hex: 0x2B230F)), at: 0)
         }
         return items
     }
@@ -1104,7 +1052,7 @@ struct RoundRow: View {
             parts.append(round.tee)
         }
         if let pos = round.position, let field = round.fieldSize {
-            parts.append("\(pos)° de \(field)")
+            parts.append("\(pos)º de \(field)")
         }
         return parts.joined(separator: " · ")
     }
@@ -1318,7 +1266,7 @@ enum HomeHcpPeopleLayout {
     static let groupOverlap: CGFloat = 12
     static let numberPeopleGap: CGFloat = 12
     static let accent: UInt32 = BrandHex.red
-    static let celeste: UInt32 = 0x75AADB
+    static let celeste: UInt32 = 0xC8A86A
     static let seWidth: CGFloat = 320
     static let seContentWidth: CGFloat = 280
     static let seCardWidth: CGFloat = 240
@@ -1519,15 +1467,54 @@ struct HomeGroupsSheet: View {
     }
 }
 
-extension Round {
-    var displayTitle: String {
-        var title = tournament
-        let junk = ["0-54", "0-36", "0-15.9", "18hmp", "36hmp", "🟦", "🟥", "Sabado", "Sábado", "Domingo", "Miercoles", "Miércoles"]
-        for token in junk {
-            title = title.replacingOccurrences(of: token, with: "")
+enum TournamentName {
+    /// Web `title()`: drop emoji, title-case all-caps words, then lowercase De/La/Del/Y/El/Los mid-phrase.
+    static func title(_ raw: String) -> String {
+        let stripped = raw.unicodeScalars.filter { scalar in
+            let value = scalar.value
+            if scalar.properties.isEmojiPresentation || value == 0xFE0F || value == 0x200D { return false }
+            if (0x1F300...0x1FAFF).contains(value) || (0x2600...0x27BF).contains(value) { return false }
+            return true
         }
-        title = title.replacingOccurrences(of: "  ", with: " ")
+        var text = String(String.UnicodeScalarView(stripped))
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        text = replacing(text, #"\b([A-ZÁÉÍÓÚÑ]{2,})\b"#) { word, _ in
+            String(word.prefix(1)) + word.dropFirst().lowercased()
+        }
+        text = replacing(text, #"\b(De|La|Del|Y|El|Los)\b"#) { word, range in
+            range.lowerBound == text.startIndex ? word : word.lowercased()
+        }
+        return text
+    }
+
+    /// Web `short()`: `title()`, then drop handicap ranges, hmp tokens and years.
+    static func short(_ raw: String) -> String {
+        title(raw)
+            .replacingOccurrences(of: #"\b-?\d+([.,]\d+)?\s*-\s*\d+([.,]\d+)?\b"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\b\d+\s*hmp\b"#, with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: #"\b20\d\d\b"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func replacing(_ text: String, _ pattern: String, _ transform: (String, Range<String.Index>) -> String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        var result = text
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            result.replaceSubrange(range, with: transform(String(result[range]), range))
+        }
+        return result
+    }
+}
+
+extension Round {
+    var plainTournament: String { TournamentName.title(tournament) }
+
+    var displayTitle: String {
+        let title = TournamentName.short(tournament)
         return title.isEmpty ? "Ronda" : title
     }
 }

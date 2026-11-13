@@ -6,33 +6,29 @@ struct RangeMenuButton: View {
     var count: Int
 
     var body: some View {
-        Menu {
-            ForEach(StatsRange.allCases) { option in
-                Button {
-                    range = option
-                } label: {
-                    if option == range {
-                        Label(option.title, systemImage: "checkmark")
-                    } else {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(StatsRange.allCases) { option in
+                    let on = option == range
+                    Button {
+                        range = option
+                    } label: {
                         Text(option.title)
+                            .font(GType.label)
+                            .foregroundStyle(on ? p.ink : p.ink2)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(on ? p.surface : Color.clear)
+                            .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("range-\(option.rawValue)")
+                    .accessibilityAddTraits(on ? .isSelected : [])
                 }
-                .accessibilityIdentifier("range-\(option.rawValue)")
             }
-        } label: {
-            HStack(spacing: 6) {
-                Text(range.title)
-                    .font(GType.headline)
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .foregroundStyle(p.ink)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(p.surface)
+            .padding(4)
+            .background(p.surface2)
             .clipShape(Capsule())
-            .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
         }
         .accessibilityIdentifier("range-menu")
         .accessibilityLabel("Período \(range.title), \(count) \(count == 1 ? "ronda" : "rondas")")

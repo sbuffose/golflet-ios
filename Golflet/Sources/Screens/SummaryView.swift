@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SummaryView: View {
+    var showsBack = true
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
 
@@ -9,11 +10,46 @@ struct SummaryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     header
+                    NavigationLink { ClimaView() } label: {
+                        Text("Ver cómo afecta el clima")
+                            .font(GType.headline)
+                            .foregroundStyle(p.onPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("resumen-clima")
                     filters
+                    period
                     metricsEntry
                     grid
                     trend
+                    holeResults
                     hardest
+                    NavigationLink { AcademiaView() } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Qué trabajar")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                Text("Prioridades a partir de tus tarjetas")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink2)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(p.ink3)
+                        }
+                        .padding(16)
+                        .background(p.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 0))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("resumen-trabajar")
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -21,29 +57,30 @@ struct SummaryView: View {
             }
         }
         .accessibilityIdentifier("screen-resumen")
-        .safeAreaInset(edge: .top) { MetricBackBar() }
+        .metricDestinations()
+        .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             GOverline(text: "\(model.summary.firstYear) – \(model.summary.lastYear)")
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    GTitle(text: "Resumen")
-                    Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                        .accessibilityIdentifier("range-count")
-                }
-                Spacer(minLength: 8)
-                RangeMenuButton(
-                    range: Binding(
-                        get: { model.statsRange },
-                        set: { model.setStatsRange($0) }
-                    ),
-                    count: model.rangeRoundCount
-                )
-            }
+            GTitle(text: "Resumen")
+        }
+    }
+
+    private var period: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            RangeMenuButton(
+                range: Binding(
+                    get: { model.statsRange },
+                    set: { model.setStatsRange($0) }
+                ),
+                count: model.rangeRoundCount
+            )
+            Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .accessibilityIdentifier("range-count")
         }
     }
 
@@ -76,8 +113,9 @@ struct SummaryView: View {
     }
 
     private var filters: some View {
-        ScrollFilterPills(
-            options: model.courseFilterOptions.map(\.title),
+        let shown = model.courseFilterOptions.filter { $0.kind != .other }
+        return ScrollFilterPills(
+            options: shown.map(\.title),
             selection: Binding(
                 get: { model.courseFilter.title },
                 set: { title in
@@ -256,6 +294,36 @@ struct SummaryView: View {
         }
     }
 
+    private var holeResults: some View {
+        let rounds = model.rangedValidRounds()
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Resultados por hoyo")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(ScoreKind.allCases, id: \.self) { kind in
+                    let total = rounds.reduce(0) { $0 + StatsEngine.count(kind, in: $1).count }
+                    NavigationLink(value: MetricRoute.scoreKind(kind, .allCards)) {
+                        GCard(radius: 18, padding: 14) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(kind.title)
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink2)
+                                Text("\(total)")
+                                    .font(GType.statM)
+                                    .tabular()
+                                    .foregroundStyle(p.ink)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("resumen-\(kind.rawValue)")
+                }
+            }
+        }
+    }
+
     private var hardest: some View {
         let ranged = StatsEngine.ranged(model.rounds, range: model.statsRange)
         let rows: [(String, HoleStat)] = {
@@ -274,7 +342,7 @@ struct SummaryView: View {
                     Button {
                         model.selectedCourseName = course
                         model.presentedHole = hole.number
-                        model.selectedTab = .jugar
+                        model.selectedTab = .cancha
                     } label: {
                         HStack(spacing: 12) {
                             Text("\(hole.number)")

@@ -377,43 +377,36 @@ struct ScoreMark: View {
 
     var body: some View {
         let text = strokes.map(String.init) ?? "—"
-        Text(text)
+        let label = Text(text)
             .font(GFont.ui(13.5, weight: .semibold))
             .tabular()
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
-            .background(background)
-            .clipShape(Circle())
-            .overlay {
-                if result == .par || result == .unknown {
-                    Circle().stroke(p.hairline, lineWidth: 1)
-                }
-            }
-            .background {
-                if result == .eagleOrBetter {
-                    Circle()
-                        .stroke(p.accent, lineWidth: ringWidth)
-                        .padding(-(ringWidth + ringGap))
-                }
-            }
-    }
-
-    private var ringWidth: CGFloat { max(1.25, diameter * 0.08) }
-    private var ringGap: CGFloat { max(1.25, diameter * 0.05) }
-
-    private var background: Color {
         switch result {
-        case .eagleOrBetter: return p.accent
-        case .birdie: return p.accent
-        case .par, .unknown: return Color.clear
-        case .bogey: return p.sand
-        case .doubleOrWorse: return p.negative.opacity(0.2)
+        case .par, .unknown:
+            label
+        case .birdie:
+            label.background(p.accent).clipShape(Circle())
+        case .eagleOrBetter:
+            label
+                .background(p.primary)
+                .clipShape(Circle())
+                .overlay {
+                    Circle()
+                        .stroke(p.primary, lineWidth: 2)
+                        .padding(-4)
+                }
+        case .bogey:
+            label.background(Color(hex: 0xECE8DF))
+        case .doubleOrWorse:
+            label.background(Color(hex: 0x4A514C))
         }
     }
 
     private var foreground: Color {
         switch result {
-        case .eagleOrBetter, .birdie: return p.onPrimary
+        case .eagleOrBetter: return p.accent
+        case .birdie, .doubleOrWorse: return p.onPrimary
         default: return p.ink
         }
     }

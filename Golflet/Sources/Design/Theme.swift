@@ -177,12 +177,12 @@ enum GFont {
 }
 
 enum GType {
-    static var largeTitle: Font { GFont.ui(42, weight: .semibold) }
-    static var sheetTitle: Font { GFont.ui(30, weight: .semibold) }
-    static var section: Font { GFont.ui(20, weight: .semibold) }
-    static var headline: Font { GFont.ui(15.5, weight: .semibold) }
-    static var body: Font { GFont.ui(16, weight: .regular) }
-    static var label: Font { GFont.ui(12.5, weight: .medium) }
+    static var largeTitle: Font { GFont.ui(40, weight: .semibold) }
+    static var sheetTitle: Font { GFont.ui(24, weight: .semibold) }
+    static var section: Font { GFont.ui(18, weight: .semibold) }
+    static var headline: Font { GFont.ui(15, weight: .semibold) }
+    static var body: Font { GFont.ui(15, weight: .regular) }
+    static var label: Font { GFont.ui(13, weight: .medium) }
     static var overline: Font { GFont.ui(11, weight: .semibold) }
     static var statHero: Font { GFont.ui(80, weight: .semibold) }
     static var statL: Font { GFont.ui(32, weight: .semibold) }
@@ -268,6 +268,21 @@ enum FormatAR {
         f.locale = Locale(identifier: "es_AR")
         f.dateFormat = "d MMM yyyy"
         return f.string(from: date).replacingOccurrences(of: ".", with: "")
+    }
+
+    /// Web `MES` abbreviations: ene, feb, mar…
+    static let webMonths = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+
+    static func webMonthYear(_ date: Date) -> String {
+        let parts = Calendar.gregorian.dateComponents([.month, .year], from: date)
+        let month = webMonths[max(0, min(11, (parts.month ?? 1) - 1))]
+        return "\(month). \(parts.year ?? 0)"
+    }
+
+    static func webDay(_ date: Date) -> String {
+        let parts = Calendar.gregorian.dateComponents([.day, .month, .year], from: date)
+        let month = webMonths[max(0, min(11, (parts.month ?? 1) - 1))]
+        return "\(parts.day ?? 0) \(month) \(parts.year ?? 0)"
     }
 
     static func signedInt(_ value: Int) -> String {

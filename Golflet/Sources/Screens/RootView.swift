@@ -8,6 +8,7 @@ struct RootView: View {
     @AppStorage("golflet.launch.seen") private var seenLaunch = false
     @State private var showSplash = true
     @State private var splashWasFirst = !UserDefaults.standard.bool(forKey: "golflet.launch.seen")
+    @State private var tabRoots: [AppTab: Int] = [:]
 
     var body: some View {
         let _ = typeToken
@@ -79,40 +80,20 @@ struct RootView: View {
     @ViewBuilder
     private var mainTabs: some View {
         let bindings = Bindable(model)
-        TabView(selection: bindings.selectedTab) {
-            NavigationStack { HomeView() }
-                .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
-                .tag(AppTab.inicio)
-                .accessibilityIdentifier("tab-inicio")
-
-            NavigationStack { GroupsHubView() }
-                .tabItem { Label(AppTab.grupos.title, systemImage: AppTab.grupos.systemImage) }
-                .tag(AppTab.grupos)
-                .accessibilityIdentifier("tab-grupos")
-
-            NavigationStack { PlayHubView() }
-                .tabItem { Label(AppTab.jugar.title, systemImage: AppTab.jugar.systemImage) }
-                .tag(AppTab.jugar)
-                .accessibilityIdentifier("tab-jugar")
-
-            NavigationStack { AcademiaView() }
-                .tabItem { Label(AppTab.academia.title, systemImage: AppTab.academia.systemImage) }
-                .tag(AppTab.academia)
-                .accessibilityIdentifier("tab-academia")
+        VStack(spacing: 0) {
+            tabPages
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if !model.showsLiveHole && !model.showsPlay && !model.showsClubs {
+                GolfletTabBar(selection: bindings.selectedTab) { tab in
+                    tabRoots[tab, default: 0] += 1
+                }
+            }
         }
-        .toolbar(model.showsLiveHole || model.showsPlay ? .hidden : .visible, for: .tabBar)
-        .tint(p.primary)
-        .onAppear { configureTabBar() }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedTab)
+        .modifier(GSelectionHaptic(reduce: reduceMotion, trigger: model.selectedTab))
         .sheet(item: bindings.presentedRound) { round in
             NavigationStack {
                 RoundDetailView(round: round)
-            }
-            .golfletChrome()
-            .environment(model)
-        }
-        .sheet(isPresented: bindings.showsClubs) {
-            NavigationStack {
-                ClubsView()
             }
             .golfletChrome()
             .environment(model)
@@ -213,24 +194,27 @@ struct RootView: View {
         }
     }
 
-    private func configureTabBar() {
-        let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(p.bg)
-        appearance.shadowColor = UIColor(p.hairline)
-        let selectedColor = UIColor(p.accent)
-        let idle = UIColor(p.ink3)
-        let selectedFont = UIFont.systemFont(ofSize: 11, weight: .bold)
-        let idleFont = UIFont.systemFont(ofSize: 10, weight: .regular)
-        for layout in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
-            layout.selected.iconColor = selectedColor
-            layout.selected.titleTextAttributes = [.foregroundColor: selectedColor, .font: selectedFont]
-            layout.normal.iconColor = idle
-            layout.normal.titleTextAttributes = [.foregroundColor: idle, .font: idleFont]
+    @ViewBuilder
+    private var tabPages: some View {
+        ZStack {
+            switch model.selectedTab {
+            case .resumen:
+                NavigationStack { SummaryView(showsBack: false) }
+                    .id(tabRoots[.resumen, default: 0])
+            case .rondas:
+                NavigationStack { RoundsView(showsBack: false) }
+                    .id(tabRoots[.rondas, default: 0])
+            case .cancha:
+                NavigationStack { CourseView(showsBack: false) }
+                    .id(tabRoots[.cancha, default: 0])
+            case .bolsa:
+                NavigationStack { BagView(showsBack: false) }
+                    .id(tabRoots[.bolsa, default: 0])
+            default:
+                NavigationStack { HomeView() }
+                    .id(tabRoots[.inicio, default: 0])
+            }
         }
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
-        UITabBar.appearance().tintColor = selectedColor
-        UITabBar.appearance().unselectedItemTintColor = idle
+        .transition(reduceMotion ? .identity : .opacity)
     }
 }

@@ -187,18 +187,25 @@ struct HomeGreetingHeader: View {
 
     private func greeting(_ label: String) -> some View {
         ViewThatFits(in: .horizontal) {
-            Text(label)
-                .font(GFont.ui(HomeGreetingLayout.fullSize, weight: .semibold))
-                .tracking(-1.9)
-            Text(label)
-                .font(GFont.ui(HomeGreetingLayout.minSize, weight: .semibold))
-                .tracking(-1.2)
+            greetingLine(size: HomeGreetingLayout.fullSize, tracking: -1.9)
+            greetingLine(size: HomeGreetingLayout.minSize, tracking: -1.2)
         }
-        .foregroundStyle(p.ink)
         .lineLimit(1)
         .minimumScaleFactor(HomeGreetingLayout.minScale)
         .allowsTightening(true)
+        .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("home-greeting")
         .accessibilityLabel(label)
+    }
+
+    private func greetingLine(size: CGFloat, tracking: CGFloat) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("Hola,")
+                .foregroundStyle(p.ink2)
+            Text(name)
+                .foregroundStyle(p.primary)
+        }
+        .font(GFont.ui(size, weight: .semibold))
+        .tracking(tracking)
     }
 }

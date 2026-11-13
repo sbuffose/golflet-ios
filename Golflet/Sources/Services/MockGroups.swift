@@ -284,24 +284,42 @@ extension MockAPIClient {
     func groupComparison(groupID: String, config: GroupViewConfig) async throws -> GroupComparison {
         let group = try await group(id: groupID)
         let prefsByMember = mutate { store, _ in store.share }
-        let rows = config.metrics.map { metric in
+        var metrics = config.metrics
+        for kind in [GroupMetricKind.birdies, .pars, .eagles, .net, .regular, .rounds, .streak, .aces] where !metrics.contains(kind) {
+            metrics.append(kind)
+        }
+        let rows = metrics.map { metric in
             GroupComparisonRow(
                 metric: metric,
                 values: group.members.map { member in
                     let shared = (prefsByMember[member.id] ?? .allShared).isShared(metric.category)
                     let sample = MockGroupStore.sample(metric: metric, memberID: member.id)
+                    let perRound: Double? = {
+                        guard shared, let value = sample.value else { return nil }
+                        switch metric {
+                        case .birdies, .pars, .eagles, .rounds:
+                            return (value / 18 * 10).rounded() / 10
+                        default:
+                            return nil
+                        }
+                    }()
                     return MemberMetricValue(
                         memberID: member.id,
                         memberName: member.name,
                         initials: member.initials,
                         shared: shared,
                         value: shared ? sample.value : nil,
-                        text: shared ? sample.text : nil
+                        text: shared ? sample.text : nil,
+                        perRound: perRound,
+                        sample: shared ? 18 : nil
                     )
                 }
             )
         }
-        return GroupComparison(groupID: groupID, config: config, rows: rows)
+        let me = group.members.first { $0.id == MockGroupStore.meID }
+        let rank = me.flatMap { rows.first { $0.metric == .birdies }?.rank(of: $0.id) }
+        let hero = rank.map { GroupHero(rank: $0, cards: "18 tarjetas", memberID: me?.id) }
+        return GroupComparison(groupID: groupID, config: config, rows: rows, hero: hero)
     }
 
     func groupPeriod(groupID: String, kind: ComparativoKind, off: Int) async throws -> ComparativoData {
@@ -350,8 +368,8 @@ extension MockAPIClient {
     private func currentMember(role: GroupRole, owner: Bool) -> GroupMember {
         GroupMember(
             id: MockGroupStore.meID,
-            name: "Jugador Demo",
-            initials: "JD",
+            name: MockGroupStore.meName,
+            initials: MockGroupStore.meInitials,
             photoURL: nil,
             role: role,
             isOwner: owner
@@ -376,6 +394,13 @@ struct MockGroupStore: Sendable {
     static let anaID = "ana"
     static let luisID = "luis"
 
+    static var meName: String { RuntimeFlags.testingGreetingName ?? "Jugador Demo" }
+
+    static var meInitials: String {
+        guard let name = RuntimeFlags.testingGreetingName, let first = name.first else { return "JD" }
+        return String(first).uppercased()
+    }
+
     var groups: [GolfletGroup]
     var pending: [GroupInvitePreview]
     var views: [String: GroupViewConfig]
@@ -383,7 +408,7 @@ struct MockGroupStore: Sendable {
     var createdByKey: [String: GolfletGroup] = [:]
 
     static func seed() -> MockGroupStore {
-        let me = GroupMember(id: meID, name: "Jugador Demo", initials: "JD", photoURL: nil, role: .admin, isOwner: true)
+        let me = GroupMember(id: meID, name: meName, initials: meInitials, photoURL: nil, role: .admin, isOwner: true)
         let ana = GroupMember(id: anaID, name: "Ana Pérez", initials: "AP", photoURL: nil, role: .member, isOwner: false)
         let luis = GroupMember(id: luisID, name: "Luis Gómez", initials: "LG", photoURL: nil, role: .admin, isOwner: false)
         let jockey = GolfletGroup(
@@ -420,7 +445,11 @@ struct MockGroupStore: Sendable {
         return MockGroupStore(
             groups: [jockey],
             pending: [pending],
-            views: ["g-jockey": .default],
+            views: ["g-jockey": {
+                var view = GroupViewConfig.default
+                view.range = .all
+                return view
+            }()],
             share: [meID: meShare, anaID: anaShare, luisID: luisShare]
         )
     }
@@ -436,17 +465,31 @@ struct MockGroupStore: Sendable {
         }()
         switch metric {
         case .gross: return (80 + shift, nil)
-        case .net: return (73 + shift, nil)
+        case .net:
+            if memberID == meID { return (67, nil) }
+            if memberID == luisID { return (69, nil) }
+            return (nil, nil)
         case .handicap: return (3.1 + shift, nil)
-        case .birdies: return (18 - shift, nil)
-        case .pars: return (42 + shift, nil)
-        case .eagles: return (memberID == meID ? 3 : 1, nil)
+        case .birdies:
+            if memberID == meID { return (43, nil) }
+            if memberID == luisID { return (28, nil) }
+            return (0, nil)
+        case .pars:
+            if memberID == meID { return (164, nil) }
+            if memberID == luisID { return (140, nil) }
+            return (0, nil)
+        case .eagles: return (memberID == meID ? 2 : 0, nil)
         case .gir: return (48 + shift, nil)
         case .fir: return (56 + shift, nil)
         case .putts: return (31.2 + shift * 0.4, nil)
         case .gpsDrive: return (228 + shift * 4, nil)
         case .bagCarry: return (214 + shift * 3, nil)
         case .ball: return (nil, memberID == anaID ? "Pro V1" : "TP5x")
+        case .rounds: return (18, nil)
+        case .maxBirdies: return (4, nil)
+        case .streak: return (memberID == meID ? 2 : 1, nil)
+        case .regular: return (memberID == meID ? 3.2 : 4.1, nil)
+        case .aces: return (0, nil)
         }
     }
 }
@@ -494,7 +537,7 @@ enum MockComparativo {
 
     static func profile(groupID: String, memberID: String) -> GroupMemberProfile? {
         let names = [
-            MockGroupStore.meID: "Jugador Demo",
+            MockGroupStore.meID: MockGroupStore.meName,
             MockGroupStore.anaID: "Ana Pérez",
             MockGroupStore.luisID: "Luis Gómez"
         ]
@@ -590,7 +633,7 @@ enum MockComparativo {
     }
 
     private static func members(withRounds: Bool) -> [ComparativoMember] {
-        let me = value(memberID: MockGroupStore.meID, name: "Jugador Demo", isMe: true, hidden: false, withRounds: withRounds, net: -3, gross: 0, avg: 76.0)
+        let me = value(memberID: MockGroupStore.meID, name: MockGroupStore.meName, isMe: true, hidden: false, withRounds: withRounds, net: -3, gross: 0, avg: 76.0)
         let luis = value(memberID: MockGroupStore.luisID, name: "Luis Gómez", isMe: false, hidden: false, withRounds: withRounds, net: 1, gross: 4, avg: 81.0)
         let ana = value(memberID: MockGroupStore.anaID, name: "Ana Pérez", isMe: false, hidden: true, withRounds: false, net: nil, gross: nil, avg: nil)
         return [me, luis, ana]

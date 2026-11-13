@@ -12,6 +12,7 @@ struct MetricRoundsView: View {
     @State private var sort: MetricSortField
     @State private var order: MetricSortOrder
     @State private var apiRounds: [Round]?
+    @Namespace private var roundZoom
 
     init(query: RoundListQuery, showsBack: Bool = true, screenID: String = "screen-metric-rounds") {
         self.query = query
@@ -38,7 +39,7 @@ struct MetricRoundsView: View {
                 }
                 if query.showCourseFilter {
                     ScrollFilterPills(
-                        options: MetricCourseBucket.allCases.map(\.rawValue),
+                        options: courseOptions,
                         selection: Binding(
                             get: { course.rawValue },
                             set: { course = MetricCourseBucket(rawValue: $0) ?? .all }
@@ -51,16 +52,22 @@ struct MetricRoundsView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 10, pinnedViews: .sectionHeaders) {
                         if rows.isEmpty {
-                            Text("No hay rondas con este filtro.")
-                                .font(GType.body)
-                                .foregroundStyle(p.ink3)
-                                .padding(.top, 24)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 10) {
+                                CaddieMark(height: 72)
+                                Text("Todavía no hay tarjetas")
+                                    .font(GType.section)
+                                    .foregroundStyle(p.ink)
+                                Text("No hay rondas con este filtro.")
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink3)
+                            }
+                            .padding(.top, 24)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         ForEach(yearSections) { section in
                             Section {
                                 ForEach(Array(section.rounds.enumerated()), id: \.element.id) { index, round in
-                                    Button { model.presentedRound = round } label: {
+                                    NavigationLink(value: round) {
                                         RoundRow(
                                             round: round,
                                             style: .list,
@@ -68,17 +75,12 @@ struct MetricRoundsView: View {
                                         )
                                     }
                                     .buttonStyle(.plain)
+                                    .modifier(RoundZoomSource(id: round.roundId, space: roundZoom))
                                     .accessibilityIdentifier("metric-round-\(section.id)-\(index)")
                                 }
                             } header: {
-                                if sort == .date, !section.isCurrent {
-                                    Text(section.id)
-                                        .font(GType.overline)
-                                        .foregroundStyle(p.ink3)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.vertical, 4)
-                                        .background(p.bg.opacity(0.94))
-                                        .accessibilityIdentifier("year-marker-\(section.id)")
+                                if sort == .date, screenID == "screen-rondas" || !section.isCurrent {
+                                    yearHeader(section)
                                 }
                             }
                         }
@@ -93,6 +95,10 @@ struct MetricRoundsView: View {
         .safeAreaInset(edge: .top) {
             if showsBack { MetricBackBar() }
         }
+        .navigationDestination(for: Round.self) { round in
+            RoundDetailView(round: round)
+                .modifier(RoundZoomDestination(id: round.roundId, space: roundZoom))
+        }
         .task(id: "\(period.rawValue)-\(course.rawValue)-\(sort.rawValue)-\(order.rawValue)") {
             await loadAPI()
         }
@@ -100,7 +106,7 @@ struct MetricRoundsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            GOverline(text: "\(rows.count) \(rows.count == 1 ? "ronda" : "rondas")")
+            GOverline(text: countLine)
             GTitle(text: query.title, size: 34)
             if let footnote = query.footnote {
                 Text(footnote)
@@ -111,39 +117,56 @@ struct MetricRoundsView: View {
     }
 
     private var sortRow: some View {
-        HStack {
-            Text(sortCaption)
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
-            Spacer()
-            Menu {
-                Button("Recientes") { sort = .date; order = .bestFirst }
-                Button("Antiguas") { sort = .date; order = .worstFirst }
-                Button("Mejor gross") { sort = .gross; order = .bestFirst }
-                Button("Peor gross") { sort = .gross; order = .worstFirst }
-                Button("Mejor neto") { sort = .net; order = .bestFirst }
-                Button("Peor neto") { sort = .net; order = .worstFirst }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(p.ink)
-                    .frame(width: 36, height: 36)
-                    .background(p.surface2)
-                    .clipShape(Circle())
-            }
-            .accessibilityIdentifier("metric-sort-menu")
+        HStack(spacing: 4) {
+            sortChip("Fecha", field: .date, id: "sort-date")
+            sortChip("Mejor gross", field: .gross, id: "sort-gross")
+            sortChip("Mejor neto", field: .net, id: "sort-net")
         }
+        .padding(3)
+        .background(Color(hex: 0xECE8DE))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("metric-sort-menu")
+        .accessibilityLabel("Ordenar")
     }
 
-    private var sortCaption: String {
-        switch (sort, order) {
-        case (.date, .bestFirst): return "Recientes"
-        case (.date, .worstFirst): return "Antiguas"
-        case (.gross, .bestFirst): return "Mejor"
-        case (.gross, .worstFirst): return "Peor"
-        case (.net, .bestFirst): return "Mejor neto"
-        case (.net, .worstFirst): return "Peor neto"
+    private func sortChip(_ title: String, field: MetricSortField, id: String) -> some View {
+        let on = sort == field && order == .bestFirst
+        return Button {
+            sort = field
+            order = .bestFirst
+        } label: {
+            Text(title)
+                .font(GFont.ui(13, weight: .semibold))
+                .foregroundStyle(on ? p.ink : p.ink2)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(on ? p.surface : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func yearHeader(_ section: RoundYearSection) -> some View {
+        let valid = StatsEngine.eighteenHoleValid(section.rounds)
+        let average = StatsEngine.average(valid.compactMap(\.gross))
+        return HStack {
+            Text(section.isCurrent ? "Este año" : section.id)
+                .font(GFont.ui(13, weight: .semibold))
+                .foregroundStyle(p.ink2)
+            Spacer()
+            if let average {
+                Text("prom. \(FormatAR.one(average))")
+                    .font(GFont.ui(13, weight: .semibold))
+                    .foregroundStyle(p.ink2)
+            }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(p.bg.opacity(0.94))
+        .accessibilityIdentifier("year-marker-\(section.id)")
     }
 
     private var yearSections: [RoundYearSection] {
@@ -160,8 +183,30 @@ struct MetricRoundsView: View {
         }
     }
 
+    private var countLine: String {
+        if screenID == "screen-rondas" {
+            let n = model.rounds.count
+            let word = n == 1 ? "tarjeta" : "tarjetas"
+            if model.clubs.count == 1, let name = model.clubs.first?.name {
+                return "\(n) \(word) · \(name)"
+            }
+            if model.clubs.count > 1 {
+                return "\(n) \(word) · \(model.clubs.count) clubes"
+            }
+            return "\(n) \(word)"
+        }
+        return "\(rows.count) \(rows.count == 1 ? "ronda" : "rondas")"
+    }
+
+    private var courseOptions: [String] {
+        let present = Set(model.rounds.map { MetricCourseBucket.bucket(for: $0) })
+        return MetricCourseBucket.allCases
+            .filter { $0 == .all || present.contains($0) }
+            .map(\.rawValue)
+    }
+
     private var rows: [Round] {
-        if let apiRounds, !apiRounds.isEmpty { return apiRounds }
+        if screenID != "screen-rondas", let apiRounds, !apiRounds.isEmpty { return apiRounds }
         let filtered = StatsEngine.filter(model.rounds, query: query, period: period, course: course)
         return StatsEngine.sorted(filtered, field: sort, order: order)
     }

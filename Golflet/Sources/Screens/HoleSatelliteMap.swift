@@ -7,6 +7,11 @@ struct MapRing: Hashable {
     var points: [GPSCoord]
 }
 
+struct HoleShotMark: Hashable {
+    var number: Int
+    var coord: GPSCoord
+}
+
 enum HoleGeoMath {
     static func heading(from tee: GPSCoord, to pin: GPSCoord) -> Double {
         let dLng = (pin.lng - tee.lng) * .pi / 180
@@ -83,6 +88,10 @@ struct HoleSatelliteMap: UIViewRepresentable {
     var animateCamera: Bool
     var focus: GPSCoord
     var focusID: String
+    /// Closed hole: the camera sits on the green and the tee stays down-screen, the same overview the web uses.
+    var framesHole: Bool = false
+    var zoom: Int = 0
+    var shotMarks: [HoleShotMark] = []
     var onCenter: (GPSCoord) -> Void
     var onTarget: (GPSCoord) -> Void
 
@@ -93,6 +102,8 @@ struct HoleSatelliteMap: UIViewRepresentable {
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()
         map.mapType = .satellite
+        map.isAccessibilityElement = false
+        map.accessibilityElementsHidden = true
         map.isRotateEnabled = false
         map.isPitchEnabled = false
         map.showsCompass = false
@@ -106,17 +117,20 @@ struct HoleSatelliteMap: UIViewRepresentable {
         context.coordinator.onTarget = onTarget
         context.coordinator.trackMode = trackMode
         let holeChanged = context.coordinator.holeNumber != holeNumber
-        let focusChanged = context.coordinator.focusID != focusID
-        if holeChanged || focusChanged {
-            if holeChanged {
-                context.coordinator.holeNumber = holeNumber
-                map.removeOverlays(map.overlays)
-                map.removeAnnotations(map.annotations)
-                addRings(map)
-            }
-            context.coordinator.focusID = focusID
-            let meters = max(90.0, Double(PlayMath.meters(from: tee, to: pin)) * 0.72)
-            let camera = MKMapCamera(lookingAtCenter: focus.cl, fromDistance: meters, pitch: 0, heading: heading)
+        if holeChanged {
+            context.coordinator.holeNumber = holeNumber
+            map.removeOverlays(map.overlays)
+            map.removeAnnotations(map.annotations)
+            addRings(map)
+        }
+        let cameraKey = "\(focusID)|\(framesHole)|\(zoom)"
+        if context.coordinator.cameraKey != cameraKey {
+            context.coordinator.cameraKey = cameraKey
+            let holeMeters = max(40.0, Double(PlayMath.meters(from: tee, to: pin)))
+            // Web overview (`frameHole` mode overview) keeps the green at the reticle and the tee down-screen.
+            let distance = (framesHole ? max(360, holeMeters * 1.15) : max(90, holeMeters * 0.72)) * pow(0.78, Double(zoom))
+            let look = framesHole ? pin : focus
+            let camera = MKMapCamera(lookingAtCenter: look.cl, fromDistance: distance, pitch: 0, heading: heading)
             map.setCamera(camera, animated: animateCamera && !holeChanged)
         }
         refreshShots(map)
@@ -153,13 +167,16 @@ struct HoleSatelliteMap: UIViewRepresentable {
         if !trackMode {
             map.addAnnotation(HolePoint(kind: "aim", coord: target))
         }
+        for mark in shotMarks {
+            map.addAnnotation(HolePoint(kind: "n:\(mark.number)", coord: mark.coord))
+        }
     }
 
     final class Coord: NSObject, MKMapViewDelegate {
         var onCenter: (GPSCoord) -> Void
         var onTarget: (GPSCoord) -> Void
         var holeNumber = 0
-        var focusID = ""
+        var cameraKey = ""
         var trackMode = false
         var dragging = false
 
@@ -204,7 +221,7 @@ struct HoleSatelliteMap: UIViewRepresentable {
             view.canShowCallout = false
             let marker = HoleMarker.image(kind: point.kind)
             view.image = marker
-            view.centerOffset = point.kind == "pin" ? CGPoint(x: 0, y: -10) : .zero
+            view.centerOffset = point.kind == "pin" ? CGPoint(x: 0, y: -10) : (point.kind.hasPrefix("n:") ? CGPoint(x: 8, y: -8) : .zero)
             view.isDraggable = point.kind == "aim"
             return view
         }
@@ -238,6 +255,21 @@ final class HolePoint: MKPointAnnotation {
 
 enum HoleMarker {
     static func image(kind: String) -> UIImage {
+        if kind.hasPrefix("n:"), let number = Int(kind.dropFirst(2)) {
+            let size: CGFloat = 22
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+            return renderer.image { _ in
+                let rect = CGRect(x: 1, y: 1, width: size - 2, height: size - 2)
+                UIColor(red: 0.78, green: 0.06, blue: 0.18, alpha: 1).setFill()
+                UIBezierPath(ovalIn: rect).fill()
+                let text = NSAttributedString(string: "\(number)", attributes: [
+                    .font: UIFont.systemFont(ofSize: 12, weight: .bold),
+                    .foregroundColor: UIColor.white
+                ])
+                let box = text.size()
+                text.draw(at: CGPoint(x: (size - box.width) / 2, y: (size - box.height) / 2))
+            }
+        }
         let size: CGFloat = kind == "aim" ? 28 : 18
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         return renderer.image { ctx in

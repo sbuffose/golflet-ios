@@ -161,7 +161,8 @@ final class AppModel {
     var home: HomeSnapshot {
         StatsEngine.home(
             rounds: rounds,
-            officialIndex: OfficialHandicap.latest(player: profile.currentHandicap, history: officialHistory)
+            officialIndex: OfficialHandicap.latest(player: profile.currentHandicap, history: officialHistory),
+            history: officialHistory
         )
     }
     var groupedCourseNames: [String] { StatsEngine.groupedCourseNames(from: courseFilterOptions) }
@@ -216,7 +217,15 @@ final class AppModel {
             }
             apply(snap)
             if api.persistsLocally {
-                bag = notes.bag()
+                let local = notes.bag()
+                let untouched = local.map(\.name) == DefaultBag.clubs
+                    && local.allSatisfy { $0.carry == nil && $0.total == nil }
+                if untouched, !snap.bag.isEmpty {
+                    bag = snap.bag
+                    notes.saveBag(snap.bag)
+                } else {
+                    bag = local
+                }
             }
             await flushOffline()
             recurring = try? await api.recurringMistakes()
@@ -572,7 +581,14 @@ final class AppModel {
     func updateBagClub(name: String, carry: Int?, total: Int?) {
         bag = bag.map { item in
             guard item.name == name else { return item }
-            return BagClub(name: name, carry: carry, total: total)
+            return BagClub(
+                name: name,
+                carry: carry,
+                total: total,
+                brand: item.brand,
+                modelName: item.modelName,
+                code: item.code
+            )
         }
         notes.saveBag(bag)
         Task { [bag] in
@@ -1541,7 +1557,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case resumen, rondas, cancha, bolsa
     var id: String { rawValue }
 
-    static var visible: [AppTab] { [.inicio, .grupos, .jugar, .academia] }
+    static var visible: [AppTab] { [.inicio, .resumen, .rondas, .cancha, .bolsa] }
 
     var title: String {
         switch self {
