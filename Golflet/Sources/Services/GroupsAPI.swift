@@ -240,13 +240,26 @@ enum GroupsParser {
 
     /// The web group payload is members with card totals, not a rows array. Same numbers, no invented ranks.
     private static func memberRows(_ members: [[String: Any]]) -> [GroupComparisonRow] {
-        func row(_ metric: GroupMetricKind, pick: ([String: Any]) -> (Double?, Double?)?) -> GroupComparisonRow? {
+        func sampleCount(_ map: [String: Any]) -> Int? {
+            guard let raw = JSONFlex.double(from: map["cards_18"] ?? map["rounds"]) else { return nil }
+            return Int(raw)
+        }
+        func previous(_ map: [String: Any], _ key: String) -> Double? {
+            guard let box = map["prev"] as? [String: Any] else { return nil }
+            return JSONFlex.double(from: box[key])
+        }
+        func row(
+            _ metric: GroupMetricKind,
+            value: ([String: Any]) -> Double?,
+            per: ([String: Any]) -> Double? = { _ in nil },
+            earlier: ([String: Any]) -> Double? = { _ in nil },
+            hideWhenAllZero: Bool = false
+        ) -> GroupComparisonRow? {
             let values = members.compactMap { map -> MemberMetricValue? in
                 let id = string(map["member_id"] ?? map["id"])
                 guard !id.isEmpty else { return nil }
                 let name = string(map["name"])
-                let pair = pick(map)
-                let number = pair?.0 ?? nil
+                let number = value(map)
                 return MemberMetricValue(
                     memberID: id,
                     memberName: name.isEmpty ? "Jugador" : name,
@@ -255,31 +268,42 @@ enum GroupsParser {
                     value: number,
                     text: nil,
                     photoURL: optionalString(map["photo_url"]),
-                    perRound: pair?.1 ?? nil
+                    perRound: per(map),
+                    sample: sampleCount(map),
+                    previous: earlier(map)
                 )
             }
-            guard values.contains(where: { $0.value != nil }) else { return nil }
+            let live = values.compactMap(\.value)
+            guard !live.isEmpty else { return nil }
+            if hideWhenAllZero, live.allSatisfy({ $0 == 0 }) { return nil }
             return GroupComparisonRow(metric: metric, values: values)
         }
-        func type(_ key: String) -> ([String: Any]) -> (Double?, Double?)? {
+        func type(_ key: String) -> ([String: Any]) -> Double? {
             { map in
-                guard let types = map["types"] as? [String: Any] else { return nil }
-                guard let bag = types[key] as? [String: Any] else { return (nil, nil) }
-                return (JSONFlex.double(from: bag["total"]), JSONFlex.double(from: bag["per_round"]))
+                guard let types = map["types"] as? [String: Any], let bag = types[key] as? [String: Any] else { return nil }
+                return JSONFlex.double(from: bag["total"])
+            }
+        }
+        func rate(_ key: String) -> ([String: Any]) -> Double? {
+            { map in
+                guard let types = map["types"] as? [String: Any], let bag = types[key] as? [String: Any] else { return nil }
+                return JSONFlex.double(from: bag["per_round"])
             }
         }
         return [
-            row(.birdies, pick: type("birdies")),
-            row(.pars, pick: type("pars")),
-            row(.eagles, pick: type("eagles")),
-            row(.net, pick: { map in
-                guard map.keys.contains("best_net") else { return nil }
-                return (JSONFlex.double(from: map["best_net"]), nil)
+            row(.birdies, value: type("birdies"), per: rate("birdies"), earlier: { previous($0, "birdies") }),
+            row(.pars, value: type("pars"), per: rate("pars"), earlier: { previous($0, "pars") }),
+            row(.eagles, value: type("eagles"), per: rate("eagles"), earlier: { previous($0, "eagles") }),
+            row(.net, value: { JSONFlex.double(from: $0["best_net"]) }, earlier: { previous($0, "best_net") }),
+            row(.regular, value: { map in
+                guard let box = map["consistency"] as? [String: Any] else { return nil }
+                return JSONFlex.double(from: box["sd"])
             }),
-            row(.gross, pick: { map in
-                guard map.keys.contains("best_gross") else { return nil }
-                return (JSONFlex.double(from: map["best_gross"]), nil)
-            }),
+            row(.rounds, value: { JSONFlex.double(from: $0["rounds"]) }, earlier: { previous($0, "rounds") }),
+            row(.maxBirdies, value: type("max_birdies")),
+            row(.streak, value: { JSONFlex.double(from: $0["streak"]) }),
+            row(.aces, value: type("aces"), hideWhenAllZero: true),
+            row(.gross, value: { JSONFlex.double(from: $0["best_gross"]) }),
         ].compactMap { $0 }
     }
 
@@ -300,7 +324,7 @@ enum GroupsParser {
                   let total = JSONFlex.double(from: bag["total"]) else { return false }
             return total > mine.total
         }.count
-        return GroupHero(rank: better + 1, cards: mine.cards)
+        return GroupHero(rank: better + 1, cards: mine.cards, memberID: mine.id)
     }
 
     private static func cardsLine(_ map: [String: Any]) -> String? {

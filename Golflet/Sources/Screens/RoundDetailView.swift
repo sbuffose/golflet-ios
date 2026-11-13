@@ -41,21 +41,29 @@ struct RoundDetailView: View {
     var body: some View {
         GScreen(id: "screen-ronda") {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 12) {
                     header
+                    partners
                     scoreHero
-                    recapButton
                     if round.isOtherCourse || round.holes.isEmpty {
                         otherCourseNotice
                     } else {
-                        scorecard
+                        GCard(radius: 16, padding: 14) {
+                            scorecard
+                        }
+                        if !caption.isEmpty {
+                            Text(caption)
+                                .font(GType.label)
+                                .foregroundStyle(p.ink3)
+                        }
                         gameStats
                     }
                     notes
+                    recapButton
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 32)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
             }
         }
         .accessibilityIdentifier("screen-ronda")
@@ -111,16 +119,18 @@ struct RoundDetailView: View {
         }
         .safeAreaInset(edge: .top) {
             HStack {
-                Spacer()
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(p.ink2)
-                        .frame(width: 32, height: 32)
-                        .background(p.surface)
-                        .clipShape(Circle())
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Tee times")
+                            .font(GFont.ui(15, weight: .semibold))
+                    }
+                    .foregroundStyle(p.primary)
                 }
                 .accessibilityIdentifier("close-round")
+                .accessibilityLabel("Tee times")
+                Spacer()
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -129,39 +139,51 @@ struct RoundDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            GOverline(text: FormatAR.longDate(round.date).uppercased())
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if round.isCompetition {
-                    Image(systemName: "trophy.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(p.accentInk)
-                        .accessibilityIdentifier("round-trophy")
-                }
-                Text(round.displayTitle)
-                    .font(GType.sheetTitle)
-                    .tracking(-1.2)
-                    .foregroundStyle(p.ink)
-            }
-            Text(round.tournament)
+            GOverline(text: FormatAR.syncDay(round.date))
+            Text(round.displayTitle)
+                .font(GType.sheetTitle)
+                .tracking(-1.2)
+                .foregroundStyle(p.ink)
+            Text(round.plainTournament)
                 .font(GType.label)
                 .foregroundStyle(p.ink3)
                 .lineLimit(2)
-            HStack(spacing: 8) {
-                Text(round.clubName)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-                if !round.isOtherCourse, !round.tee.isEmpty {
-                    TeeDot(name: round.tee)
-                    Text("\(round.displayCourse) · Tee \(round.tee) · \(FormatAR.one(round.courseRating)) / \(Int(round.slope))")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                } else {
-                    Text(round.displayCourse)
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
+            ChipWrap(spacing: 8) {
+                roundChip(round.clubName)
+                if !round.displayCourse.isEmpty, round.displayCourse.caseInsensitiveCompare(round.clubName) != .orderedSame {
+                    roundChip(round.displayCourse)
+                }
+                if !round.tee.isEmpty { teeChip(round.tee) }
+                if !round.isOtherCourse {
+                    roundChip("Rating \(FormatAR.one(round.courseRating)) · Slope \(Int(round.slope.rounded()))i")
                 }
             }
         }
+    }
+
+    private func roundChip(_ text: String) -> some View {
+        Text(text)
+            .font(GType.label)
+            .foregroundStyle(p.ink)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(p.surface)
+            .clipShape(Capsule())
+    }
+
+    private func teeChip(_ name: String) -> some View {
+        HStack(spacing: 6) {
+            TeeDot(name: name)
+            Text("Tee \(name)")
+                .font(GType.label)
+                .foregroundStyle(p.ink)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(p.surface)
+        .clipShape(Capsule())
     }
 
     private var otherCourseNotice: some View {
@@ -184,7 +206,7 @@ struct RoundDetailView: View {
     }
 
     private var scoreHero: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 8) {
             heroCell("Gross", round.gross.map(String.init) ?? "—", emphasize: true)
             heroCell("Neto", round.net.map(String.init) ?? "—", emphasize: false)
             Button { showsWhat = true } label: {
@@ -195,8 +217,6 @@ struct RoundDetailView: View {
             .accessibilityLabel("¿Qué es esto?")
             heroCell("Puesto", position, emphasize: false)
         }
-        .background(p.surface2)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func heroCell(_ label: String, _ value: String, emphasize: Bool) -> some View {
@@ -208,42 +228,43 @@ struct RoundDetailView: View {
                 .font(GType.statM)
                 .tabular()
                 .foregroundStyle(emphasize ? p.onPrimary : p.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(emphasize ? p.primary : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.vertical, 12)
+        .padding(.horizontal, 4)
+        .background(emphasize ? p.primary : p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var scorecard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             holeTable(Array(round.holes.prefix(9)), totalLabel: "IDA", total: round.outScore)
+            Hairline()
+                .padding(.vertical, 4)
             holeTable(Array(round.holes.suffix(from: min(9, round.holes.count))), totalLabel: "VTA", total: round.inScore)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], alignment: .leading, spacing: 10) {
+            ChipWrap(spacing: 10) {
                 ForEach(ScoreLegend.items(holes: round.holes, counts: round.counts)) { item in
                     legend(item)
                 }
-            }
-            if !caption.isEmpty {
-                Text(caption)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink3)
             }
         }
     }
 
     private func holeTable(_ holes: [HoleScore], totalLabel: String, total: Int?) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 2) {
             row("HOYO", holes.map { "\($0.number)" }, totalLabel)
-            row("YDS", holes.map { $0.yards.map(String.init) ?? "—" }, "")
+            row("YDS", holes.map { yardLabel($0) }, "")
             row("PAR", holes.map { "\($0.par)" }, "\(holes.reduce(0) { $0 + $1.par })")
             HStack(alignment: .center, spacing: 0) {
                 Text("")
                     .font(GType.overline)
                     .frame(width: 44, alignment: .leading)
                 ForEach(holes) { hole in
-                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 26)
+                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 28)
                         .frame(maxWidth: .infinity)
+                        .frame(height: 34)
                 }
                 Text(total.map(String.init) ?? "—")
                     .font(GFont.ui(13, weight: .semibold))
@@ -275,6 +296,7 @@ struct RoundDetailView: View {
                 .foregroundStyle(p.ink2)
                 .frame(width: 32)
         }
+        .padding(.vertical, 1)
     }
 
     private func legend(_ item: ScoreLegend.Item) -> some View {
@@ -284,53 +306,57 @@ struct RoundDetailView: View {
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.55)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.count) \(item.spoken)")
     }
 
-    @ViewBuilder
     private func legendMark(_ result: HoleResult, _ count: Int) -> some View {
-        let mark = Text("\(count)")
-            .font(GFont.ui(13, weight: .semibold))
-            .tabular()
-            .foregroundStyle(legendInk(result))
-            .frame(minWidth: 26, minHeight: 26)
-            .padding(.horizontal, 4)
-        switch result {
-        case .eagleOrBetter:
-            mark.background(p.primary).clipShape(Circle())
-        case .birdie:
-            mark.background(p.accent).clipShape(Circle())
-        case .par, .unknown:
-            mark
-        case .bogey:
-            mark.background(p.sand).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        case .doubleOrWorse:
-            mark.background(Color(red: 74 / 255, green: 81 / 255, blue: 76 / 255)).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
+        ScoreMark(strokes: count, result: result, diameter: 18)
     }
 
-    private func legendInk(_ result: HoleResult) -> Color {
-        switch result {
-        case .eagleOrBetter: return p.accent
-        case .birdie, .doubleOrWorse: return p.onPrimary
-        default: return p.ink
+    private func statPill(_ title: String, _ value: String) -> some View {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shown = trimmed.isEmpty ? "Sin cargar" : trimmed
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+            Text(shown)
+                .font(GType.headline)
+                .foregroundStyle(trimmed.isEmpty ? p.ink3 : p.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var gameStats: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Tu juego")
+            HStack(alignment: .center, spacing: 10) {
+                CaddieMark(height: 36)
+                Text("Estadísticas de la ronda")
                     .font(GType.section)
                     .foregroundStyle(p.ink)
                 Spacer()
-                Button(showsGameEditor ? "Listo" : "Cargar") { showsGameEditor.toggle() }
-                    .font(GType.headline)
-                    .foregroundStyle(p.ink2)
+                let empty = puttsText.isEmpty && girText.isEmpty && firText.isEmpty
+                Button(showsGameEditor ? "Listo" : (empty ? "Sin cargar" : "Cargado")) { showsGameEditor.toggle() }
+                    .font(GType.label)
+                    .foregroundStyle(p.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(p.surface)
+                    .clipShape(Capsule())
                     .accessibilityIdentifier("edit-game")
+            }
+            HStack(spacing: 8) {
+                statPill("Putts", puttsText)
+                statPill("Greens", girText)
+                statPill("Fairways", firText)
             }
             Button { showsTrack = true } label: {
                 HStack(spacing: 12) {
@@ -345,7 +371,7 @@ struct RoundDetailView: View {
                         Text("Registrar mis tiros")
                             .font(GType.headline)
                             .foregroundStyle(p.onPrimary)
-                        Text("Cómo fueron los golpes en el mapa de esta vuelta. Los putts, el drive y el green quedan aparte.")
+                        Text("Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.")
                             .font(GType.label)
                             .foregroundStyle(p.onPrimary.opacity(0.72))
                             .fixedSize(horizontal: false, vertical: true)
@@ -364,10 +390,12 @@ struct RoundDetailView: View {
             .accessibilityIdentifier("round-track")
             .accessibilityLabel("Registrar mis tiros")
             .accessibilityHint("Abre el mapa de golpes de esta vuelta")
-            HStack(spacing: 10) {
-                gameField("Putts", $puttsText, .putts)
-                gameField("Greens", $girText, .gir)
-                gameField("Fairways", $firText, .fir)
+            if showsGameEditor {
+                HStack(spacing: 10) {
+                    gameField("Putts", $puttsText, .putts)
+                    gameField("Greens", $girText, .gir)
+                    gameField("Fairways", $firText, .fir)
+                }
             }
             Text(statSources)
                 .font(GType.label)
@@ -383,12 +411,6 @@ struct RoundDetailView: View {
                             .accessibilityIdentifier("hole-source-\(hole.number)")
                     }
                 }
-            }
-            if let company = playedWith {
-                Text("Jugaste con \(company)")
-                    .font(GType.body)
-                    .foregroundStyle(p.ink)
-                    .accessibilityIdentifier("round-partners")
             }
             Text(scheduleLine)
                 .font(GType.label)
@@ -634,6 +656,24 @@ struct RoundDetailView: View {
         return same.count == 1 ? same[0] : nil
     }
 
+    private var partners: some View {
+        Group {
+            if let company = playedWith {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Jugaste con")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    Text(company)
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("round-partners")
+                .accessibilityLabel("Jugaste con \(company)")
+            }
+        }
+    }
+
     private var playedWith: String? {
         let names = sameDayTee?.companions.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
         return names.isEmpty ? nil : names.joined(separator: ", ")
@@ -678,12 +718,31 @@ struct RoundDetailView: View {
     }
 
     private var position: String {
-        if let pos = round.position { return "\(pos)°" }
+        if let pos = round.position { return "\(pos)º" }
         return "—"
     }
 
+    private func yardLabel(_ hole: HoleScore) -> String {
+        let tee = round.tee.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let course = model.courses.first { item in
+            item.name.caseInsensitiveCompare(round.course) == .orderedSame
+                || item.name.caseInsensitiveCompare(round.displayCourse) == .orderedSame
+        }
+        if let match = course?.holes.first(where: { $0.number == hole.number }) {
+            if let yards = match.yards[tee] ?? match.yards.first(where: { $0.key.caseInsensitiveCompare(tee) == .orderedSame })?.value {
+                return String(yards)
+            }
+        }
+        return hole.yards.map(String.init) ?? "—"
+    }
+
     private var caption: String {
-        differential.map { "Diferencial estimado por Golflet: \(FormatAR.one($0))." } ?? ""
+        var parts: [String] = []
+        if let position = round.position, let field = round.fieldSize {
+            parts.append("\(position)º de \(field).")
+        }
+        parts.append("*Diferencial estimado por Golflet.")
+        return parts.joined(separator: " ")
     }
 
     private func persistNotes() {
@@ -989,6 +1048,45 @@ struct RoundDetailView: View {
                 didFillTrack = true
                 Task { await self.fillFromTrack(identity: identity) }
             }
+        }
+    }
+}
+
+private struct ChipWrap: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 0
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: width, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

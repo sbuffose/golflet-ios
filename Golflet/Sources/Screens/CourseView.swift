@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct CourseView: View {
+    var showsBack = true
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @State private var holesWidth: CGFloat = 353
@@ -28,7 +29,7 @@ struct CourseView: View {
         }
         .accessibilityIdentifier("screen-cancha")
         .metricDestinations()
-        .safeAreaInset(edge: .top) { MetricBackBar() }
+        .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .task(id: model.selectedCourseName) {
             let name = model.selectedCourseName
             strategy = try? await model.api.courseStrategy(courseKey: CourseIdentity.key(for: name), courseId: nil)
@@ -40,25 +41,25 @@ struct CourseView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let count = model.courseSnapshot().validCount
+        return VStack(alignment: .leading, spacing: 10) {
             GOverline(text: model.clubs.first?.name ?? "Golflet")
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    GTitle(text: "Cancha")
-                    Text("\(model.courseSnapshot().validCount) \(model.courseSnapshot().validCount == 1 ? "ronda" : "rondas")")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                        .accessibilityIdentifier("range-count")
-                }
-                Spacer(minLength: 8)
-                RangeMenuButton(
-                    range: Binding(
-                        get: { model.statsRange },
-                        set: { model.setStatsRange($0) }
-                    ),
-                    count: model.courseSnapshot().validCount
-                )
-            }
+            GTitle(text: "Cancha")
+            Text("\(count) \(count == 1 ? "ronda" : "rondas")")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .accessibilityIdentifier("range-count")
+            RangeMenuButton(
+                range: Binding(
+                    get: { model.statsRange },
+                    set: { model.setStatsRange($0) }
+                ),
+                count: count
+            )
+            Text("\(model.statsRange.title) · \(model.selectedCourseName). Los promedios y los hoyos de esta vista son solo de esta cancha.")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -264,10 +265,10 @@ struct CourseView: View {
         return GCard(radius: 22, padding: 16) {
             VStack(alignment: .leading, spacing: 10) {
                 GOverline(text: "Libreta")
-                Text("Descargar cómo jugarla")
+                Text("Libreta de la cancha")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Text("Un PDF con el plan publicado. El de viento usa solo el del horario reservado.")
+                Text("Imprimir el diseño o, después de jugar, subir las fotos de la libreta. Sin reserva.")
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
                 Button("Descargar sin viento") {

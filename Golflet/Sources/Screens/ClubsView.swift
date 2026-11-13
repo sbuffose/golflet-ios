@@ -10,27 +10,108 @@ struct ClubsView: View {
     @State private var syncPassword = ""
     @State private var saveOnSync = false
     @State private var showsTextPrefs = false
+    @State private var showsMissingClub = false
 
     var body: some View {
         GScreen(id: "screen-clubes") {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Tu ficha del club")
-                        GTitle(text: "Clubes")
+                    VStack(alignment: .leading, spacing: 12) {
+                        GOverline(text: "Tu cuenta")
+                        HStack(alignment: .center, spacing: 14) {
+                            Text(model.profile.initials)
+                                .font(GFont.ui(22, weight: .semibold))
+                                .foregroundStyle(p.onPrimary)
+                                .frame(width: 64, height: 64)
+                                .background(p.primary)
+                                .clipShape(Circle())
+                                .accessibilityIdentifier("cuenta-foto")
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 8) {
+                                    Text(accountName)
+                                        .font(GType.sheetTitle)
+                                        .foregroundStyle(p.ink)
+                                        .lineLimit(2)
+                                    if !model.profile.firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        Button {} label: {
+                                            PencilMark()
+                                                .frame(width: 44, height: 44)
+                                                .background(Circle().fill(Color(hex: 0xECE8DF)))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Editar nombre")
+                                        .accessibilityIdentifier("cuenta-nick")
+                                    }
+                                }
+                                if let mail = accountMail {
+                                    Text(mail)
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink2)
+                                }
+                                HStack(spacing: 6) {
+                                    if !fichaName.isEmpty {
+                                        Text(fichaName)
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink2)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(p.surface2)
+                                            .clipShape(Capsule())
+                                            .accessibilityIdentifier("cuenta-ficha")
+                                    }
+                                    Text("HI \(FormatAR.one(model.profile.currentHandicap))")
+                                        .font(GType.label)
+                                        .foregroundStyle(p.accent)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(p.accentSoft)
+                                        .clipShape(Capsule())
+                                        .accessibilityIdentifier("cuenta-hi")
+                                }
+                            }
+                        }
+                        Button {} label: {
+                            Text("Elegir foto")
+                                .font(GFont.ui(14, weight: .semibold))
+                                .foregroundStyle(Color(hex: 0xF6F7F9))
+                                .padding(.horizontal, 16)
+                                .frame(minHeight: 44)
+                                .background(p.primary)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("cuenta-foto-elegir")
+                        Text("Sin foto. Se ven tus iniciales.")
+                            .font(GFont.ui(13))
+                            .foregroundStyle(p.ink3)
                     }
-                    Text("Golflet entra con tu matrícula y contraseña y trae todos tus clubes. Nunca cambia nada en tu cuenta.")
-                        .font(GType.body)
-                        .foregroundStyle(p.ink2)
 
                     notificationsRow
+
+                    if !model.clubs.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Clubes")
+                                .font(GType.section)
+                                .foregroundStyle(p.ink)
+                            GCard(radius: 18, padding: 4) {
+                                VStack(spacing: 0) {
+                                    ForEach(model.clubs) { club in
+                                        clubCard(club)
+                                        Hairline()
+                                    }
+                                    missingClubRow
+                                }
+                            }
+                            if showsMissingClub {
+                                linkForm
+                            }
+                        }
+                    }
+
+                    tuJuego
                     groupsSection
                     shareSection
                     accessibilitySection
-
-                    ForEach(model.clubs) { club in
-                        clubCard(club)
-                    }
 
                     if !model.clubs.isEmpty {
                         sharedActions
@@ -48,16 +129,8 @@ struct ClubsView: View {
 
                     playSettingsSection
 
-                    if let user = model.user {
+                    if model.user != nil {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Tu cuenta")
-                                .font(GType.section)
-                                .foregroundStyle(p.ink)
-                            if let email = user.visibleEmail {
-                                Text(email)
-                                    .font(GType.label)
-                                    .foregroundStyle(p.ink2)
-                            }
                             Button("Salir") {
                                 Task {
                                     await model.signOut()
@@ -85,20 +158,91 @@ struct ClubsView: View {
         }
         .safeAreaInset(edge: .top) {
             HStack {
-                Spacer()
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(p.ink2)
-                        .frame(width: 32, height: 32)
-                        .background(p.surface)
-                        .clipShape(Circle())
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Mi bolsa")
+                            .font(GFont.ui(15, weight: .semibold))
+                    }
+                    .foregroundStyle(p.primary)
                 }
                 .accessibilityIdentifier("close-clubes")
+                .accessibilityLabel("Mi bolsa")
+                Spacer()
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
         }
+    }
+
+    private var accountName: String {
+        let call = model.profile.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !call.isEmpty { return call }
+        let named = model.user?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !named.isEmpty { return named }
+        let shown = model.profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return shown.isEmpty ? "Tu cuenta" : shown
+    }
+
+    private var fichaName: String {
+        let ficha = model.profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ficha == accountName ? "" : ficha
+    }
+
+    private var accountMail: String? {
+        if let mail = model.user?.visibleEmail { return mail }
+        return model.user == nil ? nil : "Entrás con tu matrícula"
+    }
+
+    private var tuJuego: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Tu juego")
+                .font(GType.section)
+                .foregroundStyle(p.ink)
+            GCard(radius: 18, padding: 4) {
+                VStack(spacing: 0) {
+                    NavigationLink { PelotaView() } label: {
+                        gearRow("Mi pelota", "Contanos con qué pelota jugás") { BallMark() }
+                    }
+                    .accessibilityIdentifier("cuenta-pelota")
+                    Hairline()
+                    NavigationLink { SorteosView() } label: {
+                        gearRow("Sorteos", sorteosLine)
+                    }
+                    .accessibilityIdentifier("cuenta-sorteos")
+                }
+            }
+        }
+    }
+
+    private var sorteosLine: String {
+        "No hay sorteos abiertos"
+    }
+
+    private func gearRow(_ title: String, _ subtitle: String) -> some View {
+        gearRow(title, subtitle) { EmptyView() }
+    }
+
+    private func gearRow<Mark: View>(_ title: String, _ subtitle: String, @ViewBuilder mark: () -> Mark) -> some View {
+        HStack(spacing: 12) {
+            mark()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Text(subtitle)
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(p.ink3)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private var notificationsRow: some View {
@@ -115,7 +259,7 @@ struct ClubsView: View {
                         Text("Notificaciones")
                             .font(GType.headline)
                             .foregroundStyle(p.ink)
-                        Text(model.unreadBadgeText == nil ? "Invitaciones y mensajes de club" : "Tenés novedades")
+                        Text(model.unreadBadgeText == nil ? "Invitaciones a grupos y mensajes de tus clubes." : "Tenés novedades")
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
                     }
@@ -205,7 +349,7 @@ struct ClubsView: View {
 
     private var playSettingsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Jugar")
+            Text("Ronda con GPS")
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             Toggle(isOn: Binding(
@@ -213,10 +357,10 @@ struct ClubsView: View {
                 set: { model.setPaceAlertEnabled($0) }
             )) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Aviso de ritmo")
+                    Text("Aviso de ritmo de juego")
                         .font(GType.headline)
                         .foregroundStyle(p.ink)
-                    Text("Si vas más de 10 minutos atrasado, te avisamos en el hoyo 10.")
+                    Text("Al llegar al hoyo 10, si vas más de 10 minutos atrás del ritmo estimado de la cancha, te avisamos. El ritmo es una estimación de Golflet, no del club.")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
                 }
@@ -241,7 +385,7 @@ struct ClubsView: View {
                             Text("Qué comparto")
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
-                            Text("Elegí qué ven tus grupos")
+                            Text("Elegí qué ven de vos los jugadores de tus grupos.")
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
                         }
@@ -299,40 +443,107 @@ struct ClubsView: View {
     }
 
     private func clubCard(_ club: LinkedClub) -> some View {
-        GCard(radius: 18, padding: 14) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(club.name)
-                            .font(GType.headline)
-                            .foregroundStyle(p.ink)
-                        Text("Matrícula \(club.matricula) · \(club.cardCount) tarjetas")
-                            .font(GType.label)
-                            .foregroundStyle(p.ink2)
-                        if club.roundsWithHoles > 0 || club.roundsStored > 0 {
-                            Text("\(club.roundsWithHoles) con hoyos · \(club.roundsStored) guardadas")
-                                .font(GType.label)
-                                .foregroundStyle(p.ink3)
-                        }
-                    }
-                    Spacer()
-                    Circle().fill(club.lastSyncStatus == "error" ? p.negative : p.positive).frame(width: 8, height: 8)
-                }
-                Button {
-                    Task { await model.syncClub(club, password: club.passwordSaved ? nil : syncPassword, savePassword: saveOnSync) }
-                } label: {
-                    Text(model.syncSession != nil ? "Actualizando…" : "Actualizar todos los clubes")
-                        .font(GType.headline)
-                        .foregroundStyle(p.onPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(p.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .disabled(model.isBusy)
-                .accessibilityIdentifier("club-sync-\(club.accountId)")
+        HStack(spacing: 12) {
+            Text(clubMark(club.name))
+                .font(GFont.ui(18, weight: .semibold))
+                .foregroundStyle(p.accent)
+                .frame(width: 42, height: 42)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(club.name)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(clubStatus(club))
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                    .lineLimit(2)
             }
+            Spacer(minLength: 8)
+            Button {
+                Task { await model.syncClub(club, password: club.passwordSaved ? nil : syncPassword, savePassword: saveOnSync) }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(clubSyncTitle(club))
+                        .font(GFont.ui(14, weight: .semibold))
+                }
+                .foregroundStyle(p.ink)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
+                .background(Color(hex: 0xECE8DF))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isBusy)
+            .accessibilityIdentifier("club-sync-\(club.accountId)")
+            .accessibilityLabel("Actualizar")
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+    }
+
+    private var missingClubRow: some View {
+        Button { showsMissingClub = true } label: {
+            HStack(spacing: 12) {
+                Text("?")
+                    .font(GFont.ui(16, weight: .semibold))
+                    .foregroundStyle(p.ink2)
+                    .frame(width: 36, height: 36)
+                    .background(p.surface2)
+                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Tengo otro club y no aparece")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Text("Contanos cuál y lo revisamos")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(p.ink3)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("cuenta-club-faltante")
+    }
+
+    private func clubMark(_ name: String) -> String {
+        let trimmed = name.replacingOccurrences(of: #"^(Club|Golf)\s+"#, with: "", options: .regularExpression)
+        return String(trimmed.first ?? "?").uppercased()
+    }
+
+    private func clubSyncTitle(_ club: LinkedClub) -> String {
+        if model.syncSession != nil || club.lastSyncStatus == "running" { return "Actualizando…" }
+        return "Actualizar"
+    }
+
+    private func clubStatus(_ club: LinkedClub) -> String {
+        if club.lastSyncStatus == "error" {
+            return club.lastSyncMessage ?? "Error al actualizar"
+        }
+        if club.lastSyncStatus == "running" { return "Actualizando…" }
+        let via = club.source == "app" ? " · con tu matrícula" : ""
+        return "\(club.cardCount) tarjetas · \(ago(club.lastSyncAt))\(via)"
+    }
+
+    private func ago(_ date: Date?) -> String {
+        guard let date else { return "nunca" }
+        let seconds = Date().timeIntervalSince(date)
+        if seconds < 90 { return "recién" }
+        if seconds < 3600 { return "hace \(Int((seconds / 60).rounded())) min" }
+        if seconds < 86400 { return "hace \(Int((seconds / 3600).rounded())) h" }
+        let days = Int((seconds / 86400).rounded())
+        return days == 1 ? "ayer" : "hace \(days) días"
     }
 
     private var sharedActions: some View {
@@ -431,5 +642,24 @@ struct ClubsView: View {
                 matricula = pending
             }
         }
+    }
+}
+
+/// The web nickname pencil (`ICON.pencil`), on the beige circle next to the name.
+private struct PencilMark: View {
+    var body: some View {
+        Canvas { context, size in
+            let scale = min(size.width, size.height) / 16
+            var path = Path()
+            path.move(to: CGPoint(x: 2 * scale, y: 14 * scale))
+            path.addLine(to: CGPoint(x: 3 * scale, y: 10 * scale))
+            path.addLine(to: CGPoint(x: 11 * scale, y: 2 * scale))
+            path.addLine(to: CGPoint(x: 14 * scale, y: 5 * scale))
+            path.addLine(to: CGPoint(x: 6 * scale, y: 13 * scale))
+            path.closeSubpath()
+            context.stroke(path, with: .color(Color(hex: 0x3E4C62)), lineWidth: 1.6 * scale)
+        }
+        .frame(width: 16, height: 16)
+        .accessibilityHidden(true)
     }
 }

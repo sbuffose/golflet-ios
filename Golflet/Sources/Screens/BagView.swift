@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BagView: View {
+    var showsBack = true
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @State private var ironBrand = ""
@@ -16,62 +17,276 @@ struct BagView: View {
     ]
     var body: some View {
         GScreen(id: "screen-bolsa") {
+            ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     GOverline(text: "Mis distancias")
-                    GTitle(text: "Mi bolsa")
+                    GTitle(text: "Mi bolsa", size: 40)
+                }
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Mis palos")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    Spacer(minLength: 8)
+                    NavigationLink { ironSet.padding(20) } label: {
+                        bagChip("Juego de hierros")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("bag-iron-set")
+                    NavigationLink { AddClubView() } label: {
+                        bagChip("+ Agregar palo")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("bag-add-club")
+                }
+                equipmentList
+                NavigationLink { PelotaView() } label: {
+                    HStack(spacing: 12) {
+                        BallMark()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Pelota")
+                                .font(GFont.ui(15, weight: .semibold))
+                                .foregroundStyle(p.ink)
+                            Text("Sin cargar")
+                                .font(GFont.ui(13))
+                                .foregroundStyle(p.ink3)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(p.ink3)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("bag-pelota")
+                HStack {
+                    Text("Distancias")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    Spacer()
+                    Text("yardas")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(p.surface2)
+                        .clipShape(Capsule())
                 }
                 hint
-                ironSet
                 headerRow
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        ForEach(model.bag) { club in
-                            NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: club.name))) {
-                                HStack {
-                                    Text(club.name)
-                                        .font(GType.headline)
-                                        .foregroundStyle(p.ink)
-                                    Spacer()
-                                    cell(club.carry)
-                                    cell(club.total)
-                                    MetricChevron(color: p.ink3)
+                VStack(spacing: 0) {
+                        ForEach(orderedBag) { club in
+                            HStack(spacing: 8) {
+                                NavigationLink(value: MetricRoute.clubStats(ClubCode.code(for: club.name))) {
+                                    HStack {
+                                        Text(club.name)
+                                            .font(GType.headline)
+                                            .foregroundStyle(p.ink)
+                                            .lineLimit(1)
+                                        Spacer(minLength: 4)
+                                        MetricChevron(color: p.ink3)
+                                    }
+                                    .contentShape(Rectangle())
                                 }
-                                .padding(.vertical, 16)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("bag-\(club.name)")
+                                if isPutter(club.name) {
+                                    Text("Sin yardas")
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink3)
+                                        .frame(width: 128, alignment: .trailing)
+                                } else {
+                                    yardField(club, carry: true)
+                                    yardField(club, carry: false)
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("bag-\(club.name)")
+                            .padding(.vertical, 10)
                             Hairline()
                         }
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Distancias por palo")
+                                    .font(GType.section)
+                                    .foregroundStyle(p.ink)
+                                Spacer()
+                                Text("GPS")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color(hex: 0xC8A86A).opacity(0.35))
+                                    .clipShape(Capsule())
+                            }
+                            .padding(.top, 18)
+                            Text("Sin tiros medidos con GPS. Lo que escribas arriba es tu distancia.")
+                                .font(GType.body)
+                                .foregroundStyle(p.ink2)
+                                .accessibilityIdentifier("bag-gps")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 24)
                     }
-                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
+            }
         }
         .accessibilityIdentifier("screen-bolsa")
-        .safeAreaInset(edge: .top) { MetricBackBar() }
+        .metricDestinations()
+        .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .onAppear(perform: restoreIron)
     }
 
+    private func bagChip(_ title: String) -> some View {
+        Text(title)
+            .font(GFont.ui(12, weight: .semibold))
+            .foregroundStyle(p.ink2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(p.surface2)
+            .clipShape(Capsule())
+    }
+
+    private var orderedBag: [BagClub] {
+        model.bag.sorted { equipmentRank($0.name) < equipmentRank($1.name) }
+    }
+
+    /// Same groups as the web catalog: Driver, Maderas, Híbridos, Hierros, Wedges, Putter.
+    private func equipmentRank(_ name: String) -> Int {
+        let club = name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
+        if club == "driver" { return 0 }
+        if club.contains("madera") { return 1 }
+        if club.contains("hibrido") { return 2 }
+        if club.contains("hierro") { return 3 }
+        if isPutter(name) { return 5 }
+        return 4
+    }
+
+    private func equipmentCode(_ name: String) -> String {
+        let club = name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
+        if club == "driver" { return "DR" }
+        if club.hasPrefix("madera"), let face = club.split(separator: " ").last { return "\(face)W".uppercased() }
+        if club.contains("hibrido") { return "HY" }
+        if club.hasPrefix("hierro"), let face = name.split(separator: " ").last { return "\(face)i" }
+        if isPutter(name) { return "PT" }
+        return name
+    }
+
+    private var equipmentFoot: String {
+        let branded = model.bag.filter { !($0.brand ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+        if branded == 0 {
+            return "\(model.bag.count) palos · cargá marca y modelo de cada uno."
+        }
+        return "\(model.bag.count) palos · \(branded) con marca y modelo."
+    }
+
+    private var equipmentList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(equipmentFoot)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+            GCard(radius: 22, padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(orderedBag.enumerated()), id: \.element.id) { index, club in
+                        equipmentRow(club)
+                        if index < orderedBag.count - 1 { Hairline() }
+                    }
+                }
+            }
+        }
+    }
+
+    private func equipmentRow(_ club: BagClub) -> some View {
+        HStack(spacing: 0) {
+                    Text(club.code ?? equipmentCode(club.name))
+                        .font(GFont.ui(13, weight: .bold))
+                        .foregroundStyle(p.primary)
+                        .frame(width: 40, height: 40)
+                        .background(Color(hex: 0xF1EDE3))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(club.name)
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                            .lineLimit(1)
+                        Text(club.equipmentLine)
+                            .font(GFont.ui(13))
+                            .foregroundStyle(p.ink3)
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, 12)
+                    Spacer(minLength: 8)
+                    equipmentYards(club)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(p.ink3)
+                        .padding(.leading, 6)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(club.name), \(club.equipmentLine)")
+                .accessibilityIdentifier("equip-\(club.name)")
+    }
+
+    private func equipmentYards(_ club: BagClub) -> some View {
+        Group {
+            if isPutter(club.name) {
+                Text("Sin yardas")
+                    .font(GFont.ui(13))
+                    .foregroundStyle(p.ink2)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(club.carry.map(String.init) ?? "—")
+                        .font(GFont.ui(17, weight: .semibold))
+                        .foregroundStyle(p.primary)
+                        .monospacedDigit()
+                    Text("yd")
+                        .font(GFont.ui(12))
+                        .foregroundStyle(p.ink2)
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(hex: 0xF1EDE3))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var yardClubs: [BagClub] {
+        model.bag.filter { !isPutter($0.name) }
+    }
+
     private var filled: Int {
-        model.bag.filter { $0.carry != nil || $0.total != nil }.count
+        yardClubs.filter { $0.carry != nil || $0.total != nil }.count
+    }
+
+    private func isPutter(_ name: String) -> Bool {
+        let club = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return club == "pt" || club == "putter" || club.hasPrefix("putter")
     }
 
     private var hint: some View {
         GCard(radius: 22, padding: 16) {
-            HStack(alignment: .top, spacing: 12) {
-                Text("\(filled)/\(model.bag.count)")
-                    .font(GFont.ui(16, weight: .semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(filled) de \(yardClubs.count)")
+                    .font(GType.statM)
                     .tabular()
-                    .foregroundStyle(p.onPrimary)
-                    .frame(width: 44, height: 44)
-                    .background(p.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Text("Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.")
+                    .foregroundStyle(p.ink)
+                    .accessibilityIdentifier("bag-count")
+                Text(filled == 0
+                     ? "Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo."
+                     : "Palos con una distancia que cargaste vos.")
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
+                Text("Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste. El putter no lleva yardas acá.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
             }
         }
     }
@@ -176,14 +391,30 @@ struct BagView: View {
         .padding(.horizontal, 4)
     }
 
-    private func cell(_ value: Int?) -> some View {
-        Text(value.map(String.init) ?? "—")
-            .font(GType.headline)
-            .tabular()
-            .foregroundStyle(value == nil ? p.ink3 : p.ink)
-            .frame(width: 64, height: 36)
-            .background(p.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    private func yardField(_ club: BagClub, carry: Bool) -> some View {
+        TextField("—", text: Binding(
+            get: {
+                let value = carry ? club.carry : club.total
+                return value.map(String.init) ?? ""
+            },
+            set: { raw in
+                let digits = raw.filter(\.isNumber)
+                let parsed = digits.isEmpty ? nil : Int(digits)
+                model.updateBagClub(
+                    name: club.name,
+                    carry: carry ? parsed : club.carry,
+                    total: carry ? club.total : parsed
+                )
+            }
+        ))
+        .keyboardType(.numberPad)
+        .multilineTextAlignment(.center)
+        .font(GType.headline)
+        .foregroundStyle(p.ink)
+        .frame(width: 56, height: 36)
+        .background(p.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityLabel("\(carry ? "Carry" : "Total") de \(club.name)")
     }
 }
 
@@ -229,5 +460,25 @@ struct BagEditSheet: View {
             carry = club.carry.map(String.init) ?? ""
             total = club.total.map(String.init) ?? ""
         }
+    }
+}
+
+/// Same ball mark as the web `BALL_IC`: a circle with dimples, on a pale disc.
+struct BallMark: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color(hex: 0x0B2545), lineWidth: 1.4)
+                .frame(width: 16, height: 16)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: -2.5, y: -3.5)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: 1.2, y: -4.2)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: -1, y: 0)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: 2.6, y: -0.4)
+            Circle().fill(Color(hex: 0x0B2545)).frame(width: 2, height: 2).offset(x: 0.8, y: 3.4)
+        }
+        .frame(width: 34, height: 34)
+        .background(Color(hex: 0x0F3D2E).opacity(0.07))
+        .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 }

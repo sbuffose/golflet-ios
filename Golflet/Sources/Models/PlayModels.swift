@@ -743,3 +743,73 @@ enum PlayMath {
         isFar(yards) ? nil : yards
     }
 }
+
+/// Shots already stored for a live round. The hole screen reads this on the first frame,
+/// before the reload request returns, so a finished hole does not flash open.
+enum SavedRoundShots {
+    private static let lock = NSLock()
+    private static var byRound: [String: [Shot]] = [:]
+
+    static func replace(roundID: String, shots: [Shot]) {
+        lock.lock()
+        byRound[roundID] = shots
+        lock.unlock()
+    }
+
+    static func load(roundID: String) -> [Shot] {
+        lock.lock()
+        defer { lock.unlock() }
+        return byRound[roundID] ?? []
+    }
+
+    /// An empty reload must not throw away a hole the player already finished.
+    static func keepingHoledShots(local: [Shot], incoming: [Shot]) -> [Shot] {
+        if incoming.isEmpty, local.contains(where: { TrackSession.isHoled($0.result) }) {
+            return local
+        }
+        return incoming
+    }
+
+    /// The closed-hole UI test asks for a round that already has a ball in the cup.
+    /// Only the current launch counts. A leftover default must not close the next test.
+    static var closedHoleFixtureRequested: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-ui-testing-closed-hole") { return true }
+        let env = ProcessInfo.processInfo.environment["GOLFLET_CLOSED_HOLE"] ?? ""
+        return env == "1" || env.uppercased() == "YES"
+    }
+
+    /// Iron to the fairway and a putt in the cup. Used when a test opens a round that is already finished.
+    static func closedHoleFixture(hole: Int, tee: GPSCoord, pin: GPSCoord) -> [Shot] {
+        let approach = GPSCoord(
+            lat: tee.lat + (pin.lat - tee.lat) * 0.62,
+            lng: tee.lng + (pin.lng - tee.lng) * 0.62
+        )
+        let start = Date()
+        func shot(_ id: String, number: Int, at: GPSCoord, club: String, lie: String, result: String?, taken: Date) -> Shot {
+            Shot(
+                id: id,
+                clientId: id,
+                hole: hole,
+                shotNumber: number,
+                lat: at.lat,
+                lng: at.lng,
+                accuracyM: 4,
+                takenAt: taken,
+                club: club,
+                lie: lie,
+                result: result,
+                direction: nil,
+                length: nil,
+                mishit: false,
+                distanceM: nil,
+                distanceYd: nil,
+                toGreenYd: nil
+            )
+        }
+        return [
+            shot("closed-iron", number: 1, at: approach, club: "Hierro 7", lie: "fairway", result: nil, taken: start),
+            shot("closed-putt", number: 2, at: pin, club: "Putter", lie: "green", result: "holed", taken: start.addingTimeInterval(40))
+        ]
+    }
+}

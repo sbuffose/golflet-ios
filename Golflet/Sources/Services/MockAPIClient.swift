@@ -5,15 +5,19 @@ struct MockAPIClient: GolfletAPI {
     private let demoCode = "118"
     private let demoName = "Jockey Club Buenos Aires"
     private let demoURL = URL(string: "https://golf.e-jockeyclub.org.ar/golf")!
+    /// Same instant the web capture uses for «hace N días».
+    private static let demoSyncedAt: Date = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 15)) ?? Date()
+    }()
     private let mdpCode = "209"
-    private let mdpName = "Mar del Plata Golf Club"
-    private let mdpURL = URL(string: "https://golf.mardelplata.com")!
 
     private static let sessionLock = NSLock()
     private static var mockSignedIn = false
     private static var mockLinked = true
     private static var mockPasswordSaved = true
-    private static var mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
+    private static var mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: "Jugador Demo", firstName: "Jugador")
     private static var progressByID: [String: SyncAPIProgress] = [:]
     private static var holeMarksByRound: [String: [Int: HoleMark]] = [:]
     private static var noteClock = 0
@@ -56,9 +60,10 @@ struct MockAPIClient: GolfletAPI {
         self.autoSession = autoSession
         Self.sessionLock.lock()
         if let greeting = RuntimeFlags.testingGreetingName {
-            Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: greeting, firstName: greeting)
+            let ficha = greeting == "Sebastián" ? "Sebastián Buffo" : greeting
+            Self.mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: ficha, firstName: greeting)
         } else {
-            Self.mockUser = GolfletUser(id: "demo", email: "demo@golflet.app", name: "Jugador Demo", firstName: "Jugador")
+            Self.mockUser = GolfletUser(id: "demo", email: "entra@golfistics.invalid", name: "Jugador Demo", firstName: "Jugador")
         }
         if autoSession {
             Self.mockSignedIn = true
@@ -169,14 +174,14 @@ struct MockAPIClient: GolfletAPI {
         let hi = rounds.sorted { $0.date > $1.date }.first?.handicapIndex ?? 3.1
         return AppSnapshot(
             user: Self.mockUser,
-            profile: PlayerProfile(displayName: Self.mockUser.name, initials: initials(Self.mockUser.name), currentHandicap: hi, firstName: Self.mockUser.firstName),
+            profile: PlayerProfile(displayName: Self.mockUser.name, initials: Self.mockUser.name == "Sebastián Buffo" ? faceInitials(Self.mockUser.name) : initials(Self.mockUser.name), currentHandicap: hi, firstName: Self.mockUser.firstName),
             clubs: clubs,
             rounds: rounds,
             courses: courses,
             tees: tees,
             holeStats: stats,
-            bag: DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) },
-            hiHistory: [],
+            bag: FixtureBag.clubs,
+            hiHistory: Self.handicapHistory(rounds),
             teeTimes: linked ? (try? await teeTimes()) ?? [] : [],
             profesores: linked ? (try? await profesores()) ?? [] : []
         )
@@ -338,51 +343,39 @@ struct MockAPIClient: GolfletAPI {
                 passwordSaved: saved,
                 lastSyncStatus: "ok",
                 lastSyncMessage: "Datos de demostración",
+                lastSyncAt: Self.demoSyncedAt,
                 cardCount: 97,
-                source: "app",
+                source: "site",
                 roundsStored: 97,
                 roundsWithHoles: 97
-            ),
-            LinkedClub(
-                accountId: mdpCode,
-                code: mdpCode,
-                name: mdpName,
-                baseURL: mdpURL,
-                matricula: "94506",
-                isDemo: true,
-                passwordSaved: saved,
-                lastSyncStatus: "ok",
-                lastSyncMessage: "Datos de demostración",
-                cardCount: 1,
-                source: "app",
-                roundsStored: 1,
-                roundsWithHoles: 0
             )
         ]
+    }
+
+    /// First and last index, same endpoints the web uses for «↓ 7,9 desde feb. 2013».
+    private static func handicapHistory(_ rounds: [Round]) -> [HIPoint] {
+        let series = StatsEngine.handicapSeries(rounds)
+        guard let first = series.first, let newest = rounds.max(by: { $0.date < $1.date }) else { return [] }
+        let last = HIPoint(date: newest.date, handicap: newest.handicapIndex)
+        if first.date == last.date { return [last] }
+        return [HIPoint(date: first.date, handicap: first.handicap), last]
     }
 
     private func demoSyncResult(message: String, newCards: Int) -> SyncResult {
         SyncResult(
             ok: true,
             message: message,
-            cardCount: 98,
+            cardCount: 97,
             newCards: newCards,
             clubs: [
-                SyncClubResult(accountId: demoCode, clubName: demoName, ok: true, newRounds: newCards > 0 ? 97 : 0, listTotal: 97),
-                SyncClubResult(accountId: mdpCode, clubName: mdpName, ok: true, newRounds: newCards > 0 ? 1 : 0, listTotal: 1)
+                SyncClubResult(accountId: demoCode, clubName: demoName, ok: true, newRounds: newCards > 0 ? 97 : 0, listTotal: 97)
             ]
         )
     }
 
     private func loadRounds() async throws -> [Round] {
         let raw: [[String: Any]] = try FixtureLoader.array("rounds")
-        let extra: [[String: Any]] = (try? FixtureLoader.array("other_course")) ?? []
-        return (raw + extra).compactMap(Self.parseRound).enumerated().map { index, round in
-            guard index == 0, !round.isCompetition else { return round }
-            var copy = round
-            copy.isCompetition = true
-            return copy
-        }
+        return raw.compactMap(Self.parseRound)
     }
 
     private func loadCourses() async throws -> [Course] {
@@ -479,8 +472,7 @@ struct MockAPIClient: GolfletAPI {
         let fast = RuntimeFlags.isUITesting
         let pause: UInt64 = fast ? 80_000_000 : 350_000_000
         let clubs: [(name: String, code: String, logo: String?, initials: String, listed: Int, cards: Int)] = [
-            (demoName, demoCode, "/clubs/118@2x.png", "JC", 97, 97),
-            (mdpName, mdpCode, "/clubs/209@2x.png", "MD", 1, 1)
+            (demoName, demoCode, "/clubs/118@2x.png", "JC", 97, 97)
         ]
         var steps: [SyncAPIProgress] = [
             SyncAPIProgress(club: "Golfistics App", clubIndex: 1, clubCount: clubs.count, clubInitials: "G", stage: .connect)
@@ -648,6 +640,21 @@ struct MockAPIClient: GolfletAPI {
         let parts = name.split(separator: " ")
         let letters = parts.prefix(2).compactMap { $0.first }.map(String.init)
         return letters.joined().uppercased()
+    }
+
+    /// Same face as the web `initials()`: the first Capitalized word, twice.
+    /// «Sebastián Buffo» is SS.
+    private func faceInitials(_ name: String) -> String {
+        let parts = name.split(separator: " ").map(String.init).filter { !$0.isEmpty }
+        guard let first = parts.first, let firstLetter = first.first else { return "·" }
+        let capital = parts.first { word in
+            guard let head = word.first, head.isLetter else { return false }
+            let tail = word.dropFirst().first
+            return String(head) == String(head).uppercased() && tail?.isLowercase == true
+        }
+        let lead = capital?.first ?? firstLetter
+        let second: Character = capital == nil ? (parts.dropFirst().first?.first ?? " ") : firstLetter
+        return String([lead, second]).uppercased()
     }
 
     private static func parseRound(_ item: [String: Any]) -> Round? {
