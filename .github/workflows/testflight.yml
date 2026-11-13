@@ -300,9 +300,29 @@ jobs:
             ${{ runner.temp }}/ui_test_summary.txt
           retention-days: 14
 
-  testflight:
+  release-gate:
     needs: [build, unit-tests, ui-tests]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the UI suite on a main push
+        run: |
+          test "${{ needs.build.result }}" = "success"
+          test "${{ needs.unit-tests.result }}" = "success"
+          test "${{ needs.ui-tests.result }}" = "success"
+
+  testflight:
+    needs: [build, unit-tests, release-gate]
+    # A manual run on main uploads after the build and unit tests. It does not
+    # wait for the UI suite. A push to main still does.
+    if: |
+      always() &&
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.build.result == 'success' &&
+      needs.unit-tests.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || needs.release-gate.result == 'success')
     runs-on: macos-15
     timeout-minutes: 25
 
