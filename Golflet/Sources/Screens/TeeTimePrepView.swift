@@ -177,6 +177,9 @@ struct TeeTimePrepView: View {
         }
         .accessibilityIdentifier("screen-tee-prep")
         .safeAreaInset(edge: .top) { MetricBackBar() }
+        .sheet(item: $scorecardJob) { job in
+            scorecardSheet(job)
+        }
         .task(id: place.strategyCourses.map(\.key).joined(separator: "|")) {
             await loadStrategy()
         }
@@ -369,22 +372,25 @@ struct TeeTimePrepView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("tee-prep-scorecard-open")
-        .sheet(item: $scorecardJob) { job in
-            NavigationStack {
-                ScrollView {
-                    Text(job.label)
-                        .font(GType.body)
-                        .foregroundStyle(p.ink)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(20)
-                        .accessibilityIdentifier("tee-prep-scorecard")
-                }
-                .background(p.bg)
-                .navigationTitle("Tarjetas del club")
-                .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func scorecardSheet(_ job: ScorecardFetchJob) -> some View {
+        NavigationStack {
+            ScrollView {
+                Text(job.label)
+                    .font(GType.body)
+                    .foregroundStyle(p.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .accessibilityIdentifier("tee-prep-scorecard")
             }
-            .golfletChrome()
+            .background(p.bg)
+            .navigationTitle("Tarjetas del club")
+            .navigationBarTitleDisplayMode(.inline)
         }
+        .golfletChrome()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("tee-prep-scorecard")
     }
 
     private func block(_ title: String, _ body: String, _ id: String) -> some View {

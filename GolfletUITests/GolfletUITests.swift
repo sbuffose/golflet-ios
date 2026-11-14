@@ -1687,9 +1687,22 @@ final class GolfletUITests: XCTestCase {
         reveal(app, "tee-prep-scorecard-open")
         XCTAssertTrue(waitFor(app, "tee-prep-scorecard-open", timeout: 4), "Falta Tarjetas del club")
         shot("reserva")
-        tapLargest(app, "tee-prep-scorecard-open")
-        XCTAssertTrue(waitFor(app, "tee-prep-scorecard", timeout: 4), "No se abrió la hoja de tarjetas")
+        let open = app.buttons["tee-prep-scorecard-open"]
+        for _ in 0..<2 {
+            if open.isHittable {
+                open.tap()
+            } else {
+                open.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            if scorecardSheetOpen(app) { break }
+        }
+        XCTAssertTrue(scorecardSheetOpen(app), "No se abrió la hoja de tarjetas")
         shot("reserva-tarjetas")
+    }
+
+    private func scorecardSheetOpen(_ app: XCUIApplication) -> Bool {
+        if app.navigationBars["Tarjetas del club"].waitForExistence(timeout: 3) { return true }
+        return first(app, "tee-prep-scorecard").waitForExistence(timeout: 1)
     }
 
     private func reveal(_ app: XCUIApplication, _ id: String) {
