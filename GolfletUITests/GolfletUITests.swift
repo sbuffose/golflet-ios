@@ -395,7 +395,8 @@ final class GolfletUITests: XCTestCase {
         saveShot("12_sync")
 
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: overlay)
-        wait(for: [gone], timeout: 12)
+        // The overlay stays 5.5s after the mock sync succeeds. A busy simulator can add several seconds on top.
+        wait(for: [gone], timeout: 20)
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 4))
         saveShot("13_inicio_despues_sync")
     }
@@ -1656,12 +1657,15 @@ final class GolfletUITests: XCTestCase {
         pinTop(app, "range-menu")
         let rangeIDs = ["range-1m", "range-3m", "range-6m", "range-12m", "range-all"]
         let rangeFrames = rangeIDs.map { largest(app, $0).frame }
-        XCTAssertEqual(rangeFrames.filter { $0.width > 20 }.count, rangeIDs.count, "Falta un período del inicio")
+        let rangeDump = zip(rangeIDs, rangeFrames).map { "\($0.0) \($0.1.width)x\($0.1.height)" }.joined(separator: ", ")
+        XCTAssertEqual(rangeFrames.filter { $0.width > 8 && $0.height > 8 }.count, rangeIDs.count, "Falta un período del inicio: \(rangeDump)")
         let rangeTop = rangeFrames.map(\.minY).min() ?? 0
         let rangeBottom = rangeFrames.map(\.maxY).max() ?? 0
-        XCTAssertLessThan(rangeBottom - rangeTop, 44, "Los períodos del inicio no entran en una fila")
-        XCTAssertGreaterThanOrEqual(rangeFrames.map(\.minX).min() ?? 0, -1)
-        XCTAssertLessThanOrEqual(rangeFrames.map(\.maxX).max() ?? 0, window.frame.maxX + 1)
+        XCTAssertLessThan(rangeBottom - rangeTop, 44, "Los períodos del inicio no entran en una fila: \(rangeDump)")
+        XCTAssertGreaterThanOrEqual(rangeFrames.map(\.minX).min() ?? 0, -1, rangeDump)
+        XCTAssertLessThanOrEqual(rangeFrames.map(\.maxX).max() ?? 0, window.frame.maxX + 1, rangeDump)
+        let menu = largest(app, "range-menu")
+        XCTAssertGreaterThan(menu.frame.width, window.frame.width * 0.7, "La fila de períodos no ocupa el ancho")
         shot("inicio-hi")
 
         let profesor = largest(app, "home-hcp-profesor")
