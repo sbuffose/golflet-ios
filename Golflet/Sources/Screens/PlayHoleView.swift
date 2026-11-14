@@ -941,6 +941,8 @@ struct PlayHoleView: View {
                     .foregroundStyle(p.ink)
                     .padding(.leading, 4)
                     .padding(.trailing, 44)
+                    .accessibilityIdentifier("play-club-sheet")
+                    .accessibilityLabel("Palo")
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(model.bag, id: \.name) { club in
                         let on = chosenClub == club.name
@@ -1002,7 +1004,9 @@ struct PlayHoleView: View {
             .padding(.horizontal, 14)
             .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("play-club-sheet")
+        .accessibilityLabel("Palo")
     }
 
     private func shortClub(_ label: String) -> String {
