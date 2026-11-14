@@ -406,7 +406,14 @@ extension MockAPIClient {
             default: return .all
             }
         }()
-        let period: MetricPeriod = scope == "year" ? .year : .all
+        let period: MetricPeriod = {
+            switch range {
+            case "3m": return .threeMonths
+            case "6m": return .sixMonths
+            case "12m": return .twelveMonths
+            default: return scope == "year" ? .year : .all
+            }
+        }()
         let since = scope == "since" ? year : nil
         let query: RoundListQuery = {
             switch metric {
@@ -419,7 +426,7 @@ extension MockAPIClient {
         if let since {
             filtered = filtered.filter { Calendar.gregorian.component(.year, from: $0.date) >= since }
         }
-        if let statsRange = StatsRange(rawValue: range) {
+        if period == .year || period == .all, let statsRange = StatsRange(rawValue: range), statsRange != .all {
             filtered = StatsEngine.ranged(filtered, range: statsRange)
         }
         let field: MetricSortField = sort == "gross" ? .gross : (sort == "net" ? .net : .date)
@@ -922,6 +929,13 @@ enum MetricAPIMap {
         let year = Calendar.gregorian.component(.year, from: Date())
         if let sinceYear { return ("since", sinceYear) }
         return period == .year ? ("year", year) : ("all", year)
+    }
+
+    /// Rolling windows send range=3m|6m|12m and scope=all. Este año sends scope=year and no range, so the API does not ignore the calendar year. Histórico sends scope=all and no range.
+    static func listQuery(_ period: MetricPeriod, sinceYear: Int?) -> (scope: String, year: Int, range: String) {
+        let scoped = scope(period, sinceYear: sinceYear)
+        if sinceYear != nil { return (scoped.0, scoped.1, "") }
+        return (scoped.0, scoped.1, period.rangeQuery)
     }
 
     static func sortKey(_ field: MetricSortField) -> String {

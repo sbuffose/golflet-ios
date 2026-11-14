@@ -258,6 +258,9 @@ enum StatsEngine {
             if period == .year, Calendar.gregorian.component(.year, from: round.date) != year {
                 return false
             }
+            if let start = period.startDate(now: now), round.date < start {
+                return false
+            }
             if !course.matches(round) { return false }
             return true
         }

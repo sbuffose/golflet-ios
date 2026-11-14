@@ -103,6 +103,7 @@ struct TeeTimePrepView: View {
     @State private var strategy: CourseStrategy?
     @State private var liveForecast: String?
     @State private var gpsHoles: [GPSHole] = []
+    @State private var scorecardJob: ScorecardFetchJob?
 
     private var shown: TeeTime {
         model.teeTimes.first { $0.id == booking.id } ?? booking
@@ -160,7 +161,7 @@ struct TeeTimePrepView: View {
                         }
                     }
                     if let job = model.scorecardFetches.first(where: { $0.teeTimeId == booking.id }) {
-                        block("Tarjeta del club", job.label, "tee-prep-scorecard")
+                        scorecardRow(job)
                     }
                     block("Cancha", place.canchaTitle, "tee-prep-cancha")
                     block(
@@ -228,10 +229,21 @@ struct TeeTimePrepView: View {
                             HStack(spacing: 10) {
                                 AvatarCircle(initials: String(name.prefix(1)).uppercased())
                                     .frame(width: 32, height: 32)
-                                Text(name)
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                Spacer()
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    if let juego = partnerPlayingHandicap(name) {
+                                        Text("Hándicap de juego \(juego)")
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink3)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                Text(partnerIndexLabel(name))
+                                    .font(GType.label)
+                                    .foregroundStyle(shown.companionHandicaps[name] == nil ? p.ink3 : p.ink)
+                                    .multilineTextAlignment(.trailing)
                             }
                             .padding(.vertical, 8)
                             .padding(.horizontal, 8)
@@ -323,6 +335,55 @@ struct TeeTimePrepView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func partnerIndexLabel(_ name: String) -> String {
+        guard let index = shown.companionHandicaps[name] else { return "HI no disponible" }
+        return "HI \(FormatAR.one(index))"
+    }
+
+    /// Playing handicap only when this reservation's course has one tee rating. Several tees would mean guessing which one.
+    private func partnerPlayingHandicap(_ name: String) -> Int? {
+        guard let index = shown.companionHandicaps[name] else { return nil }
+        let matches = model.tees.filter { $0.course.caseInsensitiveCompare(shown.course) == .orderedSame }
+        guard matches.count == 1, let tee = matches.first else { return nil }
+        let par = model.courses.first { $0.name.caseInsensitiveCompare(shown.course) == .orderedSame }?.par ?? 72
+        return HandicapMath.courseHandicap(index: index, slope: Double(tee.slope), rating: tee.courseRating, par: par)
+    }
+
+    private func scorecardRow(_ job: ScorecardFetchJob) -> some View {
+        Button {
+            scorecardJob = job
+        } label: {
+            HStack {
+                Text("Tarjeta del club")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(p.ink3)
+            }
+            .frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("tee-prep-scorecard-open")
+        .sheet(item: $scorecardJob) { job in
+            NavigationStack {
+                ScrollView {
+                    Text(job.label)
+                        .font(GType.body)
+                        .foregroundStyle(p.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(20)
+                        .accessibilityIdentifier("tee-prep-scorecard")
+                }
+                .background(p.bg)
+                .navigationTitle("Tarjeta del club")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .golfletChrome()
         }
     }
 

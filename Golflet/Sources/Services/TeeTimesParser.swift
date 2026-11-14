@@ -51,6 +51,7 @@ enum TeeTimesParser {
             nestedName(item["cancha"])
         )
         guard let startsAt = parseStarts(item) else { return nil }
+        let line = companions(from: item["companions"] ?? item["partners"] ?? item["players"] ?? item["playing_partners"])
         let id = firstNonEmpty(
             string(item["id"]),
             string(item["tee_time_id"]),
@@ -71,7 +72,8 @@ enum TeeTimesParser {
             clubName: club.isEmpty ? "Club" : club,
             clubCode: firstNonEmpty(string(item["club_code"]), string(item["clubCode"]), string((item["club"] as? [String: Any])?["code"])),
             course: course,
-            companions: companions(from: item["companions"] ?? item["partners"] ?? item["players"] ?? item["playing_partners"]),
+            companions: line.names,
+            companionHandicaps: line.handicaps,
             forecast: forecastText,
             windKmh: JSONFlex.int(from: weather?["wind_kmh"] ?? weather?["viento_kmh"] ?? item["wind_kmh"] ?? item["viento_kmh"]),
             windFrom: optionalString(weather?["wind_from"] ?? weather?["direction"] ?? item["wind_from"] ?? item["viento_desde"]),
@@ -80,17 +82,26 @@ enum TeeTimesParser {
         )
     }
 
-    static func companions(from raw: Any?) -> [String] {
-        if let names = raw as? [String] {
-            return names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    static func companions(from raw: Any?) -> (names: [String], handicaps: [String: Double]) {
+        var names: [String] = []
+        var handicaps: [String: Double] = [:]
+        func keep(_ name: String, handicap: Double?) {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            names.append(trimmed)
+            if let handicap { handicaps[trimmed] = handicap }
+        }
+        if let plain = raw as? [String] {
+            plain.forEach { keep($0, handicap: nil) }
+            return (names, handicaps)
         }
         if let items = raw as? [Any] {
-            return items.compactMap { item -> String? in
+            for item in items {
                 if let name = item as? String {
-                    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    return trimmed.isEmpty ? nil : trimmed
+                    keep(name, handicap: nil)
+                    continue
                 }
-                guard let map = item as? [String: Any] else { return nil }
+                guard let map = item as? [String: Any] else { continue }
                 let joined = [string(map["first_name"]), string(map["last_name"])]
                     .filter { !$0.isEmpty }
                     .joined(separator: " ")
@@ -100,13 +111,19 @@ enum TeeTimesParser {
                     string(map["full_name"]),
                     joined
                 )
-                return name.isEmpty ? nil : name
+                keep(name, handicap: handicap(map["hcp"] ?? map["handicap"] ?? map["handicap_index"] ?? map["hi"]))
             }
+            return (names, handicaps)
         }
         if let csv = raw as? String {
-            return csv.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            csv.split(separator: ",").forEach { keep(String($0), handicap: nil) }
         }
-        return []
+        return (names, handicaps)
+    }
+
+    private static func handicap(_ raw: Any?) -> Double? {
+        if raw == nil || raw is NSNull { return nil }
+        return JSONFlex.double(from: raw)
     }
 
     private static func parseStarts(_ item: [String: Any]) -> Date? {

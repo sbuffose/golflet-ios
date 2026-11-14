@@ -11,6 +11,7 @@ struct HomeView: View {
     @State private var showsHomeGroups = false
     @State private var showsHomeProfesores = false
     @State private var showsAgregarProfesor = false
+    @State private var showsScorecards = false
     @State private var highlightPartners = false
     @State private var modeOpen = false
     @Namespace private var roundZoom
@@ -285,7 +286,13 @@ struct HomeView: View {
                             onProfesor: { presentProfesor($0) },
                             onProfesores: { showsHomeProfesores = true },
                             onAddProfesor: { showsAgregarProfesor = true },
-                            onGroups: { showsHomeGroups = true },
+                            onGroups: {
+                                if model.groups.count == 1, let group = model.groups.first {
+                                    model.presentGroupDetail(group.id)
+                                } else {
+                                    model.presentGroups()
+                                }
+                            },
                             onCreate: { model.presentCreateGroup() }
                         )
                         Button { model.showsPlay = true } label: {
@@ -431,39 +438,87 @@ struct HomeView: View {
     @ViewBuilder
     private var scorecardFetchCard: some View {
         if !model.scorecardFetches.isEmpty || model.scorecardFetchNote != nil {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Tarjeta del club")
-                    .font(GType.section)
-                    .foregroundStyle(p.ink)
-                GCard(radius: 22, padding: 16) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let note = model.scorecardFetchNote, !note.isEmpty {
-                            Text(note)
-                                .font(GType.body)
-                                .foregroundStyle(p.ink2)
-                                .accessibilityIdentifier("home-scorecard-error")
-                        }
-                        ForEach(model.scorecardFetches) { job in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(job.clubName.isEmpty ? "Club" : job.clubName)
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                if !job.course.isEmpty || !job.time.isEmpty {
-                                    Text([job.date, job.time, job.course].filter { !$0.isEmpty }.joined(separator: " · "))
-                                        .font(GType.label)
-                                        .foregroundStyle(p.ink2)
-                                }
-                                Text(job.label)
-                                    .font(GType.body)
-                                    .foregroundStyle(p.ink)
-                            }
-                            .accessibilityIdentifier("home-scorecard-\(job.id)")
-                        }
-                    }
+            Button {
+                showsScorecards = true
+            } label: {
+                HStack(spacing: 10) {
+                    Text("Tarjetas del club")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Spacer(minLength: 8)
+                    Text(scorecardCount)
+                        .font(GType.label)
+                        .foregroundStyle(Color(hex: BrandHex.red))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(p.ink3)
                 }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 44)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("home-scorecard-fetches")
+            .accessibilityLabel("Tarjetas del club, \(scorecardCount)")
+            .sheet(isPresented: $showsScorecards) {
+                NavigationStack {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if let note = model.scorecardFetchNote, !note.isEmpty {
+                                Text(note)
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink2)
+                                    .accessibilityIdentifier("home-scorecard-error")
+                            }
+                            ForEach(model.scorecardFetches) { job in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(job.clubName.isEmpty ? "Club" : job.clubName)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    if !job.course.isEmpty || !job.time.isEmpty {
+                                        Text([job.date, job.time, job.course].filter { !$0.isEmpty }.joined(separator: " · "))
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink2)
+                                    }
+                                    Text(job.label)
+                                        .font(GType.body)
+                                        .foregroundStyle(p.ink)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("home-scorecard-\(job.id)")
+                            }
+                            Button {
+                                Task { await model.refreshScorecardFetches() }
+                            } label: {
+                                Text("Actualizar")
+                                    .font(GType.headline)
+                                    .foregroundStyle(Color.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(minHeight: 44)
+                                    .background(Color(hex: BrandHex.navy))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("home-scorecard-refresh")
+                        }
+                        .padding(20)
+                    }
+                    .background(p.bg)
+                    .navigationTitle("Tarjetas del club")
+                    .navigationBarTitleDisplayMode(.inline)
+                }
+                .golfletChrome()
+                .environment(model)
+            }
         }
+    }
+
+    private var scorecardCount: String {
+        let n = model.scorecardFetches.count
+        if n == 0 { return "Sin búsquedas" }
+        return n == 1 ? "1 búsqueda" : "\(n) búsquedas"
     }
 
     private func teeTimeRow(_ booking: TeeTime) -> some View {
@@ -981,25 +1036,29 @@ struct RoundRow: View {
                         .font(GType.headline)
                         .foregroundStyle(p.ink)
                         .lineLimit(2)
-                    HStack(spacing: 6) {
+                    HStack(alignment: .top, spacing: 6) {
                         if !round.isOtherCourse, !round.tee.isEmpty {
                             TeeDot(name: round.tee)
+                                .padding(.top, 4)
                         }
                         Text(meta)
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if !chips.isEmpty {
-                        HStack(spacing: 4) {
-                            ForEach(chips, id: \.label) { chip in
+                        ChipFlowLayout(spacing: 4, lineSpacing: 4) {
+                            ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
                                 Text(chip.label)
                                     .font(.system(size: 10, weight: .semibold))
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: true)
                                     .foregroundStyle(chip.ink)
                                     .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
+                                    .frame(height: 18)
                                     .background(chip.fill)
-                                    .clipShape(Capsule())
+                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                             }
                         }
                     }
@@ -1102,8 +1161,6 @@ struct HomeHcpPeople: View {
             }
         }
         .buttonStyle(.plain)
-        .padding(8)
-        .contentShape(Rectangle())
         .accessibilityIdentifier("home-hcp-profesor")
         .accessibilityLabel(profesorLabel)
         .overlay {
@@ -1127,6 +1184,9 @@ struct HomeHcpPeople: View {
                 profesorStack
             }
         }
+        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+        .contentShape(Rectangle())
+        .background(Color.white.opacity(0.001))
     }
 
     private var addProfesor: some View {
@@ -1166,6 +1226,9 @@ struct HomeHcpPeople: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
+            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+            .contentShape(Rectangle())
+            .background(Color.white.opacity(0.001))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-groups")
@@ -1213,7 +1276,6 @@ struct HomeHcpPeople: View {
                 .zIndex(Double(shown.count - index))
             }
         }
-        .allowsHitTesting(false)
     }
 
     private var groupStack: some View {
@@ -1240,7 +1302,6 @@ struct HomeHcpPeople: View {
                 ring: ring
             )
         }
-        .allowsHitTesting(false)
     }
 
     private var profesorLabel: String {

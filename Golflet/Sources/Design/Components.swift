@@ -161,6 +161,80 @@ struct FilterPills: View {
     }
 }
 
+/// Wraps whole chips onto the next row. Each child keeps a single line and a fixed height.
+struct ChipFlowLayout: Layout {
+    var spacing: CGFloat = 4
+    var lineSpacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth + 0.5 {
+                y += rowHeight + lineSpacing
+                x = 0
+                rowHeight = 0
+            }
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+        return CGSize(width: proposal.width ?? max(0, x - spacing), height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX + 0.5 {
+                y += rowHeight + lineSpacing
+                x = bounds.minX
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(width: size.width, height: size.height))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+    }
+}
+
+struct MetricPeriodStrip: View {
+    @Environment(\.palette) private var p
+    @Binding var period: MetricPeriod
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(MetricPeriod.allCases, id: \.self) { item in
+                let on = period == item
+                Button {
+                    period = item
+                } label: {
+                    Text(item.rawValue)
+                        .font(GFont.ui(10, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .foregroundStyle(on ? Color.white : p.ink)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 32)
+                        .background(on ? p.primary : Color.white)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(item.rawValue)
+                .accessibilityIdentifier("metric-period-\(item.rangeQuery.isEmpty ? (item == .year ? "year" : "all") : item.rangeQuery)")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(p.primary.opacity(0.22), lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("metric-period")
+    }
+}
+
 struct ScrollFilterPills: View {
     let options: [String]
     @Binding var selection: String

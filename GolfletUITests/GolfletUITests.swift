@@ -591,6 +591,34 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    func testHomeHcpGroupsButtonOpensGrupos() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        let groups = largest(app, "home-hcp-groups")
+        XCTAssertTrue(groups.waitForExistence(timeout: 4), "Falta el botón de grupos en el HI")
+        reveal(app, groups)
+        groups.tap()
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "Un solo grupo no abrió el grupo")
+    }
+
+    func testHomeHcpProfesorButtonOpensProfile() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        let profesor = largest(app, "home-hcp-profesor")
+        XCTAssertTrue(profesor.waitForExistence(timeout: 4), "Falta el profesor en el HI")
+        reveal(app, profesor)
+        profesor.tap()
+        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 8), "No se abrió el profesor")
+    }
+
     func testHomeHcpCreateGroupWhenEmpty() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing", "-ui-testing-no-groups"]

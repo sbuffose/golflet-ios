@@ -24,13 +24,7 @@ struct ScoreKindDetailView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header(snap)
                     if query.showPeriod {
-                        FilterPills(
-                            options: MetricPeriod.allCases.map(\.rawValue),
-                            selection: Binding(
-                                get: { period.rawValue },
-                                set: { period = MetricPeriod(rawValue: $0) ?? .all }
-                            )
-                        )
+                        MetricPeriodStrip(period: $period)
                     }
                     if query.showCourseFilter {
                         ScrollFilterPills(
@@ -63,15 +57,15 @@ struct ScoreKindDetailView: View {
     }
 
     private func loadAPI() async {
-        let (scope, year) = MetricAPIMap.scope(period, sinceYear: query.sinceYear)
+        let request = MetricAPIMap.listQuery(period, sinceYear: query.sinceYear)
         guard let drill = try? await model.api.metricDrilldown(
             metric: MetricAPIMap.score(kind),
-            scope: scope,
-            year: year,
+            scope: request.scope,
+            year: request.year,
             course: MetricAPIMap.course(course),
             sort: "count",
             order: "desc",
-            range: model.statsRange.query
+            range: request.range
         ), drill.total != nil || !drill.rounds.isEmpty else {
             apiSnapshot = nil
             return

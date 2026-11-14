@@ -605,6 +605,8 @@ struct TeeTime: Identifiable, Hashable, Sendable {
     var clubCode: String
     var course: String
     var companions: [String]
+    /// Official HCP printed on the club line, keyed by the companion name. Missing key means the club did not send one.
+    var companionHandicaps: [String: Double] = [:]
     var forecast: String? = nil
     var windKmh: Int? = nil
     var windFrom: String? = nil

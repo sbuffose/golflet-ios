@@ -29,13 +29,7 @@ struct MetricRoundsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 header
                 if query.showPeriod {
-                    FilterPills(
-                        options: MetricPeriod.allCases.map(\.rawValue),
-                        selection: Binding(
-                            get: { period.rawValue },
-                            set: { period = MetricPeriod(rawValue: $0) ?? .all }
-                        )
-                    )
+                    MetricPeriodStrip(period: $period)
                 }
                 if query.showCourseFilter {
                     ScrollFilterPills(
@@ -212,15 +206,15 @@ struct MetricRoundsView: View {
     }
 
     private func loadAPI() async {
-        let (scope, year) = MetricAPIMap.scope(period, sinceYear: query.sinceYear)
+        let request = MetricAPIMap.listQuery(period, sinceYear: query.sinceYear)
         guard let drill = try? await model.api.metricDrilldown(
             metric: MetricAPIMap.name(for: query),
-            scope: scope,
-            year: year,
+            scope: request.scope,
+            year: request.year,
             course: MetricAPIMap.course(course),
             sort: MetricAPIMap.sortKey(sort),
             order: MetricAPIMap.orderKey(sort, order),
-            range: model.statsRange.query
+            range: request.range
         ), !drill.rounds.isEmpty else {
             apiRounds = nil
             return
