@@ -34,11 +34,30 @@ final class TeeTimesParserTests: XCTestCase {
         XCTAssertEqual(bookings[0].clubName, "Jockey Club Buenos Aires")
         XCTAssertEqual(bookings[0].course, "Azul")
         XCTAssertEqual(bookings[0].companions, ["Juan", "Pedro", "Ana"])
+        XCTAssertNil(bookings[0].companionHandicaps["Juan"])
         XCTAssertEqual(bookings[0].companionsLine, "con Juan, Pedro +1")
         XCTAssertEqual(bookings[1].clubName, "Mar del Plata Golf Club")
         XCTAssertEqual(bookings[1].clubCode, "209")
         XCTAssertEqual(bookings[1].course, "Cancha Vieja")
         XCTAssertNil(bookings[1].companionsLine)
+    }
+
+    func testKeepsOfficialCompanionHandicapFromTheLine() {
+        let json: [String: Any] = [
+            "tee_times": [[
+                "id": "tt-hcp",
+                "starts_at": "2026-10-31T12:33:00-03:00",
+                "club_name": "Jockey Club Argentino",
+                "course": "Colorada",
+                "companions": [
+                    ["name": "Lavalle Cobo Joaquin Maria", "hcp": 4.2],
+                    ["name": "Gonzalez Bernaldo De Quiros Julio"]
+                ]
+            ]]
+        ]
+        let booking = TeeTimesParser.list(from: json).first
+        XCTAssertEqual(booking?.companionHandicaps["Lavalle Cobo Joaquin Maria"], 4.2)
+        XCTAssertNil(booking?.companionHandicaps["Gonzalez Bernaldo De Quiros Julio"])
     }
 
     func testOmitsConWhenThereAreNoCompanions() {

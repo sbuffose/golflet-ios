@@ -1,8 +1,41 @@
 import Foundation
 
 enum MetricPeriod: String, Hashable, CaseIterable, Sendable {
+    case threeMonths = "3 meses"
+    case sixMonths = "6 meses"
+    case twelveMonths = "12 meses"
     case year = "Este año"
     case all = "Histórico"
+
+    /// Rolling windows match `rangeSince` in web/lib/metrics.ts (Argentina civil day, N months back).
+    /// Este año is the calendar year. Histórico has no start.
+    func startDate(now: Date = Date()) -> Date? {
+        let months: Int
+        switch self {
+        case .threeMonths: months = 3
+        case .sixMonths: months = 6
+        case .twelveMonths: months = 12
+        case .year, .all: return nil
+        }
+        let cal = Calendar.gregorian
+        let shifted = now.addingTimeInterval(-3 * 3600)
+        let year = cal.component(.year, from: shifted)
+        let month = cal.component(.month, from: shifted)
+        let day = cal.component(.day, from: shifted)
+        guard let first = cal.date(from: DateComponents(year: year, month: month, day: 1)),
+              let back = cal.date(byAdding: .month, value: -months, to: first),
+              let span = cal.range(of: .day, in: .month, for: back)?.count else { return nil }
+        return cal.date(byAdding: .day, value: min(day, span) - 1, to: back)
+    }
+
+    var rangeQuery: String {
+        switch self {
+        case .threeMonths: return "3m"
+        case .sixMonths: return "6m"
+        case .twelveMonths: return "12m"
+        case .year, .all: return ""
+        }
+    }
 }
 
 enum MetricCourseBucket: String, Hashable, CaseIterable, Sendable {
@@ -123,7 +156,7 @@ enum ScoreKind: String, Hashable, CaseIterable, Sendable {
 struct RoundListQuery: Hashable, Sendable {
     var title: String
     var footnote: String? = nil
-    var periodDefault: MetricPeriod = .all
+    var periodDefault: MetricPeriod = .twelveMonths
     var showPeriod: Bool = true
     var showCourseFilter: Bool = true
     var showSort: Bool = true
@@ -142,7 +175,7 @@ struct RoundListQuery: Hashable, Sendable {
         RoundListQuery(
             title: "Rondas",
             footnote: "Rondas válidas de 18 hoyos.",
-            periodDefault: .year,
+            periodDefault: .twelveMonths,
             valid18Only: true
         )
     }
@@ -151,7 +184,7 @@ struct RoundListQuery: Hashable, Sendable {
         RoundListQuery(
             title: yearOnly ? "Mejor del año" : "Mejor gross",
             footnote: "Rondas válidas de 18 hoyos, de menor a mayor gross.",
-            periodDefault: yearOnly ? .year : .all,
+            periodDefault: .twelveMonths,
             valid18Only: true,
             defaultSort: .gross,
             defaultOrder: .bestFirst
@@ -162,7 +195,7 @@ struct RoundListQuery: Hashable, Sendable {
         RoundListQuery(
             title: yearOnly ? "Promedio \(Calendar.gregorian.component(.year, from: Date()))" : "Promedio gross",
             footnote: "Las rondas que entran en el promedio.",
-            periodDefault: yearOnly ? .year : .all,
+            periodDefault: .twelveMonths,
             valid18Only: true,
             defaultSort: .gross,
             defaultOrder: .bestFirst

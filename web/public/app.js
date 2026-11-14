@@ -170,7 +170,7 @@ function vInicio(){
     <div class="hi-avs"><div id="hiprofs" class="hi-profs nolab" hidden></div><div id="higroups" class="hi-grp" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a></div></div>
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
     <div class="big num">${f1(hiNow)}</div></a>${hiBand(hi, d)}
-    <div class="meta"><a href="${rlink('rounds',{scope:'all',course:'all',sort:'date',order:'desc'})}">Tarjetas<b class="num">${prAll.length}</b></a><a href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}">Mejor gross<b class="num">${bestR?bestR.gross:'—'}</b></a><a href="${rlink('average',{scope:'all',course:'all',sort:'date',order:'desc'})}">Promedio<b class="num">${f1(mean(pr.map(r=>r.gross)))}</b></a><a id="hcpimp" class="hi-imp" href="#/impacto${RANGE==='all'?'':'?range='+RANGE}">Impacto HCP<b class="num">…</b></a></div>
+    <div class="meta"><a href="${mlink('rounds',{range:'12m',course:'all',sort:'date',order:'desc'})}">Tarjetas<b class="num">${prAll.length}</b></a><a href="${mlink('best-gross',{range:'12m',course:'all',sort:'gross',order:'asc'})}">Mejor gross<b class="num">${bestR?bestR.gross:'—'}</b></a><a href="${mlink('average',{range:'12m',course:'all',sort:'date',order:'desc'})}">Promedio<b class="num">${f1(mean(pr.map(r=>r.gross)))}</b></a><a id="hcpimp" class="hi-imp" href="#/impacto${RANGE==='all'?'':'?range='+RANGE}">Impacto HCP<b class="num">…</b></a></div>
   </div></div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
   ${roundRow(last, true, true)}</div></div>
@@ -738,7 +738,15 @@ async function loadScorecards(){
     const bucket = f => f.heading || (f.status === 'complete' ? 'Ya está' : ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status) ? 'En curso' : 'Otras');
     const open = rows.filter(f => bucket(f) !== 'Ya está');
     if (!open.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${groups.map(title => block(title, open.filter(f => bucket(f) === title))).join('')}<p class="foot">Acá quedan las búsquedas que todavía piden algo. Las tarjetas que ya llegaron están en Rondas. «No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
+    const detail = `${groups.map(title => block(title, open.filter(f => bucket(f) === title))).join('')}<p class="foot">Acá quedan las búsquedas que todavía piden algo. Las tarjetas que ya llegaron están en Rondas. «No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
+    el.innerHTML = `<button type="button" class="sc-open" id="sc-open"><span>Tarjetas del club</span><b class="num">${open.length}</b><svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></button>`;
+    let dlg = document.getElementById('sc-dialog');
+    if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'sc-dialog'; dlg.className = 'sc-dialog'; document.body.appendChild(dlg); }
+    dlg.innerHTML = `<div class="bar"><span class="overline">Tarjetas del club</span><button type="button" class="close" id="sc-close" aria-label="Cerrar">${ICON.x}</button></div>${detail}`;
+    const openBtn = document.getElementById('sc-open');
+    if (openBtn) openBtn.onclick = () => { if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); };
+    const closeBtn = document.getElementById('sc-close');
+    if (closeBtn) closeBtn.onclick = () => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -971,7 +979,7 @@ async function loadTee(id, opts){
       <button type="button" class="btn ghost sm" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>
       <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
-      <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HCP ${f1(c.hcp)}`:''}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HCP</span></div>`:''}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
+      <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HI ${f1(c.hcp)}`:', HI no disponible'}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HI</span></div>`:`<div class="score"><span>HI no disponible</span></div>`}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
       ${past ? '' : `<div class="section"><h2>Tu hándicap de juego</h2></div><div class="card tt-now">${teeBlock(d, t.id)}</div>`}
       <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>`;
     const rb = $('#refresh-booking'); if (rb) rb.onclick = () => refreshBooking(id, rb);
@@ -1623,7 +1631,10 @@ async function loadHiGroups(){
   try { const gs = (await api('/api/groups')).groups || []; if (!$('#higroups')) return;
     if (!gs.length) { el.innerHTML = `<a class="hg-link hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M6 2.2v7.6M2.2 6h7.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span class="hg-n">Crear grupo</span></a>`; el.hidden = false; return; }
     const show = gs.slice(0, 3);
-    el.innerHTML = `<a class="hg-link" href="#/amigos" aria-label="Tus grupos: ${gs.length}">${show.map(g => `<span class="hp-av">${g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase())}</span>`).join('')}<span class="hg-n num">${gs.length} grupo${gs.length === 1 ? '' : 's'}</span></a>`;
+    const avs = show.map(g => `<span class="hp-av">${g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase())}</span>`).join('');
+    const href = gs.length === 1 ? `#/grupo/${encodeURIComponent(gs[0].id)}` : '#/amigos';
+    const label = gs.length === 1 ? `Tu grupo: ${gs[0].name || 'grupo'}` : `Tus grupos: ${gs.length}`;
+    el.innerHTML = `<a class="hg-link" href="${href}" aria-label="${esc(label)}">${avs}<span class="hg-n num">${gs.length} grupo${gs.length === 1 ? '' : 's'}</span></a>`;
     el.hidden = false;
   } catch(e){ el.hidden = true; } finally { sizeHiAvs(); }
 }
@@ -2185,12 +2196,30 @@ const MTITLE = { rounds:'Rondas', 'best-gross':'Mejor gross', average:'Promedio'
 const SCOREK = ['eagles','birdies','pars','bogeys','doubles'];
 let MQ = {};   // metric -> {scope, year, course, sort, order}
 const mlink = (metric, q={}) => { q = Object.fromEntries(Object.entries(q).filter(([,v])=>v!==''&&v!=null)); return `#/metrica/${metric}${Object.keys(q).length?'?'+new URLSearchParams(q):''}`; };
+const LIST_PERIODS = [['3m','3 meses'],['6m','6 meses'],['12m','12 meses'],['year','Este año'],['all','Histórico']];
 function mstate(metric, qs){
   const p = new URLSearchParams(qs||''), cur = MQ[metric] || {};
+  const fromURL = ['3m','6m','12m'].includes(p.get('range')) ? p.get('range') : '';
   const st = { scope: p.get('scope') || cur.scope || 'year', year: p.get('year') || cur.year || String(new Date().getFullYear()), course: p.get('course') || cur.course || 'all',
     sort: p.get('sort') || cur.sort || (metric==='best-gross'?'gross':'date'), order: p.get('order') || cur.order || (metric==='best-gross'?'asc':'desc'),
-    range: qs ? (RKEYS.includes(p.get('range')) ? p.get('range') : '') : (cur.range || '') };
+    range: qs ? fromURL : (cur.range || ''), lp: (qs && LIST_PERIODS.some(([k]) => k === p.get('lp'))) ? p.get('lp') : (cur.lp || ''), scopeFromURL: !!(qs && p.get('scope')) };
   if (qs) MQ[metric] = st; return MQ[metric] = MQ[metric] || st;
+}
+function listPeriod(st){
+  if (LIST_PERIODS.some(([k]) => k === st.lp)) return st.lp;
+  if (st.range === '3m' || st.range === '6m' || st.range === '12m') return st.range;
+  if (st.scope === 'since' && !st.lp) return '';
+  if (st.scope === 'year' && st.scopeFromURL && !st.range) return 'year';
+  return '12m';
+}
+function metricQuery(st){
+  const q = { course: st.course, sort: st.sort, order: st.order, year: st.year };
+  if (st.scope === 'since' && !st.lp && st.range !== '3m' && st.range !== '6m' && st.range !== '12m') { q.scope = 'since'; return q; }
+  const lp = listPeriod(st);
+  if (lp === 'year') { q.scope = 'year'; q.lp = 'year'; }
+  else if (lp === 'all') { q.scope = 'all'; q.lp = 'all'; }
+  else { q.scope = 'all'; q.range = lp || '12m'; }
+  return q;
 }
 function sMetric(metric, qs){
   if (!MTITLE[metric]) return '<p>Métrica no encontrada.</p>';
@@ -2202,11 +2231,11 @@ function sMetric(metric, qs){
 }
 async function loadMetric(metric){
   const el = $('#mbody'); if (!el) return;
-  const st = MQ[metric]; const q = new URLSearchParams(Object.fromEntries(Object.entries(st).filter(([,v])=>v)));
+  const st = MQ[metric]; const q = new URLSearchParams(Object.fromEntries(Object.entries(metricQuery(st)).filter(([,v])=>v)));
   let d; try { d = await api(`/api/metrics/${metric}?${q}`); } catch(e){ el.innerHTML = `${errBox(e)}`; return; }
   if (!$('#mbody') || location.hash.indexOf('#/metrica/'+metric) !== 0) return;
-  const yr = st.year, rg = st.range || '';
-  const scopeSeg = `<div class="rng"><div class="seg vx-seg rng-seg" role="tablist" aria-label="Período">${RANGES.map(([k,l])=>`<button type="button" role="tab" aria-selected="${k===rg}" class="${k===rg?'on':''}" data-mset="range=${k}">${l}</button>`).join('')}${!rg?`<button type="button" class="on" data-mset="range=">${st.scope==='since'?'Desde '+yr:st.scope==='all'?'Todas':yr}</button>`:''}</div>
+  const lp = listPeriod(st);
+  const scopeSeg = `<div class="rng"><div class="seg vx-seg rng-seg lp-seg" role="tablist" aria-label="Período">${LIST_PERIODS.map(([k,l])=>`<button type="button" role="tab" aria-selected="${k===lp}" class="${k===lp?'on':''}" data-lp="${k}">${l}</button>`).join('')}</div>
     <span class="rng-n"><b class="num">${metric==='handicap'?(d.history||[]).length:d.rounds_in_range}</b> ${metric==='handicap'?'registros':(d.rounds_in_range===1?'ronda':'rondas')}${d.since?` desde ${dmy(d.since)}`:''}</span></div>` + overTime(metric, d);
   const courseSeg = d.courses.length>2 ? `<div class="vx-chips">${d.courses.filter(c=>c.rounds||c.key==='all').map(c=>`<button class="vx-chip ${c.key===st.course?'on':''}" data-mset="course=${encodeURIComponent(c.key)}">${esc(c.label)}<span class="num">${c.rounds}</span></button>`).join('')}</div>` : '';
   let html = '';
@@ -2236,7 +2265,16 @@ async function loadMetric(metric){
       ${d.rounds_with_hole_detail<d.rounds_considered?`<p class="foot">Las tarjetas sin detalle hoyo por hoyo cuentan por el total que publica tu club, sin hoyos.</p>`:''}`;
   }
   el.innerHTML = html;
-  el.querySelectorAll('[data-mset]').forEach(b => b.onclick = () => { const p = new URLSearchParams(b.dataset.mset); const st = { ...MQ[metric] }; p.forEach((v,k)=>{ st[k] = decodeURIComponent(v); }); if (st.range) setRange(st.range); MQ[metric] = st; history.replaceState(null, '', mlink(metric, st)); loadMetric(metric); });
+  el.querySelectorAll('[data-lp]').forEach(b => b.onclick = () => {
+    const next = { ...MQ[metric], lp: b.dataset.lp };
+    if (next.lp === 'year') { next.range = ''; next.scope = 'year'; }
+    else if (next.lp === 'all') { next.range = ''; next.scope = 'all'; }
+    else { next.range = next.lp; next.scope = 'all'; }
+    MQ[metric] = next;
+    history.replaceState(null, '', mlink(metric, metricQuery(next)));
+    loadMetric(metric);
+  });
+  el.querySelectorAll('[data-mset]').forEach(b => b.onclick = () => { const p = new URLSearchParams(b.dataset.mset); const st = { ...MQ[metric] }; p.forEach((v,k)=>{ st[k] = decodeURIComponent(v); }); MQ[metric] = st; history.replaceState(null, '', mlink(metric, metricQuery(st))); loadMetric(metric); });
   const det = el.querySelector('#modetail'), sc = el.querySelector('#moscroll');
   el.querySelectorAll('[data-mo]').forEach(b => b.onclick = () => { if (!det) return; det.hidden = false; det.textContent = b.getAttribute('aria-label') || ''; });
   if (sc) sc.scrollLeft = sc.scrollWidth;
