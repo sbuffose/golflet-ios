@@ -302,10 +302,12 @@ jobs:
           if [ -d /tmp/golflet-screenshots ]; then
             cp /tmp/golflet-screenshots/*.png "$RUNNER_TEMP/screenshots/" 2>/dev/null || true
           fi
-          if [ -d "$RUNNER_TEMP/test-results/UITests.xcresult" ]; then
+          if compgen -G "$RUNNER_TEMP/test-results/*.xcresult" >/dev/null; then
             brew install chargepoint/xcparse/xcparse 2>/dev/null || true
             if command -v xcparse >/dev/null 2>&1; then
-              xcparse screenshots "$RUNNER_TEMP/test-results/UITests.xcresult" "$RUNNER_TEMP/screenshots" 2>/dev/null || true
+              for bundle in "$RUNNER_TEMP/test-results"/*.xcresult; do
+                xcparse screenshots "$bundle" "$RUNNER_TEMP/screenshots" 2>/dev/null || true
+              done
             fi
           fi
           echo "Screenshots:"
