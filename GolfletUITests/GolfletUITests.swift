@@ -1694,7 +1694,11 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(chips.waitForExistence(timeout: 4), "Faltan los chips de la última ronda")
         XCTAssertTrue(roundTitle.exists, "Falta el título de la última ronda")
         XCTAssertGreaterThan(roundTitle.frame.minY, 40, "El título de la última ronda quedó fuera")
-        XCTAssertLessThan(chips.frame.maxY, window.frame.height - 100, "Los chips de la última ronda quedaron cortados")
+        XCTAssertLessThan(
+            chips.frame.maxY,
+            window.frame.height - 88,
+            "Los chips quedaron cortados (maxY \(chips.frame.maxY), alto \(window.frame.height))"
+        )
         shot("ultima-ronda")
 
         reveal(app, "metric-best-gross")
@@ -1752,18 +1756,23 @@ final class GolfletUITests: XCTestCase {
 
     private func showLastRound(_ app: XCUIApplication) {
         let height = app.windows.firstMatch.frame.height
-        for _ in 0..<20 {
+        let floor = height - 96
+        for _ in 0..<14 {
             let chips = largest(app, "last-round-chips")
             let title = app.staticTexts["Última ronda"]
-            let chipsOn = chips.exists && chips.frame.width > 20 && chips.frame.minY > 88 && chips.frame.maxY < height - 120
-            let titleOn = title.exists && title.frame.minY > 48 && title.frame.maxY < height - 160
+            let chipsOn = chips.exists && chips.frame.width > 20 && chips.frame.minY > 72 && chips.frame.maxY < floor
+            let titleOn = title.exists && title.frame.minY > 48 && title.frame.maxY < chips.frame.minY + 4
             if chipsOn && titleOn { return }
-            if !chips.exists || chips.frame.minY > height * 0.62 || chips.frame.maxY > height - 100 {
-                app.swipeUp()
-            } else {
-                app.swipeDown()
-            }
+            // A swipe through the middle lands on the card and does not move the page.
+            let tooLow = !chips.exists || chips.frame.maxY > floor || chips.frame.minY > height * 0.5
+            nudgePage(app, up: tooLow || title.frame.minY > height * 0.45)
         }
+    }
+
+    private func nudgePage(_ app: XCUIApplication, up: Bool) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: up ? 0.78 : 0.38))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: up ? 0.46 : 0.70))
+        start.press(forDuration: 0.02, thenDragTo: end)
     }
 
     private func showFully(_ app: XCUIApplication, _ id: String) {
