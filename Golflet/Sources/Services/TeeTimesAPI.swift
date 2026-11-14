@@ -62,7 +62,23 @@ enum ScorecardFetchParser {
 extension MockAPIClient {
     func scorecardFetches() async throws -> [ScorecardFetchJob] {
         guard isAuthenticated else { throw GolfletError.notAuthenticated }
-        return Self.dequeueScorecardFetches() ?? []
+        if let scripted = Self.dequeueScorecardFetches() { return scripted }
+        guard ProcessInfo.processInfo.arguments.contains("-ui-testing-review") else { return [] }
+        return [
+            ScorecardFetchJob(
+                id: "sc-review",
+                teeTimeId: "tt-jockey-1",
+                date: "2026-11-16",
+                time: "12:33",
+                clubName: "Jockey Club Buenos Aires",
+                course: "Azul",
+                status: "awaiting_card",
+                label: "Esperando la tarjeta del club.",
+                lastError: nil,
+                roundId: nil,
+                attemptCount: 1
+            )
+        ]
     }
 
     func teeTimes() async throws -> [TeeTime] {
@@ -101,7 +117,10 @@ extension MockAPIClient {
                 clubName: "Jockey Club Buenos Aires",
                 clubCode: "118",
                 course: "Azul",
-                companions: ["Juan", "Pedro", "Ana"]
+                companions: ["Juan", "Pedro", "Ana"],
+                companionHandicaps: ProcessInfo.processInfo.arguments.contains("-ui-testing-review")
+                    ? ["Juan": 4.2, "Pedro": 12]
+                    : [:]
             ),
             TeeTime(
                 id: "tt-mdp-1",

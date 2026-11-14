@@ -1638,6 +1638,74 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    func testCaptureReviewScreens() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-greeting", "Sebastián", "-ui-testing-review"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10), "Bootstrap del mock no terminó")
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 6))
+        let width = Int(window.frame.width.rounded())
+        XCTAssertGreaterThan(width, 300)
+        let shot = { (name: String) in
+            self.saveShot("ios-\(width)-\(name)")
+        }
+
+        pinTop(app, "handicap-card")
+        shot("inicio-hi")
+
+        pinTop(app, "last-round-card")
+        XCTAssertTrue(waitFor(app, "last-round-card", timeout: 4), "Falta la última ronda")
+        shot("ultima-ronda")
+
+        reveal(app, "metric-best-gross")
+        tapLargest(app, "metric-best-gross")
+        XCTAssertTrue(waitFor(app, "screen-metric-rounds", timeout: 6), "Mejor gross no se abrió")
+        XCTAssertTrue(waitFor(app, "metric-period-12m", timeout: 4), "Falta la fila de períodos")
+        shot("mejor-gross")
+        dismissIfPresent(app, "metric-back")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+
+        if first(app, "home-tee-tab").waitForExistence(timeout: 3) {
+            let tab = first(app, "home-tee-tab")
+            if tab.isHittable { tab.tap() } else {
+                tab.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+        }
+        reveal(app, "home-tee-row-tt-jockey-1")
+        let teeRow = largest(app, "home-tee-row-tt-jockey-1")
+        XCTAssertTrue(teeRow.waitForExistence(timeout: 4), "Falta la fila del tee time")
+        if teeRow.isHittable {
+            teeRow.tap()
+        } else {
+            teeRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "La reserva no se abrió")
+        XCTAssertTrue(app.staticTexts["Jugás con"].waitForExistence(timeout: 4), "Falta Jugás con")
+        reveal(app, "tee-prep-scorecard-open")
+        XCTAssertTrue(waitFor(app, "tee-prep-scorecard-open", timeout: 4), "Falta Tarjetas del club")
+        shot("reserva")
+        tapLargest(app, "tee-prep-scorecard-open")
+        XCTAssertTrue(waitFor(app, "tee-prep-scorecard", timeout: 4), "No se abrió la hoja de tarjetas")
+        shot("reserva-tarjetas")
+    }
+
+    private func reveal(_ app: XCUIApplication, _ id: String) {
+        let height = app.windows.firstMatch.frame.height
+        for _ in 0..<14 {
+            let element = largest(app, id)
+            guard element.exists else {
+                app.swipeUp()
+                continue
+            }
+            let frame = element.frame
+            if frame.width > 20, frame.minY > 64, frame.maxY < height - 16 { return }
+            if frame.minY < 64 { app.swipeDown() } else { app.swipeUp() }
+        }
+    }
+
     private func saveShot(_ name: String) {
         let shot = XCUIScreen.main.screenshot()
         let attachment = XCTAttachment(screenshot: shot)

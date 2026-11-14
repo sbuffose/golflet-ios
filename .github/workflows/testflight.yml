@@ -185,7 +185,7 @@ jobs:
   ui-tests:
     needs: build
     runs-on: macos-15
-    timeout-minutes: 55
+    timeout-minutes: 80
 
     steps:
       - name: Checkout repository
@@ -250,6 +250,50 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee "$RUNNER_TEMP/ui_test_output.log"
           cp -R /tmp/golflet-screenshots/. "$RUNNER_TEMP/screenshots/" 2>/dev/null || true
+
+      - name: Capture review screens at 375 and 430
+        run: |
+          set -euo pipefail
+          DEVICE_ID="${{ steps.setup_sim.outputs.device_id }}"
+          xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+          RUNTIME=$(xcrun simctl list runtimes iOS | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | tail -1)
+          create_one() {
+            local label="$1"
+            shift
+            local name id
+            for name in "$@"; do
+              if id=$(xcrun simctl create "Golflet ${label}" "$name" "$RUNTIME" 2>/dev/null); then
+                echo "$id"
+                return 0
+              fi
+            done
+            echo "No simulator type for ${label}" >&2
+            return 1
+          }
+          run_one() {
+            local id="$1"
+            xcrun simctl boot "$id" 2>/dev/null || true
+            sleep 4
+            xcrun simctl spawn "$id" defaults write -g AppleLanguages -array "es-AR" "es" "en" || true
+            xcrun simctl spawn "$id" defaults write -g AppleLocale -string "es_AR" || true
+            xcodebuild test \
+              -project Golflet.xcodeproj \
+              -scheme Golflet \
+              -destination "platform=iOS Simulator,id=$id" \
+              -only-testing:GolfletUITests/GolfletUITests/testCaptureReviewScreens \
+              -derivedDataPath "$RUNNER_TEMP/TestBuild" \
+              -resultBundlePath "$RUNNER_TEMP/test-results/Review-${id}.xcresult" \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=NO \
+              2>&1 | tee "$RUNNER_TEMP/review-${id}.log"
+            xcrun simctl shutdown "$id" 2>/dev/null || true
+          }
+          SE=$(create_one "SE" "iPhone SE (3rd generation)" "iPhone SE (2nd generation)")
+          PLUS=$(create_one "Plus" "iPhone 16 Plus" "iPhone 15 Plus" "iPhone 15 Pro Max" "iPhone 14 Pro Max")
+          run_one "$SE"
+          run_one "$PLUS"
+          ls /tmp/golflet-screenshots/ios-375-inicio-hi.png
+          ls /tmp/golflet-screenshots/ios-430-inicio-hi.png
 
       - name: Extract Screenshots
         if: always()

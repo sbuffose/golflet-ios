@@ -357,7 +357,7 @@ struct TeeTimePrepView: View {
             scorecardJob = job
         } label: {
             HStack {
-                Text("Tarjeta del club")
+                Text("Tarjetas del club")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
                 Spacer()
@@ -380,7 +380,7 @@ struct TeeTimePrepView: View {
                         .accessibilityIdentifier("tee-prep-scorecard")
                 }
                 .background(p.bg)
-                .navigationTitle("Tarjeta del club")
+                .navigationTitle("Tarjetas del club")
                 .navigationBarTitleDisplayMode(.inline)
             }
             .golfletChrome()
