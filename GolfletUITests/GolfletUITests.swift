@@ -1653,11 +1653,44 @@ final class GolfletUITests: XCTestCase {
             self.saveShot("ios-\(width)-\(name)")
         }
 
-        pinTop(app, "handicap-card")
+        pinTop(app, "range-menu")
+        let rangeIDs = ["range-1m", "range-3m", "range-6m", "range-12m", "range-all"]
+        let rangeFrames = rangeIDs.map { largest(app, $0).frame }
+        XCTAssertEqual(rangeFrames.filter { $0.width > 20 }.count, rangeIDs.count, "Falta un período del inicio")
+        let rangeTop = rangeFrames.map(\.minY).min() ?? 0
+        let rangeBottom = rangeFrames.map(\.maxY).max() ?? 0
+        XCTAssertLessThan(rangeBottom - rangeTop, 44, "Los períodos del inicio no entran en una fila")
+        XCTAssertGreaterThanOrEqual(rangeFrames.map(\.minX).min() ?? 0, -1)
+        XCTAssertLessThanOrEqual(rangeFrames.map(\.maxX).max() ?? 0, window.frame.maxX + 1)
         shot("inicio-hi")
 
-        pinTop(app, "last-round-card")
-        XCTAssertTrue(waitFor(app, "last-round-card", timeout: 4), "Falta la última ronda")
+        let profesor = largest(app, "home-hcp-profesor")
+        XCTAssertTrue(profesor.waitForExistence(timeout: 4), "Falta el profesor en el HI")
+        if profesor.isHittable { profesor.tap() } else {
+            profesor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 8), "No se abrió el profesor")
+        shot("inicio-profesor")
+        dismissIfPresent(app, "close-profesor")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+
+        let groups = largest(app, "home-hcp-groups")
+        XCTAssertTrue(groups.waitForExistence(timeout: 4), "Falta el grupo en el HI")
+        if groups.isHittable { groups.tap() } else {
+            groups.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No se abrió el grupo")
+        shot("inicio-grupo")
+        dismissIfPresent(app, "close-grupo")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+
+        showLastRound(app)
+        let chips = largest(app, "last-round-chips")
+        let roundTitle = app.staticTexts["Última ronda"]
+        XCTAssertTrue(chips.waitForExistence(timeout: 4), "Faltan los chips de la última ronda")
+        XCTAssertTrue(roundTitle.exists, "Falta el título de la última ronda")
+        XCTAssertGreaterThan(roundTitle.frame.minY, 40, "El título de la última ronda quedó fuera")
+        XCTAssertLessThan(chips.frame.maxY, window.frame.height - 100, "Los chips de la última ronda quedaron cortados")
         shot("ultima-ronda")
 
         reveal(app, "metric-best-gross")
@@ -1683,10 +1716,13 @@ final class GolfletUITests: XCTestCase {
             teeRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
         XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "La reserva no se abrió")
+        showFully(app, "tee-prep-companions")
         XCTAssertTrue(app.staticTexts["Jugás con"].waitForExistence(timeout: 4), "Falta Jugás con")
+        XCTAssertTrue(app.staticTexts["Lola Díaz"].waitForExistence(timeout: 4), "Falta un compañero con HI")
+        XCTAssertTrue(app.staticTexts["HI no disponible"].waitForExistence(timeout: 4), "Falta el compañero sin HI")
+        shot("reserva")
         reveal(app, "tee-prep-scorecard-open")
         XCTAssertTrue(waitFor(app, "tee-prep-scorecard-open", timeout: 4), "Falta Tarjetas del club")
-        shot("reserva")
         let open = app.buttons["tee-prep-scorecard-open"]
         for _ in 0..<2 {
             guard open.exists else { break }
@@ -1698,13 +1734,46 @@ final class GolfletUITests: XCTestCase {
             if scorecardSheetOpen(app) { break }
         }
         XCTAssertTrue(scorecardSheetOpen(app), "No se abrió la hoja de tarjetas")
+        XCTAssertTrue(app.staticTexts["1 búsqueda"].waitForExistence(timeout: 4), "Falta la cantidad de búsquedas")
+        XCTAssertTrue(app.buttons["tee-prep-scorecard-refresh"].waitForExistence(timeout: 4), "Falta Actualizar")
+        XCTAssertTrue(app.staticTexts["Todavía no hay tarjeta"].exists, "Falta el vacío con el caddie")
         shot("reserva-tarjetas")
     }
 
     private func scorecardSheetOpen(_ app: XCUIApplication) -> Bool {
-        if app.navigationBars["Tarjetas del club"].waitForExistence(timeout: 4) { return true }
-        if app.staticTexts["Esperando la tarjeta del club."].waitForExistence(timeout: 2) { return true }
-        return first(app, "tee-prep-scorecard").waitForExistence(timeout: 2)
+        if first(app, "tee-prep-scorecard").waitForExistence(timeout: 6) { return true }
+        if app.navigationBars["Tarjetas del club"].waitForExistence(timeout: 2) { return true }
+        return app.staticTexts["Todavía no hay tarjeta"].waitForExistence(timeout: 2)
+    }
+
+    private func showLastRound(_ app: XCUIApplication) {
+        let height = app.windows.firstMatch.frame.height
+        for _ in 0..<20 {
+            let chips = largest(app, "last-round-chips")
+            let title = app.staticTexts["Última ronda"]
+            let chipsOn = chips.exists && chips.frame.width > 20 && chips.frame.minY > 88 && chips.frame.maxY < height - 120
+            let titleOn = title.exists && title.frame.minY > 48 && title.frame.maxY < height - 160
+            if chipsOn && titleOn { return }
+            if !chips.exists || chips.frame.minY > height * 0.62 || chips.frame.maxY > height - 100 {
+                app.swipeUp()
+            } else {
+                app.swipeDown()
+            }
+        }
+    }
+
+    private func showFully(_ app: XCUIApplication, _ id: String) {
+        let height = app.windows.firstMatch.frame.height
+        for _ in 0..<16 {
+            let element = largest(app, id)
+            if !element.exists {
+                app.swipeUp()
+                continue
+            }
+            let frame = element.frame
+            if frame.width > 20, frame.minY > 72, frame.maxY < height - 160 { return }
+            if frame.minY < 72 { app.swipeDown() } else { app.swipeUp() }
+        }
     }
 
     private func reveal(_ app: XCUIApplication, _ id: String) {

@@ -16,6 +16,11 @@ final class StatsRangeTests: XCTestCase {
         XCTAssertEqual(StatsRange.month.title, "Este mes")
         XCTAssertEqual(StatsRange.year.title, "Año")
         XCTAssertEqual(StatsRange.all.title, "Histórico")
+        XCTAssertEqual(StatsRange.month.compactTitle, "Mes")
+        XCTAssertEqual(StatsRange.threeMonths.compactTitle, "3 meses")
+        XCTAssertEqual(StatsRange.sixMonths.compactTitle, "6 meses")
+        XCTAssertEqual(StatsRange.year.compactTitle, "Año")
+        XCTAssertEqual(StatsRange.all.compactTitle, "Todo")
     }
 
     func testPersistsChoice() {
