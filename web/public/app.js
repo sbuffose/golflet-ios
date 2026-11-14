@@ -190,9 +190,10 @@ function roundRow(r, single, withYr){
 }
 /* TV-style chips per round (from /api/data: eagles, birdies, pars, bogeys, double_plus, putts_total) */
 function rchips(r){
-  if (r.birdies == null && r.putts_total == null && !r.manual_putts) return '';
+  const doubles = r.double_plus;
+  if (r.birdies == null && r.putts_total == null && !r.manual_putts && !r.eagles && !doubles) return '';
   const c = (cls, n, l) => `<span class="rc ${cls}"><b class="num">${n}</b>${l}</span>`;
-  return `<div class="rchips">${r.eagles?c('rc-e', r.eagles, r.eagles===1?' águila':' águilas'):''}${r.birdies!=null?c('rc-b', r.birdies, r.birdies===1?' birdie':' birdies')+c('rc-p', r.pars, ' pares')+c('rc-g', r.bogeys, r.bogeys===1?' bogey':' bogeys'):''}${r.putts_total!=null?c('rc-u', r.putts_total, r.putts_source==='gps'?' putts GPS':' putts'):''}${r.manual_putts?c('rc-u', r.manual_putts, ' putts a mano'):''}</div>`;
+  return `<div class="rchips">${r.eagles?c('rc-e', r.eagles, r.eagles===1?' águila':' águilas'):''}${r.birdies!=null?c('rc-b', r.birdies, r.birdies===1?' birdie':' birdies')+c('rc-p', r.pars||0, ' pares')+c('rc-g', r.bogeys||0, r.bogeys===1?' bogey':' bogeys'):''}${doubles?c('rc-d', doubles, doubles===1?' doble':' dobles'):''}${r.putts_total!=null?c('rc-u', r.putts_total, r.putts_source==='gps'?' putts GPS':' putts'):''}${r.manual_putts?c('rc-u', r.manual_putts, ' putts a mano'):''}</div>`;
 }
 let sortL = 'date';
 /* t224u: chips show the course name only (the club in the tooltip/aria) unless two clubs share a course name */
@@ -980,9 +981,11 @@ async function loadTee(id, opts){
       <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
       <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HI ${f1(c.hcp)}`:', HI no disponible'}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HI</span></div>`:`<div class="score"><span>HI no disponible</span></div>`}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
+      <div id="scorecards"></div>
       ${past ? '' : `<div class="section"><h2>Tu hándicap de juego</h2></div><div class="card tt-now">${teeBlock(d, t.id)}</div>`}
       <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>`;
     const rb = $('#refresh-booking'); if (rb) rb.onclick = () => refreshBooking(id, rb);
+    loadScorecards();
     el.insertAdjacentHTML('beforeend', '<div id="teeprep"></div>');
     if (!opts?.quiet) refreshReservations(navigator.onLine !== false).then(d => { if (d?.fresh && $('#tee')?.dataset.id === id) loadTee(id, { quiet: true }); });
     bindTeeBlock(el, t.id, () => loadTee(id));

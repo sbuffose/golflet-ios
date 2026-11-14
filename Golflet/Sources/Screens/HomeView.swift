@@ -1083,17 +1083,30 @@ struct RoundRow: View {
 
     private var chips: [(label: String, fill: Color, ink: Color)] {
         guard round.gross != nil else { return [] }
+        let navy = Color(hex: 0x0B2545)
+        let white = Color(hex: 0xFFFFFF)
+        let gold = Color(hex: 0xC8A86A)
+        let beige = Color(hex: 0xECE7DB)
+        let red = Color(hex: 0xC8102E)
+        let charcoal = Color(hex: 0x3E4C62)
         let birdie = round.counts.birdies == 1 ? "birdie" : "birdies"
         let bogey = round.counts.bogeys == 1 ? "bogey" : "bogeys"
         var items: [(String, Color, Color)] = [
-            ("\(round.counts.birdies) \(birdie)", Color(hex: 0x0B2545), Color(hex: 0xF6F7F9)),
-            ("\(round.counts.pars) pares", Color(hex: 0xECE7DB), p.ink),
-            ("\(round.counts.bogeys) \(bogey)", Color(hex: 0xC8102E), Color(hex: 0xFFF7F2))
+            ("\(round.counts.birdies) \(birdie)", navy, white),
+            ("\(round.counts.pars) pares", beige, navy),
+            ("\(round.counts.bogeys) \(bogey)", red, white)
         ]
         let eagles = max(round.counts.eagles, StatsEngine.count(.eagle, in: round).count)
         if eagles > 0 {
             let word = eagles == 1 ? "águila" : "águilas"
-            items.insert(("\(eagles) \(word)", Color(hex: 0xC8102E), Color(hex: 0x2B230F)), at: 0)
+            items.insert(("\(eagles) \(word)", gold, navy), at: 0)
+        }
+        let doubles = round.holes.isEmpty
+            ? round.counts.doubles + round.counts.triples + round.counts.worse
+            : round.holes.filter { $0.result == .doubleOrWorse }.count
+        if doubles > 0 {
+            let word = doubles == 1 ? "doble" : "dobles"
+            items.append(("\(doubles) \(word)", charcoal, white))
         }
         return items
     }
