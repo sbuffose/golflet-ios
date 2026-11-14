@@ -1689,8 +1689,12 @@ final class GolfletUITests: XCTestCase {
         shot("reserva")
         let open = app.buttons["tee-prep-scorecard-open"]
         for _ in 0..<2 {
-            // The title sits on the left. A center tap used to land on the spacer and never fired the button.
-            open.coordinate(withNormalizedOffset: CGVector(dx: 0.22, dy: 0.5)).tap()
+            guard open.exists else { break }
+            if open.isHittable {
+                open.tap()
+            } else {
+                open.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
             if scorecardSheetOpen(app) { break }
         }
         XCTAssertTrue(scorecardSheetOpen(app), "No se abrió la hoja de tarjetas")
@@ -1712,7 +1716,8 @@ final class GolfletUITests: XCTestCase {
                 continue
             }
             let frame = element.frame
-            if frame.width > 20, frame.minY > 64, frame.maxY < height - 16 { return }
+            // Stay clear of the tab bar. On the Plus its center sat on Resumen and the tap left the reserva.
+            if frame.width > 20, frame.minY > 64, frame.maxY < height - 128 { return }
             if frame.minY < 64 { app.swipeDown() } else { app.swipeUp() }
         }
     }
