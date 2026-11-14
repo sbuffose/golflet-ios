@@ -356,19 +356,29 @@ struct TeeTimePrepView: View {
     }
 
     private func scorecardRow(_ job: ScorecardFetchJob) -> some View {
-        Button {
+        let count = model.scorecardFetches.filter { $0.teeTimeId == job.teeTimeId }.count
+        let countLabel = count == 1 ? "1 búsqueda" : "\(count) búsquedas"
+        return Button {
             scorecardJob = job
         } label: {
-            HStack {
+            HStack(spacing: 10) {
                 Text("Tarjetas del club")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Spacer()
+                Spacer(minLength: 8)
+                Text(countLabel)
+                    .font(GType.label)
+                    .foregroundStyle(Color(hex: BrandHex.red))
+                    .lineLimit(1)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(p.ink3)
             }
-            .frame(minHeight: 44)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+            .background(p.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("tee-prep-scorecard-open")
