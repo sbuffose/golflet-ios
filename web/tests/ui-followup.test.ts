@@ -103,7 +103,7 @@ test("period, strategy and the hole map follow the fixture", { timeout: 90_000, 
     assert.equal(urls.some(u => u.includes("/login")), false);
     const selected = () => page.$$eval('button[data-range][aria-selected="true"]', els => els.map(el => el.textContent || ""));
     const rounds = () => page.$eval(".rng-n", el => el.textContent || "");
-    assert.deepEqual(await selected(), ["Histórico"]);
+    assert.deepEqual(await selected(), ["Todo"]);
     assert.match(await rounds(), /2 rondas/);
     await page.click('button[data-range="3m"]');
     await page.waitForFunction(() => location.hash.includes("range=3m") && document.querySelector('button[data-range="3m"]')?.getAttribute("aria-selected") === "true");

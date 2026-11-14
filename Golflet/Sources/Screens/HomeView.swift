@@ -325,7 +325,7 @@ struct HomeView: View {
                     .overlay { GProbe(id: "metric-tarjetas", label: "Tarjetas") }
                     Spacer()
                     NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: false))) {
-                        heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
+                        heroMini("Mejor", snap.bestGross.map(String.init) ?? "—", access: "Mejor gross")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-best-gross")
@@ -333,7 +333,7 @@ struct HomeView: View {
                     .overlay { GProbe(id: "metric-best-gross", label: "Mejor gross") }
                     Spacer()
                     NavigationLink(value: MetricRoute.roundList(.average(yearOnly: true))) {
-                        heroMini("Promedio", model.summary.averageGross.map(FormatAR.one) ?? "—")
+                        heroMini("Prom.", model.summary.averageGross.map(FormatAR.one) ?? "—", access: "Promedio")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("metric-average")
@@ -342,7 +342,7 @@ struct HomeView: View {
                     if let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact {
                         Spacer()
                         Button { showsHcpImpact = true } label: {
-                            heroMini(hcpImpactLabel(impact), hcpImpactValue(impact), gold: impact.delta < 0)
+                            heroMini("Impacto", hcpImpactValue(impact), gold: impact.delta < 0, access: "Impacto HCP")
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("metric-hcp-impact")
@@ -356,13 +356,14 @@ struct HomeView: View {
         }
     }
 
-    private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
+    private func heroMini(_ label: String, _ value: String, gold: Bool = false, access: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 Text(label)
                     .font(GType.label)
                     .foregroundStyle(p.onPrimary.opacity(0.5))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 MetricChevron(color: p.onPrimary.opacity(0.35))
             }
             Text(value)
@@ -373,6 +374,8 @@ struct HomeView: View {
                 .foregroundStyle(gold ? p.accentOnNavy : p.onPrimary)
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(access ?? label), \(value)")
     }
 
     private func countUpCards(to target: Int) async {
@@ -463,53 +466,14 @@ struct HomeView: View {
             .accessibilityIdentifier("home-scorecard-fetches")
             .accessibilityLabel("Tarjetas del club, \(scorecardCount)")
             .sheet(isPresented: $showsScorecards) {
-                NavigationStack {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            if let note = model.scorecardFetchNote, !note.isEmpty {
-                                Text(note)
-                                    .font(GType.body)
-                                    .foregroundStyle(p.ink2)
-                                    .accessibilityIdentifier("home-scorecard-error")
-                            }
-                            ForEach(model.scorecardFetches) { job in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(job.clubName.isEmpty ? "Club" : job.clubName)
-                                        .font(GType.headline)
-                                        .foregroundStyle(p.ink)
-                                    if !job.course.isEmpty || !job.time.isEmpty {
-                                        Text([job.date, job.time, job.course].filter { !$0.isEmpty }.joined(separator: " · "))
-                                            .font(GType.label)
-                                            .foregroundStyle(p.ink2)
-                                    }
-                                    Text(job.label)
-                                        .font(GType.body)
-                                        .foregroundStyle(p.ink)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .accessibilityIdentifier("home-scorecard-\(job.id)")
-                            }
-                            Button {
-                                Task { await model.refreshScorecardFetches() }
-                            } label: {
-                                Text("Actualizar")
-                                    .font(GType.headline)
-                                    .foregroundStyle(Color.white)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(minHeight: 44)
-                                    .background(Color(hex: BrandHex.navy))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("home-scorecard-refresh")
-                        }
-                        .padding(20)
-                    }
-                    .background(p.bg)
-                    .navigationTitle("Tarjetas del club")
-                    .navigationBarTitleDisplayMode(.inline)
+                ScorecardFetchSheet(
+                    jobs: model.scorecardFetches,
+                    note: model.scorecardFetchNote,
+                    refreshID: "home-scorecard-refresh",
+                    sheetID: "home-scorecards"
+                ) {
+                    Task { await model.refreshScorecardFetches() }
                 }
-                .golfletChrome()
                 .environment(model)
             }
         }
@@ -939,10 +903,6 @@ struct HomeView: View {
         )
     }
 
-    private func hcpImpactLabel(_ impact: HcpImpact) -> String {
-        "Impacto HCP"
-    }
-
     private func hcpImpactValue(_ impact: HcpImpact) -> String {
         let arrow = impact.delta < 0 ? "↓" : (impact.delta > 0 ? "↑" : "·")
         return "\(arrow)\(FormatAR.one(abs(impact.delta)))"
@@ -1061,6 +1021,7 @@ struct RoundRow: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                             }
                         }
+                        .accessibilityIdentifier(style == .home ? "last-round-chips" : "round-chips")
                     }
                 }
                 Spacer(minLength: 8)
@@ -1295,25 +1256,31 @@ struct HomeHcpPeople: View {
         let shown = Array(groups.prefix(HomeHcpPeopleLayout.groupVisible))
         let extra = groups.count - shown.count
         let ring = Color(hex: HomeHcpPeopleLayout.accent)
-        return HStack(spacing: -HomeHcpPeopleLayout.groupOverlap) {
-            ForEach(shown) { group in
-                HomeHcpAvatar(
-                    url: group.photoURL,
-                    initials: GroupsParser.initials(group.name),
-                    size: groupAvatar,
-                    fill: p.onPrimary,
-                    ink: p.primary,
-                    ring: ring,
-                    verified: false
-                )
+        return ZStack(alignment: .bottomTrailing) {
+            HStack(spacing: shown.count > 1 ? -HomeHcpPeopleLayout.groupOverlap : 0) {
+                ForEach(shown) { group in
+                    HomeHcpAvatar(
+                        url: group.photoURL,
+                        initials: GroupsParser.initials(group.name),
+                        size: groupAvatar,
+                        fill: p.onPrimary,
+                        ink: p.primary,
+                        ring: ring,
+                        verified: false
+                    )
+                }
             }
-            HomeHcpCountChip(
-                text: extra > 0 ? "+\(extra)" : "\(groups.count)",
-                size: groupAvatar,
-                fill: p.accent,
-                ink: p.onPrimary,
-                ring: ring
-            )
+            if extra > 0 {
+                Text("+\(extra)")
+                    .font(GFont.ui(10, weight: .semibold))
+                    .foregroundStyle(p.onPrimary)
+                    .frame(width: 18, height: 18)
+                    .background(p.accent)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(p.primary, lineWidth: 1.5))
+                    .offset(x: 4, y: 4)
+                    .accessibilityLabel("\(extra) más")
+            }
         }
     }
 
@@ -1337,7 +1304,7 @@ enum HomeHcpPeopleLayout {
     static let profesorAvatar: CGFloat = 28
     static let groupAvatar: CGFloat = 36
     static let profesorOverlap: CGFloat = 7
-    static let groupOverlap: CGFloat = 12
+    static let groupOverlap: CGFloat = 8
     static let numberPeopleGap: CGFloat = 12
     static let accent: UInt32 = BrandHex.red
     static let celeste: UInt32 = 0xC8A86A
@@ -1374,7 +1341,7 @@ enum HomeHcpPeopleLayout {
     static func groupWidth(count: Int) -> CGFloat {
         if count == 0 { return max(groupAvatar, labelWidth("Crear grupo")) }
         let shown = min(count, groupVisible)
-        return stackWidth(count: shown, avatar: groupAvatar, overlap: groupOverlap, extraChip: true)
+        return stackWidth(count: shown, avatar: groupAvatar, overlap: groupOverlap, extraChip: false)
     }
 
     static func columnWidth(profesorCount: Int, groupCount: Int) -> CGFloat {
@@ -1457,21 +1424,98 @@ struct HomeHcpAvatar: View {
     }
 }
 
-struct HomeHcpCountChip: View {
-    var text: String
-    var size: CGFloat
-    var fill: Color
-    var ink: Color
-    var ring: Color
+struct ScorecardFetchSheet: View {
+    @Environment(\.palette) private var p
+    let jobs: [ScorecardFetchJob]
+    var note: String? = nil
+    var refreshID: String
+    var sheetID: String
+    var onRefresh: () -> Void
 
     var body: some View {
-        Text(text)
-            .font(GFont.ui(size < 40 ? 12 : 16, weight: .semibold))
-            .foregroundStyle(ink)
-            .frame(width: size, height: size)
-            .background(fill)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(ring, lineWidth: 2))
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(ScorecardFetchJob.searchCount(jobs.count))
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                        .accessibilityIdentifier("scorecard-count")
+                    if let note, !note.isEmpty {
+                        Text(note)
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("home-scorecard-error")
+                    }
+                    if jobs.isEmpty {
+                        emptyCard
+                    } else {
+                        ForEach(jobs) { job in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(job.statusLine)
+                                    .font(GType.overline)
+                                    .foregroundStyle(Color(hex: BrandHex.red))
+                                Text(job.clubName.isEmpty ? "Club" : job.clubName)
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                if !whenLine(job).isEmpty {
+                                    Text(whenLine(job))
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink2)
+                                }
+                                Text(job.label)
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink)
+                                Text(job.lastCheckLine)
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink3)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("home-scorecard-\(job.id)")
+                        }
+                        if jobs.contains(where: { !$0.hasCard }) {
+                            emptyCard
+                        }
+                    }
+                    Button(action: onRefresh) {
+                        Text("Actualizar")
+                            .font(GType.headline)
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 44)
+                            .background(Color(hex: BrandHex.navy))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(refreshID)
+                }
+                .padding(20)
+            }
+            .background(p.bg)
+            .navigationTitle("Tarjetas del club")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .golfletChrome()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(sheetID)
+    }
+
+    private func whenLine(_ job: ScorecardFetchJob) -> String {
+        [job.date, job.time, job.course].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private var emptyCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CaddieMark(height: 72)
+            Text("Todavía no hay tarjeta")
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+                .accessibilityIdentifier("scorecard-empty")
+            Text("El club todavía no publicó la tarjeta de esta salida.")
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

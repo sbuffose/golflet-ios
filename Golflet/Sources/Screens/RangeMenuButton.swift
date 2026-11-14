@@ -6,30 +6,34 @@ struct RangeMenuButton: View {
     var count: Int
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(StatsRange.allCases) { option in
-                    let on = option == range
-                    Button {
-                        range = option
-                    } label: {
-                        Text(option.title)
-                            .font(GType.label)
-                            .foregroundStyle(on ? p.ink : p.ink2)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(on ? p.surface : Color.clear)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("range-\(option.rawValue)")
-                    .accessibilityAddTraits(on ? .isSelected : [])
+        // Este mes stays: it is the current calendar month for Inicio, Resumen and Cancha.
+        // Año is the rolling 12 months. The list's Este año is the calendar year, so these are not the same control.
+        HStack(spacing: 0) {
+            ForEach(StatsRange.allCases) { option in
+                let on = option == range
+                Button {
+                    range = option
+                } label: {
+                    Text(option.compactTitle)
+                        .font(GFont.ui(10, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .foregroundStyle(on ? p.ink : p.ink2)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 32)
+                        .background(on ? p.surface : Color.clear)
+                        .clipShape(Capsule())
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("range-\(option.rawValue)")
+                .accessibilityLabel(option.title)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
-            .padding(4)
-            .background(p.surface2)
-            .clipShape(Capsule())
         }
+        .padding(3)
+        .background(p.surface2)
+        .clipShape(Capsule())
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("range-menu")
         .accessibilityLabel("Período \(range.title), \(count) \(count == 1 ? "ronda" : "rondas")")
     }

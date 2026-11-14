@@ -648,6 +648,48 @@ struct ScorecardFetchJob: Identifiable, Hashable, Sendable {
     var lastError: String?
     var roundId: String?
     var attemptCount: Int
+    var heading: String = ""
+    var lastAttemptAt: String? = nil
+
+    var hasCard: Bool {
+        status == "complete" || !(roundId ?? "").isEmpty
+    }
+
+    var statusLine: String {
+        let trimmed = heading.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        switch status {
+        case "complete": return "Ya está"
+        case "cancelled": return "Cancelada"
+        case "error", "needs_credentials", "stopped": return "Sin confirmar"
+        default: return "En curso"
+        }
+    }
+
+    var lastCheckLine: String {
+        guard let raw = lastAttemptAt?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
+              let date = Self.parseStamp(raw) else {
+            return "Todavía sin una lectura del club."
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_AR")
+        formatter.timeZone = TimeZone(secondsFromGMT: -3 * 3600)
+        formatter.dateFormat = "d MMM yyyy, HH:mm"
+        return "Última lectura \(formatter.string(from: date))"
+    }
+
+    static func searchCount(_ count: Int) -> String {
+        count == 1 ? "1 búsqueda" : "\(count) búsquedas"
+    }
+
+    private static func parseStamp(_ raw: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
+    }
 }
 
 struct PlayerProfile: Hashable, Sendable {

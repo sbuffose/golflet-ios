@@ -61,9 +61,9 @@ const ago = d => { if(!d) return 'nunca'; const s=(Date.now()-new Date(d))/1000;
 let G = null, rounds = [], valid = [], asc = [], idxSeries = [], IDX_ALL = [], CCOL = {}, VIEW_GEN = 0;
 const course = k => G.courses.find(c => c.key === k);
 /* period selector (Inicio / Resumen / Cancha / métricas): ?range=1m|3m|6m|12m|all, same rules as lib/metrics.ts rangeSince */
-const RANGES = [['1m','Este mes'],['3m','3 meses'],['6m','6 meses'],['12m','Año'],['all','Histórico']], RKEYS = RANGES.map(x=>x[0]);
+const RANGES = [['1m','Mes','Este mes'],['3m','3 meses','3 meses'],['6m','6 meses','6 meses'],['12m','Año','Año'],['all','Todo','Histórico']], RKEYS = RANGES.map(x=>x[0]);
 let RANGE = (() => { try { const v = sessionStorage.getItem('gl_range'); return RKEYS.includes(v) ? v : 'all'; } catch(e){ return 'all'; } })();
-const rlabel = k => (RANGES.find(x=>x[0]===k)||RANGES[4])[1];
+const rlabel = k => (RANGES.find(x=>x[0]===k)||RANGES[4])[2];
 function rangeSince(k){ if (k==='all') return null; const n = new Date(), y = n.getFullYear(), m = n.getMonth(), d = n.getDate(), p2 = x => String(x).padStart(2,'0');
   if (k==='1m') return `${y}-${p2(m+1)}-01`; const b = k==='3m'?3:k==='6m'?6:12, t = new Date(y, m-b, 1), last = new Date(t.getFullYear(), t.getMonth()+1, 0).getDate();
   return `${t.getFullYear()}-${p2(t.getMonth()+1)}-${p2(Math.min(d,last))}`; }
@@ -71,7 +71,7 @@ const inR = r => { const s0 = rangeSince(RANGE); return !s0 || r.date >= s0; };
 const rlink = (m, q={}) => mlink(m, RANGE==='all' ? q : { ...q, range: RANGE });
 function setRange(k){ if (!RKEYS.includes(k)) return; RANGE = k; try { sessionStorage.setItem('gl_range', k); } catch(_){} }
 function rangeSeg(n, attr='range'){
-  return `<div class="rng"><div class="seg vx-seg rng-seg" role="tablist" aria-label="Período">${RANGES.map(([k,l])=>`<button type="button" role="tab" aria-selected="${k===RANGE}" class="${k===RANGE?'on':''}" data-${attr}="${k}">${l}</button>`).join('')}</div>
+  return `<div class="rng"><div class="seg vx-seg rng-seg" role="tablist" aria-label="Período">${RANGES.map(([k,short,full])=>`<button type="button" role="tab" aria-selected="${k===RANGE}" aria-label="${full}" class="${k===RANGE?'on':''}" data-${attr}="${k}">${short}</button>`).join('')}</div>
     <span class="rng-n"><b class="num">${n}</b> ${n===1?'ronda':'rondas'}${RANGE==='all'?'':` desde ${dmy(rangeSince(RANGE))}`}</span></div>`;
 }
 /* per-hole strokes over par from the rounds in the period (server stats cover all history) */
@@ -170,7 +170,7 @@ function vInicio(){
     <div class="hi-avs"><div id="hiprofs" class="hi-profs nolab" hidden></div><div id="higroups" class="hi-grp" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a></div></div>
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
     <div class="big num">${f1(hiNow)}</div></a>${hiBand(hi, d)}
-    <div class="meta"><a href="${mlink('rounds',{range:'12m',course:'all',sort:'date',order:'desc'})}">Tarjetas<b class="num">${prAll.length}</b></a><a href="${mlink('best-gross',{range:'12m',course:'all',sort:'gross',order:'asc'})}">Mejor gross<b class="num">${bestR?bestR.gross:'—'}</b></a><a href="${mlink('average',{range:'12m',course:'all',sort:'date',order:'desc'})}">Promedio<b class="num">${f1(mean(pr.map(r=>r.gross)))}</b></a><a id="hcpimp" class="hi-imp" href="#/impacto${RANGE==='all'?'':'?range='+RANGE}">Impacto HCP<b class="num">…</b></a></div>
+    <div class="meta"><a href="${mlink('rounds',{range:'12m',course:'all',sort:'date',order:'desc'})}" aria-label="Tarjetas, ${prAll.length}">Tarjetas<b class="num">${prAll.length}</b></a><a href="${mlink('best-gross',{range:'12m',course:'all',sort:'gross',order:'asc'})}" aria-label="Mejor gross, ${bestR?bestR.gross:'—'}">Mejor<b class="num">${bestR?bestR.gross:'—'}</b></a><a href="${mlink('average',{range:'12m',course:'all',sort:'date',order:'desc'})}" aria-label="Promedio, ${f1(mean(pr.map(r=>r.gross)))}">Prom.<b class="num">${f1(mean(pr.map(r=>r.gross)))}</b></a><a id="hcpimp" class="hi-imp" href="#/impacto${RANGE==='all'?'':'?range='+RANGE}" aria-label="Impacto HCP">Impacto<b class="num">…</b></a></div>
   </div></div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
   ${roundRow(last, true, true)}</div></div>
@@ -727,19 +727,22 @@ async function loadScorecards(){
     if (!rows.length) { el.innerHTML = ''; return; }
     const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
     const rowText = f => f.heading === 'No presentó' ? 'El club respondió y no había tarjeta.' : (f.label || '');
+    const lastCheck = f => f.last_attempt_at ? `Última lectura ${ago(f.last_attempt_at)}` : 'Todavía sin una lectura del club.';
     const shown = (title, list) => title === 'No presentó' ? list.slice(0, 6) : list;
     const block = (title, list) => {
       const rows = shown(title, list);
       if (!rows.length) return '';
       const more = title === 'No presentó' && list.length > rows.length ? `<p class="foot">Hay ${list.length - rows.length} más en «No presentó». No cambia el hándicap.</p>` : '';
-      return `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${rows.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(rowText(f))}</div></div></div>`).join('')}</div>${more}`;
+      return `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${rows.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(rowText(f))}</div><div class="s">${esc(lastCheck(f))}</div></div></div>`).join('')}</div>${more}`;
     };
     const headed = rows.some(f => f.heading);
     const groups = headed ? ['Próxima', 'En curso', 'No presentó', 'Sin confirmar', 'Otras'] : ['En curso', 'Otras'];
     const bucket = f => f.heading || (f.status === 'complete' ? 'Ya está' : ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status) ? 'En curso' : 'Otras');
     const open = rows.filter(f => bucket(f) !== 'Ya está');
     if (!open.length) { el.innerHTML = ''; return; }
-    const detail = `${groups.map(title => block(title, open.filter(f => bucket(f) === title))).join('')}<p class="foot">Acá quedan las búsquedas que todavía piden algo. Las tarjetas que ya llegaron están en Rondas. «No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
+    const waiting = open.some(f => f.status !== 'complete' && !f.round_id);
+    const countLabel = open.length === 1 ? '1 búsqueda' : `${open.length} búsquedas`;
+    const detail = `<p class="stitle">${countLabel}</p>${groups.map(title => block(title, open.filter(f => bucket(f) === title))).join('')}${waiting ? caddieEmpty('Todavía no hay tarjeta', 'El club todavía no publicó la tarjeta de esta salida.') : ''}<button type="button" class="btn" id="sc-refresh">Actualizar</button><p class="foot">Acá quedan las búsquedas que todavía piden algo. Las tarjetas que ya llegaron están en Rondas. «No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
     el.innerHTML = `<button type="button" class="sc-open" id="sc-open"><span>Tarjetas del club</span><b class="num">${open.length}</b><svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></button>`;
     let dlg = document.getElementById('sc-dialog');
     if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'sc-dialog'; dlg.className = 'sc-dialog'; document.body.appendChild(dlg); }
@@ -748,6 +751,8 @@ async function loadScorecards(){
     if (openBtn) openBtn.onclick = () => { if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); };
     const closeBtn = document.getElementById('sc-close');
     if (closeBtn) closeBtn.onclick = () => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
+    const refreshBtn = document.getElementById('sc-refresh');
+    if (refreshBtn) refreshBtn.onclick = () => { refreshBtn.disabled = true; loadScorecards(); };
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -1644,7 +1649,7 @@ async function loadHiGroups(){
 async function loadHcpImp(){
   const a = $('#hcpimp'); if (!a) return;
   try { const { hcp_impact: h } = await api(`/api/metrics/hcp-impact?range=${RANGE}`); if (!$('#hcpimp')) return;
-    a.innerHTML = `Impacto HCP${h.delta != null && h.estimated ? ' <small>est.</small>' : ''}<b class="num ${impCls(h)}">${impTxt(h)}</b>`;
+    a.innerHTML = `Impacto${h.delta != null && h.estimated ? ' <small>est.</small>' : ''}<b class="num ${impCls(h)}">${impTxt(h)}</b>`;
     a.setAttribute('aria-label', h.delta == null ? 'Impacto en el hándicap: sin historia suficiente' : `Impacto en el hándicap: ${h.delta < 0 ? 'bajó' : h.delta > 0 ? 'subió' : 'sin cambio'} ${f1(Math.abs(h.delta))}${h.estimated ? ', estimado' : ''}`);
   } catch(e){ a.querySelector('b').textContent = '—'; }
 }

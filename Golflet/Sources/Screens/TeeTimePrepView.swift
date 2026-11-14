@@ -253,11 +253,11 @@ struct TeeTimePrepView: View {
                         }
                     }
                 }
-                .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("tee-prep-players")
-                .accessibilityLabel(shown.companions.joined(separator: ", "))
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("tee-prep-companions")
     }
 
     private var playingHandicap: some View {
@@ -385,22 +385,15 @@ struct TeeTimePrepView: View {
     }
 
     private func scorecardSheet(_ job: ScorecardFetchJob) -> some View {
-        NavigationStack {
-            ScrollView {
-                Text(job.label)
-                    .font(GType.body)
-                    .foregroundStyle(p.ink)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(20)
-                    .accessibilityIdentifier("tee-prep-scorecard")
-            }
-            .background(p.bg)
-            .navigationTitle("Tarjetas del club")
-            .navigationBarTitleDisplayMode(.inline)
+        let jobs = model.scorecardFetches.filter { $0.teeTimeId == job.teeTimeId }
+        return ScorecardFetchSheet(
+            jobs: jobs.isEmpty ? [job] : jobs,
+            refreshID: "tee-prep-scorecard-refresh",
+            sheetID: "tee-prep-scorecard"
+        ) {
+            Task { await model.refreshScorecardFetches() }
         }
-        .golfletChrome()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("tee-prep-scorecard")
+        .environment(model)
     }
 
     private func block(_ title: String, _ body: String, _ id: String) -> some View {

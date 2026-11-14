@@ -20,6 +20,17 @@ enum StatsRange: String, CaseIterable, Hashable, Codable, Sendable, Identifiable
         }
     }
 
+    /// Fits five options on one row at 375 without scrolling or clipping.
+    var compactTitle: String {
+        switch self {
+        case .month: return "Mes"
+        case .threeMonths: return "3 meses"
+        case .sixMonths: return "6 meses"
+        case .year: return "Año"
+        case .all: return "Todo"
+        }
+    }
+
     var query: String { rawValue }
 
     var monthsBack: Int? {

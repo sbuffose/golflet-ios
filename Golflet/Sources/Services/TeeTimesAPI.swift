@@ -53,7 +53,9 @@ enum ScorecardFetchParser {
                 label: label.isEmpty ? "No pudimos leer el estado de esta búsqueda." : label,
                 lastError: row["last_error"] as? String,
                 roundId: row["round_id"] as? String,
-                attemptCount: row["attempt_count"] as? Int ?? 0
+                attemptCount: row["attempt_count"] as? Int ?? 0,
+                heading: (row["heading"] as? String) ?? "",
+                lastAttemptAt: row["last_attempt_at"] as? String
             )
         }
     }
@@ -76,7 +78,9 @@ extension MockAPIClient {
                 label: "Esperando la tarjeta del club.",
                 lastError: nil,
                 roundId: nil,
-                attemptCount: 1
+                attemptCount: 1,
+                heading: "Próxima",
+                lastAttemptAt: "2026-11-14T18:40:00.000Z"
             )
         ]
     }
@@ -110,6 +114,7 @@ extension MockAPIClient {
         comps.second = 0
         let first = cal.date(from: comps) ?? base
         let second = first.addingTimeInterval(7 * 24 * 3600)
+        let review = ProcessInfo.processInfo.arguments.contains("-ui-testing-review")
         return [
             TeeTime(
                 id: "tt-jockey-1",
@@ -117,10 +122,8 @@ extension MockAPIClient {
                 clubName: "Jockey Club Buenos Aires",
                 clubCode: "118",
                 course: "Azul",
-                companions: ["Juan", "Pedro", "Ana"],
-                companionHandicaps: ProcessInfo.processInfo.arguments.contains("-ui-testing-review")
-                    ? ["Juan": 4.2, "Pedro": 12]
-                    : [:]
+                companions: review ? ["Lola Díaz", "Teo Ruiz", "Mia Costa"] : ["Juan", "Pedro", "Ana"],
+                companionHandicaps: review ? ["Lola Díaz": 8.4, "Teo Ruiz": 15.2] : [:]
             ),
             TeeTime(
                 id: "tt-mdp-1",
