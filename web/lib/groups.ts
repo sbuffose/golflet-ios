@@ -11,6 +11,7 @@ import { clubStats } from "./shots-calc";
 import { callName, titleWord } from "./person-name";
 import { effectiveShare, getView, linkInfo, newToken, type Share } from "./group-share";
 import { createGroupAtomic } from "./group-create-tx";
+import { findUserForMatricula } from "./golfistics-login";
 
 export const MAX_MEMBERS = 12, INVITES_PER_DAY = 20, GROUPS_PER_DAY = 10;
 /** Member colors: brand greens and golds only (#0F3D2E / #C8A86A first). */
@@ -25,17 +26,22 @@ async function rateLimit(actor: string, action: string, max: number) {
   if (r.n >= max) throw new HttpError(429, action === "invite" ? `Llegaste al máximo de ${max} invitaciones por día. Probá mañana.` : `Llegaste al máximo de ${max} grupos por día.`);
 }
 
-/** Link invitations sent to a matrícula before its owner had a Golflet account (called on sign-in / data load). */
+/** Link invitations sent to this user's own matrícula before they had a Golflet account. A copied foreign matrícula is ignored. */
 export async function linkPendingInvites(userId: string) {
   await q(`update cmp_member m set user_id=$1 where m.user_id is null and m.status='invited'
-    and m.matricula in (select matricula from club_account where user_id=$1 and matricula is not null)`, [userId]).catch(() => {});
+    and lower(m.matricula) = lower(coalesce(
+      (select "accountId" from account where "userId"=$1 and "providerId"='golfistics' order by "createdAt" limit 1),
+      (select matricula from club_account where user_id=$1 and matricula is not null order by created_at limit 1)
+    ))`, [userId]).catch(() => {});
 }
 async function usersForMatricula(mat: string): Promise<string | null> {
-  const [r] = await q(`select user_id from club_account where matricula=$1 and user_id is not null order by last_sync_at desc nulls last limit 1`, [mat]);
-  return r?.user_id ?? null;
+  return findUserForMatricula(mat);
 }
 async function myMatriculas(userId: string): Promise<string[]> {
-  return (await q(`select distinct matricula from club_account where user_id=$1 and matricula is not null`, [userId])).map((r: any) => r.matricula);
+  const [ident] = await q(`select "accountId" as matricula from account where "userId"=$1 and "providerId"='golfistics' order by "createdAt" limit 1`, [userId]);
+  if (ident?.matricula) return [String(ident.matricula)];
+  const [first] = await q(`select matricula from club_account where user_id=$1 and matricula is not null order by created_at limit 1`, [userId]);
+  return first?.matricula ? [String(first.matricula)] : [];
 }
 
 /** "Sebastian Buffo": what other members see (first name + first surname from the Golfistics card). */
