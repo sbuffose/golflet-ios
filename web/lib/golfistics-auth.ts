@@ -7,10 +7,12 @@ import { setSessionCookie } from "better-auth/cookies";
 import * as z from "zod";
 import { q } from "./db";
 import { classifyLoginError, currentVerifier, failCounts, findUserForMatricula, normMatricula, placeholderEmail, rateDecision, recordAttempt, refreshSavedClave, savePending, type LoginFailure } from "./golfistics-login";
+import { MATRICULA_OTHER } from "./matricula-guard";
 
 const fail = (f: LoginFailure) => {
   const { counts: _c, status, ...body } = f;
-  return new APIError(status === 401 ? "UNAUTHORIZED" : status === 429 ? "TOO_MANY_REQUESTS" : status === 400 ? "BAD_REQUEST" : "SERVICE_UNAVAILABLE", body, status === 429 ? { "Retry-After": String(f.retry_after_s ?? 900) } : undefined);
+  const code = status === 401 ? "UNAUTHORIZED" : status === 429 ? "TOO_MANY_REQUESTS" : status === 409 ? "CONFLICT" : status === 400 ? "BAD_REQUEST" : "SERVICE_UNAVAILABLE";
+  return new APIError(code, body, status === 429 ? { "Retry-After": String(f.retry_after_s ?? 900) } : undefined);
 };
 const clientIp = (h: Headers | undefined) => (h?.get("x-real-ip") || h?.get("x-forwarded-for")?.split(",")[0] || "").trim().slice(0, 64) || null;
 
@@ -48,6 +50,8 @@ export const golfisticsAuth = () => ({
         userId = user!.id;
       }
       const uid = user!.id;
+      const [foreign] = await q(`select "accountId" as matricula from account where "userId"=$1 and "providerId"='golfistics' and lower("accountId")<>lower($2) limit 1`, [uid, matricula]);
+      if (foreign) throw fail({ status: 409, code: "MATRICULA_CONFLICT", message: MATRICULA_OTHER, counts: false });
       const [link] = await q(`select 1 from account where "userId"=$1 and "providerId"='golfistics' and lower("accountId")=lower($2)`, [uid, matricula]);
       if (!link) await adapter.linkAccount({ userId: uid, providerId: "golfistics", accountId: matricula });
 
