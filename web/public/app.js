@@ -979,7 +979,9 @@ async function loadTee(id, opts){
   try {
     const d = await api(`/api/tee-times/${encodeURIComponent(id)}?${teeQS(id)}`); if (!$('#tee')) return;
     const t = d.tee_time, dd = dU(t.date), past = daysTo(t.date) < 0, minsTo = (Date.parse(t.starts_at || `${t.date}T${t.time}:00-03:00`) - Date.now()) / 60000;
-    el.innerHTML = `<div class="tt-hero"><div class="overline">${past?'Ya jugado':relDay(t.date)}</div><div class="tt-when"><b class="num">${esc(t.time)}</b><span>${WDL[dd.getUTCDay()]} ${dd.getUTCDate()} de ${MESL[dd.getUTCMonth()]}${t.start_hole?` · sale del hoyo ${t.start_hole}`:''}</span></div>
+    const dayName = WDL[dd.getUTCDay()] || '';
+    const dayLabel = dayName ? dayName.charAt(0).toUpperCase() + dayName.slice(1) : '';
+    el.innerHTML = `<div class="tt-hero"><div class="overline">${past?'Ya jugado':relDay(t.date)}</div><div class="tt-when"><b class="num">${esc(t.time)}</b><span>${dayLabel} ${dd.getUTCDate()} de ${MESL[dd.getUTCMonth()]}${t.start_hole?` · sale del hoyo ${t.start_hole}`:''}</span></div>
         <div class="tt-where"><b>${esc(t.club_name)}</b>${t.course_label?`<span>Cancha ${esc(t.course_label)}</span>`:'<span>La reserva no especifica la cancha.</span>'}${t.modality?`<span>${esc(t.modality)}</span>`:''}</div></div>
       ${t.event_name?`<p class="foot" style="margin-top:8px">${esc(t.event_name)}</p>`:''}
       <button type="button" class="btn ghost sm" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>

@@ -1684,6 +1684,7 @@ final class GolfletUITests: XCTestCase {
             groups.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No se abrió el grupo")
+        assertGroupPeriodsFit(app, window)
         shot("inicio-grupo")
         dismissIfPresent(app, "close-grupo")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
@@ -1752,6 +1753,22 @@ final class GolfletUITests: XCTestCase {
         if first(app, "tee-prep-scorecard").waitForExistence(timeout: 6) { return true }
         if app.navigationBars["Tarjetas del club"].waitForExistence(timeout: 2) { return true }
         return app.staticTexts["Todavía no hay tarjeta"].waitForExistence(timeout: 2)
+    }
+
+    private func assertGroupPeriodsFit(_ app: XCUIApplication, _ window: XCUIElement) {
+        let ids = ["group-period-1w", "group-period-1m", "group-period-3q", "group-period-6s", "group-period-12y", "group-period-all"]
+        let frames = ids.map { largest(app, $0).frame }
+        let dump = zip(ids, frames).map { "\($0.0) \($0.1.width)x\($0.1.minX)-\($0.1.maxX)" }.joined(separator: ", ")
+        XCTAssertEqual(frames.filter { $0.width > 8 && $0.height > 8 }.count, ids.count, "Falta un período del grupo: \(dump)")
+        let top = frames.map(\.minY).min() ?? 0
+        let bottom = frames.map(\.maxY).max() ?? 0
+        XCTAssertLessThan(bottom - top, 40, "Los períodos del grupo no entran en una fila: \(dump)")
+        XCTAssertGreaterThanOrEqual(frames.map(\.minX).min() ?? 0, -1, dump)
+        XCTAssertLessThanOrEqual(frames.map(\.maxX).max() ?? 0, window.frame.maxX + 1, dump)
+        let course = largest(app, "group-view-range")
+        if course.exists, course.frame.width > 8 {
+            XCTAssertGreaterThanOrEqual(course.frame.minX + 1, frames.map(\.maxX).max() ?? 0, "El período pisa Canchas: \(dump)")
+        }
     }
 
     private func showLastRound(_ app: XCUIApplication) {

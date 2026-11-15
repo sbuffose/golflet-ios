@@ -187,6 +187,20 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     });
     assert.equal(yearFits, true);
     await board("grupos6-anio-390");
+    await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 2 });
+    await open("g1", "all");
+    const periods375 = await page.evaluate(() => {
+      const links = [...document.querySelectorAll(".gg-filters .gg-rng a")];
+      const parent = document.querySelector(".gg-filters")?.getBoundingClientRect();
+      return {
+        clipped: links.filter(el => el.scrollWidth > el.clientWidth + 1).map(el => `${el.textContent} ${el.scrollWidth}>${el.clientWidth}`),
+        oneRow: new Set(links.map(el => Math.round(el.getBoundingClientRect().top))).size === 1,
+        inside: !!parent && links.every(el => el.getBoundingClientRect().right <= parent.right + 1 && el.getBoundingClientRect().left >= parent.left - 1),
+      };
+    });
+    assert.deepEqual(periods375.clipped, []);
+    assert.equal(periods375.oneRow, true);
+    assert.equal(periods375.inside, true);
   } finally {
     await browser.close();
     server.close();

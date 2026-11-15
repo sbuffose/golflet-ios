@@ -611,27 +611,29 @@ struct GroupDetailView: View {
             }
 
             HStack(spacing: 8) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
-                        ForEach(GroupPeriod.allCases) { period in
-                            let on = config.range == period
-                            Button {
-                                selectPeriod(period)
-                            } label: {
-                                Text(period.short)
-                                    .font(GFont.ui(12, weight: .semibold))
-                                    .foregroundStyle(on ? Color.white : p.ink)
-                                    .padding(.horizontal, 10)
-                                    .frame(height: 32)
-                                    .background(on ? p.primary : Color.white)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(period.title)
-                            .accessibilityIdentifier("group-period-\(period.rawValue)")
+                HStack(spacing: 0) {
+                    ForEach(GroupPeriod.allCases) { period in
+                        let on = config.range == period
+                        Button {
+                            selectPeriod(period)
+                        } label: {
+                            Text(period.short)
+                                .font(GFont.ui(10, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .foregroundStyle(on ? Color.white : p.ink)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 32)
+                                .background(on ? p.primary : Color.white)
                         }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel(period.title)
+                        .accessibilityIdentifier("group-period-\(period.rawValue)")
                     }
-                    .overlay(Rectangle().stroke(p.primary.opacity(0.22), lineWidth: 1))
                 }
+                .frame(maxWidth: .infinity)
+                .overlay(Rectangle().stroke(p.primary.opacity(0.22), lineWidth: 1))
                 Button { showsViewSettings = true } label: {
                     HStack(spacing: 4) {
                         Text(config.courseFilter ?? "Canchas")
@@ -639,10 +641,10 @@ struct GroupDetailView: View {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9, weight: .bold))
                     }
-                    .font(GFont.ui(12, weight: .semibold))
+                    .font(GFont.ui(11, weight: .semibold))
                     .foregroundStyle(p.ink)
-                    .padding(.horizontal, 8)
-                    .frame(maxWidth: 96)
+                    .padding(.horizontal, 6)
+                    .frame(maxWidth: 84)
                     .frame(height: 32)
                     .overlay(Rectangle().stroke(p.primary.opacity(0.22), lineWidth: 1))
                 }

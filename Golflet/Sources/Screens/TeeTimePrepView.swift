@@ -212,7 +212,9 @@ struct TeeTimePrepView: View {
         f.locale = Locale(identifier: "es_AR")
         f.timeZone = .current
         f.dateFormat = "EEEE d 'de' MMMM"
-        return f.string(from: shown.startsAt).capitalized
+        let raw = f.string(from: shown.startsAt)
+        guard let first = raw.first else { return raw }
+        return String(first).uppercased() + raw.dropFirst()
     }
 
     private var companionsBlock: some View {
