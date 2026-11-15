@@ -896,7 +896,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-filters .gg-rng{flex:1 1 auto;min-width:0;margin:0!important;flex-wrap:nowrap;overflow:hidden}
 .gg-filters .gg-rng a{white-space:nowrap;font-size:11px!important;padding:6px 0!important;flex:1 1 0;min-width:0}
 .gg-filters .gg-course{margin:0;flex:0 0 auto;position:relative}
-.gg-filters .gg-course summary{display:inline-flex;align-items:center;justify-content:center;height:32px;min-height:32px;max-height:32px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px;font-size:12px;box-sizing:border-box}
+.gg-filters .gg-course summary{display:inline-flex;align-items:center;justify-content:center;height:32px;min-height:32px;max-height:32px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 6px;font-size:11px;box-sizing:border-box}
 .gg-course{margin:8px 0 4px}
 .gg-course summary{list-style:none;display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:999px;background:#fff;color:#0B2545;font-weight:650;box-shadow:var(--shadow-card);cursor:pointer}
 .gg-course summary::-webkit-details-marker{display:none}
@@ -917,6 +917,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-rankrow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:#fff;border-radius:12px;padding:10px 12px;text-decoration:none;color:#0B2545;min-height:44px}
 .gg-week a{color:#0B2545;font-weight:650}
 .gg-rng{flex-wrap:nowrap;overflow-x:auto}
+.gg-filters .gg-rng{overflow-x:hidden}
 .gg-rng a{white-space:nowrap;flex:0 0 auto;text-align:center}
 .gg-carousel{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 8px;margin:8px 0 4px}
 .gg-slide{flex:0 0 88%;scroll-snap-align:start;margin:0}
@@ -1091,7 +1092,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-rng a.on{background:var(--color-surface);color:var(--color-ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 @media (max-width:520px){.rng-seg button{padding-left:9px!important;padding-right:9px!important}}
 .gg-filters .gg-rng{overflow:hidden;margin:0!important}
-.gg-filters .gg-rng a{flex:1 1 0!important;min-width:0;padding:6px 0!important;font-size:11px!important}
+.gg-filters .gg-rng a{flex:1 1 0!important;min-width:0;padding:0 1px!important;font-size:10px!important;letter-spacing:-0.03em;line-height:32px;overflow:hidden;text-overflow:clip}
 .gg-filters .gg-course summary{font-size:12px;height:32px;min-height:32px;max-height:32px}
 .gg-photo .btn{display:inline-flex;width:auto;margin:0 6px 6px 0}
 .gg-linkacts .btn,.gg-macts .btn,.gg-ord .btn{width:auto}
@@ -1655,6 +1656,9 @@ div.rng div.lp-seg.seg{flex:1 0 100%;width:100%;max-width:100%;overflow:hidden}
 div.rng div.lp-seg.seg button{flex:1 1 0%!important;width:auto;max-width:none;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:clip;font-size:10px!important;line-height:1.1!important;font-weight:650;letter-spacing:-0.04em;padding:8px 0!important;min-height:32px}
 div.rng div.rng-seg.seg{flex:1 0 100%;width:100%;max-width:100%;overflow:hidden}
 div.rng div.rng-seg.seg button{flex:1 1 0%!important;width:auto;max-width:none;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:clip;font-size:10px!important;line-height:1.1!important;font-weight:650;letter-spacing:-0.03em;padding:8px 1px!important;min-height:32px}
+div.gg-filters{min-width:0;overflow:hidden}
+div.gg-filters div.gg-rng.seg{flex:1 1 auto;min-width:0;width:auto;max-width:100%;overflow:hidden}
+div.gg-filters div.gg-rng.seg a{flex:1 1 0%!important;width:auto;max-width:none;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:clip;font-size:10px!important;line-height:32px!important;letter-spacing:-0.03em;padding:0 1px!important;text-align:center}
 .sc-open{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:12px 16px;border:0;border-radius:16px;background:#fff;color:#0B2545;font:inherit;font-weight:650;text-align:left;cursor:pointer}
 .sc-open b{margin-left:auto}
 .sc-dialog{border:0;border-radius:18px;padding:18px 18px 8px;max-width:440px;width:calc(100% - 32px);background:#F7F5F0;color:#14201B}
