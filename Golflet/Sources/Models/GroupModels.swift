@@ -48,7 +48,7 @@ struct GolfletGroup: Identifiable, Hashable, Sendable {
     var members: [GroupMember]
     var myRole: GroupRole
     var invite: GroupInviteLink?
-    /// Total from the API (`member_count` or a numeric `members`). The member list can be shorter.
+    /// Total from the API (`member_count`, integer `accepted`, or a numeric `members`). The member list can be shorter. A boolean `accepted` is not a count.
     var reportedMemberCount: Int? = nil
     var matchRecords: [MatchFormatRecord] = []
     var recentMatches: [PlayedMatch] = []

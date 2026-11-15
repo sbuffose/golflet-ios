@@ -2838,9 +2838,11 @@ html[data-ts] .bagtable .baghdr,html[data-ts] .bagtable .bagrow{grid-template-co
 .jg-club-h{display:flex;justify-content:space-between;align-items:baseline;padding:4px 2px 8px;color:#0B2545}
 .jg-club-h b{font-size:calc(13px*var(--ts,1));letter-spacing:.04em;text-transform:uppercase}
 .jg-club-h span{font-size:calc(12.5px*var(--ts,1));color:var(--color-ink3)}
-.jg-course{min-height:52px;border-bottom:1px solid var(--color-hairline,#E6E2D8);cursor:pointer}
-.jg-course input{width:18px;height:18px;accent-color:#0B2545}
-.jg-course .t{flex:1;font-weight:650}
+.jg-course{min-height:52px;border-bottom:1px solid var(--color-hairline,#E6E2D8);cursor:pointer;align-items:flex-start}
+.jg-course input{width:18px;height:18px;accent-color:#0B2545;margin-top:4px}
+.jg-course .body{flex:1;min-width:0}
+.jg-course .t{display:block;font-weight:650;white-space:normal;overflow:visible;text-overflow:clip}
+.jg-course .s{display:block}
 .jg-find{display:block;margin:4px 0 8px;font-size:calc(13px*var(--ts,1));color:var(--color-ink2)}
 .jg-find input{display:block;width:100%;margin-top:6px;height:46px;border:1px solid var(--color-hairline,#E6E2D8);border-radius:12px;padding:0 12px;background:#fff;font:inherit}
 .hard-id{align-items:flex-start}

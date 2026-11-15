@@ -70,6 +70,32 @@ test("la búsqueda separa clubes homónimos y no duplica una cancha", () => {
   const pilar = matchCatalog(rows, "pilar");
   assert.equal(pilar.hits.length, 2);
   assert.equal(new Set(pilar.hits.map(h => h.club_code)).size, 2);
+  assert.equal(pilar.hits.find(h => h.club_code === "50")?.course_label, "Norte");
+});
+
+test("la búsqueda usa el nombre del directorio y no inventa un club sin ficha", () => {
+  const rows = [
+    { club_code: "107", club: "Club 107", vm_course: "NAUTICO SAN ISIDRO" },
+    { club_code: "124", club: "Club 124", vm_course: "SAN ISIDRO GC" },
+    { club_code: "999", club: "Club 999", vm_course: "CANCHA SIN FICHA" },
+  ];
+  const names = new Map([
+    ["107", { directory: "CLUB NAUTICO SAN ISIDRO" }],
+    ["124", { directory: "SAN ISIDRO GOLF CLUB", golflet: "San Isidro Golf Club" }],
+  ]);
+  const found = matchCatalog(rows, "san isidro", 12, names);
+  const byCode = Object.fromEntries(found.hits.map(h => [h.club_code, h]));
+  assert.equal(found.hits.length, 2);
+  assert.equal(byCode["107"].club_name, "Club Nautico San Isidro");
+  assert.equal(byCode["107"].course_label, "Nautico San Isidro");
+  assert.equal(byCode["124"].club_name, "San Isidro Golf Club");
+  assert.equal(byCode["124"].course_label, "San Isidro GC");
+  assert.equal(found.hits.some(h => /^club\s+\d+$/i.test(h.club_name)), false);
+  const unnamed = matchCatalog(rows, "sin ficha", 12, names);
+  assert.equal(unnamed.hits.length, 1);
+  assert.equal(unnamed.hits[0].club_code, "999");
+  assert.equal(unnamed.hits[0].club_name, "Club 999");
+  assert.equal(unnamed.hits[0].course_label, "Cancha Sin Ficha");
 });
 
 test("la tarjeta no promete un plazo y la ronda puede elegir otra cancha", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
