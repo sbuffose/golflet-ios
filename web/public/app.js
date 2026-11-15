@@ -1298,14 +1298,16 @@ async function loadJugar(id){
     if (!$('#jugbody')) return;
     const today = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10), open = (L.live_rounds || []).find(l => !l.ended_at && String(l.date).slice(0, 10) === today);
     const cs = (C.courses || []).filter(c => c.mine !== false);
+    const catalog = (C.catalog || []).filter(c => c && c.course_id && c.club_name);
     const groups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(cs) : [{ code: 'c', club: '', distance: null, rows: cs.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
-    const courseRadios = (rows, checkedFirst) => rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${checkedFirst && i === 0 ? 'checked' : ''}><span class="t">${esc(c.name)}</span>${c.club ? `<span class="s">${esc(c.club)}</span>` : ''}<svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('');
+    const courseRadios = (rows, checkedFirst) => rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${checkedFirst && i === 0 ? 'checked' : ''}><span class="body"><span class="t">${esc(c.name)}</span>${c.club ? `<span class="s">${esc(c.club)}</span>` : ''}</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('');
     el.innerHTML = `<div class="stitle">Empezar ronda</div>
       ${open ? `<a class="card row vx-tap jg-open" href="#/jugar/${esc(open.id)}"><div><div class="t">Seguir la ronda de hoy</div><div class="s">${esc(open.course || open.vm_course || 'Cancha')} · hoyo ${open.current_hole || 1}</div></div>${ICON.chev || '›'}</a>` : ''}
       <p class="lede">Elegí la cancha. En el hoyo confirmás el tee, después la bandera, y cada golpe con ENTER. El mapa se mueve bajo la mira.</p>
       <div class="section"><h2>Mis clubes</h2></div>
       ${cs.length ? groups.map((g, gi) => `<section class="jg-club" id="club-${esc(g.code)}"><div class="jg-club-h"><b>${esc(g.club)}</b>${g.distance ? `<span>${esc(g.distance)}</span>` : ''}</div>${courseRadios(g.rows.map(r => ({ ...r, club: '' })), gi === 0)}</section>`).join('')
         : `<div class="msg">No encontramos canchas de tus clubes. Podés buscar otra en el catálogo.</div>`}
+      <div id="jgnear"></div>
       <div class="section"><h2>Otra cancha</h2></div>
       <label class="jg-find">Buscar por club o cancha<input id="jgq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Ej. Pilar, Norte"></label>
       <div id="jgqout"></div>
@@ -1314,12 +1316,48 @@ async function loadJugar(id){
       <button class="btn" id="jgstart" ${cs.length ? '' : 'disabled'}>Empezar ronda</button><div id="jgerr"></div>`;
     let qGen = 0;
     const known = new Set(cs.map(c => c.course_id));
+    const foldQ = s => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+    const kmBetween = (a, b) => {
+      const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+      const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+    };
+    const paintHits = (hits, already, covLine) => {
+      if (!$('#jgqout')) return;
+      if (!hits.length && !already.length) { $('#jgqout').innerHTML = `<p class="foot">No hay una cancha con ese nombre en el catálogo.</p>${covLine}`; return; }
+      const foundGroups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(hits) : [{ code: 'o', club: '', rows: hits.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
+      $('#jgqout').innerHTML = `${already.length && !hits.length ? '<p class="foot">Esa cancha ya está en Mis clubes.</p>' : ''}
+        ${hits.length ? foundGroups.map(g => `<section class="jg-club"><div class="jg-club-h"><b>${esc(g.club)}</b></div>${courseRadios(g.rows.map(r => ({ ...r, club: g.club })), false)}</section>`).join('') : ''}
+        ${already.length && hits.length ? `<p class="foot">${already.length === 1 ? 'Otra coincidencia ya está en Mis clubes.' : 'Algunas coincidencias ya están en Mis clubes.'}</p>` : ''}${covLine}`;
+      $('#jgqout').querySelectorAll('input[name=jgc]').forEach(inp => inp.onchange = () => { const b = $('#jgstart'); if (b) b.disabled = false; });
+    };
+    const paintNearby = pos => {
+      const box = $('#jgnear'); if (!box || !pos) return;
+      const rows = catalog.map(c => ({ ...c, distance_km: c.lat == null || c.lng == null ? null : Math.round(kmBetween(pos, { lat: +c.lat, lng: +c.lng }) * 10) / 10 }))
+        .filter(c => c.distance_km != null && c.distance_km <= 40 && !known.has(c.course_id))
+        .sort((a, b) => a.distance_km - b.distance_km).slice(0, 8);
+      if (!rows.length) { box.innerHTML = ''; return; }
+      const nearGroups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(rows) : [];
+      box.innerHTML = `<div class="section"><h2>Cerca</h2></div>${nearGroups.map(g => `<section class="jg-club"><div class="jg-club-h"><b>${esc(g.club)}</b>${g.distance ? `<span>${esc(g.distance)}</span>` : ''}</div>${courseRadios(g.rows.map(r => ({ ...r, club: g.club })), false)}</section>`).join('')}`;
+      box.querySelectorAll('input[name=jgc]').forEach(inp => inp.onchange = () => { const b = $('#jgstart'); if (b) b.disabled = false; });
+    };
+    if (catalog.length && navigator.geolocation) navigator.geolocation.getCurrentPosition(p => paintNearby({ lat: p.coords.latitude, lng: p.coords.longitude }), () => {}, { enableHighAccuracy: false, timeout: 4000, maximumAge: 120000 });
     $('#jgq').oninput = () => {
       const q = $('#jgq').value.trim();
       clearTimeout($('#jgq')._t);
       if (q.length < 2) { $('#jgqout').innerHTML = q ? '<p class="foot">Escribí al menos 2 letras.</p>' : ''; return; }
       $('#jgq')._t = setTimeout(async () => {
-        const gen = ++qGen; $('#jgqout').innerHTML = '<p class="foot">Buscando en el catálogo…</p>';
+        const gen = ++qGen;
+        if (catalog.length) {
+          const tokens = foldQ(q).split(/[^a-z0-9]+/).filter(t => t.length >= 2);
+          const matched = tokens.length ? catalog.filter(c => tokens.every(t => foldQ([c.club_name, c.course_label, c.vm_course, c.label].filter(Boolean).join(' ')).includes(t))) : [];
+          const hits = matched.filter(c => !known.has(c.course_id)).slice(0, 12);
+          const already = matched.filter(c => known.has(c.course_id));
+          const clubs = new Set(catalog.map(c => c.club_code)).size;
+          paintHits(hits, already, `<p class="foot">Catálogo: ${catalog.length} canchas en ${clubs} clubes.${matched.length > 12 ? ' Hay más: afiná el nombre.' : ''}</p>`);
+          return;
+        }
+        $('#jgqout').innerHTML = '<p class="foot">Buscando en el catálogo…</p>';
         try {
           const d = await api('/api/gps/courses?q=' + encodeURIComponent(q));
           if (gen !== qGen || !$('#jgqout')) return;
@@ -1328,12 +1366,7 @@ async function loadJugar(id){
           const cov = d.coverage;
           const covLine = cov && cov.catalog ? `<p class="foot">Catálogo: ${cov.catalog} canchas en ${cov.clubs} clubes.${cov.truncated ? ' Hay más: afiná el nombre.' : ''}</p>` : '';
           if (d.reason === 'short') { $('#jgqout').innerHTML = '<p class="foot">Escribí al menos 2 letras.</p>'; return; }
-          if (!hits.length && !already.length) { $('#jgqout').innerHTML = `<p class="foot">No hay una cancha con ese nombre en el catálogo.</p>${covLine}`; return; }
-          const foundGroups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(hits) : [{ code: 'o', club: '', rows: hits.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
-          $('#jgqout').innerHTML = `${already.length && !hits.length ? '<p class="foot">Esa cancha ya está en Mis clubes.</p>' : ''}
-            ${hits.length ? foundGroups.map(g => `<section class="jg-club"><div class="jg-club-h"><b>${esc(g.club)}</b></div>${courseRadios(g.rows.map(r => ({ ...r, club: g.club })), false)}</section>`).join('') : ''}
-            ${already.length && hits.length ? `<p class="foot">${already.length === 1 ? 'Otra coincidencia ya está en Mis clubes.' : 'Algunas coincidencias ya están en Mis clubes.'}</p>` : ''}${covLine}`;
-          $('#jgqout').querySelectorAll('input[name=jgc]').forEach(inp => inp.onchange = () => { const b = $('#jgstart'); if (b) b.disabled = false; });
+          paintHits(hits, already, covLine);
         } catch (e) { if (gen === qGen && $('#jgqout')) $('#jgqout').innerHTML = errBox(e, 'el catálogo'); }
       }, 300);
     };

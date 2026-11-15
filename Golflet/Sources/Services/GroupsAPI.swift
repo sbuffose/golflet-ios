@@ -94,8 +94,11 @@ enum GroupsParser {
         let memberBlob = (blob["members"] as? [String: Any]) ?? (item["members"] as? [String: Any])
         let memberSource = blob["member_list"] ?? item["member_list"] ?? memberBlob?["list"] ?? memberBlob?["items"] ?? blob["members"] ?? item["members"]
         let members = members(from: memberSource)
+        // The list payload has no member array. `accepted` is the integer count. A boolean is not a count, and a real member array still wins.
         let reportedCount = JSONFlex.int(from: blob["member_count"] ?? blob["members_count"] ?? blob["integrantes"] ?? item["member_count"] ?? memberBlob?["count"] ?? memberBlob?["total"])
-            ?? ((memberSource as? [Any]) == nil ? JSONFlex.int(from: memberSource) : nil)
+            ?? ((memberSource as? [Any]) == nil
+                ? (JSONFlex.int(from: blob["accepted"] ?? item["accepted"]) ?? JSONFlex.int(from: memberSource))
+                : nil)
         let isAdmin = JSONFlex.bool(from: blob["is_admin"] ?? item["is_admin"]) ?? false
         let owner = member(from: blob["owner"])
             ?? members.first(where: \.isOwner)

@@ -184,8 +184,41 @@ final class GroupsTests: XCTestCase {
         let group = GroupsParser.group(from: json)
         XCTAssertEqual(group?.name, "Birdies")
         XCTAssertEqual(group?.members.count, 2)
+        XCTAssertEqual(group?.memberCount, 2)
         XCTAssertEqual(group?.invite?.url.absoluteString, "https://golflet.vercel.app/g/tok-1")
         XCTAssertTrue(group?.isAdmin == true)
+    }
+
+    func testListUsesAcceptedCountWhenTheMemberArrayIsMissing() {
+        let scratch = GroupsParser.group(from: [
+            "id": "g-scratch",
+            "name": "Scratch",
+            "is_admin": true,
+            "accepted": 1,
+            "pending": 0
+        ])
+        XCTAssertEqual(scratch?.members.count, 0)
+        XCTAssertEqual(scratch?.memberCount, 1)
+
+        let familia = GroupsParser.group(from: [
+            "id": "g-familia",
+            "name": "Familia",
+            "accepted": 2,
+            "pending": 0
+        ])
+        XCTAssertEqual(familia?.memberCount, 2)
+
+        let detail = GroupsParser.group(from: [
+            "id": "g1",
+            "name": "Birdies",
+            "accepted": true,
+            "members": [
+                ["id": "u1", "name": "Ana Pérez", "role": "admin"],
+                ["id": "u2", "name": "Luis Gómez", "role": "member"]
+            ]
+        ])
+        XCTAssertNil(detail?.reportedMemberCount)
+        XCTAssertEqual(detail?.memberCount, 2)
     }
 
     func testParsesGroupsV2JoinAndSharing() {
