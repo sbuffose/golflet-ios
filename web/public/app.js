@@ -1725,11 +1725,11 @@ async function loadHiProfs(){
   const av = p => `<span class="hp-av">${p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : esc(compInit(p.name))}${p.verified ? '<i class="hp-v" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3.3 6.2l1.7 1.6 3.4-3.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i>' : ''}</span>`;
   try { const ps = (await api('/api/profesores')).profesores; if (!$('#hiprofs')) return; PROFS = ps;
     if (!ps.length) {
-      el.innerHTML = `<a class="hg-row hp-add" href="#/profesores/buscar" aria-label="Agregar profesor"><span class="hp-av hp-empty" aria-hidden="true">+</span><span class="hg-copy"><b>Agregar profesor</b><span>Todavía no hay uno vinculado.</span></span></a>`;
+      el.innerHTML = `<a class="hg-row hp-add" href="#/profesores/buscar" aria-label="Agregar profesor"><span class="hp-av hp-empty" aria-hidden="true">+</span><span class="hg-copy"><b>Agregar profesor</b><span>Todavía no hay uno vinculado.</span></span>${ICON.chev}</a>`;
     } else if (ps.length === 1) {
-      el.innerHTML = `<a class="hg-row" href="#/profesor/${encodeURIComponent(ps[0].profesor_id)}" aria-label="Tu profesor: ${esc(ps[0].name)}">${av(ps[0])}<span class="hg-copy"><b>${esc(ps[0].name)}</b><span>Profesor</span></span></a>`;
+      el.innerHTML = `<a class="hg-row" href="#/profesor/${encodeURIComponent(ps[0].profesor_id)}" aria-label="Tu profesor: ${esc(ps[0].name)}">${av(ps[0])}<span class="hg-copy"><b>${esc(ps[0].name)}</b><span>Profesor</span></span>${ICON.chev}</a>`;
     } else {
-      el.innerHTML = `<a class="hg-row" href="#/profesores" aria-label="Tus profesores: ${ps.length}"><span class="hp-stack">${ps.slice(0, 3).map(av).join('')}</span><span class="hg-copy"><b>${ps.length} profesores</b><span>Tocá para verlos.</span></span></a>`;
+      el.innerHTML = `<a class="hg-row" href="#/profesores" aria-label="Tus profesores: ${ps.length}"><span class="hp-stack">${ps.slice(0, 3).map(av).join('')}</span><span class="hg-copy"><b>${ps.length} profesores</b><span>Tocá para verlos.</span></span>${ICON.chev}</a>`;
     }
     el.hidden = false;
   } catch(e){ el.hidden = true; }
@@ -1753,13 +1753,13 @@ function grossPlace(members){
 async function loadHiGroups(){
   const el = $('#higroups'); if (!el) return;
   try { const gs = (await api('/api/groups')).groups || []; if (!$('#higroups')) return;
-    if (!gs.length) { el.innerHTML = `<a class="hg-row hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true">+</span><span class="hg-copy"><b>Crear grupo</b><span>Compará con tus amigos.</span></span></a>`; el.hidden = false; return; }
+    if (!gs.length) { el.innerHTML = `<a class="hg-row hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true">+</span><span class="hg-copy"><b>Crear grupo</b><span>Compará con tus amigos.</span></span>${ICON.chev}</a>`; el.hidden = false; return; }
     const show = gs.slice(0, 3);
     el.innerHTML = show.map(g => {
       const face = g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase());
       const n = Number(g.accepted) || 0;
       const sub = n ? `${n} ${n === 1 ? 'jugador' : 'jugadores'}` : 'Grupo';
-      return `<a class="hg-row" href="#/grupo/${encodeURIComponent(g.id)}" data-gid="${esc(g.id)}" aria-label="Tu grupo: ${esc(g.name || 'grupo')}"><span class="hp-av">${face}</span><span class="hg-copy"><b>${esc(g.name || 'Grupo')}</b><span>${sub}</span></span><b class="hg-place" hidden></b></a>`;
+      return `<a class="hg-row" href="#/grupo/${encodeURIComponent(g.id)}" data-gid="${esc(g.id)}" aria-label="Tu grupo: ${esc(g.name || 'grupo')}"><span class="hp-av">${face}</span><span class="hg-copy"><b>${esc(g.name || 'Grupo')}</b><span>${sub}</span></span><b class="hg-place" hidden></b>${ICON.chev}</a>`;
     }).join('');
     el.hidden = false;
     await Promise.all(show.map(async g => {
