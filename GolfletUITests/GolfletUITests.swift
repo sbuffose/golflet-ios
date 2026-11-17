@@ -149,8 +149,8 @@ final class GolfletUITests: XCTestCase {
         reveal(app, tee)
         XCTAssertTrue(tee.waitForExistence(timeout: 4), "Próxima reserva no muestra el tee time")
         XCTAssertFalse(app.staticTexts["Sáb 7-nov · 9:20"].exists, "Sigue el tee time inventado")
-        let prep = first(app, "home-open-jugar")
-        XCTAssertTrue(prep.waitForExistence(timeout: 4), "Falta preparar la salida")
+        revealHomePrep(app)
+        XCTAssertTrue(first(app, "home-open-jugar").exists, "Falta preparar la salida")
         saveShot("60_grupos")
         saveShot("parity-ios-grupos")
         if liveGroup.isHittable {
@@ -1458,6 +1458,14 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    private func revealHomePrep(_ app: XCUIApplication) {
+        let prep = first(app, "home-open-jugar")
+        for _ in 0..<12 {
+            if prep.exists, app.frame.intersects(prep.frame) { return }
+            app.swipeUp()
+        }
+    }
+
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
         var attempts = 0
         while !isOnScreen(app, element) && attempts < 8 {
@@ -1497,14 +1505,9 @@ final class GolfletUITests: XCTestCase {
         case "Jugar":
             tapVisibleTab(app, "Inicio")
             _ = waitFor(app, "home-ready", timeout: 10)
-            let prep = first(app, "home-open-jugar")
-            var scrolls = 0
-            while !prep.exists && scrolls < 8 {
-                nudgePage(app, up: true)
-                scrolls += 1
-            }
-            XCTAssertTrue(prep.waitForExistence(timeout: 6), "Falta preparar la salida")
-            reveal(app, prep)
+            revealHomePrep(app)
+            let prep = largest(app, "home-open-jugar")
+            XCTAssertTrue(prep.exists, "Falta preparar la salida")
             if prep.isHittable {
                 prep.tap()
             } else {
