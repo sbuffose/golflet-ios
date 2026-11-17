@@ -466,21 +466,23 @@ struct HomeView: View {
                 if let booking = model.nextTeeTime {
                     VStack(alignment: .leading, spacing: 12) {
                         teeTimeRow(booking)
-                        NavigationLink {
-                            TeeTimePrepView(booking: booking)
-                        } label: {
-                            Text("Preparar la salida")
-                                .font(GType.headline)
-                                .foregroundStyle(p.onPrimary)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .background(p.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .accessibilityIdentifier("home-open-jugar")
-                                .accessibilityLabel("Preparar la salida")
+                        ZStack(alignment: .topLeading) {
+                            NavigationLink {
+                                TeeTimePrepView(booking: booking)
+                            } label: {
+                                Text("Preparar la salida")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.onPrimary)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .background(p.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("home-open-jugar")
+                            .accessibilityLabel("Preparar la salida")
+                            GProbe(id: "home-open-jugar", label: "Preparar la salida")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("home-open-jugar")
-                        .accessibilityLabel("Preparar la salida")
+                        .accessibilityElement(children: .contain)
                     }
                 } else {
                     HStack(alignment: .top, spacing: 12) {
