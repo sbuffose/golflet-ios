@@ -1655,6 +1655,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
         shot("inicio-hi")
 
+        reveal(app, "home-hcp-profesor")
         let profesor = largest(app, "home-hcp-profesor")
         XCTAssertTrue(profesor.waitForExistence(timeout: 4), "Falta el profesor en el HI")
         if profesor.isHittable { profesor.tap() } else {
@@ -1665,6 +1666,7 @@ final class GolfletUITests: XCTestCase {
         dismissIfPresent(app, "close-profesor")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
 
+        reveal(app, "home-hcp-groups")
         let groups = largest(app, "home-hcp-groups")
         XCTAssertTrue(groups.waitForExistence(timeout: 4), "Falta el grupo en el HI")
         if groups.isHittable { groups.tap() } else {
