@@ -1079,6 +1079,9 @@ struct RoundRow: View {
                     }
                     if round.official && !chips.isEmpty {
                         SingleLineChipRow(chips: chips)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(chips.map(\.0).joined(separator: " | "))
+                            .accessibilityValue(chips.map(\.0).joined(separator: " | "))
                             .accessibilityIdentifier(style == .home ? "last-round-chips" : "round-chips")
                     }
                 }

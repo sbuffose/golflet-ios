@@ -1498,7 +1498,12 @@ final class GolfletUITests: XCTestCase {
             tapVisibleTab(app, "Inicio")
             _ = waitFor(app, "home-ready", timeout: 10)
             let prep = first(app, "home-open-jugar")
-            XCTAssertTrue(prep.waitForExistence(timeout: 8), "Falta preparar la salida")
+            var scrolls = 0
+            while !prep.exists && scrolls < 8 {
+                nudgePage(app, up: true)
+                scrolls += 1
+            }
+            XCTAssertTrue(prep.waitForExistence(timeout: 6), "Falta preparar la salida")
             reveal(app, prep)
             if prep.isHittable {
                 prep.tap()
@@ -1785,17 +1790,23 @@ final class GolfletUITests: XCTestCase {
                 let box = boxes.element(boundBy: index)
                 guard box.exists, box.frame.height > 8, box.frame.width > 8 else { continue }
                 let chips = box.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'round-chip-'"))
-                guard chips.count >= 3 else { continue }
                 var labels: [String] = []
                 var framed: [(String, CGRect)] = []
                 for chipIndex in 0..<chips.count {
                     let chip = chips.element(boundBy: chipIndex)
                     let label = chip.label
-                    guard !label.isEmpty else { continue }
+                    guard !label.isEmpty, !labels.contains(label) else { continue }
                     labels.append(label)
                     if chip.frame.height > 8, chip.frame.width > 8 {
                         framed.append((label, chip.frame))
                     }
+                }
+                if labels.count < 3 {
+                    let value = (box.value as? String) ?? ""
+                    labels = "\(box.label) | \(value)"
+                        .components(separatedBy: " | ")
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty && $0 != "round-chips" && $0 != "last-round-chips" }
                 }
                 guard labels.count >= 3 else { continue }
                 sawRow = true

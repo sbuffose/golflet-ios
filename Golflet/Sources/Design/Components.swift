@@ -202,6 +202,7 @@ struct SingleLineChipRow: View {
                 .frame(height: 18)
                 .background(chip.fill)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .accessibilityLabel(chip.label)
                 .accessibilityIdentifier("round-chip-\(index)")
         }
     }
