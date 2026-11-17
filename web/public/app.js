@@ -712,8 +712,10 @@ async function loadTeeCard(fresh){
     fitGreeting();
     pill.onclick = ev => { ev.preventDefault(); const sec = $('#tees'), c = sec?.querySelector('.tt-next') || sec; if (!c) return; sec.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
       c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1800); }; }
+  const list = ts.length ? `${yrList(ts, t => t.date, teeRow)}`.replace('<a class="row" href="#/tee/', '<a class="row tt-next" href="#/tee/') : '';
+  const prep = ts.length ? `<a class="tee-prep" href="#/tee/${esc(ts[0].id)}">Preparar la salida</a>` : '';
   el.innerHTML = `<div class="section"><h2>Próxima reserva</h2>${ts.length?`<a href="#/tees">Ver todas</a>`:''}</div><p class="foot" id="teenote">${esc(TEE_NOTE)}</p>` + (ts.length
-    ? `${yrList(ts, t => t.date, teeRow)}`.replace('<a class="row" href="#/tee/', '<a class="row tt-next" href="#/tee/')
+    ? `<div class="tt-card">${list}${prep}</div>`
     : caddieEmpty('Sin reservas próximas', 'Cuando reserves una salida en tu club, aparece acá.'));
   if (fresh) for (const id of [...(fresh.new || []), ...(fresh.changed || [])]) { const a = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"]`); if (a) { a.classList.add('tt-in'); setTimeout(() => a.classList.remove('tt-in'), 2600); } }
   if (fresh) for (const id of fresh.new || []) { const sp = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"] .score span`); if (sp) { sp.textContent = 'nueva'; sp.classList.add('tt-newb'); } }

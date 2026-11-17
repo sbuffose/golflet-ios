@@ -140,17 +140,17 @@ final class GolfletUITests: XCTestCase {
             dismissIfPresent(app, "metric-back")
         }
 
-        tapTab(app, "Grupos")
-        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
-        let liveGroup = first(app, "hub-group-g-jockey")
+        tapTab(app, "Inicio")
+        let liveGroup = first(app, "home-hcp-groups")
         reveal(app, liveGroup)
-        XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "El tab Grupos no muestra el grupo de la cuenta")
+        XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "Inicio no muestra el grupo de la cuenta")
         XCTAssertFalse(app.staticTexts["Miércoles 9 hoyos"].exists, "Sigue el segundo grupo de ejemplo")
-        XCTAssertFalse(first(app, "hub-groups-example").exists, "Hay un bloque de ejemplo junto a los grupos reales")
-        let tee = first(app, "hub-tee-tt-jockey-1")
+        let tee = first(app, "home-tee-row-tt-jockey-1")
         reveal(app, tee)
-        XCTAssertTrue(tee.waitForExistence(timeout: 4), "Quién juega cuándo no usa los tee times")
-        XCTAssertFalse(first(app, "hub-tee-example").exists, "Hay un horario de ejemplo junto a los tee times reales")
+        XCTAssertTrue(tee.waitForExistence(timeout: 4), "Próxima reserva no muestra el tee time")
+        XCTAssertFalse(app.staticTexts["Sáb 7-nov · 9:20"].exists, "Sigue el tee time inventado")
+        let prep = first(app, "home-open-jugar")
+        XCTAssertTrue(prep.waitForExistence(timeout: 4), "Falta preparar la salida")
         saveShot("60_grupos")
         saveShot("parity-ios-grupos")
         if liveGroup.isHittable {
@@ -162,7 +162,7 @@ final class GolfletUITests: XCTestCase {
         saveShot("parity-ios-grupos-usga")
 
         tapTab(app, "Jugar")
-        XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
+        XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "Preparar la salida no abrió la reserva")
         XCTAssertFalse(app.staticTexts["Vos y Tomi vs Fede y Lucas"].exists, "Sigue el partido inventado")
         XCTAssertFalse(app.staticTexts["Sáb 7-nov · 9:20"].exists, "Sigue el tee time inventado")
         saveShot("61_jugar")
@@ -206,46 +206,11 @@ final class GolfletUITests: XCTestCase {
         }
 
         tapTab(app, "Jugar")
-        XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
-        if first(app, "jugar-ajustes").waitForExistence(timeout: 4) {
-            first(app, "jugar-ajustes").tap()
-            XCTAssertTrue(waitFor(app, "screen-antes", timeout: 6))
-            XCTAssertTrue(first(app, "antes-mode-clasico").waitForExistence(timeout: 2))
-            XCTAssertTrue(first(app, "antes-mode-comp").exists)
-            XCTAssertTrue(first(app, "antes-mode-mej").exists)
-            XCTAssertTrue(first(app, "antes-mode-soc").exists)
-            let track = app.switches["antes-feat-track"]
-            reveal(app, track)
-            XCTAssertTrue(track.waitForExistence(timeout: 4), "Falta el switch de golpe a golpe")
-            XCTAssertFalse(switchIsOn(track), "En Clásico el switch arranca apagado")
-            track.tap()
-            XCTAssertTrue(switchIsOn(track), "El switch no quedó prendido")
-            saveShot("74_antes_de_salir")
-            first(app, "antes-mode-clasico").tap()
-            first(app, "antes-start").tap()
-            XCTAssertTrue(waitFor(app, "screen-live-hole", timeout: 10), "No abrió el hoyo satelital")
-            XCTAssertTrue(first(app, "live-hole-title").waitForExistence(timeout: 4))
-            saveShot("75_hoyo_clasico")
-            if first(app, "live-menu").waitForExistence(timeout: 3) {
-                first(app, "live-menu").tap()
-                if first(app, "antes-mode-comp").waitForExistence(timeout: 4) {
-                    first(app, "antes-mode-comp").tap()
-                    tapMetricBack(app)
-                    saveShot("76_hoyo_competitivo")
-                    first(app, "live-menu").tap()
-                    first(app, "antes-mode-mej").tap()
-                    tapMetricBack(app)
-                    saveShot("77_hoyo_mejorar")
-                    first(app, "live-menu").tap()
-                    first(app, "antes-mode-soc").tap()
-                    tapMetricBack(app)
-                    saveShot("78_hoyo_social")
-                }
-            }
-            if first(app, "live-home").waitForExistence(timeout: 3) {
-                first(app, "live-home").tap()
-            }
-        }
+        XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "Preparar la salida no abrió la reserva")
+        XCTAssertTrue(first(app, "tee-prep-cancha").waitForExistence(timeout: 4), "Falta la cancha de la reserva")
+        XCTAssertTrue(first(app, "tee-prep-strategy").waitForExistence(timeout: 6), "Falta la estrategia")
+        saveShot("74_preparar_salida")
+        dismissIfPresent(app, "metric-back")
 
         tapTab(app, "Academia")
         XCTAssertTrue(waitFor(app, "screen-academia", timeout: 6))
@@ -578,9 +543,7 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
-        tapTab(app, "Grupos")
-        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
-        let liveGroup = first(app, "hub-group-g-jockey")
+        let liveGroup = first(app, "home-hcp-groups")
         reveal(app, liveGroup)
         XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "Falta el grupo de la cuenta")
         if liveGroup.isHittable {
@@ -1013,11 +976,17 @@ final class GolfletUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Estrategia"].exists)
         saveShot("36_que_comparto")
         dismissIfPresent(app, "close-que-comparto")
+        dismissIfPresent(app, "close-clubes")
 
-        openGroupsFromAccount(app)
-        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
-        XCTAssertTrue(first(app, "group-g-jockey").waitForExistence(timeout: 4))
-        first(app, "group-g-jockey").tap()
+        tapTab(app, "Inicio")
+        let groupRow = first(app, "home-hcp-groups")
+        XCTAssertTrue(groupRow.waitForExistence(timeout: 6), "Falta el grupo en Inicio")
+        reveal(app, groupRow)
+        if groupRow.isHittable {
+            groupRow.tap()
+        } else {
+            groupRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 6))
         XCTAssertTrue(waitFor(app, "group-usga", timeout: 6), "Falta la clasificación")
         let me = first(app, "group-board-birdies-demo")
@@ -1599,6 +1568,7 @@ final class GolfletUITests: XCTestCase {
                 || first(app, "screen-metric-chart").exists
             let pushedHome = first(app, "screen-grupos").exists
                 || first(app, "screen-jugar").exists
+                || first(app, "screen-tee-prep").exists
                 || first(app, "screen-academia").exists
             if first(app, "close-grupo").exists {
                 let close = first(app, "close-grupo")
