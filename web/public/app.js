@@ -209,24 +209,27 @@ function hiBand(hi, d){
   const facts = `${when ? `<p class="hi-when"><span>Índice al</span> <b class="num">${when}</b></p>` : ''}${d != null ? `<p class="hi-evo"><b class="num">${arrow} ${f1(Math.abs(d))}</b> <span>desde ${from}</span></p>` : ''}`;
   return `<div class="hi-strip">${facts ? `<div class="hi-facts">${facts}</div>` : ''}<a class="hi-ch-l" href="#/cambios">Cambios</a></div>`;
 }
-function homePeople(play){
-  const jugar = play ? `<div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a></div>` : '';
-  return `<div class="hi-avs"><div id="hiprofs" class="hi-profs nolab" hidden></div><div id="higroups" class="hi-grp" hidden></div>${jugar}</div>`;
+function heroActions(play){
+  if (!play) return '';
+  return `<div class="hi-avs"><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a></div></div>`;
+}
+function homeCircle(){
+  return `<div class="home-circle" id="home-circle"><div id="hiprofs" hidden></div><div id="higroups" hidden></div></div>`;
 }
 function vInicio(){
   const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
   const top = `<div class="top"><img class="cad xs" src="/brand/caddie.png" alt=""><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
-  if (!valid.length) return top + homePeople(false) + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas. Actualizalas desde Cuenta.</div>` : emptyData('Empecemos por tu club'));
+  if (!valid.length) return top + homeCircle() + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas. Actualizalas desde Cuenta.</div>` : emptyData('Empecemos por tu club'));
   const hi = G.hi_history, d = hi.length>1 ? hi[hi.length-1].hi - hi[0].hi : null;
   const last = rounds.find(r => r.official !== false) || rounds[0];
   const hiNow = window.GolfletRules ? window.GolfletRules.officialIndex(G.player?.handicap_index, (hi || []).filter(h => h.hi != null).map(h => ({ date: h.date, hi: +h.hi }))) : (hi.at(-1)?.hi ?? G.player?.handicap_index ?? null);
   const hiMark = hiNow == null ? miss('handicap') : `<div class="big num">${f1(hiNow)}</div>`;
   return top + revealCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
-    ${homePeople(true)}
+    ${heroActions(true)}
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
     ${hiMark}</a>${hiNow == null ? '' : hiBand(hi, d)}
-  </div></div>
+  </div>${homeCircle()}</div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
   ${roundRow(last, true, true)}</div></div>
   <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div></div></div>`;
@@ -285,6 +288,13 @@ const gpsLine = () => { const c = gpsCount(); return `Con GPS: <b class="num">${
 function paintGps(){ document.querySelectorAll('[data-gpsn]').forEach(e => e.innerHTML = gpsLine()); }
 async function loadGpsLive(){ try { const M = await api(`/api/game-metrics?${rq()}`); METLIVE = { range: RANGE, live: M.live || [] }; paintGps(); } catch(e){} }
 const metEntry = () => `<a class="card vx-tap met-entry" href="#/metricas"><div class="me-k">Métricas</div><div class="me-v">Tee, hierros, GIR y putting</div><div class="me-s" data-gpsn>${gpsLine()}</div><span class="me-ch" aria-hidden="true">›</span></a>`;
+function resumenBrow(list){
+  const dates = (list || []).map(r => r.date).filter(Boolean).sort();
+  const start = dates[0] ? dates[0].slice(0, 4) : '';
+  const end = dates.length ? dates[dates.length - 1].slice(0, 4) : '';
+  if (start && start === end) return start;
+  return rlabel(RANGE);
+}
 function rendTiles(){
   const few = valid.length < 3 ? '<span class="rend-few">Pocas tarjetas</span>' : '';
   return `<div class="rend" id="tu-rendimiento"><p class="overline">Tu rendimiento</p>
@@ -308,10 +318,9 @@ function vResumen(){
   const worstCell = pool.length < 2
     ? `<div class="card stat"><div class="k">Peor ronda</div><div class="v num">${miss('worst')}</div><div class="d">Con una sola tarjeta no hay otra para comparar.</div></div>`
     : card(worst, ranged?'Peor ronda':`Peor (desde ${wSince})`, ranged?rlink('rounds',{scope:'all',course:cq,sort:'gross',order:'desc'}):mlink('rounds',{scope:'since',year:wSince,course:cq,sort:'gross',order:'desc'}),'r');
-  return `<div class="top"><span class="overline">${ranged ? `${rlabel(RANGE)} · desde ${dmy(rangeSince(RANGE))}` : `${rounds[rounds.length-1].date.slice(0,4)} – ${rounds[0].date.slice(0,4)}`}</span></div>
+  return `<div class="top"><span class="overline">${resumenBrow(pool)}</span></div>
   <h1 class="ltitle">Resumen</h1>
   ${rendTiles()}
-  <button type="button" class="btn wx-jump" id="wx-jump">Ver cómo afecta el clima</button>
   ${G.courses.length>1?`<div class="seg">${segBtns(segR,'seg')}</div>`:''}
   ${rangeSeg(poolAll.length)}
   ${metEntry()}
@@ -1712,18 +1721,17 @@ const impTxt = h => h?.delta == null ? '—' : `${h.delta < 0 ? '↓' : h.delta 
 const impCls = h => h?.delta == null ? '' : h.delta < 0 ? 'dn' : h.delta > 0 ? 'up' : 'flat';
 /* t125u: linked profesores on the Inicio HI card (max 3 + N; tap → profesor page, or Tu cuenta › Profesores if several) */
 async function loadHiProfs(){
-  /* t155u/t156u: 1 profesor → single avatar (→ its page); 2+ → stacked avatars + "N profes" (→ Mis profesores); none → empty celeste circle "Agregar profesor" (→ add/search page). Celeste ring = profesores, gold = groups. */
   const el = $('#hiprofs'); if (!el) return;
   const av = p => `<span class="hp-av">${p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : esc(compInit(p.name))}${p.verified ? '<i class="hp-v" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3.3 6.2l1.7 1.6 3.4-3.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i>' : ''}</span>`;
   try { const ps = (await api('/api/profesores')).profesores; if (!$('#hiprofs')) return; PROFS = ps;
     if (!ps.length) {
-      el.innerHTML = `<a class="hg-link hp-add" href="#/profesores/buscar" aria-label="Agregar profesor"><span class="hp-av hp-empty" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="6.4" cy="5.4" r="2.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.2 13c.6-2.3 2.2-3.5 4.2-3.5s3.6 1.2 4.2 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12.6 4.2v4M10.6 6.2h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span><span class="hg-n">Agregar profesor</span></a>`;
+      el.innerHTML = `<a class="hg-row hp-add" href="#/profesores/buscar" aria-label="Agregar profesor"><span class="hp-av hp-empty" aria-hidden="true">+</span><span class="hg-copy"><b>Agregar profesor</b><span>Todavía no hay uno vinculado.</span></span></a>`;
     } else if (ps.length === 1) {
-      el.innerHTML = `<a class="hg-link" href="#/profesor/${encodeURIComponent(ps[0].profesor_id)}" aria-label="Tu profesor: ${esc(ps[0].name)}">${av(ps[0])}</a>`;
+      el.innerHTML = `<a class="hg-row" href="#/profesor/${encodeURIComponent(ps[0].profesor_id)}" aria-label="Tu profesor: ${esc(ps[0].name)}">${av(ps[0])}<span class="hg-copy"><b>${esc(ps[0].name)}</b><span>Profesor</span></span></a>`;
     } else {
-      el.innerHTML = `<a class="hg-link" href="#/profesores" aria-label="Tus profesores: ${ps.length}">${ps.slice(0, 3).map(av).join('')}<span class="hg-n num">${ps.length} profes</span></a>`;
+      el.innerHTML = `<a class="hg-row" href="#/profesores" aria-label="Tus profesores: ${ps.length}"><span class="hp-stack">${ps.slice(0, 3).map(av).join('')}</span><span class="hg-copy"><b>${ps.length} profesores</b><span>Tocá para verlos.</span></span></a>`;
     }
-    el.hidden = false; sizeHiAvs();
+    el.hidden = false;
   } catch(e){ el.hidden = true; }
 }
 /* t147u/t148u/t149u: the player's groups on the HI card, as ONE element (stacked photos/initials + count) → #/amigos (list) → #/grupo/:id.
@@ -1736,16 +1744,33 @@ function sizeHiAvs(){ const a = document.querySelector('.hero .hi-avs'), h = a?.
   const big = h.querySelector('.big'); if (!big) return; const rg = document.createRange(); rg.selectNodeContents(big); const b = rg.getBoundingClientRect(), r = a.getBoundingClientRect();
   if (r.left < b.right + 10 && r.bottom > b.top + 6) h.classList.add('avs-below'); }
 addEventListener('resize', () => sizeHiAvs());
+function grossPlace(members){
+  const rows = (members || []).filter(m => m && m.avg_gross != null && !(m.hidden || []).includes('scores'));
+  const me = rows.find(m => m.is_me);
+  if (!me) return null;
+  return rows.filter(m => m.avg_gross < me.avg_gross).length + 1;
+}
 async function loadHiGroups(){
   const el = $('#higroups'); if (!el) return;
   try { const gs = (await api('/api/groups')).groups || []; if (!$('#higroups')) return;
-    if (!gs.length) { el.innerHTML = `<a class="hg-link hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M6 2.2v7.6M2.2 6h7.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span class="hg-n">Crear grupo</span></a>`; el.hidden = false; return; }
+    if (!gs.length) { el.innerHTML = `<a class="hg-row hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true">+</span><span class="hg-copy"><b>Crear grupo</b><span>Compará con tus amigos.</span></span></a>`; el.hidden = false; return; }
     const show = gs.slice(0, 3);
-    const avs = show.map(g => `<span class="hp-av">${g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase())}</span>`).join('');
-    const href = gs.length === 1 ? `#/grupo/${encodeURIComponent(gs[0].id)}` : '#/amigos';
-    const label = gs.length === 1 ? `Tu grupo: ${gs[0].name || 'grupo'}` : `Tus grupos: ${gs.length}`;
-    el.innerHTML = `<a class="hg-link" href="${href}" aria-label="${esc(label)}">${avs}<span class="hg-n num">${gs.length} grupo${gs.length === 1 ? '' : 's'}</span></a>`;
+    el.innerHTML = show.map(g => {
+      const face = g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase());
+      const n = Number(g.accepted) || 0;
+      const sub = n ? `${n} ${n === 1 ? 'jugador' : 'jugadores'}` : 'Grupo';
+      return `<a class="hg-row" href="#/grupo/${encodeURIComponent(g.id)}" data-gid="${esc(g.id)}" aria-label="Tu grupo: ${esc(g.name || 'grupo')}"><span class="hp-av">${face}</span><span class="hg-copy"><b>${esc(g.name || 'Grupo')}</b><span>${sub}</span></span><b class="hg-place" hidden></b></a>`;
+    }).join('');
     el.hidden = false;
+    await Promise.all(show.map(async g => {
+      try {
+        const d = await api(`/api/groups/${encodeURIComponent(g.id)}?range=12y`);
+        const place = grossPlace(d.members);
+        const row = [...el.querySelectorAll('[data-gid]')].find(x => x.getAttribute('data-gid') === g.id);
+        const mark = row && row.querySelector('.hg-place');
+        if (place && mark) { mark.hidden = false; mark.textContent = `${place}º`; }
+      } catch (e) {}
+    }));
   } catch(e){ el.hidden = true; } finally { sizeHiAvs(); }
 }
 async function loadHcpImp(){
@@ -3827,8 +3852,6 @@ function bind(p, isDetail){
 }
 addEventListener('hashchange', () => render());
 document.addEventListener('click', ev => {
-  const jump = ev.target && ev.target.closest && ev.target.closest('#wx-jump');
-  if (jump) { ev.preventDefault(); const t = document.getElementById('wxres'); if (t) t.scrollIntoView({ block: 'start' }); return; }
   const b = ev.target && ev.target.closest && ev.target.closest('#view [data-range]');
   if (!b) return;
   const k = b.getAttribute('data-range');
