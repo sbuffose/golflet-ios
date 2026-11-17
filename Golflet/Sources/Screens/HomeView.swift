@@ -1239,9 +1239,14 @@ struct HomeHcpPeople: View {
     private func row<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 12) {
             content()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(p.ink3)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .frame(maxWidth: .infinity)
+        .frame(height: 64)
         .background(p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .contentShape(Rectangle())
@@ -1392,11 +1397,17 @@ struct HomeHcpAvatar: View {
                     .font(GFont.ui(size <= 28 ? 10.5 : (size < 40 ? 12 : 16), weight: .semibold))
                     .foregroundStyle(ink)
                 if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
-                    AsyncImage(url: parsed) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Color.clear
+                    AsyncImage(url: parsed) { phase in
+                        if let image = phase.image {
+                            image.resizable()
+                                .scaledToFill()
+                                .frame(width: size, height: size)
+                                .clipShape(Circle())
+                        } else {
+                            Color.clear.frame(width: size, height: size)
+                        }
                     }
+                    .frame(width: size, height: size)
                 }
             }
             .frame(width: size, height: size)
