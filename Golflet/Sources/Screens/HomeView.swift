@@ -60,6 +60,16 @@ struct HomeView: View {
                         }
                         lastRound
                         teeTimesCard
+                        NavigationLink {
+                            PlayHubView()
+                        } label: {
+                            Text("Preparar la salida")
+                                .font(GType.headline)
+                                .foregroundStyle(p.primary)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-open-jugar")
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 160)
@@ -322,6 +332,58 @@ struct HomeView: View {
     }
 
     private var homeCircle: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let invite = model.pendingInvites.first {
+                Button { model.presentInvite(invite) } label: {
+                    HStack(spacing: 12) {
+                        Text(invite.ownerInitials)
+                            .font(GFont.ui(16, weight: .semibold))
+                            .foregroundStyle(p.ink)
+                            .frame(width: 44, height: 44)
+                            .background(p.surface2)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color(hex: 0xC8102E), lineWidth: 2))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(invite.name)
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                                .lineLimit(1)
+                            Text("Te invita \(invite.ownerName)")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(p.ink3)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 64)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home-pending-invite")
+                .accessibilityLabel("Invitación pendiente, \(invite.name)")
+            }
+            peopleRows
+            NavigationLink {
+                GroupsHubView()
+            } label: {
+                Text("Grupos y tee times")
+                    .font(GType.headline)
+                    .foregroundStyle(p.primary)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-hub-grupos")
+        }
+    }
+
+    private var peopleRows: some View {
         HomeHcpPeople(
             profesores: model.profesores,
             groups: model.groups,
