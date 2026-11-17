@@ -88,10 +88,10 @@ final class GroupsTests: XCTestCase {
         let api = MockAPIClient(autoSession: true)
         var config = GroupViewConfig.default
         config.metrics = [.gross, .birdies]
-        config.range = .quarter
+        config.range = .threeMonths
         config.courseFilter = "Azul"
         let saved = try await api.saveGroupView(groupID: "g-jockey", config: config)
-        XCTAssertEqual(saved.range, .quarter)
+        XCTAssertEqual(saved.range, .threeMonths)
         XCTAssertEqual(saved.courseFilter, "Azul")
         let view = try await api.groupView(groupID: "g-jockey")
         XCTAssertEqual(view.metrics, [.gross, .birdies])
@@ -110,8 +110,8 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(row.rank(of: "a"), 1)
         XCTAssertEqual(row.rank(of: "b"), 1)
         XCTAssertEqual(row.rank(of: "c"), 3)
-        XCTAssertEqual(GroupPeriod.semester.short, "6m")
-        XCTAssertEqual(GroupPeriod.semester.title, "Semestre")
+        XCTAssertEqual(GroupPeriod.sixMonths.short, "6 meses")
+        XCTAssertEqual(GroupPeriod.sixMonths.title, "6 meses")
         XCTAssertTrue(GroupViewSettings.fewCards("2 tarjetas (2 de 18)"))
         XCTAssertFalse(GroupViewSettings.fewCards("6 tarjetas (4 de 18 y 2 de 9)"))
     }

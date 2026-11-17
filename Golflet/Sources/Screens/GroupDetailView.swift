@@ -548,11 +548,10 @@ struct GroupDetailView: View {
 
     private func meetLine() -> String {
         switch config.range {
-        case .week: return "Esta semana"
-        case .month: return "Este mes"
-        case .quarter: return "Este trimestre"
-        case .semester: return "Este semestre"
-        case .year: return "Esta temporada"
+        case .threeMonths: return "Últimos 3 meses"
+        case .sixMonths: return "Últimos 6 meses"
+        case .twelveMonths: return "Últimos 12 meses"
+        case .year: return "Este año"
         case .all: return "Histórico"
         }
     }
@@ -618,9 +617,9 @@ struct GroupDetailView: View {
                             selectPeriod(period)
                         } label: {
                             Text(period.short)
-                                .font(GFont.ui(10, weight: .semibold))
+                                .font(GFont.ui(9, weight: .semibold))
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                                .minimumScaleFactor(0.55)
                                 .foregroundStyle(on ? Color.white : p.ink)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 32)
@@ -1177,10 +1176,9 @@ struct GroupDetailView: View {
 
     private func periodPhrase() -> String {
         switch config.range {
-        case .week: return "esta semana"
-        case .month: return "este mes"
-        case .quarter: return "este trimestre"
-        case .semester: return "este semestre"
+        case .threeMonths: return "en 3 meses"
+        case .sixMonths: return "en 6 meses"
+        case .twelveMonths: return "en 12 meses"
         case .year: return "este año"
         case .all: return "en el histórico"
         }

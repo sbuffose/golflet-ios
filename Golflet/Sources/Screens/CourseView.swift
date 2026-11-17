@@ -15,6 +15,24 @@ struct CourseView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     header
+                    if model.courses.isEmpty {
+                        Text("Sin cancha")
+                            .font(GType.section)
+                            .foregroundStyle(p.ink)
+                        Text("Elegí una cancha para ver sus hoyos.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                        Button { model.showsPlay = true } label: {
+                            Text("Elegir cancha")
+                                .font(GType.headline)
+                                .foregroundStyle(Color.white)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(p.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("elegir-cancha")
+                    }
                     coursePills
                     hero
                     strategyCard

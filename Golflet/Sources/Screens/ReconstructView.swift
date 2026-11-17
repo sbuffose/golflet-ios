@@ -28,6 +28,7 @@ struct ReconstructView: View {
     @State private var teeName = "Blanco"
     @State private var holeEnds: [Int: HoleEnds] = [:]
     @State private var courseFocus: ReconstructionPoint?
+    @State private var aimCenter: ReconstructionPoint?
     @State private var showsManual = false
 
     private let clubs = ["Dr", "3W", "5W", "Hy", "4i", "5i", "6i", "7i", "8i", "9i", "PW", "GW", "SW", "LW", "Pt"]
@@ -180,6 +181,23 @@ struct ReconstructView: View {
                     .accessibilityIdentifier("tk-unofficial")
             }
             holeMap
+            if holeEnds[hole]?.verified() != nil {
+                HStack(spacing: 12) {
+                    Text(metersLine)
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                        .accessibilityIdentifier("play-meters")
+                    Spacer()
+                    Button("ENTER") { dropAtCenter() }
+                        .font(GType.headline)
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .background(p.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .accessibilityIdentifier("play-hit")
+                }
+            }
             HStack {
                 Button("Hoyo anterior") { shiftHole(-1) }
                     .disabled(hole <= 1)
@@ -260,15 +278,18 @@ struct ReconstructView: View {
     @ViewBuilder
     private var holeMap: some View {
         if let pair = holeEnds[hole]?.verified() {
-            Map(position: $camera) {
-                Annotation("Salida", coordinate: coord(pair.tee)) {
-                    Circle().fill(Color.white).frame(width: 10, height: 10)
+            ZStack {
+                Map(position: $camera) {
+                    Annotation("Salida", coordinate: coord(pair.tee)) {
+                        Circle().fill(Color.white).frame(width: 10, height: 10)
+                    }
+                    Annotation("Bandera", coordinate: coord(pair.flag)) {
+                        Circle().fill(p.accent).frame(width: 10, height: 10)
+                    }
                 }
-                Annotation("Bandera", coordinate: coord(pair.flag)) {
-                    Circle().fill(p.accent).frame(width: 10, height: 10)
-                }
+                .mapStyle(.imagery(elevation: .flat))
+                reticle
             }
-            .mapStyle(.imagery(elevation: .flat))
             .frame(height: 280)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .accessibilityIdentifier("hole-satellite")
@@ -290,6 +311,38 @@ struct ReconstructView: View {
                 .foregroundStyle(p.ink2)
                 .accessibilityIdentifier("rc-nogeo")
         }
+    }
+
+    private var reticle: some View {
+        ZStack {
+            Rectangle().fill(Color(hex: 0x0B2545)).frame(width: 1, height: 28)
+            Rectangle().fill(Color(hex: 0x0B2545)).frame(width: 28, height: 1)
+            Circle().stroke(Color(hex: 0xC8102E), lineWidth: 2).frame(width: 18, height: 18)
+        }
+        .allowsHitTesting(false)
+        .accessibilityIdentifier("play-reticle")
+    }
+
+    private var metersLine: String {
+        guard let pair = holeEnds[hole]?.verified(), let center = aimCenter else { return "Metros" }
+        let meters = Int(distanceMeters(pair.tee, center).rounded())
+        return meters > 0 ? "\(meters) m" : "Metros"
+    }
+
+    private func distanceMeters(_ a: ReconstructionPoint, _ b: ReconstructionPoint) -> Double {
+        let r = 6371000.0
+        let dLat = (b.lat - a.lat) * .pi / 180
+        let dLng = (b.lng - a.lng) * .pi / 180
+        let h = pow(sin(dLat / 2), 2) + cos(a.lat * .pi / 180) * cos(b.lat * .pi / 180) * pow(sin(dLng / 2), 2)
+        return 2 * r * asin(min(1, sqrt(h)))
+    }
+
+    private func dropAtCenter() {
+        guard let pair = holeEnds[hole]?.verified(), let center = aimCenter else { return }
+        start = pair.tee
+        end = center
+        let meters = Int(distanceMeters(pair.tee, center).rounded())
+        if meters > 0 { typedDistance = String(meters) }
     }
 
     private func coord(_ point: ReconstructionPoint) -> CLLocationCoordinate2D {
@@ -323,6 +376,7 @@ struct ReconstructView: View {
             let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLng + maxLng) / 2)
             let span = MKCoordinateSpan(latitudeDelta: max(0.004, (maxLat - minLat) * 1.8), longitudeDelta: max(0.004, (maxLng - minLng) * 1.8))
             camera = .region(MKCoordinateRegion(center: center, span: span))
+            aimCenter = ReconstructionPoint(lat: center.latitude, lng: center.longitude)
             return
         }
         if let focus = courseFocus {
