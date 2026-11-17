@@ -163,6 +163,7 @@ struct Round: Identifiable, Hashable, Sendable {
     var recapId: String? = nil
     var gpsShots: Int = 0
     var isCompetition: Bool = false
+    var official: Bool = true
 
     var isOtherCourse: Bool {
         otherCourse || courseKey.hasPrefix("x:")

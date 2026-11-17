@@ -27,13 +27,14 @@ enum LivePayloadMapper {
         var rounds = parseRounds(json["rounds"])
         rounds = stampHandicap(rounds, history: hiHistory, fallback: playerHI)
         let mappedCourses = parseCourses(json["courses"])
+        rounds += parseUnofficial(json["unofficial_rounds"])
         return AppSnapshot(
             user: user,
             profile: PlayerProfile(
                 displayName: display,
                 initials: initials(display),
                 currentHandicap: OfficialHandicap.latest(player: playerHI, history: hiHistory)
-                    ?? rounds.sorted { $0.date > $1.date }.first?.handicapIndex
+                    ?? rounds.sorted { $0.date > $1.date }.first { $0.official }?.handicapIndex
                     ?? 0,
                 firstName: firstName
             ),
@@ -221,6 +222,35 @@ enum LivePayloadMapper {
         }.sorted { $0.date < $1.date }
     }
 
+    private static func parseUnofficial(_ raw: Any?) -> [Round] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let id = item["id"] as? String, let date = parseDay(item["date"] as? String) else { return nil }
+            let course = item["course"] as? String ?? ""
+            return Round(
+                roundId: id,
+                date: date,
+                weekday: "",
+                tournament: "No oficial",
+                clubName: "",
+                clubCode: item["club_code"] as? String ?? "",
+                course: course,
+                tee: item["tee"] as? String ?? "",
+                courseRating: 0,
+                slope: 0,
+                handicapIndex: 0,
+                cardStatus: "No oficial",
+                counts: ScoreCounts(birdies: 0, pars: 0, bogeys: 0, doubles: 0, triples: 0, worse: 0, eagles: 0),
+                holes: [],
+                holesPlayed: 0,
+                isNineHoles: false,
+                isValid: false,
+                courseKey: "unofficial:\(id)",
+                official: false
+            )
+        }
+    }
+
     private static func parseRounds(_ raw: Any?) -> [Round] {
         guard let items = raw as? [[String: Any]] else { return [] }
         return items.compactMap(parseRound)
@@ -292,7 +322,8 @@ enum LivePayloadMapper {
             courseLabel: item["course_label"] as? String,
             recapId: item["recap_id"] as? String,
             gpsShots: JSONFlex.int(from: item["gps_shots"]) ?? 0,
-            isCompetition: JSONFlex.bool(from: item["is_competition"] ?? item["competition"]) ?? false
+            isCompetition: JSONFlex.bool(from: item["is_competition"] ?? item["competition"]) ?? false,
+            official: JSONFlex.bool(from: item["official"]) ?? true
         )
     }
 

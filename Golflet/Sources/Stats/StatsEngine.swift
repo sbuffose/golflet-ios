@@ -48,7 +48,7 @@ struct CourseSnapshot: Equatable, Sendable {
 enum StatsEngine {
     static func eighteenHoleValid(_ rounds: [Round]) -> [Round] {
         rounds
-            .filter { $0.isValid && !$0.isNineHoles && $0.gross != nil }
+            .filter { $0.official && $0.isValid && !$0.isNineHoles && $0.gross != nil }
             .sorted { $0.date > $1.date }
     }
 
@@ -101,7 +101,7 @@ enum StatsEngine {
             yearRoundCount: yearRounds.count,
             yearBestGross: yearRounds.compactMap(\.gross).min(),
             yearBirdies: yearRounds.reduce(0) { $0 + count(.birdie, in: $1).count },
-            lastRound: sorted.first
+            lastRound: sorted.first { $0.official }
         )
     }
 

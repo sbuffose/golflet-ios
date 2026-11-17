@@ -161,6 +161,52 @@ struct FilterPills: View {
     }
 }
 
+/// One row of result chips. Wider rows keep the normal gap. Narrow rows tighten the gap and the type. They never wrap the number over the word.
+struct SingleLineChipRow: View {
+    var chips: [(label: String, fill: Color, ink: Color)]
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            line(spacing: 4, pad: 6, size: 10)
+            line(spacing: 2, pad: 4, size: 10)
+            line(spacing: 1, pad: 3, size: 9)
+            compressed
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 18)
+    }
+
+    private func line(spacing: CGFloat, pad: CGFloat, size: CGFloat) -> some View {
+        HStack(spacing: spacing) {
+            chipViews(pad: pad, size: size, compress: false)
+        }
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private var compressed: some View {
+        HStack(spacing: 2) {
+            chipViews(pad: 3, size: 10, compress: true)
+        }
+    }
+
+    @ViewBuilder
+    private func chipViews(pad: CGFloat, size: CGFloat, compress: Bool) -> some View {
+        ForEach(Array(chips.enumerated()), id: \.offset) { index, chip in
+            Text(chip.label)
+                .font(.system(size: size, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(compress ? 0.6 : 1)
+                .fixedSize(horizontal: !compress, vertical: true)
+                .foregroundStyle(chip.ink)
+                .padding(.horizontal, pad)
+                .frame(height: 18)
+                .background(chip.fill)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .accessibilityIdentifier("round-chip-\(index)")
+        }
+    }
+}
+
 /// Wraps whole chips onto the next row. Each child keeps a single line and a fixed height.
 struct ChipFlowLayout: Layout {
     var spacing: CGFloat = 4

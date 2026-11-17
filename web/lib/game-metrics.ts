@@ -3,6 +3,7 @@ import { rangeSince, type Range } from "./metrics";
 import { gameMetrics, type GmHole, type GmRound, type GmShot, type LL } from "./game-metrics-core";
 import { effectiveGreens, flagsForLive, pinStateFor } from "./pins";
 import { gpsShotSql } from "./gps-shot";
+import { isUndefinedColumn } from "./scorecard-lease";
 
 /** Per-hole info of one live round: par (our course card), green front/center/back (club GPS map + corrections), putts counter, own pin,
  *  and (t162u) the collaborative pin of the day + what the player's pin button does. */
@@ -22,10 +23,18 @@ export async function liveHoles(live: any, me?: string) {
 /** win (t163u): optional inclusive date window { from, to } (YYYY-MM-DD) instead of a range — used by the group Comparativo. */
 export async function loadGameMetrics(userId: string, range: Range | null, win?: { from: string; to: string }) {
   const since = win ? win.from : range ? rangeSince(range) : null;
-  const lv = await q(`select l.id, l.date::text date, l.round_id, l.club_code, l.vm_course, l.course, c.holes pars, v.holes greens
+  const params = win ? [userId, win.from, win.to] : since ? [userId, since] : [userId];
+  const liveSql = (flag: boolean) => `select l.id, l.date::text date, l.round_id, l.club_code, l.vm_course, l.course, c.holes pars, v.holes greens
       from live_round l left join course c on c.club_id=l.club_id and lower(c.name)=lower(l.course)
       left join vm_course v on v.club_code=l.club_code and v.vm_course=l.vm_course
-      where l.user_id=$1 ${since ? "and l.date >= $2::date" : ""} ${win ? "and l.date <= $3::date" : ""}`, win ? [userId, win.from, win.to] : since ? [userId, since] : [userId]);
+      where l.user_id=$1 ${since ? "and l.date >= $2::date" : ""} ${win ? "and l.date <= $3::date" : ""}
+      ${flag ? "and coalesce(l.official, true)" : ""}`;
+  let lv: any[];
+  try { lv = await q(liveSql(true), params); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "official")) throw e;
+    lv = await q(liveSql(false), params);
+  }
   const rounds: GmRound[] = lv.map((l: any) => ({ id: l.id, date: l.date, course_label: l.course || l.vm_course || "Cancha",
     pars: Object.fromEntries((l.pars || []).map((h: any) => [Number(h.hole), Number(h.par)])),
     greens: Object.fromEntries((l.greens || []).filter((h: any) => h.center).map((h: any) => [Number(h.hole), h.center as LL])) }));

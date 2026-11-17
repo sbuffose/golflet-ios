@@ -2,13 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
-import { createManualRound, deleteManualShot, listManualShots, saveManualShot, updateManualShot } from "../lib/reconstruct";
+import { createManualRound, deleteManualShot, listManualShots, listOfficialChoices, saveManualShot, updateManualShot } from "../lib/reconstruct";
 import { gpsPuttSql, manualPuttSql } from "../lib/gps-shot";
 import { HttpError } from "../lib/http-error";
 
 const TEST_DATABASE_URL = process.env.GOLFLET_RECON_DATABASE_URL || "postgres://golflet_test:golflet_test@127.0.0.1:5432/golflet_reconstruct_test";
 const local = /@(127\.0\.0\.1|localhost)(:|\/)/.test(TEST_DATABASE_URL);
 const migration = readFileSync(new URL("../db/migrations/0043_manual_shots.sql", import.meta.url), "utf8");
+const unofficial = readFileSync(new URL("../db/migrations/0047_unofficial_round.sql", import.meta.url), "utf8");
 
 const STUBS = `
 create table if not exists "user" (id text primary key);
@@ -43,6 +44,7 @@ async function setup() {
   for (const statement of statements(STUBS)) await run(statement);
   for (const statement of statements(migration)) await run(statement);
   for (const statement of statements(migration)) await run(statement);
+  for (const statement of statements(unofficial)) await run(statement);
   await run(`truncate shot, live_round, round, club_account, club, "user" restart identity cascade`);
   await run(`insert into "user" (id) values ('owner'), ('other')`);
   await run(`insert into club (id, code, name) values (7, '118', 'Jockey')`);
@@ -69,6 +71,7 @@ test("a reconstruction saves without coordinates, stays off the official card, a
     roundId: "20000000-0000-4000-8000-0000000000d1",
   }, sql);
   assert.equal(live.origin, "manual");
+  assert.equal(live.official, true);
   assert.equal(live.round_id, "20000000-0000-4000-8000-0000000000d1");
   assert.equal(writes.some(q => /^update round\b/i.test(q)), false);
   const card = (await sql(`select data::text, holes::text from round where id='20000000-0000-4000-8000-0000000000d1'`))[0];
@@ -108,8 +111,14 @@ test("an owned shot cannot be changed through another round, and a manual putt i
   let sql: Awaited<ReturnType<typeof setup>>;
   try { sql = await setup(); } catch (e) { return t.skip(`sin postgres aislado: ${e instanceof Error ? e.message : "error"}`); }
   const home = await createManualRound({
-    userId: "owner", date: "2026-11-07", clubCode: "118", vmCourse: "Azul", course: "Azul", clubId: 7, roundId: null,
+    userId: "owner", date: "2026-11-07", clubCode: "118", vmCourse: "Azul", course: "Azul", clubId: 7, roundId: null, tee: "Blanco",
   }, sql);
+  assert.equal(home.official, false);
+  assert.equal(home.tee, "Blanco");
+  assert.equal(home.round_id, null);
+  const choices = await listOfficialChoices("owner", sql);
+  assert.equal(choices.some(c => c.id === home.id), false);
+  assert.equal(choices.some(c => c.official === true), true);
   const elsewhere = await createManualRound({
     userId: "owner", date: "2026-11-06", clubCode: "118", vmCourse: "Colorada", course: "Colorada", clubId: 7, roundId: null,
   }, sql);

@@ -1007,21 +1007,9 @@ struct RoundRow: View {
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if !chips.isEmpty {
-                        ChipFlowLayout(spacing: 4, lineSpacing: 4) {
-                            ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
-                                Text(chip.label)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: true)
-                                    .foregroundStyle(chip.ink)
-                                    .padding(.horizontal, 6)
-                                    .frame(height: 18)
-                                    .background(chip.fill)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            }
-                        }
-                        .accessibilityIdentifier(style == .home ? "last-round-chips" : "round-chips")
+                    if round.official && !chips.isEmpty {
+                        SingleLineChipRow(chips: chips)
+                            .accessibilityIdentifier(style == .home ? "last-round-chips" : "round-chips")
                     }
                 }
                 Spacer(minLength: 8)
@@ -1080,6 +1068,7 @@ struct RoundRow: View {
             }
             return parts.joined(separator: " · ")
         }
+        if !round.official { return "No oficial · \(round.displayCourse)\(round.tee.isEmpty ? "" : " · \(round.tee)")" }
         var parts = [round.displayCourse]
         if !round.tee.isEmpty, round.tee.caseInsensitiveCompare(round.course) != .orderedSame {
             parts.append(round.tee)

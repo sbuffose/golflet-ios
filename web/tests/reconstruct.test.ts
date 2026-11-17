@@ -62,4 +62,10 @@ test("the reconstruction migration has no procedural block and does not drop dat
   assert.equal(/\bdelete from\b/i.test(file), false);
   assert.match(file, /alter column lat drop not null/);
   assert.match(file, /origin text not null default 'live'/);
+  const flag = readFileSync(new URL("../db/migrations/0047_unofficial_round.sql", import.meta.url), "utf8");
+  assert.equal(flag.includes("$$"), false);
+  assert.equal(/\bdrop table\b/i.test(flag), false);
+  assert.equal(/\bdelete from\b/i.test(flag), false);
+  assert.match(flag, /add column if not exists official boolean/i);
+  assert.match(flag, /set default true/i);
 });

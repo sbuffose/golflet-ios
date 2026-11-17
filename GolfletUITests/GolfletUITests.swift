@@ -83,6 +83,7 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Rondas")
         XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6))
+        assertRoundChipsOneLine(app)
         saveShot("03_rondas")
         saveShot("parity-ios-rondas")
 
@@ -1701,6 +1702,34 @@ final class GolfletUITests: XCTestCase {
             "Los chips quedaron cortados (maxY \(chips.frame.maxY), alto \(window.frame.height))"
         )
         shot("ultima-ronda")
+        assertRoundChipsOneLine(app)
+
+        tapTab(app, "Rondas")
+        XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6), "La lista de rondas no se abrió")
+        assertRoundChipsOneLine(app)
+        shot("rondas-chips")
+
+        tapTab(app, "Inicio")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+        reveal(app, "reconstruct-start")
+        let start = first(app, "reconstruct-start")
+        XCTAssertTrue(start.waitForExistence(timeout: 4), "Falta Cargar una vuelta ya jugada")
+        if start.isHittable { start.tap() } else { start.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "rc-last", timeout: 6), "La última ronda no quedó arriba")
+        XCTAssertTrue(app.staticTexts["Sin golpes"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Golpes cargados"].exists)
+        XCTAssertTrue(app.staticTexts["No oficial"].exists)
+        shot("cargar-vuelta")
+        dismissIfPresent(app, "reconstruct-back")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+        if waitFor(app, "last-round-card", timeout: 4) {
+            first(app, "last-round-card").tap()
+            XCTAssertTrue(waitFor(app, "track-shots", timeout: 6), "Falta Track Shots")
+            shot("track-shots")
+            dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
+        }
+        tapTab(app, "Inicio")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
 
         reveal(app, "metric-best-gross")
         tapLargest(app, "metric-best-gross")
@@ -1753,6 +1782,44 @@ final class GolfletUITests: XCTestCase {
         if first(app, "tee-prep-scorecard").waitForExistence(timeout: 6) { return true }
         if app.navigationBars["Tarjetas del club"].waitForExistence(timeout: 2) { return true }
         return app.staticTexts["Todavía no hay tarjeta"].waitForExistence(timeout: 2)
+    }
+
+    private func assertRoundChipsOneLine(_ app: XCUIApplication, file: StaticString = #file, line: UInt = #line) {
+        let window = app.windows.firstMatch
+        let listed = app.descendants(matching: .any).matching(identifier: "round-chips")
+        let home = app.descendants(matching: .any).matching(identifier: "last-round-chips")
+        let boxes = listed.count > 0 ? listed : home
+        XCTAssertGreaterThan(boxes.count, 0, "Faltan los chips de la ronda", file: file, line: line)
+        var sawTwoDigits = false
+        for index in 0..<min(boxes.count, 8) {
+            let box = boxes.element(boundBy: index)
+            guard box.exists, box.frame.height > 8 else { continue }
+            let chips = box.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'round-chip-'"))
+            guard chips.count >= 3 else { continue }
+            var frames: [CGRect] = []
+            var labels: [String] = []
+            for chipIndex in 0..<chips.count {
+                let chip = chips.element(boundBy: chipIndex)
+                frames.append(chip.frame)
+                labels.append(chip.label)
+            }
+            let joined = labels.joined(separator: " | ")
+            guard labels.contains(where: { $0.contains("10") }) else { continue }
+            sawTwoDigits = true
+            let dump = zip(labels, frames).map { "\($0.0) h\($0.1.height) y\($0.1.minY)" }.joined(separator: ", ")
+            XCTAssertLessThan(box.frame.height, 26, "Los chips ocupan más de una línea: \(dump)", file: file, line: line)
+            let heights = frames.map(\.height)
+            let tops = frames.map(\.minY)
+            XCTAssertLessThan((heights.max() ?? 0) - (heights.min() ?? 0), 1.5, "Los chips no tienen la misma altura: \(dump)", file: file, line: line)
+            XCTAssertGreaterThan(heights.min() ?? 0, 14, "El chip quedó sin alto: \(dump)", file: file, line: line)
+            XCTAssertLessThan((tops.max() ?? 0) - (tops.min() ?? 0), 2, "Un chip pasó a la línea de abajo: \(dump)", file: file, line: line)
+            XCTAssertGreaterThanOrEqual(frames.map(\.minX).min() ?? 0, -1, dump, file: file, line: line)
+            XCTAssertLessThanOrEqual(frames.map(\.maxX).max() ?? 0, window.frame.maxX + 1, "Un chip se sale de la pantalla: \(dump)", file: file, line: line)
+            XCTAssertTrue(joined.contains("birdie") && joined.contains("pares") && joined.contains("bogey"), joined, file: file, line: line)
+            XCTAssertFalse(labels.contains { $0.contains("\n") }, "El número y la palabra no van en la misma línea: \(joined)", file: file, line: line)
+            break
+        }
+        XCTAssertTrue(sawTwoDigits, "Ninguna fila muestra un conteo de dos dígitos con los tres chips", file: file, line: line)
     }
 
     private func assertGroupPeriodsFit(_ app: XCUIApplication, _ window: XCUIElement) {

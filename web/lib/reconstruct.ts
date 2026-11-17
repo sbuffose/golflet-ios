@@ -9,13 +9,13 @@ import { slug } from "./viewmaster-parse";
 
 export class ReconstructSchemaError extends Error {
   constructor() {
-    super("Falta aplicar web/db/migrations/0043_manual_shots.sql antes de guardar un golpe sin coordenadas.");
+    super("Falta aplicar web/db/migrations/0043_manual_shots.sql y web/db/migrations/0047_unofficial_round.sql antes de guardar un golpe sin coordenadas.");
     this.name = "ReconstructSchemaError";
   }
 }
 
 const schema = (e: unknown) =>
-  isUndefinedColumn(e, "origin") || isUndefinedColumn(e, "end_lat") || isUndefinedColumn(e, "distance_kind")
+  isUndefinedColumn(e, "origin") || isUndefinedColumn(e, "official") || isUndefinedColumn(e, "end_lat") || isUndefinedColumn(e, "distance_kind")
   || isUndefinedColumn(e, "penalty_strokes") || isUndefinedColumn(e, "end_source") || isUndefinedColumn(e, "distance_m") || isUndefinedColumn(e, "intent")
   || (e as { code?: string })?.code === "23502";
 
@@ -38,6 +38,7 @@ export type ManualRoundInput = {
   course: string;
   clubId: number | null;
   roundId: string | null;
+  tee?: string | null;
 };
 
 const dayOk = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -54,21 +55,73 @@ export async function createManualRound(input: ManualRoundInput, sql?: Sql) {
     if (!owned) throw new HttpError(404, "No encontrado");
     roundId = String(owned.id);
   }
-  const [row] = await db(`insert into live_round (user_id, club_code, vm_course, club_id, course, date, current_hole, origin, ended_at, round_id)
-    values ($1,$2,$3,$4,$5,$6,1,'manual',now(),$7)
-    returning id, date::text as date, course, club_code, vm_course, round_id, origin`, [
-    input.userId, input.clubCode, input.vmCourse, input.clubId, input.course, input.date, roundId,
+  const tee = String(input.tee || "").trim().slice(0, 40) || null;
+  const official = !!roundId;
+  const [row] = await db(`insert into live_round (user_id, club_code, vm_course, club_id, course, date, tee, current_hole, origin, ended_at, round_id, official)
+    values ($1,$2,$3,$4,$5,$6,$7,1,'manual',now(),$8,$9)
+    returning id, date::text as date, course, tee, club_code, vm_course, round_id, origin, official`, [
+    input.userId, input.clubCode, input.vmCourse, input.clubId, input.course, input.date, tee, roundId, official,
   ]);
   return {
     id: String(row.id),
     date: String(row.date).slice(0, 10),
     course: String(row.course),
+    tee: row.tee ? String(row.tee) : null,
     club_code: String(row.club_code),
     vm_course: String(row.vm_course),
     course_id: slug(String(row.club_code), String(row.vm_course)),
     round_id: row.round_id ? String(row.round_id) : null,
     origin: "manual",
+    official,
   };
+}
+
+export type RoundChoice = {
+  id: string;
+  date: string;
+  course: string;
+  tee: string;
+  gross: number | null;
+  club_name: string | null;
+  club_code: string | null;
+  tracked: boolean;
+  official: true;
+};
+
+/** Official cards, newest first, plus whether shots were already saved on that card. */
+export async function listOfficialChoices(userId: string, sql?: Sql): Promise<RoundChoice[]> {
+  const run = sql ?? ((text, params) => q(text, params ?? []));
+  const text = (flag: boolean) => `select r.id, r.date::text as date, r.course,
+      coalesce(nullif(r.data->>'tee',''), '') as tee,
+      nullif(r.data->>'gross','')::int as gross,
+      c.name as club_name, c.code as club_code,
+      exists (
+        select 1 from shot s join live_round l on l.id = s.live_round_id
+        where l.round_id = r.id and l.user_id = $1
+      ) as tracked
+    from round r
+    join club_account a on a.id = r.club_account_id
+    left join club c on c.id = a.club_id
+    where a.user_id = $1 ${flag ? "and coalesce(r.official, true)" : ""}
+    order by r.date desc, r.id desc
+    limit 200`;
+  let rows: any[];
+  try { rows = await run(text(true), [userId]); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "official")) throw e;
+    rows = await run(text(false), [userId]);
+  }
+  return rows.map(r => ({
+    id: String(r.id),
+    date: String(r.date).slice(0, 10),
+    course: String(r.course || ""),
+    tee: String(r.tee || ""),
+    gross: r.gross == null ? null : Number(r.gross),
+    club_name: r.club_name ? String(r.club_name) : null,
+    club_code: r.club_code ? String(r.club_code) : null,
+    tracked: !!r.tracked,
+    official: true as const,
+  }));
 }
 
 export async function liveOrigin(userId: string, liveId: string, sql?: Sql): Promise<"manual" | "live" | "absent"> {

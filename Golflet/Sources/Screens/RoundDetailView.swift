@@ -131,6 +131,16 @@ struct RoundDetailView: View {
                 .accessibilityIdentifier("close-round")
                 .accessibilityLabel("Tee times")
                 Spacer()
+                Button { showsTrack = true } label: {
+                    Text("Track Shots")
+                        .font(GFont.ui(14, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 36)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .accessibilityIdentifier("track-shots")
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)

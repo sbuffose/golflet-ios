@@ -6,6 +6,7 @@ import { visibleRoundIds } from "./data";
 import { privateMetrics, partnerKey, companionKey, hourBand, cardClock, clockHHMM, BANDS, type PastTee, type ScoreTally } from "./private-metrics-core";
 import { tallyHoles } from "./weather-core";
 import { HttpError } from "./http-error";
+import { isUndefinedColumn } from "./scorecard-lease";
 
 /** Link each club tee time to the round played that day (same user, same date; course name breaks ties). Idempotent. */
 export async function matchTeeTimes(userId: string) {
@@ -26,7 +27,7 @@ async function playCards(userId: string): Promise<PastTee[]> {
   await matchTeeTimes(userId);
   const keep = [...await visibleRoundIds(userId)];
   if (!keep.length) return [];
-  const rows = await q(`select r.id, r.date::text date, r.course, r.holes,
+  const cardSql = (flag: boolean) => `select r.id, r.date::text date, r.course, r.holes,
               r.data->>'club_played' club_played,
               nullif(r.data->>'tee_time','') card_time,
               nullif(r.data->>'start_time','') start_time,
@@ -47,8 +48,14 @@ async function playCards(userId: string): Promise<PastTee[]> {
               where round_id=r.id and user_id=$2 and started_at is not null
               order by started_at limit 1
             ) l on true
-            where r.id = any($1::uuid[])
-            order by r.date desc`, [keep, userId]);
+            where r.id = any($1::uuid[]) ${flag ? "and coalesce(r.official, true)" : ""}
+            order by r.date desc`;
+  let rows: any[];
+  try { rows = await q(cardSql(true), [keep, userId]); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "official")) throw e;
+    rows = await q(cardSql(false), [keep, userId]);
+  }
   return rows.map((t: any) => {
     const clock = cardClock({ reservation: t.tee_time, card: clockHHMM(t.card_time) || clockHHMM(t.start_time), track: t.track_time });
     const tally = tallyHoles(t.holes, !!t.nine);

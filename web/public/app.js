@@ -277,17 +277,19 @@ function vResumen(){
 /* ---------- RONDAS ---------- */
 let segL = 'Todas';
 function vRondas(){
-  if (!rounds.length) return `<h1 class="ltitle">Rondas</h1>${emptyData()}`;
+  if (!rounds.length && !(G.unofficial_rounds || []).length) return `<h1 class="ltitle">Rondas</h1>${emptyData()}`;
   if (segL!=='Todas' && !course(segL)) segL='Todas';
   const list = rounds.filter(r=>segL==='Todas'||r.course_key===segL), by = {};
   list.forEach(r=>(by[r.date.slice(0,4)] ||= []).push(r));
+  const unofficial = (G.unofficial_rounds || []).map(r => `<a class="row rc-off" href="#/reconstruir/${encodeURIComponent(r.id)}">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course || "Cancha")}</div><div class="s">No oficial${r.tee ? " · Tee " + esc(r.tee) : ""}</div></div><span class="badge">No oficial</span></a>`).join("");
+  const unofficialBlock = unofficial ? `<div class="section"><h2>No oficial</h2></div><p class="foot">Estas vueltas no tienen tarjeta del club. No entran en tus promedios ni en los números del grupo.</p><div class="list">${unofficial}</div>` : "";
   return `<div class="top"><span class="overline">${rounds.length} tarjetas · ${G.clubs.length===1?esc(G.clubs[0].club_name):G.clubs.length+' clubes'}</span></div>
   <h1 class="ltitle">Rondas</h1>${G.courses.length>1?`<div class="seg">${segBtns(segL,'segl')}</div>`:''}
   <div class="rsort" role="radiogroup" aria-label="Ordenar"><span aria-hidden="true">Ordenar</span>${[['date','Fecha'],['gross','Mejor gross'],['net','Mejor neto']].map(([k,l])=>`<button type="button" role="radio" aria-checked="${sortL===k}" class="${sortL===k?'on':''}" data-sortl="${k}">${l}</button>`).join('')}</div>
   ${sortL==='gross' ? `<div class="list">${list.filter(r=>r.valid_card&&r.gross&&!r.is_9_holes).sort((a,b)=>a.gross-b.gross||(a.date<b.date?1:-1)).map(r=>roundRow(r, false, true)).join('')}</div><p class="foot">Solo tarjetas válidas de 18 hoyos, de la mejor a la peor.</p>` :
     sortL==='net' ? `<div class="list">${list.filter(r=>r.valid_card&&r.gross&&!r.is_9_holes).sort((a,b)=>(a.net==null)-(b.net==null)||(a.net??0)-(b.net??0)||(a.date<b.date?1:-1)).map(r=>roundRow(r, false, true)).join('')}</div><p class="foot">Solo tarjetas válidas de 18 hoyos, por neto de menor a mayor; las que no tienen neto van al final.</p>` :
   Object.keys(by).sort().reverse().map(y=>{ const v=by[y].filter(r=>r.valid_card&&r.gross&&!r.is_9_holes), cur = y === curYear();
-    return `<section class="yrgrp${cur?' cur':''}">${cur ? '' : `<div class="yrpill" aria-hidden="true"><span class="num">${y}</span></div>`}<div class="yearhdr"><span>${cur ? 'Este año' : `<span class="sr">Año </span>${y}`}</span><span>${v.length?'prom. '+f1(mean(v.map(r=>r.gross))):''}</span></div><div class="list">${by[y].map(r=>roundRow(r)).join('')}</div></section>`; }).join('')}`;
+    return `<section class="yrgrp${cur?' cur':''}">${cur ? '' : `<div class="yrpill" aria-hidden="true"><span class="num">${y}</span></div>`}<div class="yearhdr"><span>${cur ? 'Este año' : `<span class="sr">Año </span>${y}`}</span><span>${v.length?'prom. '+f1(mean(v.map(r=>r.gross))):''}</span></div><div class="list">${by[y].map(r=>roundRow(r)).join('')}</div></section>`; }).join('')}${unofficialBlock}`;
 }
 
 /* ---------- RONDA (sheet) ---------- */
@@ -3610,7 +3612,8 @@ function render(keepScroll){
     const here = location.hash || '#/inicio', back = (GROUPISH(p[0]) && GG) ? GG.parent(here) : (p[0] === 'plan' && GP) ? GP.parent(here) : ((p[0] === 'partido' || p[0] === 'partidos') && GM) ? GM.parent(here) : (p[0] === 'metricas' && p[2]) ? `#/metricas/${metTab(p[1])}` : (p[0] === 'diferencial' && p[1]) ? (BACK[here] || `#/ronda/${p[1]}`) : (BACK[here] || PARENT[p[0]] || '#/inicio');
     detail = detail.replace(/<button class="close" data-close>[\s\S]*?<\/button>/g, '');
     view.dataset.v = 'd-' + p[0];
-    view.innerHTML = `<div class="pg"><nav class="crumbs" aria-label="Volver"><a class="crumb-back" href="${esc(back)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1L3 6l5 5"/></svg>${esc(labelFor(back))}</a></nav>
+    const trackShots = p[0] === 'ronda' && p[1] ? `<a class="track-shots" id="track-shots" href="#/reconstruir?ronda=${encodeURIComponent(p[1])}&amp;hole=1">Track Shots</a>` : '';
+    view.innerHTML = `<div class="pg"><nav class="crumbs" aria-label="Volver"><a class="crumb-back" href="${esc(back)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1L3 6l5 5"/></svg>${esc(labelFor(back))}</a>${trackShots}</nav>
       <div class="md${aside ? ' has-aside' : ''}">${aside ? `<aside class="md-list">${aside}</aside>` : ''}<article class="md-detail">${detail}</article></div></div>`;
     window.scrollTo(0, 0);
     const on = view.querySelector('.md-list .on'); if (on) on.scrollIntoView({ block: 'nearest' });

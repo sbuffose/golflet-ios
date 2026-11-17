@@ -195,7 +195,7 @@ export async function renameGroup(userId: string, groupId: string, name: unknown
 }
 
 /* ---------------- comparison (aggregates only) ---------------- */
-import { groupWindow, inWindow, memberStats, shareMember, worstHoles, type NR } from "./group-stats";
+import { countsInSharedStats, groupWindow, inWindow, memberStats, shareMember, worstHoles, type NR } from "./group-stats";
 export { memberStats, shareMember };
 const r1 = (x: number | null) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
 const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
@@ -204,11 +204,11 @@ export async function memberRounds(userId: string): Promise<{ rounds: NR[]; hi: 
   const d: any = await buildData(userId);
   const courses = new Map<string, { label: string; par: number | null; holes: any[] }>();
   for (const c of d.courses || []) courses.set(c.key, { label: c.course && c.club_name ? (c.label || c.course) : c.label, par: c.par ?? null, holes: (c.holes || []).map((h: any) => ({ hole: h.hole, par: h.par, hcp: h.hcp })) });
-  const rounds: NR[] = (d.rounds || []).filter((r: any) => r.valid_card && r.gross).map((r: any) => ({
+  const rounds: NR[] = (d.rounds || []).filter((r: any) => r.valid_card && r.gross && countsInSharedStats(r.official)).map((r: any) => ({
     date: r.date, year: String(r.date).slice(0, 4), course_key: r.course_key, course_label: r.course_label || courses.get(r.course_key)?.label || r.course,
     nine: !!r.is_9_holes,
     gross: Number(r.gross) || null, net: r.net != null ? Number(r.net) : null, holes: Array.isArray(r.holes) ? r.holes : [],
-    putts: r.putts ?? null, gir: r.gir ?? null, fir: r.fir ?? null, round_id: String(r.round_id),
+    putts: r.putts ?? null, gir: r.gir ?? null, fir: r.fir ?? null, round_id: String(r.round_id), official: r.official !== false,
     par: (() => { const hs = Array.isArray(r.holes) ? r.holes : []; const ok = hs.filter((h: any) => h && h[1]); return ok.length === 18 ? ok.reduce((n: number, h: any) => n + Number(h[1]), 0) : (courses.get(r.course_key)?.par ?? null); })() }));
   const hi = d.player?.handicap_index ?? (d.hi_history || []).at(-1)?.hi ?? null;
   const hi_history = (d.hi_history || []).filter((h: any) => h?.date && h.hi != null).map((h: any) => ({ date: String(h.date).slice(0, 10), hi: Number(h.hi) }));
