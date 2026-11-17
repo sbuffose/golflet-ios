@@ -1807,8 +1807,8 @@ final class GolfletUITests: XCTestCase {
                 XCTAssertTrue(joined.contains("birdie") && joined.contains("pares") && joined.contains("bogey"), joined, file: file, line: line)
                 XCTAssertFalse(labels.contains { $0.contains("\n") }, "El número y la palabra no van en la misma línea: \(joined)", file: file, line: line)
                 if framed.count >= 3 {
-                    let line = framed.filter { abs($0.1.minY - framed[0].1.minY) < 2 }
-                    let sample = line.count >= 3 ? line : framed
+                    let sameLine = framed.filter { abs($0.1.minY - framed[0].1.minY) < 2 }
+                    let sample = sameLine.count >= 3 ? sameLine : framed
                     let frames = sample.map(\.1)
                     let dump = sample.map { "\($0.0) h\($0.1.height) y\($0.1.minY)" }.joined(separator: ", ")
                     let heights = frames.map(\.height)
