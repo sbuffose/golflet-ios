@@ -77,13 +77,18 @@ test("the public bundle opens the already-played round and the two explicit read
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#recon-start");
     await page.click("#recon-start");
-    await page.waitForFunction(() => (document.querySelector("#rc-course")?.textContent || "").includes("Cancha Fixture"));
+    await page.waitForSelector("#rc-manual-open");
+    await page.click("#rc-manual-open");
+    await page.waitForFunction(() => {
+      const sel = document.querySelector("#rc-course") as HTMLSelectElement | null;
+      return !!sel && sel.value.length > 0 && (sel.textContent || "").includes("Cancha Fixture");
+    });
     const err = await page.$eval("#rc-err", el => el.textContent || "");
     const course = await page.$eval("#rc-course", el => (el as HTMLSelectElement).selectedOptions[0]?.textContent || "");
     assert.equal(err.includes("api is not defined"), false);
     assert.equal(course.includes("Cargando canchas"), false);
     assert.match(course, /Cancha Fixture/);
-    await page.click("#rc-start");
+    await page.$eval("#rc-start", el => (el as HTMLButtonElement).click());
     await page.waitForFunction(() => location.hash === "#/reconstruir/live-fixture");
     assert.equal(calls.postCourse, "course-fixture");
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });

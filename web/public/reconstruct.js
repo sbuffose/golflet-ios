@@ -95,17 +95,22 @@
     return `<div class="rc-pick" id="rc-pick">
       <div id="rc-last"></div>
       <div id="rc-rest"></div>
-      <div class="card rc-manual">
-        <div class="t">Sin tarjeta del club</div>
-        <p class="s">Elegí cancha, tee y fecha. Queda marcada como no oficial y no entra en los números del grupo, ni en pares, birdies, rachas ni en Con quién jugás.</p>
-        <label class="s">Fecha<input id="rc-date" type="date" required></label>
-        <label class="s">Cancha<select id="rc-course"><option value="">Cargando canchas…</option></select></label>
-        <label class="s">Tee<select id="rc-tee">${TEES.map(t => `<option${t === "Blanco" ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
-        <p id="rc-err" class="s"></p>
-        <button class="btn" type="button" id="rc-start">Registrar golpes</button>
-      </div>
-      <div id="rc-unofficial"></div>
+      <details class="rc-manual" id="rc-manual">
+        <summary id="rc-manual-open">Sin tarjeta del club</summary>
+        <div class="card">
+          <p class="s">Elegí cancha, tee y fecha. Queda marcada como no oficial y no entra en los números del grupo, ni en pares, birdies, rachas ni en Con quién jugás.</p>
+          <label class="s">Fecha<input id="rc-date" type="date" required></label>
+          <label class="s">Cancha<select id="rc-course"><option value="">Cargando canchas…</option></select></label>
+          <label class="s">Tee<select id="rc-tee">${TEES.map(t => `<option${t === "Blanco" ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+          <p id="rc-err" class="s"></p>
+          <button class="btn" type="button" id="rc-start">Registrar golpes</button>
+        </div>
+      </details>
     </div>`;
+  }
+
+  function looseRow(r) {
+    return `<a class="rc-row rc-off" href="#/reconstruir/${esc(r.id)}"><b>${esc(dayLabel(r.date))}</b><span>${esc(roundLine(r))}</span><em>No oficial${r.tracked ? " · Golpes cargados" : ""}</em></a>`;
   }
 
   function choiceRow(r, featured) {
@@ -125,6 +130,17 @@
     date.value = prefill?.date || art;
     date.max = art;
     const err = root.querySelector("#rc-err");
+    root.querySelector("#rc-start").onclick = async () => {
+      err.textContent = "";
+      const course = root.querySelector("#rc-course").value;
+      if (!course) { err.textContent = "Elegí la cancha."; return; }
+      try {
+        const body = { date: date.value, course_id: course, tee: root.querySelector("#rc-tee").value };
+        if (prefill?.roundId) body.round_id = prefill.roundId;
+        const res = await api("/api/reconstructions", { method: "POST", body: JSON.stringify(body) });
+        location.hash = `#/reconstruir/${res.live_round.id}`;
+      } catch (e) { err.textContent = e?.message || "No pudimos abrir la vuelta."; }
+    };
     try {
       const pack = await api("/api/gps/courses");
       const courses = pack.courses || [];
@@ -140,29 +156,19 @@
       const rounds = mine.rounds || [];
       const last = root.querySelector("#rc-last");
       const rest = root.querySelector("#rc-rest");
-      if (rounds.length) {
-        last.innerHTML = choiceRow(rounds[0], true);
-        rest.innerHTML = rounds.length > 1 ? `<div class="stitle">Otras tarjetas</div>${rounds.slice(1).map(r => choiceRow(r, false)).join("")}` : "";
-      } else {
-        last.innerHTML = `<p class="s">Todavía no hay una tarjeta del club. Podés cargar los golpes igual, como vuelta no oficial.</p>`;
-        rest.innerHTML = "";
-      }
       const loose = (mine.reconstructions || []).filter(r => r.official === false || (!r.round_id && r.official !== true));
-      root.querySelector("#rc-unofficial").innerHTML = loose.map(r => `<a class="rc-row rc-off" href="#/reconstruir/${esc(r.id)}"><b>${esc(dayLabel(r.date))}</b><span>${esc(roundLine(r))}</span><em>No oficial${r.tracked ? " · Golpes cargados" : ""}</em></a>`).join("");
+      if (rounds.length) last.innerHTML = choiceRow(rounds[0], true);
+      else last.innerHTML = `<p class="s">Todavía no hay una tarjeta del club. Podés cargar los golpes igual, como vuelta no oficial.</p>`;
+      const rows = [
+        ...rounds.slice(rounds.length ? 1 : 0).map(r => ({ date: r.date || "", id: r.id || "", html: choiceRow(r, false) })),
+        ...loose.map(r => ({ date: r.date || "", id: r.id || "", html: looseRow(r) })),
+      ].sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
+      rest.innerHTML = rows.length ? `<div class="stitle">Otras tarjetas</div>${rows.map(r => r.html).join("")}` : "";
     } catch (e) {
       if (!err.textContent) err.textContent = e?.message || "No pudimos leer tus vueltas.";
     }
-    root.querySelector("#rc-start").onclick = async () => {
-      err.textContent = "";
-      const course = root.querySelector("#rc-course").value;
-      if (!course) { err.textContent = "Elegí la cancha."; return; }
-      try {
-        const body = { date: date.value, course_id: course, tee: root.querySelector("#rc-tee").value };
-        if (prefill?.roundId) body.round_id = prefill.roundId;
-        const res = await api("/api/reconstructions", { method: "POST", body: JSON.stringify(body) });
-        location.hash = `#/reconstruir/${res.live_round.id}`;
-      } catch (e) { err.textContent = e?.message || "No pudimos abrir la vuelta."; }
-    };
+    const manual = root.querySelector("#rc-manual");
+    if (manual && prefill?.roundId) manual.open = true;
   }
 
   let VISIT = 0;

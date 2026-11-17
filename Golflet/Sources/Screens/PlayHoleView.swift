@@ -598,6 +598,9 @@ struct PlayHoleView: View {
     private var dock: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
+                if editingClosed {
+                    markActions
+                }
                 if track.marks.contains(where: \.holed), !holeClosed {
                     CaddieMark(height: 48)
                 }
@@ -667,7 +670,7 @@ struct PlayHoleView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .accessibilityIdentifier("play-edit-save")
                 }
-                if !holeClosed {
+                if !holeClosed && !editingClosed {
                     markActions
                     if track.phase == .tracking { lostActions }
                 }

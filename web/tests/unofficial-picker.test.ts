@@ -40,6 +40,13 @@ test("cargar una vuelta ofrece la última tarjeta, el resto y una vuelta no ofic
         unofficial_rounds: [{ id: "live-loose", date: "2026-11-02", course: "Cancha Vieja", tee: "Blanco", club_code: "209", official: false }],
       });
       if (url.pathname === "/api/gps/courses") return json({ courses: [{ course_id: "209-cancha-vieja", club_name: "Mar del Plata Golf Club", club_code: "209", course: "Cancha Vieja", label: "Cancha Vieja" }] });
+      if (url.pathname === "/api/gps/courses/209-cancha-vieja") return json({ course: {
+        course_id: "209-cancha-vieja", club_code: "209", course: "Cancha Vieja",
+        holes: [
+          { number: 1, par: 4, tee: { lat: -38.037468, lng: -57.538187 }, green: { center: { lat: -38.033812, lng: -57.538187 } } },
+          { number: 2, par: 4 },
+        ],
+      } });
       if (url.pathname === "/api/reconstructions" && req.method === "GET") return json({
         rounds,
         reconstructions: [{ id: "live-loose", date: "2026-11-02", course: "Cancha Vieja", tee: "Blanco", club_code: "209", vm_course: "Cancha Vieja", round_id: null, official: false, tracked: false, current_hole: 1 }],
@@ -68,7 +75,7 @@ test("cargar una vuelta ofrece la última tarjeta, el resto y una vuelta no ofic
     await page.setRequestInterception(true);
     page.on("request", req => {
       const host = new URL(req.url()).hostname;
-      if (host !== "127.0.0.1" && host !== "localhost") req.abort();
+      if (host !== "127.0.0.1" && host !== "localhost" && host !== "server.arcgisonline.com") req.abort();
       else req.continue();
     });
     for (const width of [375, 430]) {
@@ -87,14 +94,31 @@ test("cargar una vuelta ofrece la última tarjeta, el resto y una vuelta no ofic
       assert.match(text, /Sin tarjeta del club/);
       assert.match(text, /No oficial/);
       const order = await page.evaluate(() => {
-        const last = document.querySelector("#rc-last")?.getBoundingClientRect().top ?? 0;
-        const rest = document.querySelector("#rc-rest")?.getBoundingClientRect().top ?? 0;
-        const manual = document.querySelector(".rc-manual")?.getBoundingClientRect().top ?? 0;
-        const off = document.querySelector("#rc-unofficial")?.getBoundingClientRect().top ?? 0;
+        const rows = [...document.querySelectorAll("#rc-rest .rc-row")].map(el => ({
+          text: (el as HTMLElement).innerText,
+          top: el.getBoundingClientRect().top,
+        }));
+        const manual = document.querySelector("#rc-manual") as HTMLDetailsElement;
+        const course = document.querySelector("#rc-course") as HTMLElement;
         const feat = getComputedStyle(document.querySelector(".rc-feat") as Element).backgroundColor;
-        return { last, rest, manual, off, feat, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
+        return {
+          rows,
+          lastBottom: document.querySelector("#rc-last")!.getBoundingClientRect().bottom,
+          manualTop: manual.getBoundingClientRect().top,
+          formOpen: manual.open,
+          courseH: course.checkVisibility() ? course.getBoundingClientRect().height : 0,
+          feat,
+          overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        };
       });
-      assert.ok(order.last < order.rest && order.rest < order.manual && order.manual < order.off, JSON.stringify(order));
+      assert.equal(order.formOpen, false);
+      assert.equal(order.courseH, 0);
+      assert.equal(order.rows.length, 2);
+      assert.match(order.rows[0].text, /2 nov 2026/);
+      assert.match(order.rows[0].text, /No oficial/);
+      assert.match(order.rows[1].text, /4 oct 2026/);
+      assert.ok(order.lastBottom <= order.rows[0].top + 1, JSON.stringify(order));
+      assert.ok(order.rows[1].top < order.manualTop, JSON.stringify(order));
       assert.equal(order.feat, "rgb(11, 37, 69)");
       assert.equal(order.overflow, false);
       if (saveShots) await page.screenshot({ path: `${SHOTS}/web-${width}-cargar-vuelta.png`, fullPage: true });
@@ -126,9 +150,26 @@ test("cargar una vuelta ofrece la última tarjeta, el resto y una vuelta no ofic
     await page.click("#rc-last");
     await page.waitForFunction(() => location.hash.includes("ronda=card-new"));
     assert.equal(posts.length, 0);
+    await page.waitForSelector("#tkmap", { timeout: 15000 });
+    await page.waitForFunction(() => (document.body.innerText || "").includes("Hoyo 1"));
+    await new Promise(r => setTimeout(r, 1800));
+    for (const width of [375, 430]) {
+      await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+      await new Promise(r => setTimeout(r, 300));
+      if (saveShots) await page.screenshot({ path: `${SHOTS}/web-${width}-track-shots-hoyo-1.png` });
+    }
+    await page.click("#tknext");
+    await page.waitForSelector("#rc-nogeo");
+    for (const width of [375, 430]) {
+      await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+      if (saveShots) await page.screenshot({ path: `${SHOTS}/web-${width}-track-shots-sin-geo.png` });
+    }
+    await page.setViewport({ width: 375, height: 900, deviceScaleFactor: 1 });
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#rc-start");
-    await page.click("#rc-start");
+    await page.waitForSelector("#rc-manual-open");
+    await page.click("#rc-manual-open");
+    await page.waitForFunction(() => (document.querySelector("#rc-course") as HTMLSelectElement | null)?.value === "209-cancha-vieja");
+    await page.$eval("#rc-start", el => (el as HTMLButtonElement).click());
     await page.waitForFunction(() => location.hash.includes("live-manual"));
     const body = posts[0] as { round_id?: string; tee?: string; course_id?: string };
     assert.equal(body.round_id, undefined);

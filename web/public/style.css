@@ -143,7 +143,12 @@ button{font:inherit;color:inherit}
 .rc-feat em,.rc-row em{font-style:normal;font-size:12px;font-weight:650}
 .rc-kicker{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#C8A86A}
 .rc-off em{color:#3E4C62}
-.rc-manual{margin-top:16px}
+.rc-manual{margin-top:8px}
+.rc-manual > summary{display:flex;align-items:center;box-sizing:border-box;width:100%;min-height:64px;margin:0;padding:12px 14px;background:#fff;color:#0B2545;border-radius:12px;box-shadow:var(--shadow-card);font-style:normal;font-size:16px;font-weight:650;line-height:1.25;cursor:pointer;list-style:none}
+.rc-manual > summary::-webkit-details-marker{display:none}
+.rc-manual:not([open]) > :not(summary){display:none}
+.rc-manual[open] > summary{margin-bottom:8px}
+.rc-manual .card{margin-top:0}
 .tk-unofficial{display:inline-flex;align-items:center;margin-left:8px;padding:2px 8px;border-radius:6px;background:#ECE7DB;color:#0B2545;font-style:normal;font-size:12px;font-weight:700}
 .track-shots{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 12px;border-radius:8px;background:#0B2545;color:#fff;text-decoration:none;font-weight:650;font-size:14px;font-style:normal}
 .rc-pick label.s{display:flex;flex-direction:column;gap:6px;margin-top:12px;white-space:normal;overflow:visible}

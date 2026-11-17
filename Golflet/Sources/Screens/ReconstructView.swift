@@ -28,6 +28,7 @@ struct ReconstructView: View {
     @State private var teeName = "Blanco"
     @State private var holeEnds: [Int: HoleEnds] = [:]
     @State private var courseFocus: ReconstructionPoint?
+    @State private var showsManual = false
 
     private let clubs = ["Dr", "3W", "5W", "Hy", "4i", "5i", "6i", "7i", "8i", "9i", "PW", "GW", "SW", "LW", "Pt"]
     private let teeNames = ["Azul", "Blanco", "Amarillo", "Colorado", "Negro"]
@@ -72,57 +73,71 @@ struct ReconstructView: View {
                 Button { Task { await openChoice(last) } } label: { choiceLabel(last, featured: true) }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("rc-last")
-                if setup.officialRounds.count > 1 {
-                    Text("Otras tarjetas")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                    ForEach(Array(setup.officialRounds.dropFirst())) { round in
-                        Button { Task { await openChoice(round) } } label: { choiceLabel(round, featured: false) }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("rc-row")
-                    }
-                }
             } else {
                 Text("Todavía no hay una tarjeta del club. Podés cargar los golpes igual, como vuelta no oficial.")
                     .font(GType.label)
                     .foregroundStyle(p.ink2)
             }
-            VStack(alignment: .leading, spacing: 8) {
+            if !otherCards.isEmpty {
+                Text("Otras tarjetas")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                ForEach(otherCards) { round in
+                    Button {
+                        Task {
+                            if round.official == false { await open(round) }
+                            else { await openChoice(round) }
+                        }
+                    } label: { choiceLabel(round, featured: false) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("rc-row")
+                }
+            }
+            Button { showsManual.toggle() } label: {
                 Text("Sin tarjeta del club")
                     .font(GType.headline)
                     .foregroundStyle(p.ink)
-                Text("Elegí cancha, tee y fecha. Queda marcada como no oficial y no entra en los números del grupo, ni en pares, birdies, rachas ni en Con quién jugás.")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-                DatePicker("Fecha", selection: $date, in: ...Date(), displayedComponents: .date)
-                    .environment(\.timeZone, TimeZone(identifier: "America/Argentina/Buenos_Aires") ?? .current)
-                    .accessibilityIdentifier("rc-date")
-                Picker("Cancha", selection: $courseKey) {
-                    Text("Elegí la cancha").tag("")
-                    ForEach(model.courses) { course in
-                        Text("\(course.clubName) · \(course.name)").tag(course.id)
-                    }
-                }
-                .accessibilityIdentifier("rc-course")
-                Picker("Tee", selection: $teeName) {
-                    ForEach(teeNames, id: \.self) { Text($0).tag($0) }
-                }
-                Button("Registrar golpes") { Task { await create(cardId: nil) } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(p.primary)
-                    .disabled(busy || courseKey.isEmpty)
-                    .accessibilityIdentifier("rc-start")
-            }
-            ForEach(setup.saved.filter { $0.official == false }) { saved in
-                Button { Task { await open(saved) } } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(saved.date) · \(saved.course)").font(GType.headline).foregroundStyle(p.ink)
-                        Text("No oficial\(saved.tracked ? " · Golpes cargados" : "")").font(GType.label).foregroundStyle(p.ink2)
-                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
+                    .padding(14)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("rc-manual-open")
+            if showsManual {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Elegí cancha, tee y fecha. Queda marcada como no oficial y no entra en los números del grupo, ni en pares, birdies, rachas ni en Con quién jugás.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                    DatePicker("Fecha", selection: $date, in: ...Date(), displayedComponents: .date)
+                        .environment(\.timeZone, TimeZone(identifier: "America/Argentina/Buenos_Aires") ?? .current)
+                        .accessibilityIdentifier("rc-date")
+                    Picker("Cancha", selection: $courseKey) {
+                        Text("Elegí la cancha").tag("")
+                        ForEach(model.courses) { course in
+                            Text("\(course.clubName) · \(course.name)").tag(course.id)
+                        }
+                    }
+                    .accessibilityIdentifier("rc-course")
+                    Picker("Tee", selection: $teeName) {
+                        ForEach(teeNames, id: \.self) { Text($0).tag($0) }
+                    }
+                    Button("Registrar golpes") { Task { await create(cardId: nil) } }
+                        .buttonStyle(.borderedProminent)
+                        .tint(p.primary)
+                        .disabled(busy || courseKey.isEmpty)
+                        .accessibilityIdentifier("rc-start")
+                }
+            }
+        }
+    }
+
+    private var otherCards: [ReconstructionRound] {
+        let official = Array(setup.officialRounds.dropFirst())
+        let loose = setup.saved.filter { $0.official == false }
+        return (official + loose).sorted { lhs, rhs in
+            if lhs.date == rhs.date { return lhs.id > rhs.id }
+            return lhs.date > rhs.date
         }
     }
 
@@ -139,7 +154,7 @@ struct ReconstructView: View {
             Text(choiceLine(round))
                 .font(GType.label)
                 .foregroundStyle(featured ? Color.white : p.ink2)
-            Text(round.tracked ? "Golpes cargados" : "Sin golpes")
+            Text(round.official == false ? (round.tracked ? "No oficial · Golpes cargados" : "No oficial") : (round.tracked ? "Golpes cargados" : "Sin golpes"))
                 .font(GType.label)
                 .foregroundStyle(featured ? Color.white : p.ink2)
         }
@@ -192,7 +207,7 @@ struct ReconstructView: View {
                     }
                 }
             }
-            .accessibilityIdentifier("play-club")
+            .accessibilityIdentifier("rc-clubs")
             Picker("Hoyo", selection: $hole) {
                 ForEach(1...18, id: \.self) { Text("\($0)").tag($0) }
             }
@@ -357,13 +372,17 @@ struct ReconstructView: View {
         }
         roundId = choice.id
         if let day = Self.day(choice.date) { date = day }
-        guard let course = RoundTrackCourse.match(courses: model.courses, clubCode: choice.clubCode, name: choice.course) else {
-            note = "Elegí la cancha."
-            return
+        if !choice.tee.isEmpty { teeName = choice.tee }
+        if let course = RoundTrackCourse.match(courses: model.courses, clubCode: choice.clubCode, name: choice.course) {
+            courseKey = course.id
+            staged = true
+            await loadMap(club: course.clubCode, name: course.name)
+        } else {
+            courseKey = ""
+            staged = true
+            note = "Elegí la cancha para guardar los golpes."
+            await loadMap(club: choice.clubCode, name: choice.course)
         }
-        courseKey = course.id
-        staged = true
-        await loadMap(club: course.clubCode, name: course.name)
     }
 
     private func loadMap(club: String, name: String) async {

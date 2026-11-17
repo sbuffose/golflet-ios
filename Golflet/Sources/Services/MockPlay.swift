@@ -24,7 +24,13 @@ extension MockAPIClient {
     func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail {
         _ = lat
         _ = lng
-        guard let summary = Self.demoCourses.first(where: { $0.courseId == id }) ?? Self.demoCourses.first else {
+        let wanted = id.lowercased()
+        guard let summary = Self.demoCourses.first(where: { $0.courseId == id })
+            ?? Self.demoCourses.first(where: { wanted.contains("vieja") && $0.course.contains("Vieja") })
+            ?? Self.demoCourses.first(where: { wanted.contains("nueva") && $0.course.contains("Nueva") })
+            ?? Self.demoCourses.first(where: { wanted.contains("colorada") && $0.course.contains("Colorada") })
+            ?? Self.demoCourses.first(where: { wanted.contains("azul") && $0.course == "Azul" })
+            ?? Self.demoCourses.first else {
             throw GolfletError.decoding("course")
         }
         return GPSCourseDetail(
@@ -726,14 +732,30 @@ extension MockAPIClient {
     ]
 
     private static func demoHoles(for courseId: String) -> [GPSHole] {
-        let origin = GPSCoord(lat: -34.485427, lng: -58.532351)
+        let origin = courseId.contains("vieja")
+            ? GPSCoord(lat: -38.037468, lng: -57.538187)
+            : GPSCoord(lat: -34.485427, lng: -58.532351)
         return (1...18).map { number in
             let step = Double(number - 1)
             let tee = GPSCoord(lat: origin.lat + step * 0.00055, lng: origin.lng + step * 0.00042)
             let center: GPSCoord
             let front: GPSCoord
             let back: GPSCoord
-            if number == 1, courseId.contains("azul") {
+            if number == 2, courseId.contains("vieja") {
+                return GPSHole(
+                    number: number,
+                    par: 4,
+                    hcp: number,
+                    yards: ["AZUL": 380],
+                    green: GPSGreen(front: nil, center: nil, back: nil),
+                    tee: nil
+                )
+            }
+            if number == 1, courseId.contains("vieja") {
+                front = GPSCoord(lat: -38.033692, lng: -57.538243)
+                center = GPSCoord(lat: -38.033812, lng: -57.538187)
+                back = GPSCoord(lat: -38.033921, lng: -57.538128)
+            } else if number == 1, courseId.contains("azul") {
                 front = GPSCoord(lat: -34.48311941, lng: -58.52894679)
                 center = GPSCoord(lat: -34.48305197, lng: -58.52881)
                 back = GPSCoord(lat: -34.48298896, lng: -58.52870807)

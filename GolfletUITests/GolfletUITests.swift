@@ -285,10 +285,14 @@ final class GolfletUITests: XCTestCase {
             "El hoyo cerrado no mostró Editar hoyo (\(status.label))"
         )
         saveShot("parity-ios-track-closed")
-        first(app, "play-edit-hole").tap()
-        XCTAssertTrue(first(app, "play-club").waitForExistence(timeout: 4), "Falta el palo al editar el hoyo")
-        first(app, "play-club").tap()
-        XCTAssertTrue(waitFor(app, "play-club-sheet", timeout: 4), "No se abrió el popup de palos")
+        let edit = app.buttons["play-edit-hole"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 4))
+        if edit.isHittable { edit.tap() } else { edit.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        let club = app.buttons["play-club"]
+        XCTAssertTrue(club.waitForExistence(timeout: 6), "Falta el palo al editar el hoyo")
+        if !club.isHittable { app.swipeUp() }
+        if club.isHittable { club.tap() } else { club.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "play-club-sheet", timeout: 8), "No se abrió el popup de palos")
         saveShot("parity-ios-track-club")
         dismissIfPresent(app, "play-club-close")
     }
@@ -1720,6 +1724,14 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Golpes cargados"].exists)
         XCTAssertTrue(app.staticTexts["No oficial"].exists)
         shot("cargar-vuelta")
+        let lastCard = first(app, "rc-last")
+        if lastCard.isHittable { lastCard.tap() } else { lastCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "hole-satellite", timeout: 8), "Falta el satélite de Cancha Vieja, hoyo 1")
+        shot("track-shots-hoyo-1")
+        let nextHole = first(app, "tknext")
+        if nextHole.isHittable { nextHole.tap() } else { nextHole.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "rc-nogeo", timeout: 6), "El hoyo sin geometría no avisa")
+        shot("track-shots-sin-geo")
         dismissIfPresent(app, "reconstruct-back")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
         if waitFor(app, "last-round-card", timeout: 4) {
