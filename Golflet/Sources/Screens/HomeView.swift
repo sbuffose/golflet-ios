@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var showsScorecards = false
     @State private var highlightPartners = false
     @State private var modeOpen = false
+    @State private var groupPlaces: [String: Int] = [:]
     @Namespace private var roundZoom
 
     var body: some View {
@@ -53,6 +54,7 @@ struct HomeView: View {
                                 .accessibilityIdentifier("sync-failed")
                         }
                         handicapCard
+                        homeCircle
                         if model.homeMode == .mej, !model.liveShots.isEmpty {
                             SGCard(shots: model.liveShots)
                         }
@@ -71,6 +73,9 @@ struct HomeView: View {
         .accessibilityIdentifier("screen-inicio")
         .onAppear {
             Task { await model.refreshTeeTimes() }
+        }
+        .task(id: model.groups.map(\.id).joined(separator: ",")) {
+            await loadGroupPlaces()
         }
         .onChange(of: model.selectedTab) { _, tab in
             if tab == .inicio {
@@ -289,21 +294,6 @@ struct HomeView: View {
                     }
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 8) {
-                        HomeHcpPeople(
-                            profesores: model.profesores,
-                            groups: model.groups,
-                            onProfesor: { presentProfesor($0) },
-                            onProfesores: { showsHomeProfesores = true },
-                            onAddProfesor: { showsAgregarProfesor = true },
-                            onGroups: {
-                                if model.groups.count == 1, let group = model.groups.first {
-                                    model.presentGroupDetail(group.id)
-                                } else {
-                                    model.presentGroups()
-                                }
-                            },
-                            onCreate: { model.presentCreateGroup() }
-                        )
                         Button { model.showsPlay = true } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "location.fill")
@@ -329,6 +319,44 @@ struct HomeView: View {
         .background(alignment: .topLeading) {
             GProbe(id: "handicap-card", label: "Handicap index")
         }
+    }
+
+    private var homeCircle: some View {
+        HomeHcpPeople(
+            profesores: model.profesores,
+            groups: model.groups,
+            places: groupPlaces,
+            onProfesor: { presentProfesor($0) },
+            onProfesores: { showsHomeProfesores = true },
+            onAddProfesor: { showsAgregarProfesor = true },
+            onGroup: { model.presentGroupDetail($0.id) },
+            onGroups: {
+                if model.groups.count == 1, let group = model.groups.first {
+                    model.presentGroupDetail(group.id)
+                } else {
+                    model.presentGroups()
+                }
+            },
+            onCreate: { model.presentCreateGroup() }
+        )
+    }
+
+    private func loadGroupPlaces() async {
+        var next: [String: Int] = [:]
+        for group in model.groups.prefix(3) {
+            if Task.isCancelled { return }
+            do {
+                let config = try await model.api.groupView(groupID: group.id)
+                let comparison = try await model.api.groupComparison(groupID: group.id, config: config)
+                guard let mine = comparison.hero?.memberID,
+                      let row = comparison.rows.first(where: { $0.metric == .gross }),
+                      let place = row.rank(of: mine) else { continue }
+                next[group.id] = place
+            } catch {
+                continue
+            }
+        }
+        if !Task.isCancelled { groupPlaces = next }
     }
 
     private func heroMini(_ label: String, _ value: String, gold: Bool = false, access: String? = nil) -> some View {
@@ -1059,17 +1087,18 @@ struct HomeHcpPeople: View {
     @Environment(\.palette) private var p
     let profesores: [Profesor]
     let groups: [GolfletGroup]
+    var places: [String: Int] = [:]
     var onProfesor: (Profesor) -> Void
     var onProfesores: () -> Void
     var onAddProfesor: () -> Void
+    var onGroup: (GolfletGroup) -> Void = { _ in }
     var onGroups: () -> Void
     var onCreate: () -> Void
 
-    private let groupAvatar: CGFloat = HomeHcpPeopleLayout.groupAvatar
-    private let profesorAvatar: CGFloat = HomeHcpPeopleLayout.profesorAvatar
+    private let face: CGFloat = 44
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: HomeHcpPeopleLayout.stackSpacing) {
+        VStack(alignment: .leading, spacing: 8) {
             if profesores.isEmpty {
                 addProfesor
             } else {
@@ -1078,10 +1107,22 @@ struct HomeHcpPeople: View {
             if groups.isEmpty {
                 createGroup
             } else {
-                groupsColumn
+                ForEach(Array(groups.prefix(3))) { group in
+                    groupRow(group)
+                }
+                if groups.count > 3 {
+                    Button(action: onGroups) {
+                        Text("Ver todos")
+                            .font(GType.headline)
+                            .foregroundStyle(p.primary)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home-hcp-groups-all")
+                }
             }
         }
-        .fixedSize(horizontal: true, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-hcp-people")
     }
@@ -1108,44 +1149,34 @@ struct HomeHcpPeople: View {
     }
 
     private var profesorAvatarLabel: some View {
-        Group {
-            if let caption = HomeHcpPeopleLayout.profesorCaption(profesores.count) {
-                VStack(alignment: .trailing, spacing: 6) {
-                    profesorStack
-                    Text(caption)
-                        .font(GType.label)
-                        .foregroundStyle(p.onPrimary.opacity(0.7))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
+        row {
+            if profesores.count == 1, let first = profesores.first {
+                HomeHcpAvatar(
+                    url: first.photoURL,
+                    initials: first.initials,
+                    size: face,
+                    fill: p.surface2,
+                    ink: p.ink,
+                    ring: Color(hex: HomeHcpPeopleLayout.celeste),
+                    verified: first.verified
+                )
+                copy(first.name, "Profesor")
             } else {
                 profesorStack
+                copy(HomeHcpPeopleLayout.profesorCaption(profesores.count) ?? "Profesores", "Tocá para verlos.")
             }
         }
-        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
-        .contentShape(Rectangle())
-        .background(Color.white.opacity(0.001))
     }
 
     private var addProfesor: some View {
         Button(action: onAddProfesor) {
-            VStack(alignment: .trailing, spacing: 6) {
-                ZStack {
-                    Circle()
-                        .strokeBorder(
-                            Color(hex: HomeHcpPeopleLayout.celeste),
-                            style: StrokeStyle(lineWidth: 1.5, dash: [3.5, 2.5])
-                        )
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
-                }
-                .frame(width: profesorAvatar, height: profesorAvatar)
-                Text(HomeHcpPeopleLayout.addLabel)
-                    .font(GType.label)
-                    .foregroundStyle(p.onPrimary.opacity(0.7))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+            row {
+                Text("+")
+                    .font(GFont.ui(22, weight: .semibold))
+                    .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
+                    .frame(width: face, height: face)
+                    .overlay(Circle().strokeBorder(Color(hex: HomeHcpPeopleLayout.celeste), style: StrokeStyle(lineWidth: 1.5, dash: [3.5, 2.5])))
+                copy(HomeHcpPeopleLayout.addLabel, "Todavía no hay uno vinculado.")
             }
         }
         .buttonStyle(.plain)
@@ -1154,46 +1185,80 @@ struct HomeHcpPeople: View {
         .overlay { GProbe(id: "home-hcp-add-profesor", label: "Agregar profesor") }
     }
 
-    private var groupsColumn: some View {
-        Button(action: onGroups) {
-            VStack(alignment: .trailing, spacing: 6) {
-                groupStack
-                Text(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
-                    .font(GType.label)
-                    .foregroundStyle(p.onPrimary.opacity(0.7))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+    private func groupRow(_ group: GolfletGroup) -> some View {
+        let players = group.memberCount
+        let sub = players > 0 ? "\(players) \(players == 1 ? "jugador" : "jugadores")" : "Grupo"
+        return Button { onGroup(group) } label: {
+            row {
+                HomeHcpAvatar(
+                    url: group.photoURL,
+                    initials: GroupsParser.initials(group.name),
+                    size: face,
+                    fill: p.surface2,
+                    ink: p.primary,
+                    ring: Color(hex: HomeHcpPeopleLayout.accent),
+                    verified: false
+                )
+                copy(group.name, sub)
+                if let place = places[group.id] {
+                    Text("\(place)º")
+                        .font(GType.headline)
+                        .foregroundStyle(p.primary)
+                        .accessibilityLabel("Puesto \(place)")
+                }
             }
-            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
-            .contentShape(Rectangle())
-            .background(Color.white.opacity(0.001))
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("home-hcp-groups")
-        .accessibilityLabel(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
-        .overlay { GProbe(id: "home-hcp-groups", label: groups.count == 1 ? "1 grupo" : "\(groups.count) grupos") }
+        .accessibilityIdentifier(group.id == groups.first?.id ? "home-hcp-groups" : "home-hcp-group-\(group.id)")
+        .accessibilityLabel("Tu grupo: \(group.name)")
+        .overlay {
+            if group.id == groups.first?.id {
+                GProbe(id: "home-hcp-groups", label: group.name)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private var createGroup: some View {
         Button(action: onCreate) {
-            VStack(alignment: .trailing, spacing: 6) {
+            row {
                 Text("+")
                     .font(GFont.ui(22, weight: .semibold))
-                    .foregroundStyle(p.onPrimary)
-                    .frame(width: groupAvatar, height: groupAvatar)
-                    .background(p.accent)
-                    .clipShape(Circle())
-                Text("Crear grupo")
-                    .font(GType.label)
-                    .foregroundStyle(p.onPrimary.opacity(0.7))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .foregroundStyle(p.accent)
+                    .frame(width: face, height: face)
+                    .overlay(Circle().stroke(p.accent, lineWidth: 1.5))
+                copy("Crear grupo", "Compará con tus amigos.")
             }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-crear-grupo")
         .accessibilityLabel("Crear grupo")
         .overlay { GProbe(id: "home-hcp-crear-grupo", label: "Crear grupo") }
+    }
+
+    private func row<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            content()
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .background(p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(Rectangle())
+    }
+
+    private func copy(_ title: String, _ line: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+                .lineLimit(1)
+            Text(line)
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Web HI-card avatar: 28pt, celeste ring, dark fill, blue verified, max 3 + "N profes".
@@ -1205,45 +1270,13 @@ struct HomeHcpPeople: View {
                 HomeHcpAvatar(
                     url: profesor.photoURL,
                     initials: profesor.initials,
-                    size: profesorAvatar,
-                    fill: p.primary,
-                    ink: p.onPrimary,
+                    size: face,
+                    fill: p.surface2,
+                    ink: p.ink,
                     ring: ring,
                     verified: profesor.verified
                 )
                 .zIndex(Double(shown.count - index))
-            }
-        }
-    }
-
-    private var groupStack: some View {
-        let shown = Array(groups.prefix(HomeHcpPeopleLayout.groupVisible))
-        let extra = groups.count - shown.count
-        let ring = Color(hex: HomeHcpPeopleLayout.accent)
-        return ZStack(alignment: .bottomTrailing) {
-            HStack(spacing: shown.count > 1 ? -HomeHcpPeopleLayout.groupOverlap : 0) {
-                ForEach(shown) { group in
-                    HomeHcpAvatar(
-                        url: group.photoURL,
-                        initials: GroupsParser.initials(group.name),
-                        size: groupAvatar,
-                        fill: p.onPrimary,
-                        ink: p.primary,
-                        ring: ring,
-                        verified: false
-                    )
-                }
-            }
-            if extra > 0 {
-                Text("+\(extra)")
-                    .font(GFont.ui(10, weight: .semibold))
-                    .foregroundStyle(p.onPrimary)
-                    .frame(width: 18, height: 18)
-                    .background(p.accent)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(p.primary, lineWidth: 1.5))
-                    .offset(x: 4, y: 4)
-                    .accessibilityLabel("\(extra) más")
             }
         }
     }

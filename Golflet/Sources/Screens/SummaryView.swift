@@ -52,9 +52,16 @@ struct SummaryView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            GOverline(text: "\(model.summary.firstYear) – \(model.summary.lastYear)")
+            GOverline(text: eyebrow)
             GTitle(text: "Resumen")
         }
+    }
+
+    /// One year when the cards in view share it. Otherwise the period name.
+    private var eyebrow: String {
+        let years = Set(model.rangedValidRounds().map { Calendar.gregorian.component(.year, from: $0.date) })
+        if years.count == 1, let year = years.first { return String(year) }
+        return model.statsRange.title
     }
 
     private var period: some View {

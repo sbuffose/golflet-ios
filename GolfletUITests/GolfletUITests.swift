@@ -633,6 +633,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         XCTAssertTrue(first(app, "home-hcp-crear-grupo").waitForExistence(timeout: 4), "Falta Crear grupo")
+        reveal(app, "home-hcp-crear-grupo")
         largest(app, "home-hcp-crear-grupo").tap()
         XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
         saveShot("42_inicio_hcp_crear_grupo")
@@ -649,6 +650,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertFalse(first(app, "home-hcp-groups").exists)
         XCTAssertTrue(first(app, "home-hcp-add-profesor").waitForExistence(timeout: 4), "Falta el placeholder de profesor")
         XCTAssertTrue(first(app, "home-hcp-crear-grupo").waitForExistence(timeout: 4), "Falta Crear grupo")
+        reveal(app, "home-hcp-add-profesor")
         largest(app, "home-hcp-add-profesor").tap()
         XCTAssertTrue(waitFor(app, "screen-agregar-profesor", timeout: 6), "No se abrió Agregar profesor")
         let search = app.textFields["profesor-search"]
@@ -663,6 +665,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-agregar-profesor", timeout: 6))
         dismissIfPresent(app, "close-agregar-profesor")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+        reveal(app, "home-hcp-crear-grupo")
         largest(app, "home-hcp-crear-grupo").tap()
         XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
         saveShot("45_inicio_hcp_crear_grupo_vacio")
