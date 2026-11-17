@@ -91,12 +91,13 @@ protocol GolfletAPI: Sendable {
     func liveRoundPace(id: String) async throws -> LiveRoundPace
     func markPaceAlerted(id: String) async throws
     func reconstructionSetup() async throws -> ReconstructionSetup
-    func createReconstruction(date: String, courseId: String, roundId: String?) async throws -> ReconstructionRound
+    func createReconstruction(date: String, courseId: String, roundId: String?, tee: String?) async throws -> ReconstructionRound
     func reconstructionShots(liveRoundId: String) async throws -> [ReconstructionShot]
     func saveReconstructionShot(liveRoundId: String, shot: ReconstructionDraft) async throws -> ReconstructionShot
     func updateReconstructionShot(liveRoundId: String, shotId: String, shot: ReconstructionDraft) async throws -> ReconstructionShot
     func deleteReconstructionShot(liveRoundId: String, shotId: String) async throws
     func courseCenters(courseId: String) async throws -> [Int: ReconstructionPoint]
+    func courseMap(club: String, course: String) async throws -> [String: Any]
 }
 
 extension GolfletAPI {

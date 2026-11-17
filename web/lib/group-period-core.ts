@@ -8,6 +8,7 @@
  * Every stat is gated by the member's "Qué comparto" category; hidden stats are omitted (never zeroed).
  */
 import type { Share } from "./group-share";
+import { countsInSharedStats } from "./group-stats";
 
 export type PKind = "semana" | "mes";
 export const PKINDS: PKind[] = ["semana", "mes"];
@@ -68,7 +69,7 @@ export const MINS: Record<PKind, Record<Exclude<Min, null>, number>> = {
 };
 export const MIN_TXT: Record<Exclude<Min, null>, [string, string]> = { r: ["ronda", "rondas"], gh: ["hoyo con dato de GIR", "hoyos con dato de GIR"], dr: ["salida medida", "salidas medidas"], mg: ["green errado", "greens errados"], pr: ["ronda con putts", "rondas con putts"], gp: ["green en regulación con putts", "greens en regulación con putts"] };
 
-export type PRound = { round_id: string; date: string; course_label: string; gross: number | null; net: number | null; par: number | null; holes: [number, number, number][];
+export type PRound = { round_id: string; date: string; course_label: string; gross: number | null; net: number | null; par: number | null; holes: [number, number, number][]; official?: boolean | null;
   putts: number | null; gir: number | null; fir: number | null };
 export type GpsHole = { live_round_id: string; round_id: string | null; hole: number; par: number | null; gir: boolean | null; putts: number | null; card: number | null };
 export type PInput = { rounds: PRound[]; hiStart: number | null; hiEnd: number | null; gps: { holes: GpsHole[]; drives: (string | null)[]; full18: number[]; linked: string[] } };
@@ -80,7 +81,7 @@ export type SV = { v: number | null; n: number; extra?: Record<string, any> };
 
 /** Raw per-member stats (before sharing). */
 export function periodStats(x: PInput): Record<string, SV & { min_n: Partial<Record<Exclude<Min, null>, number>> }> | any {
-  const rs = x.rounds, holes = rs.flatMap(r => r.holes.filter(h => h[1] && h[2]));
+  const rs = x.rounds.filter(r => countsInSharedStats(r.official)), holes = rs.flatMap(r => r.holes.filter(h => h[1] && h[2]));
   const withCards = rs.filter(r => r.holes.some(h => h[1] && h[2]));
   const birdiesOf = (r: PRound) => r.holes.filter(h => h[1] && h[2] && h[2] - h[1] === -1).length;
   const maxBirdies = withCards.length ? Math.max(...withCards.map(birdiesOf)) : null;
