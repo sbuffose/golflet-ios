@@ -60,16 +60,6 @@ struct HomeView: View {
                         }
                         lastRound
                         teeTimesCard
-                        NavigationLink {
-                            PlayHubView()
-                        } label: {
-                            Text("Preparar la salida")
-                                .font(GType.headline)
-                                .foregroundStyle(p.primary)
-                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("home-open-jugar")
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 160)
@@ -370,16 +360,6 @@ struct HomeView: View {
                 .accessibilityLabel("Invitación pendiente, \(invite.name)")
             }
             peopleRows
-            NavigationLink {
-                GroupsHubView()
-            } label: {
-                Text("Grupos y tee times")
-                    .font(GType.headline)
-                    .foregroundStyle(p.primary)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("home-hub-grupos")
         }
     }
 
@@ -466,11 +446,40 @@ struct HomeView: View {
 
     private var teeTimesCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Próximos tee times")
-                .font(GType.section)
-                .foregroundStyle(p.ink)
+            HStack {
+                Text("Próxima reserva")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                Spacer()
+                if model.nextTeeTime != nil {
+                    NavigationLink {
+                        TeeTimesHubView()
+                    } label: {
+                        Text("Ver todas")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink2)
+                    }
+                    .accessibilityIdentifier("home-tees-all")
+                }
+            }
             GCard(radius: 22, padding: 16) {
-                if model.upcomingTeeTimes.isEmpty {
+                if let booking = model.nextTeeTime {
+                    VStack(alignment: .leading, spacing: 12) {
+                        teeTimeRow(booking)
+                        NavigationLink {
+                            TeeTimePrepView(booking: booking)
+                        } label: {
+                            Text("Preparar la salida")
+                                .font(GType.headline)
+                                .foregroundStyle(p.onPrimary)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(p.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-open-jugar")
+                    }
+                } else {
                     HStack(alignment: .top, spacing: 12) {
                         CaddieMark(height: 56)
                         VStack(alignment: .leading, spacing: 4) {
@@ -484,13 +493,6 @@ struct HomeView: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("home-tee-empty")
-                } else {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(Array(model.upcomingTeeTimes.enumerated()), id: \.element.id) { index, booking in
-                            if index > 0 { Hairline() }
-                            teeTimeRow(booking)
-                        }
-                    }
                 }
             }
             .overlay {

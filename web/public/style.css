@@ -1369,6 +1369,9 @@ a.vx-store{color:inherit;text-decoration:none;cursor:pointer}
 #tees{scroll-margin-top:calc(env(safe-area-inset-top,0px) + 16px);border-radius:16px;transition:box-shadow .3s}
 /* t225u: only the next tee time is highlighted (brand green), the section title stays plain */
 #tees .row.tt-next{box-shadow:inset 0 0 0 1.5px #0B2545;border-radius:16px;background:#fff}
+#tees .tt-card{background:#fff;border-radius:16px;box-shadow:inset 0 0 0 1.5px #0B2545;overflow:hidden}
+#tees .tt-card .row.tt-next{box-shadow:none;border-radius:0;background:transparent}
+#tees .tee-prep{display:flex;align-items:center;justify-content:center;min-height:44px;margin:0 12px 12px;border-radius:12px;background:#0B2545;color:#F6F7F9;font-weight:650;text-decoration:none}
 #tees .list:has(.tt-next){overflow:visible}
 #tees .row.tt-next.flash{animation:ttflash 1.8s ease}
 @keyframes ttflash{0%,60%{box-shadow:inset 0 0 0 2.5px #0B2545,0 0 0 4px rgba(15,61,46,.18)}100%{box-shadow:inset 0 0 0 1.5px #0B2545,0 0 0 4px rgba(15,61,46,0)}}
