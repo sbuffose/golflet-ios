@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var highlightPartners = false
     @State private var modeOpen = false
     @State private var groupPlaces: [String: Int] = [:]
+    @State private var prepBooking: TeeTime?
     @Namespace private var roundZoom
 
     var body: some View {
@@ -81,6 +82,9 @@ struct HomeView: View {
             if tab == .inicio {
                 Task { await model.refreshTeeTimes() }
             }
+        }
+        .navigationDestination(item: $prepBooking) { booking in
+            TeeTimePrepView(booking: booking)
         }
         .navigationDestination(for: Round.self) { round in
             RoundDetailView(round: round)
@@ -466,9 +470,7 @@ struct HomeView: View {
                 if let booking = model.nextTeeTime {
                     VStack(alignment: .leading, spacing: 12) {
                         teeTimeRow(booking)
-                        NavigationLink {
-                            TeeTimePrepView(booking: booking)
-                        } label: {
+                        Button { prepBooking = booking } label: {
                             Text("Preparar la salida")
                                 .font(GType.headline)
                                 .foregroundStyle(p.onPrimary)
@@ -478,6 +480,7 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("home-open-jugar")
+                        .accessibilityLabel("Preparar la salida")
                     }
                 } else {
                     HStack(alignment: .top, spacing: 12) {
