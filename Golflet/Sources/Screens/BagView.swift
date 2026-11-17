@@ -47,9 +47,7 @@ struct BagView: View {
                             Text("Pelota")
                                 .font(GFont.ui(15, weight: .semibold))
                                 .foregroundStyle(p.ink)
-                            Text("Sin cargar")
-                                .font(GFont.ui(13))
-                                .foregroundStyle(p.ink3)
+                            MissingMark(kind: .ball)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
@@ -274,14 +272,29 @@ struct BagView: View {
     private var hint: some View {
         GCard(radius: 22, padding: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("\(filled) de \(yardClubs.count)")
-                    .font(GType.statM)
-                    .tabular()
-                    .foregroundStyle(p.ink)
-                    .accessibilityIdentifier("bag-count")
-                Text(filled == 0
-                     ? "Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo."
-                     : "Palos con una distancia que cargaste vos.")
+                if yardClubs.isEmpty {
+                    NavigationLink { AddClubView() } label: {
+                        Text("Agregar palo")
+                            .font(GType.headline)
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("bag-add-empty")
+                } else {
+                    Text("\(filled) de \(yardClubs.count)")
+                        .font(GType.statM)
+                        .tabular()
+                        .foregroundStyle(p.ink)
+                        .accessibilityIdentifier("bag-count")
+                }
+                Text(yardClubs.isEmpty
+                     ? "La bolsa está vacía."
+                     : (filled == 0
+                        ? "Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo."
+                        : "Palos con una distancia que cargaste vos."))
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
                 Text("Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste. El putter no lleva yardas acá.")

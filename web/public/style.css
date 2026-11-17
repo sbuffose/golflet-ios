@@ -910,7 +910,7 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-gear a{padding:12px;color:#0B2545;text-decoration:none;font-weight:600;border-radius:10px}
 .gg-filters{display:flex;align-items:center;gap:6px;margin:12px 0 8px;flex-wrap:nowrap;min-width:0}
 .gg-filters .gg-rng{flex:1 1 auto;min-width:0;margin:0!important;flex-wrap:nowrap;overflow:hidden}
-.gg-filters .gg-rng a{white-space:nowrap;font-size:11px!important;padding:6px 0!important;flex:1 1 0;min-width:0}
+.gg-filters .gg-rng a{white-space:nowrap;font-size:10px!important;padding:6px 1px!important;flex:1 1 0;min-width:0}
 .gg-filters .gg-course{margin:0;flex:0 0 auto;position:relative}
 .gg-filters .gg-course summary{display:inline-flex;align-items:center;justify-content:center;height:32px;min-height:32px;max-height:32px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 6px;font-size:11px;box-sizing:border-box}
 .gg-course{margin:8px 0 4px}
@@ -1106,7 +1106,20 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .gg-rng{margin:12px 0 8px!important}
 .gg-rng a{flex:1 0 auto;text-align:center;padding:8px 14px;border-radius:9px;font-size:calc(14px*var(--ts,1));font-weight:var(--fw550,550);color:var(--color-ink2);text-decoration:none;white-space:nowrap}
 .gg-rng a.on{background:var(--color-surface);color:var(--color-ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-@media (max-width:520px){.rng-seg button{padding-left:9px!important;padding-right:9px!important}}
+@media (max-width:520px){.rng-seg button{padding-left:2px!important;padding-right:2px!important;font-size:11px}}
+.rend{margin:8px 0 14px}
+.rend a{display:block;background:#fff;color:#0B2545;border-radius:14px;padding:12px 14px;margin-top:8px;text-decoration:none;box-shadow:var(--shadow-card)}
+.rend b{display:block;font-weight:700}
+.rend span{display:block;margin-top:2px;color:#5c6b7a;font-size:13px;font-style:normal}
+.rend-few{color:#C8102E!important}
+.miss{appearance:none;border:0;background:transparent;color:inherit;font:inherit;font-weight:700;font-style:normal;padding:0 4px;min-width:28px;min-height:28px;cursor:pointer}
+.missdlg{position:fixed;inset:0;z-index:80;display:flex;align-items:flex-end;justify-content:center;background:rgba(11,37,69,.45)}
+.missdlg[hidden]{display:none}
+.missdlg-back{position:absolute;inset:0;border:0;background:transparent}
+.missdlg-card{position:relative;width:min(420px,100%);margin:0 12px 24px;background:#fff;color:#0B2545;border-radius:16px;padding:18px 16px 16px}
+.missdlg-k{margin:0 0 8px;font-weight:700;color:#C8102E;font-style:normal}
+.missdlg-card p{margin:0 0 8px;font-style:normal}
+.missdlg-card .btn{margin-top:8px;background:#0B2545;color:#fff}
 .gg-filters .gg-rng{overflow:hidden;margin:0!important}
 .gg-filters .gg-rng a{flex:1 1 0!important;min-width:0;padding:0 1px!important;font-size:10px!important;letter-spacing:-0.03em;line-height:32px;overflow:hidden;text-overflow:clip}
 .gg-filters .gg-course summary{font-size:12px;height:32px;min-height:32px;max-height:32px}

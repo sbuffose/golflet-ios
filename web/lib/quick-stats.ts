@@ -267,7 +267,7 @@ export function saveMessage(phase: string): string {
   if (phase === "saved") return "Guardado en tu cuenta";
   if (phase === "conflict") return "Otra edición llegó antes. Tocá reintentar para traer la cuenta.";
   if (phase === "error") return "No se pudo guardar. Lo que marcaste sigue acá.";
-  return "Sin cargar";
+  return "Todavía no hay putts en esta vuelta.";
 }
 
 /** Commit a response only when it is the write this edit sent, and that edit is still the latest. */

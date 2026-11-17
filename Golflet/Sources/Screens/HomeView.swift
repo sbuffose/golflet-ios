@@ -29,16 +29,35 @@ struct HomeView: View {
                                 .accessibilityIdentifier("home-ready")
                         }
                         header(scroll: proxy)
+                        if model.rounds.isEmpty && model.clubs.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Vinculá tu matrícula para ver tu hándicap y tus tarjetas.")
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink)
+                                NavigationLink { ClubsView() } label: {
+                                    Text("Vincular matrícula")
+                                        .font(GType.headline)
+                                        .foregroundStyle(Color.white)
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                        .background(p.primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("vincular-matricula")
+                            }
+                        }
+                        if model.clubs.contains(where: { $0.lastSyncStatus == "error" }) {
+                            Text("No se pudo actualizar. Probá de nuevo desde Cuenta.")
+                                .font(GType.body)
+                                .foregroundStyle(p.ink)
+                                .accessibilityIdentifier("sync-failed")
+                        }
                         handicapCard
                         if model.homeMode == .mej, !model.liveShots.isEmpty {
                             SGCard(shots: model.liveShots)
                         }
                         lastRound
                         teeTimesCard
-                        scorecardFetchCard
-                        groups
-                        clubs
-                        moreLegacy
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 160)
@@ -173,16 +192,6 @@ struct HomeView: View {
                 booking: model.nextTeeTime,
                 onTab: { revealPartners(scroll) }
             )
-            RangeMenuButton(
-                range: Binding(
-                    get: { model.statsRange },
-                    set: { model.setStatsRange($0) }
-                ),
-                count: model.rangeRoundCount
-            )
-            Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
         }
     }
 
@@ -315,40 +324,6 @@ struct HomeView: View {
                     }
                 }
 
-                HStack(alignment: .top) {
-                    NavigationLink(value: MetricRoute.roundList(.allCards)) {
-                        heroMini("Tarjetas", "\(shownCards ?? snap.cards)", gold: cardsGold)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("metric-tarjetas")
-                    .accessibilityElement(children: .contain)
-                    .overlay { GProbe(id: "metric-tarjetas", label: "Tarjetas") }
-                    Spacer()
-                    NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: false))) {
-                        heroMini("Mejor", snap.bestGross.map(String.init) ?? "—", access: "Mejor gross")
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("metric-best-gross")
-                    .accessibilityElement(children: .contain)
-                    .overlay { GProbe(id: "metric-best-gross", label: "Mejor gross") }
-                    Spacer()
-                    NavigationLink(value: MetricRoute.roundList(.average(yearOnly: true))) {
-                        heroMini("Prom.", model.summary.averageGross.map(FormatAR.one) ?? "—", access: "Promedio")
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("metric-average")
-                    .accessibilityElement(children: .contain)
-                    .overlay { GProbe(id: "metric-average", label: "Promedio") }
-                    if let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact {
-                        Spacer()
-                        Button { showsHcpImpact = true } label: {
-                            heroMini("Impacto", hcpImpactValue(impact), gold: impact.delta < 0, access: "Impacto HCP")
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("metric-hcp-impact")
-                    }
-                }
-                .padding(.top, 4)
             }
         }
         .background(alignment: .topLeading) {

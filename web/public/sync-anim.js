@@ -182,7 +182,11 @@ function mount(container, opts = {}){
       });
     },
     fail(msg){ done = true; alive = false; cancelAnimationFrame(raf); clearInterval(ft); root.classList.add('failed');
-      root.querySelector('.ga-title').textContent = 'No se pudo actualizar'; const li = root.querySelector('.ga-steps li.active'); if (li){ li.className = 'err'; li.querySelector('.ga-lbl').textContent = msg; } },
+      root.replaceChildren();
+      const card = document.createElement('div'); card.className = 'card';
+      const h = document.createElement('p'); h.className = 'stitle'; h.textContent = 'No se pudo actualizar';
+      const p = document.createElement('p'); p.textContent = msg || 'No llegaron las tarjetas. Podés vincular la matrícula desde Cuenta.';
+      card.append(h, p); root.append(card); },
     destroy(){ alive = false; cancelAnimationFrame(raf); clearInterval(ft); },
   };
 }

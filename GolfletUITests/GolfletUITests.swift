@@ -1192,8 +1192,6 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         assertFits(app, "home-greeting")
         assertFits(app, "metric-handicap")
-        assertFits(app, "metric-tarjetas")
-        assertFits(app, "metric-best-gross")
         saveShot("47_texto_xl_inicio")
 
         tapTab(app, "Resumen")
@@ -1659,18 +1657,23 @@ final class GolfletUITests: XCTestCase {
             self.saveShot("ios-\(width)-\(name)")
         }
 
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
         pinTop(app, "range-menu")
-        let rangeIDs = ["range-1m", "range-3m", "range-6m", "range-12m", "range-all"]
+        let rangeIDs = ["range-3m", "range-6m", "range-12m", "range-year", "range-all"]
         let rangeFrames = rangeIDs.map { largest(app, $0).frame }
         let rangeDump = zip(rangeIDs, rangeFrames).map { "\($0.0) \($0.1.width)x\($0.1.height)" }.joined(separator: ", ")
-        XCTAssertEqual(rangeFrames.filter { $0.width > 8 && $0.height > 8 }.count, rangeIDs.count, "Falta un período del inicio: \(rangeDump)")
+        XCTAssertEqual(rangeFrames.filter { $0.width > 8 && $0.height > 8 }.count, rangeIDs.count, "Falta un período del resumen: \(rangeDump)")
         let rangeTop = rangeFrames.map(\.minY).min() ?? 0
         let rangeBottom = rangeFrames.map(\.maxY).max() ?? 0
-        XCTAssertLessThan(rangeBottom - rangeTop, 44, "Los períodos del inicio no entran en una fila: \(rangeDump)")
+        XCTAssertLessThan(rangeBottom - rangeTop, 44, "Los períodos del resumen no entran en una fila: \(rangeDump)")
         XCTAssertGreaterThanOrEqual(rangeFrames.map(\.minX).min() ?? 0, -1, rangeDump)
         XCTAssertLessThanOrEqual(rangeFrames.map(\.maxX).max() ?? 0, window.frame.maxX + 1, rangeDump)
         let menu = largest(app, "range-menu")
         XCTAssertGreaterThan(menu.frame.width, window.frame.width * 0.7, "La fila de períodos no ocupa el ancho")
+        shot("resumen-periodos")
+        tapTab(app, "Inicio")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
         shot("inicio-hi")
 
         let profesor = largest(app, "home-hcp-profesor")
@@ -1713,8 +1716,6 @@ final class GolfletUITests: XCTestCase {
         assertRoundChipsOneLine(app)
         shot("rondas-chips")
 
-        tapTab(app, "Inicio")
-        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
         reveal(app, "reconstruct-start")
         let start = first(app, "reconstruct-start")
         XCTAssertTrue(start.waitForExistence(timeout: 4), "Falta Cargar una vuelta ya jugada")
@@ -1733,6 +1734,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "rc-nogeo", timeout: 6), "El hoyo sin geometría no avisa")
         shot("track-shots-sin-geo")
         dismissIfPresent(app, "reconstruct-back")
+        tapTab(app, "Inicio")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
         if waitFor(app, "last-round-card", timeout: 4) {
             first(app, "last-round-card").tap()
@@ -1743,12 +1745,15 @@ final class GolfletUITests: XCTestCase {
         tapTab(app, "Inicio")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
 
-        reveal(app, "metric-best-gross")
-        tapLargest(app, "metric-best-gross")
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        reveal(app, "metric-summary-best")
+        tapLargest(app, "metric-summary-best")
         XCTAssertTrue(waitFor(app, "screen-metric-rounds", timeout: 6), "Mejor gross no se abrió")
         XCTAssertTrue(waitFor(app, "metric-period-12m", timeout: 4), "Falta la fila de períodos")
         shot("mejor-gross")
         dismissIfPresent(app, "metric-back")
+        tapTab(app, "Inicio")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
 
         if first(app, "home-tee-tab").waitForExistence(timeout: 3) {
@@ -1835,7 +1840,7 @@ final class GolfletUITests: XCTestCase {
     }
 
     private func assertGroupPeriodsFit(_ app: XCUIApplication, _ window: XCUIElement) {
-        let ids = ["group-period-1w", "group-period-1m", "group-period-3q", "group-period-6s", "group-period-12y", "group-period-all"]
+        let ids = ["group-period-3m", "group-period-6m", "group-period-12m", "group-period-12y", "group-period-all"]
         let frames = ids.map { largest(app, $0).frame }
         let dump = zip(ids, frames).map { "\($0.0) \($0.1.width)x\($0.1.minX)-\($0.1.maxX)" }.joined(separator: ", ")
         XCTAssertEqual(frames.filter { $0.width > 8 && $0.height > 8 }.count, ids.count, "Falta un período del grupo: \(dump)")

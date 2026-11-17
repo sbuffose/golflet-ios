@@ -74,9 +74,9 @@ test("the public bundle opens the already-played round and the two explicit read
     const page = await browser.newPage();
     const leaked: string[] = [];
     page.on("request", req => { const u = new URL(req.url()); if ((u.protocol === "http:" || u.protocol === "https:") && u.hostname !== "127.0.0.1") leaked.push(u.hostname); });
-    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle0" });
+    await page.goto(`http://127.0.0.1:${port}/#/rondas`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#recon-start");
-    await page.click("#recon-start");
+    await page.$eval("#recon-start", el => (el as HTMLElement).click());
     await page.waitForSelector("#rc-manual-open");
     await page.click("#rc-manual-open");
     await page.waitForFunction(() => {
@@ -91,13 +91,15 @@ test("the public bundle opens the already-played round and the two explicit read
     await page.$eval("#rc-start", el => (el as HTMLButtonElement).click());
     await page.waitForFunction(() => location.hash === "#/reconstruir/live-fixture");
     assert.equal(calls.postCourse, "course-fixture");
-    await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });
+    await page.goto(`http://127.0.0.1:${port}/#/cuenta`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#bring-card");
     const click = page.click("#bring-card");
     await page.waitForFunction(() => (document.querySelector("#bring-card") as HTMLButtonElement).disabled);
     releaseSync();
     await click;
     await page.waitForFunction(() => (document.querySelector("#cardstat")?.textContent || "").includes("No hay una tarjeta nueva"));
+    await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });
+    await page.waitForSelector('a[href="#/tee/tt-fixture"]');
     await page.click('a[href="#/tee/tt-fixture"]');
     await page.waitForSelector("#refresh-booking");
     const clear = await page.evaluate(() => {

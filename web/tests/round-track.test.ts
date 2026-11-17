@@ -108,7 +108,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     mkdirSync(ART, { recursive: true });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#scoreline");
-    await page.waitForSelector("#round-track");
+    await page.waitForSelector("#track-shots");
     const legend = await page.$eval("#scoreline", el => ({
       marks: [...el.querySelectorAll(".b")].map(node => (node.textContent || "").trim()),
       outside: [...el.querySelectorAll(".num")].length,
@@ -118,7 +118,7 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     await page.$eval("#scoreline", el => el.scrollIntoView({ block: "center" }));
     await page.screenshot({ path: join(ART, "legend.png") });
     await page.evaluate(() => { (window as unknown as { __gps: number }).__gps = 0; });
-    await page.click("#round-track");
+    await page.click("#track-shots");
     await page.waitForSelector("#play-hit");
     await page.waitForSelector("#play-reticle");
     assert.equal(await page.$("#play-cancel"), null);
@@ -222,14 +222,14 @@ test("Tu juego opens this round on the map and the legend count sits inside the 
     assert.notEqual(await page.$(".tk-sh"), null);
     assert.equal((await page.evaluate(() => document.body.innerText)).includes("SG"), false);
     await page.click("#rc-close");
-    await page.waitForSelector("#round-track");
+    await page.waitForSelector("#track-shots");
     assert.equal(await page.evaluate(() => location.hash), "#/ronda/r-nov");
     assert.notEqual(await page.$eval("#tabbar", el => getComputedStyle(el).display), "none");
     assert.equal(await page.evaluate(() => document.documentElement.classList.contains("rc-map")), false);
     const savedAt = calls.length;
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-saved`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#round-track");
-    await page.click("#round-track");
+    await page.waitForSelector("#track-shots");
+    await page.click("#track-shots");
     await page.waitForFunction(() => location.hash === "#/reconstruir/live-saved?hole=1&ronda=r-saved");
     await page.waitForSelector("#play-club");
     await page.waitForSelector("#play-hit");
@@ -289,8 +289,8 @@ test("a round does not open another club's course when only the course name matc
       else req.continue();
     });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-a`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#round-track");
-    await page.click("#round-track");
+    await page.waitForSelector("#track-shots");
+    await page.click("#track-shots");
     await page.waitForSelector("#rc-course");
     await page.waitForFunction(() => (document.querySelector("#rc-err")?.textContent || "").includes("Elegí la cancha"));
     assert.equal(await page.$("#rc-map"), null);
@@ -375,8 +375,8 @@ test("a late reconstruction reply does not navigate or post the shot after the p
   };
   const settle = () => new Promise(r => setTimeout(r, 500));
   const reachEnter = async (page: { click: (s: string) => Promise<unknown>; waitForSelector: (s: string) => Promise<unknown>; waitForFunction: (fn: () => boolean) => Promise<unknown> }) => {
-    await page.waitForSelector("#round-track");
-    await page.click("#round-track");
+    await page.waitForSelector("#track-shots");
+    await page.click("#track-shots");
     await page.waitForSelector("#play-hit");
   };
   try {
@@ -537,8 +537,8 @@ test("a stored shot with no point stays unknown and the next shot does not start
       else req.continue();
     });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-saved`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#round-track");
-    await page.click("#round-track");
+    await page.waitForSelector("#track-shots");
+    await page.click("#track-shots");
     await page.waitForSelector("#rc-shots");
     const seen = await page.evaluate(() => {
       const map = document.querySelector("#tkmap");
@@ -651,8 +651,8 @@ test("each ENTER drops the next numbered dot and undo takes that dot off the map
       else req.continue();
     });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r-nov`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#round-track");
-    await page.click("#round-track");
+    await page.waitForSelector("#track-shots");
+    await page.click("#track-shots");
     await page.waitForSelector("#play-hit");
     await untilReady(page);
     await page.select("#play-club", "7i");

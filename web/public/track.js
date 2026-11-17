@@ -669,8 +669,13 @@
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
       if (retro && !mapOk()) {
+        const pts = [];
+        (S.holes || []).forEach(h => { const t = asLL(h.tee), f = asLL(h.green) || asLL(h.flag) || asLL(h.pin); if (t) pts.push(t); if (f) pts.push(f); });
+        const focus = pts.length ? { lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length } : null;
+        const sat = focus ? `<div class="tk-sat" id="hole-satellite" style="height:220px;border-radius:12px;background:#0B2545 center/cover no-repeat;background-image:url('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${focus.lng - 0.01},${focus.lat - 0.008},${focus.lng + 0.01},${focus.lat + 0.008}&bboxSR=4326&imageSR=4326&size=800,480&f=image')"></div>` : '';
         el.innerHTML = `<div class="tk" id="play-track">
           <div class="tk-top"><button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button><b class="tk-cn">${name}</b></div>
+          ${sat}
           <p class="tk-empty" id="rc-nogeo">Este hoyo no tiene geometría verificada. No marco un punto inventado.</p>
           <div class="tk-dock"><div class="tk-nav">
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>

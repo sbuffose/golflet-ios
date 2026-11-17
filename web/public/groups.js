@@ -14,9 +14,9 @@
   ];
   const MT = Object.fromEntries(MET.map(m => [m[0], m]));
   const SECTIONS = [['table', 'Tabla'], ['trend', 'Evolución'], ['holes', 'Hoyo por hoyo'], ['vs', 'Mano a mano'], ['clubs', 'Distancias por palo']];
-  const RANGES = [['1w', 'Sem', 'Semana'], ['1m', 'Mes', 'Mes'], ['3q', 'Trim', 'Trimestre'], ['6s', '6m', 'Semestre'], ['12y', 'Año', 'Año'], ['all', 'Todo', 'Histórico']];
+  const RANGES = [['3m', '3 meses', '3 meses'], ['6m', '6 meses', '6 meses'], ['12m', '12 meses', '12 meses'], ['12y', 'Este año', 'Este año'], ['all', 'Histórico', 'Histórico']];
   const placesOf = rows => { const out = []; rows.forEach((x, i) => out.push(i && x.v === rows[i - 1].v ? out[i - 1] : i + 1)); return out; };
-  const MIN_FALLBACK = { '1w': 1, '1m': 2, '3q': 3, '6s': 4, '12y': 4, all: 3 };
+  const MIN_FALLBACK = { '1w': 1, '1m': 2, '3q': 3, '6s': 4, '12y': 4, '3m': 3, '6m': 4, '12m': 4, all: 3 };
   /* which "Qué comparto" category hides each metric */
   const CAT = k => { const t = MT[k][2]; return t === 't' ? 'score_types' : t === 'p' ? 'holes' : t === 'u' ? 'putting' : t === 'g' || t === 'r' ? 'gir_fir' : t === 'h' ? 'handicap' : 'scores'; };
   const hid = (m, k) => (m.hidden || []).includes(CAT(k));
@@ -273,7 +273,10 @@
       if (range === '1m') return dt ? `${MESES[dt.getMonth()]} ${dt.getFullYear()}` : 'Este mes';
       if (range === '3q') return year ? `Trimestre ${year}` : 'Trimestre';
       if (range === '6s') return year ? `Semestre ${year}` : 'Semestre';
-      if (range === '12y') return year ? `Temporada ${year}` : 'Temporada';
+      if (range === '12y' || range === 'year') return year ? `Temporada ${year}` : 'Este año';
+      if (range === '3m') return 'Últimos 3 meses';
+      if (range === '6m') return 'Últimos 6 meses';
+      if (range === '12m') return 'Últimos 12 meses';
       return 'Histórico';
     };
     const lowOf = key => key === 'regular' || key === 'best_net' || !!MT[key]?.[3];
@@ -353,7 +356,7 @@
       }).join('');
       return `<table class="gg-lb" id="gg-${key}">${youLine(key, rows, places)}<thead><tr><th class="pos">Pos</th><th class="who">Jugador</th><th>Total</th><th>Por ronda</th><th>Tarj.</th></tr></thead><tbody>${body}</tbody></table>`;
     };
-    const GOALS = { '1w': [1, '1 ronda esta semana'], '1m': [3, '3 rondas este mes'], '3q': [6, '6 rondas este trimestre'], '6s': [12, '12 rondas este semestre'], '12y': [20, '20 rondas este año'] };
+    const GOALS = { '1w': [1, '1 ronda esta semana'], '1m': [3, '3 rondas este mes'], '3q': [6, '6 rondas este trimestre'], '6s': [12, '12 rondas este semestre'], '12y': [20, '20 rondas este año'], '3m': [3, '3 rondas en 3 meses'], '6m': [6, '6 rondas en 6 meses'], '12m': [12, '12 rondas en 12 meses'] };
     const goal = GOALS[d.filters.range || ''];
     const me = ms.find(m => m.is_me);
     const challenge = !isVs && goal && me && !(me.hidden || []).includes('scores') ? `<section class="gg-rank gg-goal"><h2>${goal[1]}</h2>${meter(Math.round(Math.min(1, (me.cards_18 ?? 0) / goal[0]) * 100))}<p class="foot">${me.cards_18 ?? 0} de ${goal[0]} tarjetas de 18. Una de 9 no cuenta como ronda completa.</p></section>` : '';

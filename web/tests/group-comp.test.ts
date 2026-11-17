@@ -97,8 +97,7 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     assert.match(week, /Por ronda/);
     assert.match(week, /1 ronda esta semana/);
     assert.match(week, /Pocas tarjetas/);
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Sem");
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Semana");
+    assert.deepEqual(await page.$$eval(".gg-rng a", els => els.map(el => (el.textContent || "").trim())), ["3 meses", "6 meses", "12 meses", "Este año", "Histórico"]);
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
     assert.equal(await rowsOf(), 2);
     assert.deepEqual(await placesOf(), ["1", "2"]);
@@ -111,7 +110,7 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     const hist = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(hist, /Tu posición · .+ · 8 tarj\./);
     assert.match(hist, /Histórico/);
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Todo");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => (el.textContent || "").trim()), "Histórico");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Histórico");
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
     assert.ok(await page.$(".gg-lb img.gg-img"));
@@ -124,14 +123,14 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     assert.match(year, /Pocas tarjetas/);
     assert.match(year, /Temporada 2026/);
     assert.match(year, /Tu posición · 1 · \+20 sobre Luis · 8 tarj\./);
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => (el.textContent || "").trim()), "Este año");
     await shot("grupo-2-anio-390");
     await open("g4", "all");
     assert.equal(await rowsOf(), 4);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Mateo Ruiz/);
     await shot("grupo-4-historico-390");
     await open("g4", "12y");
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => (el.textContent || "").trim()), "Este año");
     assert.equal(await rowsOf(), 4);
     await shot("grupo-4-anio-390");
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });

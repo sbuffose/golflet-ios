@@ -62,22 +62,23 @@ test("the home entry is a compact control and opens hole 1 on the map", { timeou
       if (host !== "127.0.0.1" && host !== "localhost") req.abort();
       else req.continue();
     });
-    await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#recon-start");
+    await page.goto(`http://127.0.0.1:${port}/#/cuenta`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#sc-open");
     await page.click("#sc-open");
     await page.waitForFunction(() => (document.body.innerText || "").includes("No pudimos leer el club."));
     assert.equal((await page.evaluate(() => document.body.innerText)).includes("Ya está"), false);
     assert.equal((await page.evaluate(() => document.body.innerText)).includes("La tarjeta ya está."), false);
     await page.click("#sc-close");
+    const bring = await page.$eval("#bring-card", el => (el.textContent || "").trim());
+    assert.equal(bring, "Traer última tarjeta");
+    await page.goto(`http://127.0.0.1:${port}/#/rondas`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("#recon-start");
     const box = await page.$eval("#recon-start", el => {
       const node = el as HTMLElement;
       const r = node.getBoundingClientRect();
       const s = getComputedStyle(node);
       return { text: node.innerText, display: s.display, bg: s.backgroundColor, h: r.height, left: r.left, right: r.right, vw: innerWidth, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
     });
-    const bring = await page.$eval("#bring-card", el => ({ text: el.textContent || "", top: el.getBoundingClientRect().top }));
-    const entryBottom = await page.$eval("#recon-start", el => el.getBoundingClientRect().bottom);
     assert.equal(box.display, "flex");
     assert.equal(box.bg, "rgb(11, 37, 69)");
     assert.equal(box.text.includes("Cargar una vuelta ya jugada"), true);
@@ -85,9 +86,7 @@ test("the home entry is a compact control and opens hole 1 on the map", { timeou
     assert.ok(box.h >= 48 && box.h <= 96, `height ${box.h}`);
     assert.ok(box.left >= 0 && box.right <= box.vw + 1);
     assert.equal(box.overflow, false);
-    assert.equal(bring.text.trim(), "Traer última tarjeta");
-    assert.ok(bring.top >= entryBottom - 1);
-    await page.click("#recon-start");
+    await page.$eval("#recon-start", el => (el as HTMLElement).click());
     await page.waitForSelector("#rc-manual-open");
     await page.click("#rc-manual-open");
     await page.waitForSelector("#rc-course");

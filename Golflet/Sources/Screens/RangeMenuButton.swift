@@ -6,8 +6,7 @@ struct RangeMenuButton: View {
     var count: Int
 
     var body: some View {
-        // Este mes stays: it is the current calendar month for Inicio, Resumen and Cancha.
-        // Año is the rolling 12 months. The list's Este año is the calendar year, so these are not the same control.
+        // 12 meses is the rolling year. Este año is the calendar year.
         HStack(spacing: 0) {
             ForEach(StatsRange.allCases) { option in
                 let on = option == range
@@ -17,7 +16,7 @@ struct RangeMenuButton: View {
                     Text(option.compactTitle)
                         .font(GFont.ui(10, weight: .semibold))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.6)
                         .foregroundStyle(on ? p.ink : p.ink2)
                         .frame(maxWidth: .infinity)
                         .frame(height: 32)

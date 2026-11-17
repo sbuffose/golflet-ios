@@ -8,37 +8,36 @@ final class StatsRangeTests: XCTestCase {
     }
 
     func testQueryValuesMatchWebRangeParam() {
-        XCTAssertEqual(StatsRange.month.query, "1m")
         XCTAssertEqual(StatsRange.threeMonths.query, "3m")
         XCTAssertEqual(StatsRange.sixMonths.query, "6m")
-        XCTAssertEqual(StatsRange.year.query, "12m")
+        XCTAssertEqual(StatsRange.twelveMonths.query, "12m")
+        XCTAssertEqual(StatsRange.calendarYear.query, "year")
         XCTAssertEqual(StatsRange.all.query, "all")
-        XCTAssertEqual(StatsRange.month.title, "Este mes")
-        XCTAssertEqual(StatsRange.year.title, "Año")
+        XCTAssertEqual(StatsRange.twelveMonths.title, "12 meses")
+        XCTAssertEqual(StatsRange.calendarYear.title, "Este año")
         XCTAssertEqual(StatsRange.all.title, "Histórico")
-        XCTAssertEqual(StatsRange.month.compactTitle, "Mes")
         XCTAssertEqual(StatsRange.threeMonths.compactTitle, "3 meses")
         XCTAssertEqual(StatsRange.sixMonths.compactTitle, "6 meses")
-        XCTAssertEqual(StatsRange.year.compactTitle, "Año")
-        XCTAssertEqual(StatsRange.all.compactTitle, "Todo")
+        XCTAssertEqual(StatsRange.twelveMonths.compactTitle, "12 meses")
+        XCTAssertEqual(StatsRange.all.compactTitle, "Histórico")
     }
 
     func testPersistsChoice() {
         StatsRange.threeMonths.persist()
         XCTAssertEqual(StatsRange.persisted(), .threeMonths)
-        StatsRange.month.persist()
-        XCTAssertEqual(StatsRange.persisted(), .month)
+        StatsRange.calendarYear.persist()
+        XCTAssertEqual(StatsRange.persisted(), .calendarYear)
     }
 
     func testRangedFiltersRollingWindows() async throws {
         let rounds = try await MockAPIClient().bootstrap().rounds
         let now = date("2026-10-27")
-        let month = StatsEngine.ranged(rounds, range: .month, now: now)
-        let year = StatsEngine.ranged(rounds, range: .year, now: now)
+        let month = StatsEngine.ranged(rounds, range: .threeMonths, now: now)
+        let year = StatsEngine.ranged(rounds, range: .twelveMonths, now: now)
         let all = StatsEngine.ranged(rounds, range: .all, now: now)
         XCTAssertGreaterThan(all.count, year.count)
         XCTAssertGreaterThanOrEqual(year.count, month.count)
-        XCTAssertTrue(month.allSatisfy { $0.date >= date("2026-09-27") })
+        XCTAssertTrue(month.allSatisfy { $0.date >= date("2026-07-27") })
         XCTAssertTrue(year.allSatisfy { $0.date >= date("2025-10-27") })
         XCTAssertEqual(all.count, rounds.count)
     }
@@ -47,10 +46,10 @@ final class StatsRangeTests: XCTestCase {
         let rounds = try await MockAPIClient().bootstrap().rounds
         let now = date("2026-10-27")
         let all = StatsEngine.summary(rounds: rounds, filter: .all, range: .all, now: now)
-        let year = StatsEngine.summary(rounds: rounds, filter: .all, range: .year, now: now)
+        let year = StatsEngine.summary(rounds: rounds, filter: .all, range: .twelveMonths, now: now)
         XCTAssertGreaterThan(all.validRoundCount, year.validRoundCount)
         XCTAssertGreaterThan(year.validRoundCount, 0)
-        let empty = StatsEngine.summary(rounds: rounds, filter: .all, range: .month, now: date("2010-06-01"))
+        let empty = StatsEngine.summary(rounds: rounds, filter: .all, range: .threeMonths, now: date("2010-06-01"))
         XCTAssertEqual(empty.validRoundCount, 0)
         XCTAssertNil(empty.averageGross)
     }
@@ -58,7 +57,7 @@ final class StatsRangeTests: XCTestCase {
     func testHoleAveragesAndSeriesFromRounds() async throws {
         let rounds = try await MockAPIClient().bootstrap().rounds
         let now = date("2026-10-27")
-        let yearRounds = StatsEngine.ranged(rounds, range: .year, now: now)
+        let yearRounds = StatsEngine.ranged(rounds, range: .twelveMonths, now: now)
         XCTAssertTrue(StatsEngine.hasCompleteHoleData(yearRounds))
         let holes = StatsEngine.holeAverages(rounds: yearRounds, course: "Colorada")
         XCTAssertFalse(holes.isEmpty)
@@ -81,7 +80,7 @@ final class StatsRangeTests: XCTestCase {
         let snap = try await MockAPIClient().bootstrap()
         let now = date("2026-10-27")
         let all = StatsEngine.course(named: "Colorada", rounds: snap.rounds, courses: snap.courses, tees: snap.tees, range: .all, now: now)
-        let month = StatsEngine.course(named: "Colorada", rounds: snap.rounds, courses: snap.courses, tees: snap.tees, range: .month, now: now)
+        let month = StatsEngine.course(named: "Colorada", rounds: snap.rounds, courses: snap.courses, tees: snap.tees, range: .threeMonths, now: now)
         XCTAssertGreaterThan(all.validCount, month.validCount)
     }
 

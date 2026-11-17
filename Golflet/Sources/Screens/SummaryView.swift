@@ -10,18 +10,7 @@ struct SummaryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     header
-                    NavigationLink { ClimaView() } label: {
-                        Text("Ver cómo afecta el clima")
-                            .font(GType.headline)
-                            .foregroundStyle(p.onPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
-                            .background(p.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("resumen-clima")
+                    RendimientoTiles(few: model.home.cards < 3)
                     filters
                     period
                     metricsEntry
@@ -160,6 +149,22 @@ struct SummaryView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-best")
+                if snap.validRoundCount < 2 {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Peor ronda")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                        MissingMark(kind: .worst)
+                        Text("Con una sola tarjeta no hay otra para comparar.")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityIdentifier("metric-summary-worst")
+                } else {
                 NavigationLink(value: chart(.gross, title: "Peor ronda", course: course)) {
                     AccentStatCard(
                         tint: .danger,
@@ -172,6 +177,7 @@ struct SummaryView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-worst")
+                }
             }
             HStack(spacing: 10) {
                 NavigationLink(value: chart(.gross, title: "Promedio gross", course: course)) {
