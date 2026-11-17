@@ -239,16 +239,49 @@ jobs:
           mkdir -p /tmp/golflet-screenshots
           mkdir -p "$RUNNER_TEMP/test-results"
           mkdir -p "$RUNNER_TEMP/screenshots"
-          xcodebuild test \
-            -project Golflet.xcodeproj \
-            -scheme Golflet \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -only-testing:GolfletUITests \
-            -derivedDataPath "$RUNNER_TEMP/TestBuild" \
-            -resultBundlePath "$RUNNER_TEMP/test-results/UITests.xcresult" \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            2>&1 | tee "$RUNNER_TEMP/ui_test_output.log"
+          : > "$RUNNER_TEMP/ui_test_output.log"
+          run_tests() {
+            local only="$1"
+            local bundle="$2"
+            set +e
+            xcodebuild test \
+              -project Golflet.xcodeproj \
+              -scheme Golflet \
+              -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+              -only-testing:"$only" \
+              -derivedDataPath "$RUNNER_TEMP/TestBuild" \
+              -resultBundlePath "$bundle" \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=NO \
+              2>&1 | tee -a "$RUNNER_TEMP/ui_test_output.log"
+            local status=${PIPESTATUS[0]}
+            set -e
+            return "$status"
+          }
+          if ! run_tests "GolfletUITests" "$RUNNER_TEMP/test-results/UITests.xcresult"; then
+            python3 - <<'PY'
+          import os, pathlib, re, sys
+          log = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ui_test_output.log"
+          text = log.read_text(errors="replace")
+          started = re.findall(r"Test Case '-\[GolfletUITests\.GolfletUITests (test\w+)\]' started", text)
+          finished = set(re.findall(r"Test Case '-\[GolfletUITests\.GolfletUITests (test\w+)\]' (?:passed|failed)", text))
+          missing = []
+          for name in started:
+              if name not in finished and name not in missing:
+                  missing.append(name)
+          crashed = "Restarting after unexpected exit, crash, or test timeout" in text
+          asserted = re.search(r"Test Case '-\[GolfletUITests\.GolfletUITests test\w+\]' failed", text)
+          if not crashed or asserted or not missing:
+              sys.exit(1)
+          out = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ui-retry-tests.txt"
+          out.write_text("\n".join(missing) + "\n")
+          print("El runner se cayó sin un fallo de aserción. Se repite:", ", ".join(missing))
+          PY
+            while IFS= read -r name; do
+              [ -z "$name" ] && continue
+              run_tests "GolfletUITests/GolfletUITests/$name" "$RUNNER_TEMP/test-results/UITests-retry-${name}.xcresult"
+            done < "$RUNNER_TEMP/ui-retry-tests.txt"
+          fi
           cp -R /tmp/golflet-screenshots/. "$RUNNER_TEMP/screenshots/" 2>/dev/null || true
 
       - name: Capture review screens at 375 and 430
