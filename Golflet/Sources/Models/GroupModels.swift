@@ -485,11 +485,20 @@ struct GroupHero: Hashable, Sendable {
     var memberID: String? = nil
 }
 
+struct GroupCourseOption: Hashable, Sendable, Identifiable {
+    var id: String { key }
+    var key: String
+    var label: String
+    var club: String
+    var title: String { club.isEmpty || club == label ? label : "\(label) · \(club)" }
+}
+
 struct GroupComparison: Hashable, Sendable {
     var groupID: String
     var config: GroupViewConfig
     var rows: [GroupComparisonRow]
     var hero: GroupHero? = nil
+    var courses: [GroupCourseOption] = []
 }
 
 enum PendingInviteStore {

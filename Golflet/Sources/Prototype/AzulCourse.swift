@@ -85,19 +85,68 @@ enum AzulCourse {
         )
     }
 
-    /// Real Cancha Azul geometry for the hole-detail map. Other courses return nil.
+    static let coloradaCredit = "Salida © OpenStreetMap contributors (ODbL) · Cancha Colorada, Jockey Club. El centro del green es Golfistics, no el pin."
+
+    /// Satellite when this course has a verified tee and green. Azul uses the OSM green. Colorada uses the OSM tee and the Golfistics green center. Anything else stays empty.
     static func layout(forCourse name: String, hole number: Int) -> AzulHoleGeo? {
-        guard isJockeyAzul(name), let geo = all()[number] else { return nil }
-        guard geo.green.count >= 3 || geo.line.count >= 2 else { return nil }
-        return geo
+        if isJockeyAzul(name), let geo = all()[number], geo.green.count >= 3 || geo.line.count >= 2 {
+            return geo
+        }
+        if isJockeyColorada(name) {
+            return colorada(number)
+        }
+        return nil
+    }
+
+    static func mapCredit(forCourse name: String) -> String {
+        isJockeyColorada(name) ? coloradaCredit : credit
+    }
+
+    static func isJockeyColorada(_ name: String) -> Bool {
+        let folded = fold(name)
+        return folded == "colorada" || folded == "cancha colorada" || folded.hasSuffix(" colorada")
     }
 
     static func isJockeyAzul(_ name: String) -> Bool {
-        let folded = name
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_AR"))
+        let folded = fold(name)
+        return folded == "azul" || folded == "cancha azul" || folded.hasSuffix(" azul")
+    }
+
+    private static func fold(_ name: String) -> String {
+        name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_AR"))
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-        return folded == "azul" || folded == "cancha azul" || folded.hasSuffix(" azul")
+    }
+
+    /// Tee (OSM) and green center (Golfistics) for Colorada. No invented fairway.
+    private static func colorada(_ number: Int) -> AzulHoleGeo? {
+        let rows: [(Int, Double, Double, Double, Double)] = [
+            (1, -34.486807, -58.533269, -34.490067, -58.532539),
+            (2, -34.489591, -58.532118, -34.492205, -58.53098),
+            (3, -34.492426, -58.531169, -34.492939, -58.532418),
+            (4, -34.493173, -58.532755, -34.489552, -58.5347),
+            (5, -34.489726, -58.535028, -34.487046, -58.536376),
+            (6, -34.48675, -58.536086, -34.48935, -58.534432),
+            (7, -34.489643, -58.534154, -34.492641, -58.532579),
+            (8, -34.492405, -58.531975, -34.490726, -58.532405),
+            (9, -34.490359, -58.532814, -34.48734, -58.533617),
+            (10, -34.486039, -58.532711, -34.489163, -58.530356),
+            (11, -34.489433, -58.530408, -34.487916, -58.526105),
+            (12, -34.487718, -58.52579, -34.489198, -58.52554),
+            (13, -34.489508, -58.525682, -34.489718, -58.530098),
+            (14, -34.490076, -58.530296, -34.48989, -58.526547),
+            (15, -34.490177, -58.52663, -34.491849, -58.530522),
+            (16, -34.49213, -58.5307, -34.488713, -58.532084),
+            (17, -34.488188, -58.532242, -34.489345, -58.531108),
+            (18, -34.489114, -58.530852, -34.486794, -58.532922),
+        ]
+        guard let row = rows.first(where: { $0.0 == number }) else { return nil }
+        let tee = AzulCoord(lat: row.1, lng: row.2)
+        let center = AzulCoord(lat: row.3, lng: row.4)
+        let meters = CLLocation(latitude: tee.lat, longitude: tee.lng)
+            .distance(from: CLLocation(latitude: center.lat, longitude: center.lng))
+        guard meters >= 40, meters <= 750 else { return nil }
+        return AzulHoleGeo(number: number, par: 4, meters: meters, line: [tee, center], green: [], features: [])
     }
 
     static func all() -> [Int: AzulHoleGeo] {

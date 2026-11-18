@@ -87,6 +87,7 @@ struct ReconstructionShot: Identifiable, Equatable, Sendable {
     var lie: String?
     var positionLabel: String
     var distanceLabel: String
+    var intent: String? = nil
 
     var draft: ReconstructionDraft {
         ReconstructionDraft(hole: hole, club: club, result: result, penaltyStrokes: penaltyStrokes, lat: lat, lng: lng, endLat: endLat, endLng: endLng, distanceM: lat == nil ? distanceM : nil)

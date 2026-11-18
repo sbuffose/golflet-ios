@@ -12,6 +12,7 @@ struct GroupDetailView: View {
     @State private var comparison: GroupComparison?
     @State private var config = GroupViewConfig.default
     @State private var showsViewSettings = false
+    @State private var showsCourses = false
     @State private var showsGroupAdmin = false
     @State private var editingName = ""
     @State private var pickerItem: PhotosPickerItem?
@@ -76,6 +77,9 @@ struct GroupDetailView: View {
             }
             .golfletChrome()
             .environment(model)
+        }
+        .sheet(isPresented: $showsCourses) {
+            courseSheet
         }
         .sheet(isPresented: $showsViewSettings) {
             NavigationStack {
@@ -609,20 +613,20 @@ struct GroupDetailView: View {
                     .padding(.horizontal, -20)
             }
 
-            HStack(spacing: 8) {
+            VStack(spacing: 8) {
                 HStack(spacing: 0) {
                     ForEach(GroupPeriod.allCases) { period in
                         let on = config.range == period
                         Button {
                             selectPeriod(period)
                         } label: {
-                            Text(period.short)
-                                .font(GFont.ui(9, weight: .semibold))
+                            Text(period.title)
+                                .font(GFont.ui(12, weight: .semibold))
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.55)
+                                .minimumScaleFactor(1)
                                 .foregroundStyle(on ? Color.white : p.ink)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 32)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(minHeight: 36)
                                 .background(on ? p.primary : Color.white)
                         }
                         .buttonStyle(.plain)
@@ -633,22 +637,24 @@ struct GroupDetailView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .overlay(Rectangle().stroke(p.primary.opacity(0.22), lineWidth: 1))
-                Button { showsViewSettings = true } label: {
-                    HStack(spacing: 4) {
-                        Text(config.courseFilter ?? "Canchas")
+                Button { showsCourses = true } label: {
+                    HStack(spacing: 8) {
+                        Text(courseButtonTitle)
                             .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 8)
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 12, weight: .bold))
                     }
-                    .font(GFont.ui(11, weight: .semibold))
+                    .font(GFont.ui(15, weight: .semibold))
                     .foregroundStyle(p.ink)
-                    .padding(.horizontal, 6)
-                    .frame(maxWidth: 84)
-                    .frame(height: 32)
+                    .padding(.horizontal, 14)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Color.white)
                     .overlay(Rectangle().stroke(p.primary.opacity(0.22), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(config.range.title). \(config.courseFilter ?? "Todas las canchas")")
+                .accessibilityLabel(courseButtonTitle)
                 .accessibilityIdentifier("group-view-range")
             }
             .padding(.top, 12)
@@ -680,38 +686,119 @@ struct GroupDetailView: View {
     private func leaderStrip(_ rows: [GroupComparisonRow]) -> some View {
         let keys: [GroupMetricKind] = [.birdies, .pars, .net, .rounds]
         let chips = keys.compactMap { kind in rows.first { $0.metric == kind } }
-        return HStack(alignment: .top, spacing: 0) {
+        return VStack(spacing: 0) {
             ForEach(chips) { row in
                 let ranked = row.ranked()
                 let tops = ranked.filter { row.rank(of: $0.memberID) == 1 }
-                let who = tops.count > 1 ? "T1 · \(firstName(tops.first?.memberName ?? ""))" : firstName(tops.first?.memberName ?? "")
+                let tie = tops.count > 1
+                let who = tie ? "T1 \(firstName(tops.first?.memberName ?? ""))" : firstName(tops.first?.memberName ?? "")
                 let value = tops.first.map { display($0, metric: row.metric) } ?? ""
+                let gap = tie ? "T1" : leaderGap(row, ranked: ranked)
+                let rate = leaderRate(row, top: tops.first)
                 Button { compareMetric = row.metric.rawValue } label: {
-                    VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(row.metric == .net ? "Mejor neto" : row.metric.title)
-                            .font(GFont.ui(10, weight: .semibold))
-                            .tracking(0.8)
+                            .font(GFont.ui(11, weight: .bold))
                             .textCase(.uppercase)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("\(who) \(value)")
-                            .font(GFont.ui(13, weight: .bold))
-                            .lineLimit(4)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(1)
+                            .frame(width: 92, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(who)
+                                    .font(GFont.ui(15, weight: .semibold))
+                                    .lineLimit(1)
+                                Spacer(minLength: 6)
+                                Text(value)
+                                    .font(GFont.ui(15, weight: .bold))
+                                    .lineLimit(1)
+                            }
+                            Text([gap, rate].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(GFont.ui(12, weight: .regular))
+                                .foregroundStyle(p.ink2)
+                                .lineLimit(1)
+                        }
                     }
                     .foregroundStyle(p.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 52)
+                    .background(Color.white)
                 }
                 .buttonStyle(.plain)
-                .overlay(alignment: .trailing) { Rectangle().fill(p.primary.opacity(0.16)).frame(width: 1) }
+                .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.12)).frame(height: 1) }
             }
         }
-        .overlay(alignment: .top) { Rectangle().fill(p.primary.opacity(0.16)).frame(height: 1) }
-        .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.16)).frame(height: 1) }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.top, 10)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Líderes")
+    }
+
+    private func leaderGap(_ row: GroupComparisonRow, ranked: [MemberMetricValue]) -> String {
+        guard ranked.count >= 2, let lead = ranked[0].value, let next = ranked[1].value else { return "" }
+        if row.rank(of: ranked[0].memberID) == row.rank(of: ranked[1].memberID) { return "T1" }
+        let delta = row.metric.lowerIsBetter ? next - lead : lead - next
+        return "+\(FormatAR.one(delta)) sobre \(firstName(ranked[1].memberName))"
+    }
+
+    private func leaderRate(_ row: GroupComparisonRow, top: MemberMetricValue?) -> String {
+        guard let top, let rate = top.perRound, let sample = top.sample, sample > 0 else { return "" }
+        guard row.metric == .birdies || row.metric == .pars || row.metric == .eagles else { return "" }
+        return "\(FormatAR.one(rate)) por ronda · \(sample) \(sample == 1 ? "ronda" : "rondas")"
+    }
+
+    private var courseButtonTitle: String {
+        guard let key = config.courseFilter, !key.isEmpty else { return "Todas las canchas" }
+        return courseChoices.first { $0.0 == key }?.1 ?? key
+    }
+
+    private var courseChoices: [(String?, String)] {
+        var out: [(String?, String)] = [(nil, "Todas las canchas")]
+        let listed = comparison?.courses ?? []
+        if !listed.isEmpty {
+            out.append(contentsOf: listed.map { ($0.key, $0.title) })
+        } else {
+            for course in model.courses {
+                let title = course.clubName.isEmpty ? course.name : "\(course.name) · \(course.clubName)"
+                out.append((course.name, title))
+            }
+        }
+        return out
+    }
+
+    private var courseSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(Array(courseChoices.enumerated()), id: \.offset) { _, choice in
+                    let on = config.courseFilter == choice.0 || (config.courseFilter == nil && choice.0 == nil)
+                    Button {
+                        selectCourse(choice.0)
+                        showsCourses = false
+                    } label: {
+                        HStack {
+                            Text(choice.1)
+                                .foregroundStyle(p.ink)
+                            Spacer()
+                            if on {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Color(hex: 0xC8102E))
+                            }
+                        }
+                        .frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier(choice.0 == nil ? "group-course-all" : "group-course-\(choice.0 ?? "")")
+                }
+            }
+            .navigationTitle("Canchas")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .accessibilityIdentifier("group-course-sheet")
+    }
+
+    private func selectCourse(_ key: String?) {
+        config.courseFilter = key
+        Task { await reloadComparison() }
     }
 
     private func categoryTabs(_ rows: [GroupComparisonRow], selected: GroupComparisonRow) -> some View {
@@ -1451,9 +1538,6 @@ struct GroupViewSettings: View {
                     }
                     if let cards {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Tu resumen")
-                                .font(GType.section)
-                                .foregroundStyle(p.ink)
                             Text(GroupViewSettings.fewCards(cards) ? "Pocas tarjetas" : cards)
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
@@ -1465,34 +1549,32 @@ struct GroupViewSettings: View {
                         }
                         .accessibilityIdentifier("vista-resumen")
                     }
-                    Text("Elegí qué métricas y gráficos ves, el orden, el período y la cancha. Nadie más cambia esta vista.")
+                    Text("Solo tarjetas oficiales. Una de 9 entra por hoyo, no en el promedio de golpes.")
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
 
                     Text("Período")
                         .font(GType.section)
                         .foregroundStyle(p.ink)
-                    VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 0) {
                         ForEach(GroupPeriod.allCases) { range in
+                            let on = draft.range == range
                             Button {
                                 draft.range = range
                             } label: {
-                                HStack {
-                                    Text(range.title)
-                                        .font(GType.headline)
-                                        .foregroundStyle(p.ink)
-                                    Spacer()
-                                    if draft.range == range {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(p.primary)
-                                    }
-                                }
-                                .padding(.vertical, 6)
+                                Text(range.title)
+                                    .font(GFont.ui(12, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(1)
+                                    .foregroundStyle(on ? Color.white : p.ink)
+                                    .frame(maxWidth: .infinity, minHeight: 36)
+                                    .background(on ? p.primary : Color.white)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("view-range-\(range.rawValue)")
                         }
                     }
+                    .frame(maxWidth: .infinity)
 
                     Text("Cancha")
                         .font(GType.section)

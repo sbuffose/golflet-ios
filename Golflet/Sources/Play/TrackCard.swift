@@ -41,7 +41,7 @@ enum TrackCard {
             penalty: penalty,
             holed: shot.result == "holed",
             lost: lost,
-            putt: !penalty && !lost && (onGreen || club == "pt" || club.contains("putt")),
+            putt: !penalty && !lost && (onGreen || club == "pt" || club.contains("putt") || shot.intent == "conceded"),
             originGreen: !penalty && !lost && onGreen,
             endLie: nil,
             direction: nil

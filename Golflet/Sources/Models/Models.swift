@@ -181,8 +181,15 @@ struct CourseHole: Identifiable, Hashable, Sendable {
     var id: Int { number }
     var number: Int
     var par: Int
+    var parRaw: String? = nil
     var handicap: Int
     var yards: [String: Int]
+
+    var parCaption: String {
+        let parts = (parRaw ?? "").split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count >= 2, parts[0] == String(par), !parts[1].isEmpty, parts[1] != String(par) else { return "Par" }
+        return "Par · damas \(parts[1])"
+    }
 }
 
 struct Course: Identifiable, Hashable, Sendable {
@@ -656,6 +663,15 @@ struct ScorecardFetchJob: Identifiable, Hashable, Sendable {
         status == "complete" || !(roundId ?? "").isEmpty
     }
 
+    var chipTitle: String {
+        let blob = "\(status) \(heading) \(label)".lowercased()
+        if blob.contains("no presentó") || status == "absent" { return "No presentó" }
+        if ["error", "needs_credentials", "stopped"].contains(status) || blob.contains("sin confirmar") { return "Error" }
+        return "Pendiente"
+    }
+
+    var canRetry: Bool { chipTitle == "Pendiente" || chipTitle == "Error" }
+
     var statusLine: String {
         let trimmed = heading.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
@@ -713,6 +729,15 @@ struct BagClub: Identifiable, Hashable, Sendable {
     var brand: String? = nil
     var modelName: String? = nil
     var code: String? = nil
+    var displayName: String? = nil
+
+    var face: String {
+        let custom = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !custom.isEmpty { return custom }
+        let key = code ?? name
+        let saved = UserDefaults.standard.string(forKey: "golflet.clubName.\(key)") ?? ""
+        return saved.isEmpty ? name : saved
+    }
 
     var equipmentLine: String {
         let brand = brand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

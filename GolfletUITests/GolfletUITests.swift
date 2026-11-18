@@ -1789,16 +1789,17 @@ final class GolfletUITests: XCTestCase {
             if scorecardSheetOpen(app) { break }
         }
         XCTAssertTrue(scorecardSheetOpen(app), "No se abrió la hoja de tarjetas")
-        XCTAssertTrue(app.staticTexts["1 búsqueda"].waitForExistence(timeout: 4), "Falta la cantidad de búsquedas")
-        XCTAssertTrue(app.buttons["tee-prep-scorecard-refresh"].waitForExistence(timeout: 4), "Falta Actualizar")
-        XCTAssertTrue(app.staticTexts["Todavía no hay tarjeta"].exists, "Falta el vacío con el caddie")
+        XCTAssertTrue(app.staticTexts["1 pendiente"].waitForExistence(timeout: 4), "Falta el resumen de la hoja")
+        XCTAssertTrue(app.buttons["tee-prep-scorecard-refresh"].waitForExistence(timeout: 4), "Falta Buscar de nuevo")
+        XCTAssertTrue(app.staticTexts["Pendiente"].exists, "Falta el chip Pendiente")
+        XCTAssertFalse(app.staticTexts["Todavía no hay tarjeta"].exists)
         shot("reserva-tarjetas")
     }
 
     private func scorecardSheetOpen(_ app: XCUIApplication) -> Bool {
         if first(app, "tee-prep-scorecard").waitForExistence(timeout: 6) { return true }
         if app.navigationBars["Tarjetas del club"].waitForExistence(timeout: 2) { return true }
-        return app.staticTexts["Todavía no hay tarjeta"].waitForExistence(timeout: 2)
+        return app.staticTexts["1 pendiente"].waitForExistence(timeout: 2)
     }
 
     private func assertRoundChipsOneLine(_ app: XCUIApplication, requireTwoDigits: Bool = true, file: StaticString = #file, line: UInt = #line) {
@@ -1912,7 +1913,16 @@ final class GolfletUITests: XCTestCase {
         XCTAssertLessThanOrEqual(frames.map(\.maxX).max() ?? 0, window.frame.maxX + 1, dump)
         let course = largest(app, "group-view-range")
         if course.exists, course.frame.width > 8 {
-            XCTAssertGreaterThanOrEqual(course.frame.minX + 1, frames.map(\.maxX).max() ?? 0, "El período pisa Canchas: \(dump)")
+            XCTAssertGreaterThanOrEqual(course.frame.minY + 1, frames.map(\.maxY).max() ?? 0, "Canchas tiene que ir debajo de los períodos: \(dump)")
+            XCTAssertGreaterThanOrEqual(course.frame.height, 44, "El control de canchas mide menos de 44")
+            XCTAssertTrue(app.staticTexts["43"].waitForExistence(timeout: 3), "Falta el líder sin filtro")
+            if course.isHittable { course.tap() } else { course.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            let azul = app.buttons["group-course-1:Azul"]
+            XCTAssertTrue(azul.waitForExistence(timeout: 4), "No se abrió el menú de canchas")
+            shot("grupo-canchas")
+            azul.tap()
+            XCTAssertTrue(app.staticTexts["22"].waitForExistence(timeout: 4), "El filtro de cancha no cambió el número")
+            shot("grupo-cancha-filtrada")
         }
     }
 

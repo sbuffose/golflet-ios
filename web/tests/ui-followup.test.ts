@@ -98,12 +98,12 @@ test("period, strategy and the hole map follow the fixture", { timeout: 90_000, 
     const urls: string[] = [];
     page.on("request", req => { const u = new URL(req.url()); if ((u.protocol === "http:" || u.protocol === "https:") && u.hostname !== "127.0.0.1") leaked.push(u.hostname); });
     page.on("framenavigated", frame => { if (frame === page.mainFrame()) urls.push(frame.url()); });
-    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle0" });
+    await page.goto(`http://127.0.0.1:${port}/#/resumen`, { waitUntil: "networkidle0" });
     await page.waitForSelector(".rng-n");
     assert.equal(urls.some(u => u.includes("/login")), false);
     const selected = () => page.$$eval('button[data-range][aria-selected="true"]', els => els.map(el => el.textContent || ""));
     const rounds = () => page.$eval(".rng-n", el => el.textContent || "");
-    assert.deepEqual(await selected(), ["Todo"]);
+    assert.deepEqual(await selected(), ["Histórico"]);
     assert.match(await rounds(), /2 rondas/);
     await page.click('button[data-range="3m"]');
     await page.waitForFunction(() => location.hash.includes("range=3m") && document.querySelector('button[data-range="3m"]')?.getAttribute("aria-selected") === "true");
@@ -123,7 +123,7 @@ test("period, strategy and the hole map follow the fixture", { timeout: 90_000, 
     await page.click('button[data-range="3m"]');
     await page.waitForFunction(() => (document.querySelector(".big")?.textContent || "") === "80,0");
     await page.click('a[href="#/hoyo/c1/1"]');
-    await page.waitForSelector('#holegeo svg[aria-label="Trazado con los puntos provistos del hoyo 1"]');
+    await page.waitForSelector("#hole-satellite img");
     await page.waitForFunction(() => (document.querySelector("#howto")?.textContent || "").includes("Salida al centro verificada"));
     const hole1 = await page.evaluate(() => document.body.innerText);
     assert.equal(hole1.includes("próximamente"), false);
@@ -131,7 +131,7 @@ test("period, strategy and the hole map follow the fixture", { timeout: 90_000, 
     assert.equal(hole1.includes("Plan general que no es el de hándicap bajo"), false);
     assert.equal(await page.$eval('button[data-lvl="bajo"]', el => el.classList.contains("on")), true);
     await page.click('a[aria-label="Siguiente"]');
-    await page.waitForFunction(() => (document.querySelector("#holegeo")?.textContent || "").includes("No hay un trazado verificado para este hoyo."));
+    await page.waitForFunction(() => (document.querySelector("#holegeo")?.textContent || "").includes("Este hoyo no tiene geometría verificada."));
     await page.waitForFunction(() => (document.querySelector("#howto")?.textContent || "").includes("No hay un plan verificado para hándicap bajo."));
     const hole2 = await page.evaluate(() => document.body.innerText);
     assert.equal(hole2.includes("Plan general que no es el de hándicap bajo"), false);
@@ -160,7 +160,7 @@ test("period, strategy and the hole map follow the fixture", { timeout: 90_000, 
     await page.click("#stratcard [data-retry]");
     await page.waitForFunction(() => (document.querySelector("#stratcard")?.textContent || "").includes("18 de 18"));
     assert.equal(urls.some(u => u.includes("/login")), false);
-    assert.deepEqual(leaked, []);
+    assert.deepEqual(leaked.filter(h => h !== "server.arcgisonline.com"), []);
   } finally {
     releaseStrategy.splice(0).forEach(fn => fn());
     await browser.close();

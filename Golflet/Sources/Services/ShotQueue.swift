@@ -15,10 +15,12 @@ enum ShotQueue {
         else { return [] }
         return raw.compactMap { item in
             guard let id = item["client_id"] as? String,
-                  let live = item["live_round_id"] as? String,
-                  let lat = JSONFlex.double(from: item["lat"]),
-                  let lng = JSONFlex.double(from: item["lng"])
+                  let live = item["live_round_id"] as? String
             else { return nil }
+            let intent = item["intent"] as? String
+            let lat = JSONFlex.double(from: item["lat"])
+            let lng = JSONFlex.double(from: item["lng"])
+            if intent != "conceded", lat == nil || lng == nil { return nil }
             return ShotDraft(
                 clientId: id,
                 hole: JSONFlex.int(from: item["hole"]) ?? 1,
@@ -58,10 +60,12 @@ enum ShotQueue {
             "client_id": String(draft.clientId.prefix(64)),
             "live_round_id": draft.liveRoundId,
             "hole": draft.hole,
-            "lat": draft.lat,
-            "lng": draft.lng,
             "taken_at": ISO8601DateFormatter().string(from: draft.takenAt)
         ]
+        if let lat = draft.lat, let lng = draft.lng {
+            body["lat"] = lat
+            body["lng"] = lng
+        }
         if let accuracy = draft.accuracyM { body["accuracy_m"] = accuracy }
         if let club = draft.club { body["club"] = club }
         if let lie = draft.lie { body["lie"] = lie }

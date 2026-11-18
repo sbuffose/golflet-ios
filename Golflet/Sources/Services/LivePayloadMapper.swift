@@ -386,6 +386,7 @@ enum LivePayloadMapper {
                 return CourseHole(
                     number: number,
                     par: JSONFlex.int(from: hole["par"]) ?? 4,
+                    parRaw: hole["par_raw"] as? String,
                     handicap: JSONFlex.int(from: hole["hcp"] ?? hole["hole_hcp"]) ?? number,
                     yards: yards
                 )
