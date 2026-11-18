@@ -42,6 +42,7 @@ struct GScreen<Content: View>: View {
         .background(p.bg.ignoresSafeArea())
         .overlay(alignment: .top) {
             StatusBarCover()
+                .ignoresSafeArea(edges: .top)
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -53,10 +54,14 @@ private struct StatusBarCover: View {
     @Environment(\.palette) private var p
 
     var body: some View {
-        p.bg
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.barHeight)
-            .allowsHitTesting(false)
+        GeometryReader { geo in
+            let top = max(geo.safeAreaInsets.top, Self.barHeight)
+            p.bg
+                .frame(maxWidth: .infinity)
+                .frame(height: top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .allowsHitTesting(false)
     }
 
     private static var barHeight: CGFloat {

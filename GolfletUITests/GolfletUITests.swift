@@ -1697,7 +1697,7 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Rondas")
         XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6), "La lista de rondas no se abrió")
-        let banner = first(app, "reconstruct-start")
+        let banner = largest(app, "reconstruct-start")
         XCTAssertTrue(banner.waitForExistence(timeout: 4), "Falta el banner de cargar la vuelta")
         XCTAssertLessThan(banner.frame.maxY, window.frame.height * 0.62, "El banner quedó abajo y tapa una ronda")
         let chipRow = largest(app, "round-chips")
@@ -1708,7 +1708,7 @@ final class GolfletUITests: XCTestCase {
         assertRoundChipsOneLine(app)
 
         reveal(app, "reconstruct-start")
-        let start = first(app, "reconstruct-start")
+        let start = largest(app, "reconstruct-start")
         XCTAssertTrue(start.waitForExistence(timeout: 4), "Falta Cargar una vuelta ya jugada")
         if start.isHittable { start.tap() } else { start.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         XCTAssertTrue(waitFor(app, "rc-last", timeout: 6), "La última ronda no quedó arriba")
