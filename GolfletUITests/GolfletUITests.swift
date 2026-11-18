@@ -1672,7 +1672,7 @@ final class GolfletUITests: XCTestCase {
         if groups.isHittable { groups.tap() } else {
             groups.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No se abrió el grupo")
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No se abrió el grupo \(groups.frame)")
         assertGroupPeriodsFit(app, window)
         shot("inicio-grupo")
         dismissIfPresent(app, "close-grupo")
