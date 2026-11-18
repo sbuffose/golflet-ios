@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct GProbe: View {
     let id: String
@@ -39,7 +40,35 @@ struct GScreen<Content: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(p.bg.ignoresSafeArea())
+        .overlay(alignment: .top) {
+            StatusBarCover()
+                .ignoresSafeArea(edges: .top)
+        }
         .toolbar(.hidden, for: .navigationBar)
+    }
+}
+
+/// Scroll content reaches the top of the screen. Paint the page color over
+/// that strip so the clock does not sit on a row.
+private struct StatusBarCover: View {
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        GeometryReader { geo in
+            let top = max(geo.safeAreaInsets.top, Self.barHeight)
+            p.bg
+                .frame(maxWidth: .infinity)
+                .frame(height: top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private static var barHeight: CGFloat {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let bar = scene?.statusBarManager?.statusBarFrame.height ?? 0
+        if bar > 1 { return bar }
+        return scene?.keyWindow?.safeAreaInsets.top ?? 0
     }
 }
 
@@ -158,6 +187,105 @@ struct FilterPills: View {
         .padding(4)
         .background(p.surface2)
         .clipShape(Capsule())
+    }
+}
+
+/// One row of result chips. The label is already the short form (`12 Bir`). It never scales and never ellipsizes.
+struct SingleLineChipRow: View {
+    var chips: [(label: String, fill: Color, ink: Color)]
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(chips.enumerated()), id: \.offset) { index, chip in
+                Text(chip.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: true)
+                    .foregroundStyle(chip.ink)
+                    .padding(.horizontal, 6)
+                    .frame(height: 18)
+                    .background(chip.fill)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .accessibilityLabel(chip.label)
+                    .accessibilityIdentifier("round-chip-\(index)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 18)
+    }
+}
+
+/// Wraps whole chips onto the next row. Each child keeps a single line and a fixed height.
+struct ChipFlowLayout: Layout {
+    var spacing: CGFloat = 4
+    var lineSpacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth + 0.5 {
+                y += rowHeight + lineSpacing
+                x = 0
+                rowHeight = 0
+            }
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+        return CGSize(width: proposal.width ?? max(0, x - spacing), height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX + 0.5 {
+                y += rowHeight + lineSpacing
+                x = bounds.minX
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(width: size.width, height: size.height))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+    }
+}
+
+struct MetricPeriodStrip: View {
+    @Environment(\.palette) private var p
+    @Binding var period: MetricPeriod
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(MetricPeriod.allCases, id: \.self) { item in
+                let on = period == item
+                Button {
+                    period = item
+                } label: {
+                    Text(item.rawValue)
+                        .font(GFont.ui(10, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .foregroundStyle(on ? Color.white : p.ink)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 32)
+                        .background(on ? p.primary : Color.white)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(item.rawValue)
+                .accessibilityIdentifier("metric-period-\(item.rangeQuery.isEmpty ? (item == .year ? "year" : "all") : item.rangeQuery)")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(p.primary.opacity(0.22), lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("metric-period")
     }
 }
 

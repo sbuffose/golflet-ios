@@ -103,6 +103,7 @@ struct TeeTimePrepView: View {
     @State private var strategy: CourseStrategy?
     @State private var liveForecast: String?
     @State private var gpsHoles: [GPSHole] = []
+    @State private var scorecardJob: ScorecardFetchJob?
 
     private var shown: TeeTime {
         model.teeTimes.first { $0.id == booking.id } ?? booking
@@ -160,7 +161,7 @@ struct TeeTimePrepView: View {
                         }
                     }
                     if let job = model.scorecardFetches.first(where: { $0.teeTimeId == booking.id }) {
-                        block("Tarjeta del club", job.label, "tee-prep-scorecard")
+                        scorecardRow(job)
                     }
                     block("Cancha", place.canchaTitle, "tee-prep-cancha")
                     block(
@@ -176,6 +177,9 @@ struct TeeTimePrepView: View {
         }
         .accessibilityIdentifier("screen-tee-prep")
         .safeAreaInset(edge: .top) { MetricBackBar() }
+        .sheet(item: $scorecardJob) { job in
+            scorecardSheet(job)
+        }
         .task(id: place.strategyCourses.map(\.key).joined(separator: "|")) {
             await loadStrategy()
         }
@@ -208,7 +212,9 @@ struct TeeTimePrepView: View {
         f.locale = Locale(identifier: "es_AR")
         f.timeZone = .current
         f.dateFormat = "EEEE d 'de' MMMM"
-        return f.string(from: shown.startsAt).capitalized
+        let raw = f.string(from: shown.startsAt)
+        guard let first = raw.first else { return raw }
+        return String(first).uppercased() + raw.dropFirst()
     }
 
     private var companionsBlock: some View {
@@ -228,21 +234,32 @@ struct TeeTimePrepView: View {
                             HStack(spacing: 10) {
                                 AvatarCircle(initials: String(name.prefix(1)).uppercased())
                                     .frame(width: 32, height: 32)
-                                Text(name)
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                Spacer()
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    if let juego = partnerPlayingHandicap(name) {
+                                        Text("Hándicap de juego \(juego)")
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink3)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                Text(partnerIndexLabel(name))
+                                    .font(GType.label)
+                                    .foregroundStyle(shown.companionHandicaps[name] == nil ? p.ink3 : p.ink)
+                                    .multilineTextAlignment(.trailing)
                             }
                             .padding(.vertical, 8)
                             .padding(.horizontal, 8)
                         }
                     }
                 }
-                .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("tee-prep-players")
-                .accessibilityLabel(shown.companions.joined(separator: ", "))
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("tee-prep-companions")
     }
 
     private var playingHandicap: some View {
@@ -324,6 +341,61 @@ struct TeeTimePrepView: View {
                 }
             }
         }
+    }
+
+    private func partnerIndexLabel(_ name: String) -> String {
+        guard let index = shown.companionHandicaps[name] else { return "HI no disponible" }
+        return "HI \(FormatAR.one(index))"
+    }
+
+    /// Playing handicap only when this reservation's course has one tee rating. Several tees would mean guessing which one.
+    private func partnerPlayingHandicap(_ name: String) -> Int? {
+        guard let index = shown.companionHandicaps[name] else { return nil }
+        let matches = model.tees.filter { $0.course.caseInsensitiveCompare(shown.course) == .orderedSame }
+        guard matches.count == 1, let tee = matches.first else { return nil }
+        let par = model.courses.first { $0.name.caseInsensitiveCompare(shown.course) == .orderedSame }?.par ?? 72
+        return HandicapMath.courseHandicap(index: index, slope: Double(tee.slope), rating: tee.courseRating, par: par)
+    }
+
+    private func scorecardRow(_ job: ScorecardFetchJob) -> some View {
+        let count = model.scorecardFetches.filter { $0.teeTimeId == job.teeTimeId }.count
+        let countLabel = count == 1 ? "1 búsqueda" : "\(count) búsquedas"
+        return Button {
+            scorecardJob = job
+        } label: {
+            HStack(spacing: 10) {
+                Text("Tarjetas del club")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Spacer(minLength: 8)
+                Text(countLabel)
+                    .font(GType.label)
+                    .foregroundStyle(Color(hex: BrandHex.red))
+                    .lineLimit(1)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(p.ink3)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+            .background(p.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("tee-prep-scorecard-open")
+    }
+
+    private func scorecardSheet(_ job: ScorecardFetchJob) -> some View {
+        let jobs = model.scorecardFetches.filter { $0.teeTimeId == job.teeTimeId }
+        return ScorecardFetchSheet(
+            jobs: jobs.isEmpty ? [job] : jobs,
+            refreshID: "tee-prep-scorecard-refresh",
+            sheetID: "tee-prep-scorecard"
+        ) {
+            Task { await model.refreshScorecardFetches() }
+        }
+        .environment(model)
     }
 
     private func block(_ title: String, _ body: String, _ id: String) -> some View {

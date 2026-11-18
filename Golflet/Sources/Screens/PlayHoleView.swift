@@ -44,6 +44,7 @@ struct PlayHoleView: View {
     @State private var askDeleteShot = false
     @State private var movingShotID: String?
     @State private var recovery = false
+    @State private var conceded = false
     @State private var waterAsk = false
     @State private var droppedClientIDs: Set<String> = []
 
@@ -598,6 +599,9 @@ struct PlayHoleView: View {
     private var dock: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
+                if editingClosed {
+                    markActions
+                }
                 if track.marks.contains(where: \.holed), !holeClosed {
                     CaddieMark(height: 48)
                 }
@@ -667,9 +671,14 @@ struct PlayHoleView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .accessibilityIdentifier("play-edit-save")
                 }
-                if !holeClosed {
+                if !holeClosed && !editingClosed {
                     markActions
-                    if track.phase == .tracking { lostActions }
+                    if conceded {
+                        Text("Hoyo cerrado. A buena cuenta un golpe y un putt, sin punto en el mapa.")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink)
+                            .accessibilityIdentifier("play-conceded")
+                    } else if track.phase == .tracking { lostActions }
                 }
                 greenTools
                 if !holeClosed {
@@ -941,6 +950,8 @@ struct PlayHoleView: View {
                     .foregroundStyle(p.ink)
                     .padding(.leading, 4)
                     .padding(.trailing, 44)
+                    .accessibilityIdentifier("play-club-sheet")
+                    .accessibilityLabel("Palo")
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(model.bag, id: \.name) { club in
                         let on = chosenClub == club.name
@@ -949,7 +960,7 @@ struct PlayHoleView: View {
                             showsClubs = false
                         } label: {
                             VStack(spacing: 2) {
-                                Text(shortClub(club.name))
+                                Text(shortClub(club.face))
                                     .font(GFont.ui(15, weight: .bold))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
@@ -1002,7 +1013,9 @@ struct PlayHoleView: View {
             .padding(.horizontal, 14)
             .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("play-club-sheet")
+        .accessibilityLabel("Palo")
     }
 
     private func shortClub(_ label: String) -> String {
@@ -1034,13 +1047,14 @@ struct PlayHoleView: View {
                         .background(Capsule().fill(p.surface2))
                         .accessibilityIdentifier("play-undo")
                 }
-                Button(recovery ? "Sacada" : "Sacada") { recovery.toggle() }
+                Button("A buena") { Task { await concedePutt() } }
                     .font(GType.label)
-                    .foregroundStyle(recovery ? p.onPrimary : p.ink)
+                    .foregroundStyle(p.ink)
                     .padding(.horizontal, 12)
-                    .frame(height: 44)
-                    .background(Capsule().fill(recovery ? p.primary : p.surface2))
-                    .accessibilityIdentifier("play-recovery")
+                    .frame(minHeight: 44)
+                    .background(Capsule().fill(p.surface2))
+                    .accessibilityIdentifier("play-good")
+                    .accessibilityLabel("A buena, putt concedido")
             }
             Button("Pelota perdida / fuera de límites") { markLost(provisional: false) }
                 .font(GType.label)
@@ -1050,6 +1064,37 @@ struct PlayHoleView: View {
                 .font(GType.label)
                 .foregroundStyle(p.ink)
                 .accessibilityIdentifier("play-lost-prov")
+        }
+    }
+
+    private func concedePutt() async {
+        let draft = ShotDraft(
+            clientId: String(UUID().uuidString.prefix(32)),
+            hole: hole,
+            lat: nil,
+            lng: nil,
+            accuracyM: nil,
+            takenAt: Date(),
+            club: nil,
+            lie: nil,
+            result: "holed",
+            direction: nil,
+            length: nil,
+            mishit: false,
+            liveRoundId: liveRound.id,
+            intent: "conceded"
+        )
+        ShotQueue.enqueue(draft)
+        do {
+            let posted = try await model.api.postShots(liveRoundId: liveRound.id, drafts: [draft])
+            ShotQueue.remove(clientIds: [draft.clientId])
+            shots = posted.filter { shot in
+                guard let client = shot.clientId else { return true }
+                return !droppedClientIDs.contains(client)
+            }
+            conceded = true
+        } catch {
+            message = "Sin red. El golpe quedó en cola."
         }
     }
 
@@ -1769,7 +1814,7 @@ struct PlayHoleView: View {
                                 Task { await retarget(shot, club: club.name) }
                             } label: {
                                 VStack(spacing: 2) {
-                                    Text(club.name)
+                                    Text(club.face)
                                         .font(GType.headline)
                                         .foregroundStyle(p.ink)
                                         .lineLimit(1)

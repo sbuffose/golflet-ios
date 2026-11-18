@@ -77,14 +77,51 @@
     });
   }
 
+  const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const TEES = ["Azul", "Blanco", "Amarillo", "Colorado", "Negro"];
+  function dayLabel(iso) {
+    const [y, m, d] = String(iso || "").split("-");
+    if (!y || !m || !d) return iso || "";
+    return `${+d} ${MES[+m - 1] || m} ${y}`;
+  }
+  function roundLine(r) {
+    const bits = [r.course || "Cancha"];
+    if (r.tee) bits.push("Tee " + r.tee);
+    if (r.gross != null && r.gross !== "") bits.push(String(r.gross));
+    return bits.join(" · ");
+  }
+
   function picker() {
-    return `<div class="card rc-pick"><div class="t">Cargar una vuelta ya jugada</div>
-      <label class="s">Fecha<input id="rc-date" type="date" required></label>
-      <label class="s">Cancha<select id="rc-course"><option value="">Cargando canchas…</option></select></label>
-      <label class="s">Tarjeta del club, si ya está<select id="rc-round"><option value="">Sin asociar</option></select></label>
-      <p id="rc-err" class="s"></p>
-      <button class="btn" type="button" id="rc-start">Empezar hoyo por hoyo</button>
-      <div id="rc-list"></div></div>`;
+    return `<div class="rc-pick" id="rc-pick">
+      <div id="rc-last"></div>
+      <div id="rc-rest"></div>
+      <details class="rc-manual" id="rc-manual">
+        <summary id="rc-manual-open">Sin tarjeta del club</summary>
+        <div class="card">
+          <p class="s">Elegí cancha, tee y fecha. Queda marcada como no oficial y no entra en los números del grupo, ni en pares, birdies, rachas ni en Con quién jugás.</p>
+          <label class="s">Fecha<input id="rc-date" type="date" required></label>
+          <label class="s">Cancha<select id="rc-course"><option value="">Cargando canchas…</option></select></label>
+          <label class="s">Tee<select id="rc-tee">${TEES.map(t => `<option${t === "Blanco" ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+          <p id="rc-err" class="s"></p>
+          <button class="btn" type="button" id="rc-start">Registrar golpes</button>
+        </div>
+      </details>
+    </div>`;
+  }
+
+  function looseRow(r) {
+    return `<a class="rc-row rc-off" href="#/reconstruir/${esc(r.id)}"><b>${esc(dayLabel(r.date))}</b><span>${esc(roundLine(r))}</span><em>No oficial${r.tracked ? " · Golpes cargados" : ""}</em></a>`;
+  }
+
+  function choiceRow(r, featured) {
+    const href = `#/reconstruir?ronda=${encodeURIComponent(r.id)}&hole=1`;
+    const state = r.tracked ? "Golpes cargados" : "Sin golpes";
+    return `<a class="${featured ? "rc-feat" : "rc-row"}" href="${href}" data-round="${esc(r.id)}">
+      ${featured ? `<span class="rc-kicker">Última ronda</span>` : ""}
+      <b>${esc(dayLabel(r.date))}</b>
+      <span>${esc(roundLine(r))}</span>
+      <em>${state}</em>
+    </a>`;
   }
 
   async function mountPicker(root, prefill) {
@@ -93,10 +130,20 @@
     date.value = prefill?.date || art;
     date.max = art;
     const err = root.querySelector("#rc-err");
-    let courses = [];
+    root.querySelector("#rc-start").onclick = async () => {
+      err.textContent = "";
+      const course = root.querySelector("#rc-course").value;
+      if (!course) { err.textContent = "Elegí la cancha."; return; }
+      try {
+        const body = { date: date.value, course_id: course, tee: root.querySelector("#rc-tee").value };
+        if (prefill?.roundId) body.round_id = prefill.roundId;
+        const res = await api("/api/reconstructions", { method: "POST", body: JSON.stringify(body) });
+        location.hash = `#/reconstruir/${res.live_round.id}`;
+      } catch (e) { err.textContent = e?.message || "No pudimos abrir la vuelta."; }
+    };
     try {
       const pack = await api("/api/gps/courses");
-      courses = pack.courses || [];
+      const courses = pack.courses || [];
       const sel = root.querySelector("#rc-course");
       sel.innerHTML = courses.length
         ? courses.map(c => `<option value="${esc(c.course_id)}">${esc(c.club_name || c.club || "")} · ${esc(c.label || c.course || c.vm_course || "Cancha")}</option>`).join("")
@@ -106,31 +153,22 @@
     }
     try {
       const mine = await api("/api/reconstructions");
-      const round = root.querySelector("#rc-round");
-      for (const r of mine.rounds || []) {
-        const o = document.createElement("option");
-        o.value = r.id;
-        o.textContent = `${r.date} · ${r.club_name || ""} · ${r.course || "Cancha"}`;
-        round.appendChild(o);
-      }
-      if (prefill?.roundId && [...round.options].some(o => o.value === prefill.roundId)) round.value = prefill.roundId;
-      const list = root.querySelector("#rc-list");
-      list.innerHTML = (mine.reconstructions || []).map(r => `<a class="recon-entry" href="#/reconstruir/${esc(r.id)}"><span class="rt-mark">TRACK</span><b>${esc(r.date)} · ${esc(r.course || "Cancha")}</b><span class="recon-go" aria-hidden="true">›</span></a>`).join("");
+      const rounds = mine.rounds || [];
+      const last = root.querySelector("#rc-last");
+      const rest = root.querySelector("#rc-rest");
+      const loose = (mine.reconstructions || []).filter(r => r.official === false || (!r.round_id && r.official !== true));
+      if (rounds.length) last.innerHTML = choiceRow(rounds[0], true);
+      else last.innerHTML = `<p class="s">Todavía no hay una tarjeta del club. Podés cargar los golpes igual, como vuelta no oficial.</p>`;
+      const rows = [
+        ...rounds.slice(rounds.length ? 1 : 0).map(r => ({ date: r.date || "", id: r.id || "", html: choiceRow(r, false) })),
+        ...loose.map(r => ({ date: r.date || "", id: r.id || "", html: looseRow(r) })),
+      ].sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
+      rest.innerHTML = rows.length ? `<div class="stitle">Otras tarjetas</div>${rows.map(r => r.html).join("")}` : "";
     } catch (e) {
       if (!err.textContent) err.textContent = e?.message || "No pudimos leer tus vueltas.";
     }
-    root.querySelector("#rc-start").onclick = async () => {
-      err.textContent = "";
-      const course = root.querySelector("#rc-course").value;
-      if (!course) { err.textContent = "Elegí la cancha."; return; }
-      try {
-        const body = { date: date.value, course_id: course };
-        const round = root.querySelector("#rc-round").value;
-        if (round) body.round_id = round;
-        const res = await api("/api/reconstructions", { method: "POST", body: JSON.stringify(body) });
-        location.hash = `#/reconstruir/${res.live_round.id}`;
-      } catch (e) { err.textContent = e?.message || "No pudimos abrir la vuelta."; }
-    };
+    const manual = root.querySelector("#rc-manual");
+    if (manual && prefill?.roundId) manual.open = true;
   }
 
   let VISIT = 0;
@@ -153,6 +191,7 @@
     let savedHole = 0;
     let courseName = pending?.courseName || "";
     let roundId = pending?.roundId || "";
+    let unofficial = !roundId;
     const back = pending?.back || (roundId ? `#/ronda/${roundId}` : "#/rondas");
     let holes = [];
     let shots = [];
@@ -171,6 +210,8 @@
         if (row) {
           courseName = courseName || row.course || "";
           roundId = roundId || row.round_id || "";
+          if (row.official === false || (!row.round_id && row.official !== true)) unofficial = true;
+          if (row.round_id) unofficial = false;
           const kept = Number(row.current_hole);
           if (kept >= 1 && kept <= 18) savedHole = kept;
           if (row.club_code) clubCode = clubCode || row.club_code;
@@ -219,13 +260,14 @@
       course: { holes, course: courseName, course_id: courseId, club_code: clubCode || null },
       bag: Array.isArray(bag) ? bag : CLUBS.map(c => ({ code: c })),
       roundId: roundId || "",
+      unofficial,
       api, esc, toast: () => {}, cid: () => "",
       onSave: async (shot) => {
         if (!mine()) return null;
         try {
           if (!liveId) {
-            if (!pending?.courseId || !pending?.date || !pending?.roundId) throw new Error("Elegí la cancha.");
-            const created = await api("/api/reconstructions", { method: "POST", body: JSON.stringify({ date: pending.date, course_id: pending.courseId, round_id: pending.roundId }) });
+            if (!pending?.courseId || !pending?.date) throw new Error("Elegí la cancha.");
+            const created = await api("/api/reconstructions", { method: "POST", body: JSON.stringify({ date: pending.date, course_id: pending.courseId, round_id: pending.roundId || undefined, tee: pending.tee || undefined }) });
             if (!mine()) return null;
             liveId = created?.live_round?.id || "";
             if (!liveId) throw new Error("No pudimos abrir la vuelta.");

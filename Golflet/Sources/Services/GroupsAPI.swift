@@ -94,8 +94,11 @@ enum GroupsParser {
         let memberBlob = (blob["members"] as? [String: Any]) ?? (item["members"] as? [String: Any])
         let memberSource = blob["member_list"] ?? item["member_list"] ?? memberBlob?["list"] ?? memberBlob?["items"] ?? blob["members"] ?? item["members"]
         let members = members(from: memberSource)
+        // The list payload has no member array. `accepted` is the integer count. A boolean is not a count, and a real member array still wins.
         let reportedCount = JSONFlex.int(from: blob["member_count"] ?? blob["members_count"] ?? blob["integrantes"] ?? item["member_count"] ?? memberBlob?["count"] ?? memberBlob?["total"])
-            ?? ((memberSource as? [Any]) == nil ? JSONFlex.int(from: memberSource) : nil)
+            ?? ((memberSource as? [Any]) == nil
+                ? (JSONFlex.int(from: blob["accepted"] ?? item["accepted"]) ?? JSONFlex.int(from: memberSource))
+                : nil)
         let isAdmin = JSONFlex.bool(from: blob["is_admin"] ?? item["is_admin"]) ?? false
         let owner = member(from: blob["owner"])
             ?? members.first(where: \.isOwner)
@@ -235,7 +238,14 @@ enum GroupsParser {
         }
         let members = (blob["members"] as? [Any] ?? json["members"] as? [Any] ?? []).compactMap { $0 as? [String: Any] }
         let built = rows.isEmpty ? memberRows(members) : rows
-        return GroupComparison(groupID: groupID, config: config, rows: built, hero: hero(from: members))
+        let filters = blob["filters"] as? [String: Any] ?? json["filters"] as? [String: Any]
+        let courses = (filters?["courses"] as? [Any] ?? []).compactMap { raw -> GroupCourseOption? in
+            guard let item = raw as? [String: Any] else { return nil }
+            let key = string(item["key"])
+            guard !key.isEmpty else { return nil }
+            return GroupCourseOption(key: key, label: string(item["label"]), club: string(item["club"] ?? item["club_name"]))
+        }
+        return GroupComparison(groupID: groupID, config: config, rows: built, hero: hero(from: members), courses: courses)
     }
 
     /// The web group payload is members with card totals, not a rows array. Same numbers, no invented ranks.

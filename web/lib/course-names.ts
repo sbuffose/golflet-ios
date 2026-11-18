@@ -40,13 +40,21 @@ export function commonPrefix(names: string[]): string[] {
   return out;
 }
 
+const sameName = (a: string, b: string) => a.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase() === b.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+
 /**
- * Course label within its club. Single-course club → the club name. Multi-course → the distinguishing part
- * ("JOCKEY COLORADA" → "Colorada", "MAR DEL PLATA CANCHA VIEJA" → "Cancha Vieja"); a Golflet course name wins when we have one.
+ * Course label within its club. A single course keeps its catalog name when that name is not the club
+ * and not a "Club N" placeholder ("NAUTICO SAN ISIDRO" stays "Nautico San Isidro"). Otherwise the club name.
+ * Multi-course → the distinguishing part ("JOCKEY COLORADA" → "Colorada", "MAR DEL PLATA CANCHA VIEJA" → "Cancha Vieja");
+ * a Golflet course name wins when we have one.
  */
 export function courseLabel(vm: string, siblings: string[], clubName: string, ours?: string | null): string {
   if (ours && ours.trim() && siblings.length > 1) return titleCase(ours) === ours.toUpperCase() ? titleCase(ours) : ours.trim();
-  if (siblings.length <= 1) return clubName;
+  if (siblings.length <= 1) {
+    const own = titleCase(vm);
+    if (own && !isPlaceholderClub(own) && !sameName(own, clubName)) return own;
+    return clubName;
+  }
   const pre = commonPrefix(siblings);
   const rest = vm.trim().split(/\s+/).slice(pre.length).join(" ");
   return titleCase(rest || vm);
@@ -78,6 +86,6 @@ export async function clubNames(codes: string[]): Promise<Map<string, ClubNameSo
 export function namingFields(code: string, vm: string, siblings: string[], src: ClubNameSources, ours?: string | null) {
   const club_name = clubDisplayName(code, src);
   const course_label = courseLabel(vm, siblings, club_name, ours);
-  const single = siblings.length <= 1;
-  return { club_code: code, club_name, course_label, club_course_count: Math.max(1, siblings.length), display_name: single ? club_name : `${club_name} · ${course_label}` };
+  const display_name = sameName(course_label, club_name) ? club_name : `${club_name} · ${course_label}`;
+  return { club_code: code, club_name, course_label, club_course_count: Math.max(1, siblings.length), display_name };
 }

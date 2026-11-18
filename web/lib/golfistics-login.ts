@@ -7,6 +7,7 @@ import { q } from "./db";
 import { GolfisticsApp } from "./golfistics-app";
 import { GolfisticsError } from "./golfistics";
 import { decryptSecret, encryptSecret } from "./crypto";
+import { loginUserId, type LoginCandidate } from "./matricula-guard";
 
 /** Where players set up or recover their clave (Golfistics App login page; it says the clave is recovered from the club's site). */
 export const GOLFISTICS_APP_URL = "https://app.golfistics.com/golf/golfisticsapp_login.php";
@@ -41,7 +42,7 @@ export function normMatricula(s: unknown): string | null {
   const m = String(s ?? "").trim();
   return /^[\w.-]{1,32}$/.test(m) ? m : null;
 }
-export type LoginFailure = { status: 401 | 429 | 503 | 400; code: string; message: string; hint?: string; golfistics_url?: string; retry_after_s?: number; counts: boolean };
+export type LoginFailure = { status: 401 | 429 | 503 | 400 | 409; code: string; message: string; hint?: string; golfistics_url?: string; retry_after_s?: number; counts: boolean };
 /** Golfistics error → what the player sees. Rejections count for the rate limit; Golfistics being down doesn't. */
 export function classifyLoginError(e: unknown): LoginFailure {
   if (e instanceof GolfisticsError && e.code === "login_failed")
@@ -76,13 +77,16 @@ export async function recordAttempt(matricula: string, ip: string | null, ok: bo
   if (ok) await q(`delete from login_attempt where key_hash=$1 and not ok`, [keyHash("m", matricula)]).catch(() => {});
   await q(`delete from login_attempt where at < now() - interval '2 days'`).catch(() => {});
 }
-/** Existing Golflet account for this matrícula: the Golfistics login link first, then any linked club account. */
+/** Existing Golflet account for this matrícula: the Golfistics login link first, then a club row only when that user is not already someone else. */
 export async function findUserForMatricula(matricula: string): Promise<string | null> {
-  const [a] = await q(`select "userId" as user_id from account where "providerId"='golfistics' and lower("accountId")=lower($1) order by "createdAt" limit 1`, [matricula]);
-  if (a) return a.user_id;
-  const rows = await q(`select a.user_id, r.role, max(a.last_sync_at) last_sync_at, min(u."createdAt") created_at from club_account a join "user" u on u.id=a.user_id left join user_role r on r.user_id=a.user_id
-    where lower(a.matricula)=lower($1) and a.user_id is not null group by a.user_id, r.role`, [matricula]);
-  return pickUser(rows);
+  const [a] = await q(`select "userId" as user_id, "accountId" as identity from account where "providerId"='golfistics' and lower("accountId")=lower($1) order by "createdAt" limit 1`, [matricula]);
+  const rows = await q(`select a.user_id, (select ac."accountId" from account ac where ac."userId"=a.user_id and ac."providerId"='golfistics' order by ac."createdAt" limit 1) identity
+    from club_account a where lower(a.matricula)=lower($1) and a.user_id is not null group by a.user_id`, [matricula]);
+  const candidates: LoginCandidate[] = [
+    ...(a ? [{ userId: a.user_id as string, identity: a.identity as string, via: "identity" as const }] : []),
+    ...rows.map((r: { user_id: string; identity: string | null }) => ({ userId: r.user_id, identity: r.identity, via: "club" as const })),
+  ];
+  return loginUserId(matricula, candidates);
 }
 /** Keep the saved (encrypted) clave in step when the player changed it in Golfistics. Only touches accounts that chose to save it, unless `save` is true. */
 export async function refreshSavedClave(userId: string, matricula: string, clave: string, save: boolean) {

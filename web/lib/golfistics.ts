@@ -7,6 +7,7 @@
 import * as cheerio from "cheerio";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { cookieField, matriculaFromCookies } from "./matricula-guard";
 
 const UA = "Mozilla/5.0 (compatible; GolfletReader/2.0; +https://golflet.vercel.app)";
 
@@ -102,9 +103,7 @@ export class Golfistics {
   async login() {
     await this.req("GET", "login.php");
     await this.req("POST", "login.php", { username: this.user, password: this.password, autologin: "1", submit: "Ingresar" });
-    const vals = [...this.jar].map(([k, v]) => { try { return `${k}=${decodeURIComponent(v.replace(/\+/g, " "))}`; } catch { return `${k}=${v}`; } });
-    const blob = vals.join("&") + "&" + vals.map(x => x.slice(x.indexOf("=") + 1)).join("&");
-    const kv = (k: string) => { const m = blob.match(new RegExp(`(?:^|&)${k}=([^&;]*)`)); return m ? m[1].trim() : null; };
+    const kv = (k: string) => cookieField(this.jar, k);
     if (!kv("userid")) throw new GolfisticsError("login_failed", "Matrícula o contraseña incorrecta");
     this.club.club_code = kv("CodigoClub"); this.club.club_name = kv("NombreClub");
     this.player = { userid: kv("userid"), name: kv("username"), handicap_index: num(kv("userhandicapactual")), gender: kv("PlayerGender") };
@@ -120,7 +119,8 @@ export class Golfistics {
   adoptSession(cookies: Map<string, string>, landingHtml: string | null, info: { club_code?: string | null; club_name?: string | null; player_name?: string | null; handicap_index?: number | null; gender?: string | null } = {}) {
     this.jar = new Map(cookies);
     this.club.club_code = info.club_code ?? null; this.club.club_name = info.club_name ?? null;
-    this.player = { userid: this.user, name: info.player_name ?? null, handicap_index: info.handicap_index ?? null, gender: info.gender ?? null };
+    const remote = matriculaFromCookies(cookies);
+    this.player = { userid: remote || this.user, name: info.player_name ?? null, handicap_index: info.handicap_index ?? null, gender: info.gender ?? null };
     this.tees = landingHtml ? parseTees(landingHtml) : [];
     return this;
   }

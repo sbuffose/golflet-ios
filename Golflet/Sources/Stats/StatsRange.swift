@@ -2,45 +2,49 @@ import Foundation
 import SwiftUI
 
 enum StatsRange: String, CaseIterable, Hashable, Codable, Sendable, Identifiable {
-    case month = "1m"
     case threeMonths = "3m"
     case sixMonths = "6m"
-    case year = "12m"
+    case twelveMonths = "12m"
+    case calendarYear = "year"
     case all = "all"
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .month: return "Este mes"
         case .threeMonths: return "3 meses"
         case .sixMonths: return "6 meses"
-        case .year: return "Año"
+        case .twelveMonths: return "12 meses"
+        case .calendarYear: return "Este año"
         case .all: return "Histórico"
         }
     }
 
+    /// The row shows the full name. It has to fit at 375 without scrolling.
+    var compactTitle: String { title }
+
     var query: String { rawValue }
 
-    var monthsBack: Int? {
-        switch self {
-        case .month: return 1
-        case .threeMonths: return 3
-        case .sixMonths: return 6
-        case .year: return 12
-        case .all: return nil
-        }
-    }
-
     func startDate(now: Date = Date(), calendar: Calendar = .gregorian) -> Date? {
-        guard let months = monthsBack else { return nil }
-        return calendar.date(byAdding: .month, value: -months, to: now)
+        switch self {
+        case .threeMonths: return calendar.date(byAdding: .month, value: -3, to: now)
+        case .sixMonths: return calendar.date(byAdding: .month, value: -6, to: now)
+        case .twelveMonths: return calendar.date(byAdding: .month, value: -12, to: now)
+        case .calendarYear:
+            var cal = calendar
+            cal.timeZone = TimeZone(secondsFromGMT: -3 * 3600) ?? .gmt
+            let year = cal.component(.year, from: now)
+            return cal.date(from: DateComponents(year: year, month: 1, day: 1))
+        case .all:
+            return nil
+        }
     }
 
     static let defaultsKey = "golflet.statsRange"
 
     static func persisted(defaults: UserDefaults = .standard) -> StatsRange {
         guard let raw = defaults.string(forKey: defaultsKey) else { return .all }
+        if raw == "1m" { return .threeMonths }
         return StatsRange(rawValue: raw) ?? .all
     }
 

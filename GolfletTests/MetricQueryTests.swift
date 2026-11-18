@@ -43,6 +43,18 @@ final class MetricQueryTests: XCTestCase {
         XCTAssertTrue(year.allSatisfy { Calendar.gregorian.component(.year, from: $0.date) == 2026 })
         XCTAssertTrue(year.allSatisfy { $0.isValid && !$0.isNineHoles })
 
+        let now = date("2026-10-27")
+        let valid = RoundListQuery.bestGross(yearOnly: false)
+        let three = StatsEngine.filter(rounds, query: valid, period: .threeMonths, course: .all, now: now)
+        let six = StatsEngine.filter(rounds, query: valid, period: .sixMonths, course: .all, now: now)
+        let twelve = StatsEngine.filter(rounds, query: valid, period: .twelveMonths, course: .all, now: now)
+        let historic = StatsEngine.filter(rounds, query: valid, period: .all, course: .all, now: now)
+        XCTAssertLessThanOrEqual(three.count, six.count)
+        XCTAssertLessThanOrEqual(six.count, twelve.count)
+        XCTAssertLessThanOrEqual(twelve.count, historic.count)
+        XCTAssertLessThanOrEqual(year.count, historic.count)
+        XCTAssertEqual(RoundListQuery.bestGross(yearOnly: false).periodDefault, .twelveMonths)
+
         let jockey = StatsEngine.filter(
             rounds,
             query: .club(LinkedClub(

@@ -131,6 +131,16 @@ struct RoundDetailView: View {
                 .accessibilityIdentifier("close-round")
                 .accessibilityLabel("Tee times")
                 Spacer()
+                Button { showsTrack = true } label: {
+                    Text("Track Shots")
+                        .font(GFont.ui(14, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 36)
+                        .background(p.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .accessibilityIdentifier("track-shots")
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -316,18 +326,21 @@ struct RoundDetailView: View {
         ScoreMark(strokes: count, result: result, diameter: 18)
     }
 
-    private func statPill(_ title: String, _ value: String) -> some View {
+    private func statPill(_ title: String, _ value: String, kind: MissingKind) -> some View {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        let shown = trimmed.isEmpty ? "Sin cargar" : trimmed
         return VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
-            Text(shown)
-                .font(GType.headline)
-                .foregroundStyle(trimmed.isEmpty ? p.ink3 : p.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            if trimmed.isEmpty {
+                MissingMark(kind: kind) { showsGameEditor = true }
+            } else {
+                Text(trimmed)
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -343,8 +356,7 @@ struct RoundDetailView: View {
                     .font(GType.section)
                     .foregroundStyle(p.ink)
                 Spacer()
-                let empty = puttsText.isEmpty && girText.isEmpty && firText.isEmpty
-                Button(showsGameEditor ? "Listo" : (empty ? "Sin cargar" : "Cargado")) { showsGameEditor.toggle() }
+                Button(showsGameEditor ? "Listo" : "Cargar putts") { showsGameEditor.toggle() }
                     .font(GType.label)
                     .foregroundStyle(p.ink)
                     .padding(.horizontal, 10)
@@ -354,42 +366,10 @@ struct RoundDetailView: View {
                     .accessibilityIdentifier("edit-game")
             }
             HStack(spacing: 8) {
-                statPill("Putts", puttsText)
-                statPill("Greens", girText)
-                statPill("Fairways", firText)
+                statPill("Putts", puttsText, kind: .putts)
+                statPill("Greens", girText, kind: .greens)
+                statPill("Fairways", firText, kind: .fairways)
             }
-            Button { showsTrack = true } label: {
-                HStack(spacing: 12) {
-                    Text("TRACK")
-                        .font(GFont.ui(12, weight: .semibold))
-                        .foregroundStyle(p.accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(p.onPrimary)
-                        .clipShape(Capsule())
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Registrar mis tiros")
-                            .font(GType.headline)
-                            .foregroundStyle(p.onPrimary)
-                        Text("Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.")
-                            .font(GType.label)
-                            .foregroundStyle(p.onPrimary.opacity(0.72))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(p.onPrimary.opacity(0.8))
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(p.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("round-track")
-            .accessibilityLabel("Registrar mis tiros")
-            .accessibilityHint("Abre el mapa de golpes de esta vuelta")
             if showsGameEditor {
                 HStack(spacing: 10) {
                     gameField("Putts", $puttsText, .putts)

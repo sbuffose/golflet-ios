@@ -587,7 +587,8 @@ final class AppModel {
                 total: total,
                 brand: item.brand,
                 modelName: item.modelName,
-                code: item.code
+                code: item.code,
+                displayName: item.displayName
             )
         }
         notes.saveBag(bag)

@@ -30,9 +30,12 @@ export function mergeEquipment(incoming: Club[], prev: Club[]): Club[] {
   const by = new Map(prev.map(c => [c.code.toLowerCase(), c]));
   return incoming.map((c: any) => {
     const p = by.get(c.code.toLowerCase());
-    if ("brand" in c || !p) return c;
+    const catalog = typeByCode(String(c.code || ""));
+    const generic = !c.label || c.label === catalog?.label || c.label === catalog?.bag;
+    const keptLabel = p && p.label && p.label !== catalog?.label && generic ? p.label : c.label;
+    if ("brand" in c || !p) return { ...c, label: keptLabel || c.label };
     const keep: any = {}; for (const k of ["brand", "model", "model_custom", "loft"] as const) if ((p as any)[k] != null) keep[k] = (p as any)[k];
-    return { ...c, ...keep };
+    return { ...c, ...keep, label: keptLabel || p.label };
   });
 }
 
@@ -46,7 +49,12 @@ export function addClub(list: Club[], raw: any): Club {
 }
 export function editClub(c: Club, raw: any): Club {
   const eq = cleanEquipment({ brand: "brand" in (raw || {}) ? raw.brand : c.brand, model: "model" in (raw || {}) ? raw.model : c.model, loft: "loft" in (raw || {}) ? raw.loft : c.loft }, categoryOf(c.code, c.label));
-  return { ...c, ...eq, ...(raw && "enabled" in raw ? { enabled: raw.enabled !== false } : {}) };
+  let label = c.label;
+  if (raw && "label" in raw) {
+    label = String(raw.label ?? "").trim().slice(0, 12);
+    if (!label) throw new HttpError(400, "El nombre no puede quedar vacío.");
+  }
+  return { ...c, ...eq, label, ...(raw && "enabled" in raw ? { enabled: raw.enabled !== false } : {}) };
 }
 /** Sort like a real bag: driver → woods → hybrids → irons → wedges → putter, then by code. */
 const ORDER: Category[] = ["driver", "fairway", "hybrid", "iron", "wedge", "putter"];

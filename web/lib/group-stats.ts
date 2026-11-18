@@ -1,7 +1,9 @@
 /** Pure group-comparison math (no DB): per-member aggregates and the "Qué comparto" filter. */
 import type { Share } from "./group-share";
 
-export type NR = { round_id?: string; par?: number | null; nine?: boolean; date: string; year: string; course_key: string; course_label: string; gross: number | null; net: number | null; holes: [number, number, number][]; putts: number | null; gir: number | null; fir: number | null };
+export type NR = { round_id?: string; par?: number | null; nine?: boolean; date: string; year: string; course_key: string; course_label: string; gross: number | null; net: number | null; holes: [number, number, number][]; putts: number | null; gir: number | null; fir: number | null; official?: boolean | null };
+/** Club scorecards count. A round loaded without a scorecard is unofficial and stays out of every shared number. */
+export function countsInSharedStats(official: boolean | null | undefined) { return official !== false; }
 const r1 = (x: number | null) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
 const isoDay = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 /** Competition periods for a group. Calendar bounds in Argentina (UTC−3). Legacy 3m/6m/12m stay rolling so a saved view still filters. */
@@ -76,6 +78,7 @@ export function worstHoles(rs: { holes: [number, number, number][] }[]) {
     .slice(0, 3);
 }
 export function memberStats(rs: NR[]) {
+  rs = rs.filter(r => countsInSharedStats(r.official));
   const full = rs.filter(r => !r.nine);
   const g = full.map(r => r.gross!).filter(Boolean), n = full.map(r => r.net).filter((x): x is number => x != null);
   const holes = rs.flatMap(r => r.holes.filter(h => h[1] && h[2]));

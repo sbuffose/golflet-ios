@@ -13,7 +13,6 @@ struct ReconstructView: View {
     @State private var setup = ReconstructionSetup(officialRounds: [], saved: [])
     @State private var live: ReconstructionRound?
     @State private var shots: [ReconstructionShot] = []
-    @State private var centers: [Int: ReconstructionPoint] = [:]
     @State private var hole = 1
     @State private var club = "7i"
     @State private var result = ""
@@ -23,12 +22,17 @@ struct ReconstructView: View {
     @State private var end: ReconstructionPoint?
     @State private var editing: String?
     @State private var camera = MapCameraPosition.automatic
-    @State private var aimPoint: ReconstructionPoint?
     @State private var note = ""
     @State private var busy = false
     @State private var staged = false
+    @State private var teeName = "Blanco"
+    @State private var holeEnds: [Int: HoleEnds] = [:]
+    @State private var courseFocus: ReconstructionPoint?
+    @State private var aimCenter: ReconstructionPoint?
+    @State private var showsManual = false
 
     private let clubs = ["Dr", "3W", "5W", "Hy", "4i", "5i", "6i", "7i", "8i", "9i", "PW", "GW", "SW", "LW", "Pt"]
+    private let teeNames = ["Azul", "Blanco", "Amarillo", "Colorado", "Negro"]
     private let results = ["fairway", "green", "rough", "bunker", "water", "ob", "penalty", "holed", "other"]
 
     var body: some View {
@@ -66,40 +70,99 @@ struct ReconstructView: View {
 
     private var picker: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Elegí la fecha, la cancha y, si ya está, la tarjeta del club. Los golpes se guardan aparte y no reescriben esa tarjeta.")
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
-            DatePicker("Fecha", selection: $date, in: ...Date(), displayedComponents: .date)
-                .environment(\.timeZone, TimeZone(identifier: "America/Argentina/Buenos_Aires") ?? .current)
-            Picker("Cancha", selection: $courseKey) {
-                Text("Elegí la cancha").tag("")
-                ForEach(model.courses) { course in
-                    Text("\(course.clubName) · \(course.name)").tag(course.id)
+            if let last = setup.officialRounds.first {
+                Button { Task { await openChoice(last) } } label: { choiceLabel(last, featured: true) }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("rc-last")
+            } else {
+                Text("Todavía no hay una tarjeta del club. Podés cargar los golpes igual, como vuelta no oficial.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+            }
+            if !otherCards.isEmpty {
+                Text("Otras tarjetas")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink2)
+                ForEach(otherCards) { round in
+                    Button {
+                        Task {
+                            if round.official == false { await open(round) }
+                            else { await openChoice(round) }
+                        }
+                    } label: { choiceLabel(round, featured: false) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("rc-row")
                 }
             }
-            Picker("Tarjeta del club", selection: $roundId) {
-                Text("Sin asociar").tag("")
-                ForEach(setup.officialRounds) { round in
-                    Text("\(round.date) · \(round.clubName) · \(round.course)").tag(round.id)
-                }
-            }
-            Button("Empezar hoyo por hoyo") { Task { await create() } }
-                .buttonStyle(.borderedProminent)
-                .tint(p.primary)
-                .disabled(busy || courseKey.isEmpty)
-            ForEach(setup.saved) { saved in
-                Button {
-                    Task { await open(saved) }
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(saved.date) · \(saved.course)").font(GType.headline).foregroundStyle(p.ink)
-                        Text("Seguir cargando golpes").font(GType.label).foregroundStyle(p.ink2)
-                    }
+            Button { showsManual.toggle() } label: {
+                Text("Sin tarjeta del club")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("rc-manual-open")
+            if showsManual {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Elegí cancha, tee y fecha. Queda marcada como no oficial y no entra en los números del grupo, ni en pares, birdies, rachas ni en Con quién jugás.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                    DatePicker("Fecha", selection: $date, in: ...Date(), displayedComponents: .date)
+                        .environment(\.timeZone, TimeZone(identifier: "America/Argentina/Buenos_Aires") ?? .current)
+                        .accessibilityIdentifier("rc-date")
+                    Picker("Cancha", selection: $courseKey) {
+                        Text("Elegí la cancha").tag("")
+                        ForEach(model.courses) { course in
+                            Text("\(course.clubName) · \(course.name)").tag(course.id)
+                        }
+                    }
+                    .accessibilityIdentifier("rc-course")
+                    Picker("Tee", selection: $teeName) {
+                        ForEach(teeNames, id: \.self) { Text($0).tag($0) }
+                    }
+                    Button("Registrar golpes") { Task { await create(cardId: nil) } }
+                        .buttonStyle(.borderedProminent)
+                        .tint(p.primary)
+                        .disabled(busy || courseKey.isEmpty)
+                        .accessibilityIdentifier("rc-start")
                 }
-                .buttonStyle(.plain)
             }
         }
+    }
+
+    private var otherCards: [ReconstructionRound] {
+        let official = Array(setup.officialRounds.dropFirst())
+        let loose = setup.saved.filter { $0.official == false }
+        return (official + loose).sorted { lhs, rhs in
+            if lhs.date == rhs.date { return lhs.id > rhs.id }
+            return lhs.date > rhs.date
+        }
+    }
+
+    private func choiceLabel(_ round: ReconstructionRound, featured: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if featured {
+                Text("ÚLTIMA RONDA")
+                    .font(GType.label)
+                    .foregroundStyle(Color(hex: 0xC8A86A))
+            }
+            Text(dayLabel(round.date))
+                .font(GType.headline)
+                .foregroundStyle(featured ? Color.white : p.ink)
+            Text(choiceLine(round))
+                .font(GType.label)
+                .foregroundStyle(featured ? Color.white : p.ink2)
+            Text(round.official == false ? (round.tracked ? "No oficial · Golpes cargados" : "No oficial") : (round.tracked ? "Golpes cargados" : "Sin golpes"))
+                .font(GType.label)
+                .foregroundStyle(featured ? Color.white : p.ink2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(featured ? p.primary : p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func editor(_ live: ReconstructionRound?) -> some View {
@@ -107,31 +170,62 @@ struct ReconstructView: View {
             Text(live.map { "\($0.date) · \($0.course)" } ?? stagedTitle)
                 .font(GType.headline)
                 .foregroundStyle(p.ink)
-            Text("La mira queda fija. Mové el mapa y marcá la salida y la caída. Si el hoyo no tiene mapa, guardá el palo y el resultado sin un punto.")
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
-            if let point = centers[hole] {
-                Map(position: $camera) {
-                    Annotation("Salida", coordinate: CLLocationCoordinate2D(latitude: point.lat, longitude: point.lng)) {}
-                }
-                .frame(height: 280)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(Circle().stroke(Color.white, lineWidth: 2).background(Circle().stroke(p.accent, lineWidth: 4)).frame(width: 14, height: 14))
-                .onMapCameraChange { context in
-                    aimPoint = ReconstructionPoint(lat: context.region.center.latitude, lng: context.region.center.longitude)
-                }
-                HStack {
-                    Button("Salida en la mira") { start = currentCenter() }
-                    Button("Caída en la mira") { end = currentCenter() }
-                    Button("Borrar puntos") { start = nil; end = nil }
-                }
-                .font(GType.label)
-                Text(placeCopy).font(GType.label).foregroundStyle(p.ink2)
-            } else {
-                Text("Este hoyo no tiene un punto de mapa. Podés guardar el palo, el resultado y las penas sin ubicación.")
+            if unofficialRound {
+                Text("No oficial")
                     .font(GType.label)
-                    .foregroundStyle(p.ink2)
+                    .foregroundStyle(p.ink)
+                    .padding(.horizontal, 8)
+                    .frame(minHeight: 24)
+                    .background(Color(hex: 0xECE7DB))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .accessibilityIdentifier("tk-unofficial")
             }
+            holeMap
+            if holeEnds[hole]?.verified() != nil {
+                HStack(spacing: 12) {
+                    Text(metersLine)
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                        .accessibilityIdentifier("play-meters")
+                    Spacer()
+                    Button("ENTER") { dropAtCenter() }
+                        .font(GType.headline)
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .background(p.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .accessibilityIdentifier("play-hit")
+                }
+            }
+            HStack {
+                Button("Hoyo anterior") { shiftHole(-1) }
+                    .disabled(hole <= 1)
+                    .accessibilityIdentifier("tkprev")
+                Spacer()
+                Text("Hoyo \(hole)")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink)
+                Spacer()
+                Button("Hoyo siguiente") { shiftHole(1) }
+                    .disabled(hole >= 18)
+                    .accessibilityIdentifier("tknext")
+            }
+            .font(GType.label)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(clubs, id: \.self) { name in
+                        Button(name) { club = name }
+                            .font(GType.label)
+                            .padding(.horizontal, 10)
+                            .frame(minHeight: 36)
+                            .foregroundStyle(club == name ? Color.white : p.ink)
+                            .background(club == name ? p.primary : p.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+            .accessibilityIdentifier("rc-clubs")
             Picker("Hoyo", selection: $hole) {
                 ForEach(1...18, id: \.self) { Text("\($0)").tag($0) }
             }
@@ -176,19 +270,118 @@ struct ReconstructView: View {
         }
     }
 
-    private var placeCopy: String {
-        let whereText = start != nil || end != nil ? "Marcado a mano" : "Sin ubicación"
-        let dist = start != nil && end != nil ? "Distancia estimada" : (typedDistance.isEmpty ? "Sin distancia" : "Distancia estimada, sin los dos puntos")
-        return "\(whereText). \(dist)."
+    private var unofficialRound: Bool {
+        if let live { return live.official == false }
+        return roundId.isEmpty
     }
 
-    private func currentCenter() -> ReconstructionPoint? {
-        aimPoint ?? centers[hole]
+    @ViewBuilder
+    private var holeMap: some View {
+        if let pair = holeEnds[hole]?.verified() {
+            ZStack {
+                Map(position: $camera) {
+                    Annotation("Salida", coordinate: coord(pair.tee)) {
+                        Circle().fill(Color.white).frame(width: 10, height: 10)
+                    }
+                    Annotation("Bandera", coordinate: coord(pair.flag)) {
+                        Circle().fill(p.accent).frame(width: 10, height: 10)
+                    }
+                }
+                .mapStyle(.imagery(elevation: .flat))
+                reticle
+            }
+            .frame(height: 280)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("hole-satellite")
+        } else if let focus = courseFocus {
+            Map(position: $camera) {
+                Annotation("Cancha", coordinate: coord(focus)) {}
+            }
+            .mapStyle(.imagery(elevation: .flat))
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("hole-satellite")
+            Text("Este hoyo no tiene geometría verificada. No marco un punto inventado.")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .accessibilityIdentifier("rc-nogeo")
+        } else {
+            Text("Este hoyo no tiene geometría verificada. No marco un punto inventado.")
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .accessibilityIdentifier("rc-nogeo")
+        }
+    }
+
+    private var reticle: some View {
+        ZStack {
+            Rectangle().fill(Color(hex: 0x0B2545)).frame(width: 1, height: 28)
+            Rectangle().fill(Color(hex: 0x0B2545)).frame(width: 28, height: 1)
+            Circle().stroke(Color(hex: 0xC8102E), lineWidth: 2).frame(width: 18, height: 18)
+        }
+        .allowsHitTesting(false)
+        .accessibilityIdentifier("play-reticle")
+    }
+
+    private var metersLine: String {
+        guard let pair = holeEnds[hole]?.verified(), let center = aimCenter else { return "Metros" }
+        let meters = Int(distanceMeters(pair.tee, center).rounded())
+        return meters > 0 ? "\(meters) m" : "Metros"
+    }
+
+    private func distanceMeters(_ a: ReconstructionPoint, _ b: ReconstructionPoint) -> Double {
+        let r = 6371000.0
+        let dLat = (b.lat - a.lat) * .pi / 180
+        let dLng = (b.lng - a.lng) * .pi / 180
+        let h = pow(sin(dLat / 2), 2) + cos(a.lat * .pi / 180) * cos(b.lat * .pi / 180) * pow(sin(dLng / 2), 2)
+        return 2 * r * asin(min(1, sqrt(h)))
+    }
+
+    private func dropAtCenter() {
+        guard let pair = holeEnds[hole]?.verified(), let center = aimCenter else { return }
+        start = pair.tee
+        end = center
+        let meters = Int(distanceMeters(pair.tee, center).rounded())
+        if meters > 0 { typedDistance = String(meters) }
+    }
+
+    private func coord(_ point: ReconstructionPoint) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: point.lat, longitude: point.lng)
+    }
+
+    private func shiftHole(_ delta: Int) {
+        hole = min(18, max(1, hole + delta))
+    }
+
+    private func choiceLine(_ round: ReconstructionRound) -> String {
+        var bits = [round.course.isEmpty ? "Cancha" : round.course]
+        if !round.tee.isEmpty { bits.append("Tee \(round.tee)") }
+        if let gross = round.gross { bits.append(String(gross)) }
+        return bits.joined(separator: " · ")
+    }
+
+    private func dayLabel(_ iso: String) -> String {
+        let parts = iso.split(separator: "-")
+        let months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+        guard parts.count == 3, let month = Int(parts[1]), let day = Int(parts[2]), month >= 1, month <= 12 else { return iso }
+        return "\(day) \(months[month - 1]) \(parts[0])"
     }
 
     private func aim() {
-        guard let point = centers[hole] else { return }
-        camera = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: point.lat, longitude: point.lng), span: MKCoordinateSpan(latitudeDelta: 0.002, longitudeDelta: 0.002)))
+        if let pair = holeEnds[hole]?.verified() {
+            let minLat = min(pair.tee.lat, pair.flag.lat)
+            let maxLat = max(pair.tee.lat, pair.flag.lat)
+            let minLng = min(pair.tee.lng, pair.flag.lng)
+            let maxLng = max(pair.tee.lng, pair.flag.lng)
+            let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLng + maxLng) / 2)
+            let span = MKCoordinateSpan(latitudeDelta: max(0.004, (maxLat - minLat) * 1.8), longitudeDelta: max(0.004, (maxLng - minLng) * 1.8))
+            camera = .region(MKCoordinateRegion(center: center, span: span))
+            aimCenter = ReconstructionPoint(lat: center.latitude, lng: center.longitude)
+            return
+        }
+        if let focus = courseFocus {
+            camera = .region(MKCoordinateRegion(center: coord(focus), span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)))
+        }
     }
 
     private func artDate() -> String {
@@ -222,20 +415,69 @@ struct ReconstructView: View {
         guard let course = RoundTrackCourse.match(courses: model.courses, clubCode: context.clubCode, name: context.courseName) else { return }
         courseKey = course.id
         staged = true
-        let id = ReconstructionCourseId.make(clubCode: course.clubCode, course: course.name)
-        if !course.clubCode.isEmpty {
-            centers = (try? await model.api.courseCenters(courseId: id)) ?? [:]
-            aim()
+        await loadMap(club: course.clubCode, name: course.name)
+    }
+
+    private func openChoice(_ choice: ReconstructionRound) async {
+        note = ""
+        if let saved = setup.saved.first(where: { $0.roundId == choice.id }) {
+            await open(saved)
+            return
+        }
+        roundId = choice.id
+        if let day = Self.day(choice.date) { date = day }
+        if !choice.tee.isEmpty { teeName = choice.tee }
+        if let course = RoundTrackCourse.match(courses: model.courses, clubCode: choice.clubCode, name: choice.course) {
+            courseKey = course.id
+            staged = true
+            await loadMap(club: course.clubCode, name: course.name)
+        } else {
+            courseKey = ""
+            staged = true
+            note = "Elegí la cancha para guardar los golpes."
+            await loadMap(club: choice.clubCode, name: choice.course)
         }
     }
 
-    private func create() async {
+    private func loadMap(club: String, name: String) async {
+        let id = ReconstructionCourseId.make(clubCode: club, course: name)
+        var bag: [Int: HoleEnds] = [:]
+        if let detail = try? await model.api.gpsCourse(id: id, lat: nil, lng: nil) {
+            for hole in detail.holes {
+                var ends = HoleEnds()
+                if let tee = hole.tee, ReconstructPayload.knownPoint(["lat": tee.lat, "lng": tee.lng] as [String: Any]) != nil {
+                    ends.tee = ReconstructionPoint(lat: tee.lat, lng: tee.lng)
+                }
+                if let flag = hole.green.center ?? hole.green.front, ReconstructPayload.knownPoint(["lat": flag.lat, "lng": flag.lng] as [String: Any]) != nil {
+                    ends.flag = ReconstructionPoint(lat: flag.lat, lng: flag.lng)
+                }
+                bag[hole.number] = ends
+            }
+        }
+        if !club.isEmpty, !name.isEmpty, let map = try? await model.api.courseMap(club: club, course: name) {
+            ReconstructPayload.mergeCourseMap(map, into: &bag)
+        }
+        holeEnds = bag
+        courseFocus = ReconstructPayload.courseFocus(bag)
+        aim()
+    }
+
+    private static func day(_ iso: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: iso)
+    }
+
+    private func create(cardId: String?) async {
         guard let course = model.courses.first(where: { $0.id == courseKey }) else { note = "Elegí la cancha."; return }
         busy = true
         defer { busy = false }
         do {
             let id = ReconstructionCourseId.make(clubCode: course.clubCode, course: course.name)
-            let created = try await model.api.createReconstruction(date: artDate(), courseId: id, roundId: roundId.isEmpty ? nil : roundId)
+            let created = try await model.api.createReconstruction(date: artDate(), courseId: id, roundId: cardId, tee: teeName)
+            roundId = cardId ?? ""
             await open(created)
         } catch { note = error.localizedDescription }
     }
@@ -245,9 +487,8 @@ struct ReconstructView: View {
         live = round
         do {
             shots = try await model.api.reconstructionShots(liveRoundId: round.id)
-            let id = ReconstructionCourseId.make(clubCode: round.clubCode, course: round.vmCourse.isEmpty ? round.course : round.vmCourse)
-            if !round.clubCode.isEmpty { centers = try await model.api.courseCenters(courseId: id) }
-            aim()
+            let name = round.vmCourse.isEmpty ? round.course : round.vmCourse
+            if !round.clubCode.isEmpty { await loadMap(club: round.clubCode, name: name) }
         } catch { note = error.localizedDescription }
     }
 
@@ -266,7 +507,7 @@ struct ReconstructView: View {
         defer { busy = false }
         do {
             let id = ReconstructionCourseId.make(clubCode: course.clubCode, course: course.name)
-            let created = try await model.api.createReconstruction(date: artDate(), courseId: id, roundId: roundId.isEmpty ? nil : roundId)
+            let created = try await model.api.createReconstruction(date: artDate(), courseId: id, roundId: roundId.isEmpty ? nil : roundId, tee: teeName)
             live = created
             staged = false
             shots = [try await model.api.saveReconstructionShot(liveRoundId: created.id, shot: draft())]

@@ -97,8 +97,8 @@ struct Shot: Hashable, Sendable, Identifiable {
 struct ShotDraft: Hashable, Sendable {
     var clientId: String
     var hole: Int
-    var lat: Double
-    var lng: Double
+    var lat: Double?
+    var lng: Double?
     var accuracyM: Double?
     var takenAt: Date
     var club: String?

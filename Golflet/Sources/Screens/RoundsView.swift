@@ -6,7 +6,8 @@ struct RoundsView: View {
         MetricRoundsView(
             query: RoundListQuery(title: "Rondas", showPeriod: false),
             showsBack: showsBack,
-            screenID: "screen-rondas"
+            screenID: "screen-rondas",
+            showsTrackBanner: true
         )
     }
 }

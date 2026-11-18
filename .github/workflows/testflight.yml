@@ -185,7 +185,7 @@ jobs:
   ui-tests:
     needs: build
     runs-on: macos-15
-    timeout-minutes: 55
+    timeout-minutes: 80
 
     steps:
       - name: Checkout repository
@@ -239,17 +239,94 @@ jobs:
           mkdir -p /tmp/golflet-screenshots
           mkdir -p "$RUNNER_TEMP/test-results"
           mkdir -p "$RUNNER_TEMP/screenshots"
-          xcodebuild test \
-            -project Golflet.xcodeproj \
-            -scheme Golflet \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -only-testing:GolfletUITests \
-            -derivedDataPath "$RUNNER_TEMP/TestBuild" \
-            -resultBundlePath "$RUNNER_TEMP/test-results/UITests.xcresult" \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            2>&1 | tee "$RUNNER_TEMP/ui_test_output.log"
+          : > "$RUNNER_TEMP/ui_test_output.log"
+          run_tests() {
+            local only="$1"
+            local bundle="$2"
+            set +e
+            xcodebuild test \
+              -project Golflet.xcodeproj \
+              -scheme Golflet \
+              -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+              -only-testing:"$only" \
+              -derivedDataPath "$RUNNER_TEMP/TestBuild" \
+              -resultBundlePath "$bundle" \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=NO \
+              2>&1 | tee -a "$RUNNER_TEMP/ui_test_output.log"
+            local status=${PIPESTATUS[0]}
+            set -e
+            return "$status"
+          }
+          if ! run_tests "GolfletUITests" "$RUNNER_TEMP/test-results/UITests.xcresult"; then
+            python3 - <<'PY'
+          import os, pathlib, re, sys
+          log = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ui_test_output.log"
+          text = log.read_text(errors="replace")
+          started = re.findall(r"Test Case '-\[GolfletUITests\.GolfletUITests (test\w+)\]' started", text)
+          finished = set(re.findall(r"Test Case '-\[GolfletUITests\.GolfletUITests (test\w+)\]' (?:passed|failed)", text))
+          missing = []
+          for name in started:
+              if name not in finished and name not in missing:
+                  missing.append(name)
+          crashed = "Restarting after unexpected exit, crash, or test timeout" in text
+          asserted = re.search(r"Test Case '-\[GolfletUITests\.GolfletUITests test\w+\]' failed", text)
+          if not crashed or asserted or not missing:
+              sys.exit(1)
+          out = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ui-retry-tests.txt"
+          out.write_text("\n".join(missing) + "\n")
+          print("El runner se cayó sin un fallo de aserción. Se repite:", ", ".join(missing))
+          PY
+            while IFS= read -r name; do
+              [ -z "$name" ] && continue
+              run_tests "GolfletUITests/GolfletUITests/$name" "$RUNNER_TEMP/test-results/UITests-retry-${name}.xcresult"
+            done < "$RUNNER_TEMP/ui-retry-tests.txt"
+          fi
           cp -R /tmp/golflet-screenshots/. "$RUNNER_TEMP/screenshots/" 2>/dev/null || true
+
+      - name: Capture review screens at 375 and 430
+        run: |
+          set -euo pipefail
+          DEVICE_ID="${{ steps.setup_sim.outputs.device_id }}"
+          xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+          RUNTIME=$(xcrun simctl list runtimes iOS | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | tail -1)
+          create_one() {
+            local label="$1"
+            shift
+            local name id
+            for name in "$@"; do
+              if id=$(xcrun simctl create "Golflet ${label}" "$name" "$RUNTIME" 2>/dev/null); then
+                echo "$id"
+                return 0
+              fi
+            done
+            echo "No simulator type for ${label}" >&2
+            return 1
+          }
+          run_one() {
+            local id="$1"
+            xcrun simctl boot "$id" 2>/dev/null || true
+            sleep 4
+            xcrun simctl spawn "$id" defaults write -g AppleLanguages -array "es-AR" "es" "en" || true
+            xcrun simctl spawn "$id" defaults write -g AppleLocale -string "es_AR" || true
+            xcodebuild test \
+              -project Golflet.xcodeproj \
+              -scheme Golflet \
+              -destination "platform=iOS Simulator,id=$id" \
+              -only-testing:GolfletUITests/GolfletUITests/testCaptureReviewScreens \
+              -derivedDataPath "$RUNNER_TEMP/TestBuild" \
+              -resultBundlePath "$RUNNER_TEMP/test-results/Review-${id}.xcresult" \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=NO \
+              2>&1 | tee "$RUNNER_TEMP/review-${id}.log"
+            xcrun simctl shutdown "$id" 2>/dev/null || true
+          }
+          SE=$(create_one "SE" "iPhone SE (3rd generation)" "iPhone SE (2nd generation)")
+          PLUS=$(create_one "Plus" "iPhone 16 Plus" "iPhone 15 Plus" "iPhone 15 Pro Max" "iPhone 14 Pro Max")
+          run_one "$SE"
+          run_one "$PLUS"
+          ls /tmp/golflet-screenshots/ios-375-inicio-hi.png
+          ls /tmp/golflet-screenshots/ios-430-inicio-hi.png
 
       - name: Extract Screenshots
         if: always()
@@ -258,10 +335,12 @@ jobs:
           if [ -d /tmp/golflet-screenshots ]; then
             cp /tmp/golflet-screenshots/*.png "$RUNNER_TEMP/screenshots/" 2>/dev/null || true
           fi
-          if [ -d "$RUNNER_TEMP/test-results/UITests.xcresult" ]; then
+          if compgen -G "$RUNNER_TEMP/test-results/*.xcresult" >/dev/null; then
             brew install chargepoint/xcparse/xcparse 2>/dev/null || true
             if command -v xcparse >/dev/null 2>&1; then
-              xcparse screenshots "$RUNNER_TEMP/test-results/UITests.xcresult" "$RUNNER_TEMP/screenshots" 2>/dev/null || true
+              for bundle in "$RUNNER_TEMP/test-results"/*.xcresult; do
+                xcparse screenshots "$bundle" "$RUNNER_TEMP/screenshots" 2>/dev/null || true
+              done
             fi
           fi
           echo "Screenshots:"

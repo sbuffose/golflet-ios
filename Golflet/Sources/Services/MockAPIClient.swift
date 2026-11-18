@@ -318,6 +318,11 @@ struct MockAPIClient: GolfletAPI {
     }
 
     func saveBag(_ items: [BagClub]) async throws -> [BagClub] { items }
+
+    func renameClub(code: String, label: String) async throws {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 12 else { throw GolfletError.server("El nombre entra en 12 caracteres.") }
+    }
     func saveIronSet(brand: String, model: String) async throws -> String { "Guardé \(brand) \(model)." }
 
     private var isLinked: Bool {
@@ -375,7 +380,17 @@ struct MockAPIClient: GolfletAPI {
 
     private func loadRounds() async throws -> [Round] {
         let raw: [[String: Any]] = try FixtureLoader.array("rounds")
-        return raw.compactMap(Self.parseRound)
+        var rounds = raw.compactMap(Self.parseRound)
+        guard ProcessInfo.processInfo.arguments.contains("-ui-testing-review"),
+              let index = rounds.indices.max(by: { rounds[$0].date < rounds[$1].date }),
+              let holeIndex = rounds[index].holes.firstIndex(where: { $0.result == .birdie })
+        else { return rounds }
+        rounds[index].holes[holeIndex].strokes = max(1, rounds[index].holes[holeIndex].par - 2)
+        rounds[index].holes[holeIndex].toPar = -2
+        rounds[index].holes[holeIndex].result = .eagleOrBetter
+        rounds[index].counts.birdies = max(0, rounds[index].counts.birdies - 1)
+        rounds[index].counts.eagles = max(rounds[index].counts.eagles, 1)
+        return rounds
     }
 
     private func loadCourses() async throws -> [Course] {
@@ -393,6 +408,7 @@ struct MockAPIClient: GolfletAPI {
                 return CourseHole(
                     number: number,
                     par: JSONFlex.int(from: hole["par"]) ?? 4,
+                    parRaw: hole["par_raw"] as? String,
                     handicap: JSONFlex.int(from: hole["hole_hcp"]) ?? number,
                     yards: yards
                 )

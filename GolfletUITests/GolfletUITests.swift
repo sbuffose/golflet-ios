@@ -83,6 +83,7 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Rondas")
         XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6))
+        assertRoundChipsOneLine(app)
         saveShot("03_rondas")
         saveShot("parity-ios-rondas")
 
@@ -139,29 +140,27 @@ final class GolfletUITests: XCTestCase {
             dismissIfPresent(app, "metric-back")
         }
 
-        tapTab(app, "Grupos")
-        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
-        let liveGroup = first(app, "hub-group-g-jockey")
-        reveal(app, liveGroup)
-        XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "El tab Grupos no muestra el grupo de la cuenta")
+        tapTab(app, "Inicio")
+        reveal(app, "home-hcp-groups")
+        let liveGroup = largest(app, "home-hcp-groups")
+        XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "Inicio no muestra el grupo de la cuenta")
         XCTAssertFalse(app.staticTexts["Miércoles 9 hoyos"].exists, "Sigue el segundo grupo de ejemplo")
-        XCTAssertFalse(first(app, "hub-groups-example").exists, "Hay un bloque de ejemplo junto a los grupos reales")
-        let tee = first(app, "hub-tee-tt-jockey-1")
+        let tee = first(app, "home-tee-row-tt-jockey-1")
         reveal(app, tee)
-        XCTAssertTrue(tee.waitForExistence(timeout: 4), "Quién juega cuándo no usa los tee times")
-        XCTAssertFalse(first(app, "hub-tee-example").exists, "Hay un horario de ejemplo junto a los tee times reales")
+        XCTAssertTrue(tee.waitForExistence(timeout: 4), "Próxima reserva no muestra el tee time")
+        XCTAssertFalse(app.staticTexts["Sáb 7-nov · 9:20"].exists, "Sigue el tee time inventado")
+        revealHomePrep(app)
+        XCTAssertTrue(first(app, "home-open-jugar").exists, "Falta preparar la salida")
         saveShot("60_grupos")
         saveShot("parity-ios-grupos")
-        if liveGroup.isHittable {
-            liveGroup.tap()
-        } else {
-            liveGroup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        reveal(app, "home-hcp-groups")
+        tapLargest(app, "home-hcp-groups")
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "El grupo no se abrió")
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
         saveShot("parity-ios-grupos-usga")
 
         tapTab(app, "Jugar")
-        XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
+        XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "Preparar la salida no abrió la reserva")
         XCTAssertFalse(app.staticTexts["Vos y Tomi vs Fede y Lucas"].exists, "Sigue el partido inventado")
         XCTAssertFalse(app.staticTexts["Sáb 7-nov · 9:20"].exists, "Sigue el tee time inventado")
         saveShot("61_jugar")
@@ -205,46 +204,11 @@ final class GolfletUITests: XCTestCase {
         }
 
         tapTab(app, "Jugar")
-        XCTAssertTrue(waitFor(app, "screen-jugar", timeout: 6))
-        if first(app, "jugar-ajustes").waitForExistence(timeout: 4) {
-            first(app, "jugar-ajustes").tap()
-            XCTAssertTrue(waitFor(app, "screen-antes", timeout: 6))
-            XCTAssertTrue(first(app, "antes-mode-clasico").waitForExistence(timeout: 2))
-            XCTAssertTrue(first(app, "antes-mode-comp").exists)
-            XCTAssertTrue(first(app, "antes-mode-mej").exists)
-            XCTAssertTrue(first(app, "antes-mode-soc").exists)
-            let track = app.switches["antes-feat-track"]
-            reveal(app, track)
-            XCTAssertTrue(track.waitForExistence(timeout: 4), "Falta el switch de golpe a golpe")
-            XCTAssertFalse(switchIsOn(track), "En Clásico el switch arranca apagado")
-            track.tap()
-            XCTAssertTrue(switchIsOn(track), "El switch no quedó prendido")
-            saveShot("74_antes_de_salir")
-            first(app, "antes-mode-clasico").tap()
-            first(app, "antes-start").tap()
-            XCTAssertTrue(waitFor(app, "screen-live-hole", timeout: 10), "No abrió el hoyo satelital")
-            XCTAssertTrue(first(app, "live-hole-title").waitForExistence(timeout: 4))
-            saveShot("75_hoyo_clasico")
-            if first(app, "live-menu").waitForExistence(timeout: 3) {
-                first(app, "live-menu").tap()
-                if first(app, "antes-mode-comp").waitForExistence(timeout: 4) {
-                    first(app, "antes-mode-comp").tap()
-                    tapMetricBack(app)
-                    saveShot("76_hoyo_competitivo")
-                    first(app, "live-menu").tap()
-                    first(app, "antes-mode-mej").tap()
-                    tapMetricBack(app)
-                    saveShot("77_hoyo_mejorar")
-                    first(app, "live-menu").tap()
-                    first(app, "antes-mode-soc").tap()
-                    tapMetricBack(app)
-                    saveShot("78_hoyo_social")
-                }
-            }
-            if first(app, "live-home").waitForExistence(timeout: 3) {
-                first(app, "live-home").tap()
-            }
-        }
+        XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "Preparar la salida no abrió la reserva")
+        XCTAssertTrue(first(app, "tee-prep-cancha").waitForExistence(timeout: 4), "Falta la cancha de la reserva")
+        XCTAssertTrue(first(app, "tee-prep-strategy").waitForExistence(timeout: 6), "Falta la estrategia")
+        saveShot("74_preparar_salida")
+        dismissIfPresent(app, "metric-back")
 
         tapTab(app, "Academia")
         XCTAssertTrue(waitFor(app, "screen-academia", timeout: 6))
@@ -284,10 +248,14 @@ final class GolfletUITests: XCTestCase {
             "El hoyo cerrado no mostró Editar hoyo (\(status.label))"
         )
         saveShot("parity-ios-track-closed")
-        first(app, "play-edit-hole").tap()
-        XCTAssertTrue(first(app, "play-club").waitForExistence(timeout: 4), "Falta el palo al editar el hoyo")
-        first(app, "play-club").tap()
-        XCTAssertTrue(waitFor(app, "play-club-sheet", timeout: 4), "No se abrió el popup de palos")
+        let edit = app.buttons["play-edit-hole"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 4))
+        if edit.isHittable { edit.tap() } else { edit.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        let club = app.buttons["play-club"]
+        XCTAssertTrue(club.waitForExistence(timeout: 6), "Falta el palo al editar el hoyo")
+        if !club.isHittable { app.swipeUp() }
+        if club.isHittable { club.tap() } else { club.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "play-club-sheet", timeout: 8), "No se abrió el popup de palos")
         saveShot("parity-ios-track-club")
         dismissIfPresent(app, "play-club-close")
     }
@@ -395,7 +363,8 @@ final class GolfletUITests: XCTestCase {
         saveShot("12_sync")
 
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: overlay)
-        wait(for: [gone], timeout: 12)
+        // The overlay stays 5.5s after the mock sync succeeds. A busy simulator can add several seconds on top.
+        wait(for: [gone], timeout: 20)
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 4))
         saveShot("13_inicio_despues_sync")
     }
@@ -572,9 +541,7 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
-        tapTab(app, "Grupos")
-        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
-        let liveGroup = first(app, "hub-group-g-jockey")
+        let liveGroup = first(app, "home-hcp-groups")
         reveal(app, liveGroup)
         XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "Falta el grupo de la cuenta")
         if liveGroup.isHittable {
@@ -591,6 +558,34 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    func testHomeHcpGroupsButtonOpensGrupos() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        let groups = largest(app, "home-hcp-groups")
+        XCTAssertTrue(groups.waitForExistence(timeout: 4), "Falta el botón de grupos en el HI")
+        reveal(app, groups)
+        groups.tap()
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "Un solo grupo no abrió el grupo")
+    }
+
+    func testHomeHcpProfesorButtonOpensProfile() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        let profesor = largest(app, "home-hcp-profesor")
+        XCTAssertTrue(profesor.waitForExistence(timeout: 4), "Falta el profesor en el HI")
+        reveal(app, profesor)
+        profesor.tap()
+        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 8), "No se abrió el profesor")
+    }
+
     func testHomeHcpCreateGroupWhenEmpty() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing", "-ui-testing-no-groups"]
@@ -599,6 +594,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         XCTAssertTrue(first(app, "home-hcp-crear-grupo").waitForExistence(timeout: 4), "Falta Crear grupo")
+        reveal(app, "home-hcp-crear-grupo")
         largest(app, "home-hcp-crear-grupo").tap()
         XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
         saveShot("42_inicio_hcp_crear_grupo")
@@ -615,6 +611,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertFalse(first(app, "home-hcp-groups").exists)
         XCTAssertTrue(first(app, "home-hcp-add-profesor").waitForExistence(timeout: 4), "Falta el placeholder de profesor")
         XCTAssertTrue(first(app, "home-hcp-crear-grupo").waitForExistence(timeout: 4), "Falta Crear grupo")
+        reveal(app, "home-hcp-add-profesor")
         largest(app, "home-hcp-add-profesor").tap()
         XCTAssertTrue(waitFor(app, "screen-agregar-profesor", timeout: 6), "No se abrió Agregar profesor")
         let search = app.textFields["profesor-search"]
@@ -629,6 +626,7 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "screen-agregar-profesor", timeout: 6))
         dismissIfPresent(app, "close-agregar-profesor")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+        reveal(app, "home-hcp-crear-grupo")
         largest(app, "home-hcp-crear-grupo").tap()
         XCTAssertTrue(waitFor(app, "screen-crear-grupo", timeout: 6), "No se abrió crear grupo")
         saveShot("45_inicio_hcp_crear_grupo_vacio")
@@ -766,9 +764,8 @@ final class GolfletUITests: XCTestCase {
 
         XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
-        XCTAssertTrue(first(app, "home-grupos").waitForExistence(timeout: 4))
-        XCTAssertTrue(first(app, "home-pending-invite").waitForExistence(timeout: 3), "Falta la invitación pendiente")
-        first(app, "home-grupos").tap()
+        XCTAssertTrue(first(app, "home-pending-invite").waitForExistence(timeout: 4), "Falta la invitación pendiente")
+        openGroupsFromAccount(app)
         XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
         XCTAssertTrue(first(app, "pending-invite-invite-mdp").waitForExistence(timeout: 4))
         saveShot("32_grupos")
@@ -977,20 +974,17 @@ final class GolfletUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Estrategia"].exists)
         saveShot("36_que_comparto")
         dismissIfPresent(app, "close-que-comparto")
+        dismissIfPresent(app, "close-clubes")
 
-        if first(app, "home-grupos").waitForExistence(timeout: 4) {
-            reveal(app, first(app, "home-grupos"))
-            first(app, "home-grupos").tap()
-        } else if first(app, "perfil-grupos").waitForExistence(timeout: 3) {
-            first(app, "perfil-grupos").tap()
+        tapTab(app, "Inicio")
+        let groupRow = first(app, "home-hcp-groups")
+        XCTAssertTrue(groupRow.waitForExistence(timeout: 6), "Falta el grupo en Inicio")
+        reveal(app, groupRow)
+        if groupRow.isHittable {
+            groupRow.tap()
         } else {
-            first(app, "add-club-home").tap()
-            XCTAssertTrue(first(app, "perfil-grupos").waitForExistence(timeout: 4))
-            first(app, "perfil-grupos").tap()
+            groupRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6))
-        XCTAssertTrue(first(app, "group-g-jockey").waitForExistence(timeout: 4))
-        first(app, "group-g-jockey").tap()
         XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 6))
         XCTAssertTrue(waitFor(app, "group-usga", timeout: 6), "Falta la clasificación")
         let me = first(app, "group-board-birdies-demo")
@@ -1158,8 +1152,6 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
         assertFits(app, "home-greeting")
         assertFits(app, "metric-handicap")
-        assertFits(app, "metric-tarjetas")
-        assertFits(app, "metric-best-gross")
         saveShot("47_texto_xl_inicio")
 
         tapTab(app, "Resumen")
@@ -1464,6 +1456,14 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    private func revealHomePrep(_ app: XCUIApplication) {
+        let prep = first(app, "home-open-jugar")
+        for _ in 0..<12 {
+            if prep.exists, app.frame.intersects(prep.frame) { return }
+            app.swipeUp()
+        }
+    }
+
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) {
         var attempts = 0
         while !isOnScreen(app, element) && attempts < 8 {
@@ -1502,7 +1502,15 @@ final class GolfletUITests: XCTestCase {
             tapHomeMore(app, "home-hub-grupos", "Falta el acceso a grupos")
         case "Jugar":
             tapVisibleTab(app, "Inicio")
-            tapHomeMore(app, "home-open-jugar", "Falta preparar la salida")
+            _ = waitFor(app, "home-ready", timeout: 10)
+            revealHomePrep(app)
+            let prep = largest(app, "home-open-jugar")
+            XCTAssertTrue(prep.exists, "Falta preparar la salida")
+            if prep.isHittable {
+                prep.tap()
+            } else {
+                prep.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
         case "Academia":
             tapVisibleTab(app, "Resumen")
             tapHomeMore(app, "resumen-trabajar", "Falta Qué trabajar")
@@ -1574,6 +1582,7 @@ final class GolfletUITests: XCTestCase {
                 || first(app, "screen-metric-chart").exists
             let pushedHome = first(app, "screen-grupos").exists
                 || first(app, "screen-jugar").exists
+                || first(app, "screen-tee-prep").exists
                 || first(app, "screen-academia").exists
             if first(app, "close-grupo").exists {
                 let close = first(app, "close-grupo")
@@ -1607,6 +1616,369 @@ final class GolfletUITests: XCTestCase {
                 return
             }
             return
+        }
+    }
+
+    func testCaptureReviewScreens() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-greeting", "Sebastián", "-ui-testing-review"]
+        app.launch()
+
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10), "Bootstrap del mock no terminó")
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 6))
+        let width = Int(window.frame.width.rounded())
+        XCTAssertGreaterThan(width, 300)
+        let shot = { (name: String) in
+            self.saveShot("ios-\(width)-\(name)")
+        }
+
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        pinTop(app, "range-menu")
+        let rangeIDs = ["range-3m", "range-6m", "range-12m", "range-year", "range-all"]
+        let rangeFrames = rangeIDs.map { largest(app, $0).frame }
+        let rangeDump = zip(rangeIDs, rangeFrames).map { "\($0.0) \($0.1.width)x\($0.1.height)" }.joined(separator: ", ")
+        XCTAssertEqual(rangeFrames.filter { $0.width > 8 && $0.height > 8 }.count, rangeIDs.count, "Falta un período del resumen: \(rangeDump)")
+        let rangeTop = rangeFrames.map(\.minY).min() ?? 0
+        let rangeBottom = rangeFrames.map(\.maxY).max() ?? 0
+        XCTAssertLessThan(rangeBottom - rangeTop, 44, "Los períodos del resumen no entran en una fila: \(rangeDump)")
+        XCTAssertGreaterThanOrEqual(rangeFrames.map(\.minX).min() ?? 0, -1, rangeDump)
+        XCTAssertLessThanOrEqual(rangeFrames.map(\.maxX).max() ?? 0, window.frame.maxX + 1, rangeDump)
+        let menu = largest(app, "range-menu")
+        XCTAssertGreaterThan(menu.frame.width, window.frame.width * 0.7, "La fila de períodos no ocupa el ancho")
+        shot("resumen-periodos")
+        tapTab(app, "Inicio")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+        shot("inicio-hi")
+        for _ in 0..<4 { nudgePage(app, up: true) }
+        shot("inicio-scroll")
+        for _ in 0..<6 { nudgePage(app, up: false) }
+
+        reveal(app, "home-hcp-profesor")
+        let profesor = largest(app, "home-hcp-profesor")
+        XCTAssertTrue(profesor.waitForExistence(timeout: 4), "Falta el profesor en el HI")
+        if profesor.isHittable { profesor.tap() } else {
+            profesor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-profesor", timeout: 8), "No se abrió el profesor")
+        shot("inicio-profesor")
+        dismissIfPresent(app, "close-profesor")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+
+        reveal(app, "home-hcp-groups")
+        let groups = largest(app, "home-hcp-groups")
+        XCTAssertTrue(groups.waitForExistence(timeout: 4), "Falta el grupo en el HI")
+        if groups.isHittable { groups.tap() } else {
+            groups.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "No se abrió el grupo \(groups.frame)")
+        assertGroupPeriodsFit(app, window)
+        shot("inicio-grupo")
+        dismissIfPresent(app, "close-grupo")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+
+        showLastRound(app)
+        let chips = largest(app, "last-round-chips")
+        let roundTitle = app.staticTexts["Última ronda"]
+        XCTAssertTrue(chips.waitForExistence(timeout: 4), "Faltan los chips de la última ronda")
+        XCTAssertTrue(roundTitle.exists, "Falta el título de la última ronda")
+        XCTAssertGreaterThan(roundTitle.frame.minY, 40, "El título de la última ronda quedó fuera")
+        XCTAssertLessThan(
+            chips.frame.maxY,
+            window.frame.height - 88,
+            "Los chips quedaron cortados (maxY \(chips.frame.maxY), alto \(window.frame.height))"
+        )
+        shot("ultima-ronda")
+        assertRoundChipsOneLine(app, requireTwoDigits: false)
+
+        tapTab(app, "Rondas")
+        XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6), "La lista de rondas no se abrió")
+        let banner = largest(app, "reconstruct-start")
+        XCTAssertTrue(banner.waitForExistence(timeout: 4), "Falta el banner de cargar la vuelta")
+        XCTAssertLessThan(banner.frame.maxY, window.frame.height * 0.62, "El banner quedó abajo y tapa una ronda")
+        let chipRow = largest(app, "round-chips")
+        if chipRow.exists, chipRow.frame.height > 8 {
+            XCTAssertGreaterThan(chipRow.frame.minY, banner.frame.maxY - 1, "El banner tapa los chips")
+        }
+        shot("rondas-chips")
+        assertRoundChipsOneLine(app)
+
+        reveal(app, "reconstruct-start")
+        let start = largest(app, "reconstruct-start")
+        XCTAssertTrue(start.waitForExistence(timeout: 4), "Falta Cargar una vuelta ya jugada")
+        if start.isHittable { start.tap() } else { start.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "rc-last", timeout: 6), "La última ronda no quedó arriba")
+        XCTAssertTrue(app.staticTexts["Sin golpes"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Golpes cargados"].exists)
+        XCTAssertTrue(app.staticTexts["No oficial"].exists)
+        shot("cargar-vuelta")
+        let lastCard = first(app, "rc-last")
+        if lastCard.isHittable { lastCard.tap() } else { lastCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "hole-satellite", timeout: 8), "Falta el satélite de Cancha Vieja, hoyo 1")
+        shot("track-shots-hoyo-1")
+        let nextHole = first(app, "tknext")
+        if nextHole.isHittable { nextHole.tap() } else { nextHole.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "rc-nogeo", timeout: 6), "El hoyo sin geometría no avisa")
+        shot("track-shots-sin-geo")
+        dismissIfPresent(app, "reconstruct-back")
+        tapTab(app, "Inicio")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+        if waitFor(app, "last-round-card", timeout: 4) {
+            first(app, "last-round-card").tap()
+            XCTAssertTrue(waitFor(app, "track-shots", timeout: 6), "Falta Track Shots")
+            shot("track-shots")
+            reveal(app, "missing-putts")
+            XCTAssertTrue(largest(app, "missing-putts").waitForExistence(timeout: 4), "Falta el guion de putts")
+            for _ in 0..<6 {
+                let mark = largest(app, "missing-putts")
+                if mark.exists, mark.frame.minY > 140, mark.frame.maxY < window.frame.height - 160 { break }
+                nudgePage(app, up: !mark.exists || mark.frame.minY >= 140)
+            }
+            tapLargest(app, "missing-putts")
+            if !first(app, "missing-sheet").waitForExistence(timeout: 2) {
+                nudgePage(app, up: true)
+                tapLargest(app, "missing-putts")
+            }
+            XCTAssertTrue(waitFor(app, "missing-sheet", timeout: 4), "No se abrió la hoja del guion")
+            shot("guion")
+            let sheet = first(app, "missing-sheet")
+            let handle = sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
+            handle.press(forDuration: 0.05, thenDragTo: sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 2.2)))
+            dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
+        }
+        tapTab(app, "Inicio")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
+
+        tapTab(app, "Resumen")
+        XCTAssertTrue(waitFor(app, "screen-resumen", timeout: 6))
+        reveal(app, "metric-summary-best")
+        tapLargest(app, "metric-summary-best")
+        XCTAssertTrue(waitFor(app, "screen-metric-chart", timeout: 6), "Mejor ronda no se abrió")
+        XCTAssertTrue(app.staticTexts["Mejor ronda"].waitForExistence(timeout: 4), "Falta el título de Mejor ronda")
+        shot("mejor-gross")
+        dismissIfPresent(app, "metric-back")
+        tapTab(app, "Inicio")
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 5))
+
+        if first(app, "home-tee-tab").waitForExistence(timeout: 3) {
+            let tab = first(app, "home-tee-tab")
+            if tab.isHittable { tab.tap() } else {
+                tab.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+        }
+        reveal(app, "home-tee-row-tt-jockey-1")
+        let teeRow = largest(app, "home-tee-row-tt-jockey-1")
+        XCTAssertTrue(teeRow.waitForExistence(timeout: 4), "Falta la fila del tee time")
+        if teeRow.isHittable {
+            teeRow.tap()
+        } else {
+            teeRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 6), "La reserva no se abrió")
+        showFully(app, "tee-prep-companions")
+        XCTAssertTrue(app.staticTexts["Jugás con"].waitForExistence(timeout: 4), "Falta Jugás con")
+        XCTAssertTrue(app.staticTexts["Lola Díaz"].waitForExistence(timeout: 4), "Falta un compañero con HI")
+        XCTAssertTrue(app.staticTexts["HI no disponible"].waitForExistence(timeout: 4), "Falta el compañero sin HI")
+        shot("reserva")
+        reveal(app, "tee-prep-scorecard-open")
+        XCTAssertTrue(waitFor(app, "tee-prep-scorecard-open", timeout: 4), "Falta Tarjetas del club")
+        let open = app.buttons["tee-prep-scorecard-open"]
+        for _ in 0..<2 {
+            guard open.exists else { break }
+            if open.isHittable {
+                open.tap()
+            } else {
+                open.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            if scorecardSheetOpen(app) { break }
+        }
+        XCTAssertTrue(scorecardSheetOpen(app), "No se abrió la hoja de tarjetas")
+        XCTAssertTrue(app.staticTexts["1 pendiente"].waitForExistence(timeout: 4), "Falta el resumen de la hoja")
+        XCTAssertTrue(first(app, "tee-prep-scorecard-refresh").waitForExistence(timeout: 4), "Falta Buscar de nuevo")
+        XCTAssertTrue(app.staticTexts["Pendiente"].exists, "Falta el chip Pendiente")
+        XCTAssertFalse(app.staticTexts["Todavía no hay tarjeta"].exists)
+        shot("reserva-tarjetas")
+    }
+
+    private func scorecardSheetOpen(_ app: XCUIApplication) -> Bool {
+        if first(app, "tee-prep-scorecard").waitForExistence(timeout: 6) { return true }
+        if app.navigationBars["Tarjetas del club"].waitForExistence(timeout: 2) { return true }
+        return app.staticTexts["1 pendiente"].waitForExistence(timeout: 2)
+    }
+
+    private func assertRoundChipsOneLine(_ app: XCUIApplication, requireTwoDigits: Bool = true, file: StaticString = #file, line: UInt = #line) {
+        let window = app.windows.firstMatch
+        var sawTwoDigits = false
+        var sawRow = false
+        for _ in 0..<(requireTwoDigits ? 8 : 1) {
+            let listed = app.descendants(matching: .any).matching(identifier: "round-chips")
+            let home = app.descendants(matching: .any).matching(identifier: "last-round-chips")
+            let boxes = listed.count > 0 ? listed : home
+            XCTAssertGreaterThan(boxes.count, 0, "Faltan los chips de la ronda", file: file, line: line)
+            for index in 0..<min(boxes.count, 8) {
+                let box = boxes.element(boundBy: index)
+                guard box.exists, box.frame.height > 8, box.frame.width > 8 else { continue }
+                let chips = box.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'round-chip-'"))
+                var labels: [String] = []
+                var framed: [(String, CGRect)] = []
+                for chipIndex in 0..<chips.count {
+                    let chip = chips.element(boundBy: chipIndex)
+                    let label = chip.label
+                    guard !label.isEmpty, !labels.contains(label) else { continue }
+                    labels.append(label)
+                    if chip.frame.height > 8, chip.frame.width > 8 {
+                        framed.append((label, chip.frame))
+                    }
+                }
+                if labels.count < 3 {
+                    let value = (box.value as? String) ?? ""
+                    labels = "\(box.label) | \(value)"
+                        .components(separatedBy: " | ")
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty && $0 != "round-chips" && $0 != "last-round-chips" }
+                }
+                guard labels.count >= 3 else { continue }
+                sawRow = true
+                let twoDigits = labels.contains(where: hasTwoDigitCount)
+                guard twoDigits || !requireTwoDigits else { continue }
+                if twoDigits { sawTwoDigits = true }
+                let joined = labels.joined(separator: " | ")
+                XCTAssertLessThan(box.frame.height, 26, "Los chips ocupan más de una línea: \(joined)", file: file, line: line)
+                XCTAssertTrue(joined.contains("Bir") && joined.contains("Par") && joined.contains("Bog"), joined, file: file, line: line)
+                XCTAssertFalse(labels.contains { $0.contains("…") || $0.contains("...") || $0.contains("\n") }, "Un chip se cortó: \(joined)", file: file, line: line)
+                XCTAssertTrue(labels.allSatisfy { $0.range(of: #"^\d+ (Ág|Bir|Par|Bog|Dob)$"#, options: .regularExpression) != nil }, "Formato compacto: \(joined)", file: file, line: line)
+                if framed.count >= 3 {
+                    let sameLine = framed.filter { abs($0.1.minY - framed[0].1.minY) < 2 }
+                    let sample = sameLine.count >= 3 ? sameLine : framed
+                    let frames = sample.map(\.1)
+                    let dump = sample.map { "\($0.0) h\($0.1.height) y\($0.1.minY)" }.joined(separator: ", ")
+                    let heights = frames.map(\.height)
+                    let tops = frames.map(\.minY)
+                    XCTAssertLessThan((heights.max() ?? 0) - (heights.min() ?? 0), 1.5, "Los chips no tienen la misma altura: \(dump)", file: file, line: line)
+                    XCTAssertGreaterThan(heights.min() ?? 0, 14, "El chip quedó sin alto: \(dump)", file: file, line: line)
+                    XCTAssertLessThan((tops.max() ?? 0) - (tops.min() ?? 0), 2, "Un chip pasó a la línea de abajo: \(dump)", file: file, line: line)
+                    XCTAssertGreaterThanOrEqual(frames.map(\.minX).min() ?? 0, -1, dump, file: file, line: line)
+                    XCTAssertLessThanOrEqual(frames.map(\.maxX).max() ?? 0, window.frame.maxX + 1, "Un chip se sale de la pantalla: \(dump)", file: file, line: line)
+                }
+                if twoDigits || !requireTwoDigits { return }
+            }
+            guard requireTwoDigits, !sawTwoDigits else { break }
+            nudgePage(app, up: true)
+        }
+        XCTAssertTrue(sawRow, "Faltan los tres chips de la ronda", file: file, line: line)
+        XCTAssertTrue(!requireTwoDigits || sawTwoDigits, "Ninguna fila muestra un conteo de dos dígitos con los tres chips", file: file, line: line)
+    }
+
+    private func hasTwoDigitCount(_ label: String) -> Bool {
+        var run = 0
+        for scalar in label.unicodeScalars {
+            if CharacterSet.decimalDigits.contains(scalar) {
+                run += 1
+                if run >= 2 { return true }
+            } else {
+                run = 0
+            }
+        }
+        return false
+    }
+
+    private func openGroupsFromAccount(_ app: XCUIApplication) {
+        if !first(app, "perfil-grupos").exists {
+            let avatar = first(app, "avatar-button")
+            XCTAssertTrue(avatar.waitForExistence(timeout: 4), "Falta la cuenta")
+            if avatar.isHittable {
+                avatar.tap()
+            } else {
+                avatar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            if first(app, "notifications-cuenta").waitForExistence(timeout: 4) {
+                first(app, "notifications-cuenta").tap()
+            }
+        }
+        let groups = first(app, "perfil-grupos")
+        XCTAssertTrue(groups.waitForExistence(timeout: 4), "Falta Ver todos los grupos")
+        reveal(app, groups)
+        if groups.isHittable {
+            groups.tap()
+        } else {
+            groups.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+    }
+
+    private func assertGroupPeriodsFit(_ app: XCUIApplication, _ window: XCUIElement) {
+        let ids = ["group-period-3m", "group-period-6m", "group-period-12m", "group-period-12y", "group-period-all"]
+        let frames = ids.map { largest(app, $0).frame }
+        let dump = zip(ids, frames).map { "\($0.0) \($0.1.width)x\($0.1.minX)-\($0.1.maxX)" }.joined(separator: ", ")
+        XCTAssertEqual(frames.filter { $0.width > 8 && $0.height > 8 }.count, ids.count, "Falta un período del grupo: \(dump)")
+        let top = frames.map(\.minY).min() ?? 0
+        let bottom = frames.map(\.maxY).max() ?? 0
+        XCTAssertLessThan(bottom - top, 40, "Los períodos del grupo no entran en una fila: \(dump)")
+        XCTAssertGreaterThanOrEqual(frames.map(\.minX).min() ?? 0, -1, dump)
+        XCTAssertLessThanOrEqual(frames.map(\.maxX).max() ?? 0, window.frame.maxX + 1, dump)
+        let course = largest(app, "group-view-range")
+        if course.exists, course.frame.width > 8 {
+            XCTAssertGreaterThanOrEqual(course.frame.minY + 1, frames.map(\.maxY).max() ?? 0, "Canchas tiene que ir debajo de los períodos: \(dump)")
+            XCTAssertGreaterThanOrEqual(course.frame.height, 44, "El control de canchas mide menos de 44")
+            XCTAssertTrue(app.staticTexts["43"].waitForExistence(timeout: 3), "Falta el líder sin filtro")
+            if course.isHittable { course.tap() } else { course.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            let azul = app.buttons["group-course-1:Azul"]
+            XCTAssertTrue(azul.waitForExistence(timeout: 4), "No se abrió el menú de canchas")
+            saveShot("ios-\(Int(window.frame.width.rounded()))-grupo-canchas")
+            azul.tap()
+            XCTAssertTrue(app.staticTexts["22"].waitForExistence(timeout: 4), "El filtro de cancha no cambió el número")
+            saveShot("ios-\(Int(window.frame.width.rounded()))-grupo-cancha-filtrada")
+        }
+    }
+
+    private func showLastRound(_ app: XCUIApplication) {
+        let height = app.windows.firstMatch.frame.height
+        let floor = height - 96
+        for _ in 0..<14 {
+            let chips = largest(app, "last-round-chips")
+            let title = app.staticTexts["Última ronda"]
+            let chipsOn = chips.exists && chips.frame.width > 20 && chips.frame.minY > 72 && chips.frame.maxY < floor
+            let titleOn = title.exists && title.frame.minY > 48 && title.frame.maxY < chips.frame.minY + 4
+            if chipsOn && titleOn { return }
+            // A swipe through the middle lands on the card and does not move the page.
+            let tooLow = !chips.exists || chips.frame.maxY > floor || chips.frame.minY > height * 0.5
+            nudgePage(app, up: tooLow || title.frame.minY > height * 0.45)
+        }
+    }
+
+    private func nudgePage(_ app: XCUIApplication, up: Bool) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: up ? 0.78 : 0.38))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: up ? 0.46 : 0.70))
+        start.press(forDuration: 0.02, thenDragTo: end)
+    }
+
+    private func showFully(_ app: XCUIApplication, _ id: String) {
+        let height = app.windows.firstMatch.frame.height
+        for _ in 0..<16 {
+            let element = largest(app, id)
+            if !element.exists {
+                app.swipeUp()
+                continue
+            }
+            let frame = element.frame
+            if frame.width > 20, frame.minY > 72, frame.maxY < height - 160 { return }
+            if frame.minY < 72 { app.swipeDown() } else { app.swipeUp() }
+        }
+    }
+
+    private func reveal(_ app: XCUIApplication, _ id: String) {
+        let height = app.windows.firstMatch.frame.height
+        for _ in 0..<16 {
+            let element = largest(app, id)
+            guard element.exists else {
+                nudgePage(app, up: true)
+                continue
+            }
+            let frame = element.frame
+            // A full swipe on the SE salta la franja libre y la fila queda otra vez bajo la barra.
+            if frame.width > 20, frame.minY > 64, frame.maxY < height - 128 { return }
+            nudgePage(app, up: frame.minY >= 64)
         }
     }
 

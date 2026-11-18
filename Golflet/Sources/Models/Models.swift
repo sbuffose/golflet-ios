@@ -163,6 +163,7 @@ struct Round: Identifiable, Hashable, Sendable {
     var recapId: String? = nil
     var gpsShots: Int = 0
     var isCompetition: Bool = false
+    var official: Bool = true
 
     var isOtherCourse: Bool {
         otherCourse || courseKey.hasPrefix("x:")
@@ -180,8 +181,15 @@ struct CourseHole: Identifiable, Hashable, Sendable {
     var id: Int { number }
     var number: Int
     var par: Int
+    var parRaw: String? = nil
     var handicap: Int
     var yards: [String: Int]
+
+    var parCaption: String {
+        let parts = (parRaw ?? "").split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count >= 2, parts[0] == String(par), !parts[1].isEmpty, parts[1] != String(par) else { return "Par" }
+        return "Par · damas \(parts[1])"
+    }
 }
 
 struct Course: Identifiable, Hashable, Sendable {
@@ -605,6 +613,8 @@ struct TeeTime: Identifiable, Hashable, Sendable {
     var clubCode: String
     var course: String
     var companions: [String]
+    /// Official HCP printed on the club line, keyed by the companion name. Missing key means the club did not send one.
+    var companionHandicaps: [String: Double] = [:]
     var forecast: String? = nil
     var windKmh: Int? = nil
     var windFrom: String? = nil
@@ -646,6 +656,57 @@ struct ScorecardFetchJob: Identifiable, Hashable, Sendable {
     var lastError: String?
     var roundId: String?
     var attemptCount: Int
+    var heading: String = ""
+    var lastAttemptAt: String? = nil
+
+    var hasCard: Bool {
+        status == "complete" || !(roundId ?? "").isEmpty
+    }
+
+    var chipTitle: String {
+        let blob = "\(status) \(heading) \(label)".lowercased()
+        if blob.contains("no presentó") || status == "absent" { return "No presentó" }
+        if ["error", "needs_credentials", "stopped"].contains(status) || blob.contains("sin confirmar") { return "Error" }
+        return "Pendiente"
+    }
+
+    var canRetry: Bool { chipTitle == "Pendiente" || chipTitle == "Error" }
+
+    var statusLine: String {
+        let trimmed = heading.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        switch status {
+        case "complete": return "Ya está"
+        case "cancelled": return "Cancelada"
+        case "error", "needs_credentials", "stopped": return "Sin confirmar"
+        default: return "En curso"
+        }
+    }
+
+    var lastCheckLine: String {
+        guard let raw = lastAttemptAt?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
+              let date = Self.parseStamp(raw) else {
+            return "Todavía sin una lectura del club."
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_AR")
+        formatter.timeZone = TimeZone(secondsFromGMT: -3 * 3600)
+        formatter.dateFormat = "d MMM yyyy, HH:mm"
+        return "Última lectura \(formatter.string(from: date))"
+    }
+
+    static func searchCount(_ count: Int) -> String {
+        count == 1 ? "1 búsqueda" : "\(count) búsquedas"
+    }
+
+    private static func parseStamp(_ raw: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
+    }
 }
 
 struct PlayerProfile: Hashable, Sendable {
@@ -668,6 +729,15 @@ struct BagClub: Identifiable, Hashable, Sendable {
     var brand: String? = nil
     var modelName: String? = nil
     var code: String? = nil
+    var displayName: String? = nil
+
+    var face: String {
+        let custom = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !custom.isEmpty { return custom }
+        let key = code ?? name
+        let saved = UserDefaults.standard.string(forKey: "golflet.clubName.\(key)") ?? ""
+        return saved.isEmpty ? name : saved
+    }
 
     var equipmentLine: String {
         let brand = brand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
