@@ -1730,9 +1730,17 @@ final class GolfletUITests: XCTestCase {
             XCTAssertTrue(waitFor(app, "track-shots", timeout: 6), "Falta Track Shots")
             shot("track-shots")
             reveal(app, "missing-putts")
-            let dash = first(app, "missing-putts")
-            XCTAssertTrue(dash.waitForExistence(timeout: 4), "Falta el guion de putts")
-            if dash.isHittable { dash.tap() } else { dash.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            XCTAssertTrue(largest(app, "missing-putts").waitForExistence(timeout: 4), "Falta el guion de putts")
+            for _ in 0..<6 {
+                let mark = largest(app, "missing-putts")
+                if mark.exists, mark.frame.minY > 140, mark.frame.maxY < window.frame.height - 160 { break }
+                nudgePage(app, up: !mark.exists || mark.frame.minY >= 140)
+            }
+            tapLargest(app, "missing-putts")
+            if !first(app, "missing-sheet").waitForExistence(timeout: 2) {
+                nudgePage(app, up: true)
+                tapLargest(app, "missing-putts")
+            }
             XCTAssertTrue(waitFor(app, "missing-sheet", timeout: 4), "No se abrió la hoja del guion")
             shot("guion")
             let sheet = first(app, "missing-sheet")
