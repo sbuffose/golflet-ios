@@ -3,6 +3,12 @@ import { claimLoginLease, isUndefinedColumn, newLeaseToken, releaseLoginLease, S
 import { syncClubExtras } from "./club-extras";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { Golfistics, GolfisticsError, teeFor, strokesReceived, type CardDetail, type CardRow, type Tee } from "./golfistics";
+import { assertCanBind, MATRICULA_REMOTE, MatriculaConflict, syncWriteAllowed } from "./matricula-guard";
+
+async function refuseForeignMatricula(userId: string, matricula: string) {
+  try { await assertCanBind(userId, matricula); }
+  catch (e) { if (e instanceof MatriculaConflict) throw new GolfisticsError("login_failed", e.message); throw e; }
+}
 import { GolfisticsApp, appServesClub } from "./golfistics-app";
 import { norm } from "./dedupe";
 import { StatsTracker, type SyncStats } from "./sync-stats";
@@ -95,6 +101,7 @@ async function resolveLocalClub(g: Golfistics, list: CardRow[], known: string | 
  * Budget-bound from `t0`: if not all new cards fit, the rest come in the next sync.
  */
 async function syncWithClient(acc: any, g: Golfistics, t0: number, budgetMs: number, onProgress: OnProgress, last = true, tracker = new StatsTracker()): Promise<ClubSyncResult> {
+  if (!syncWriteAllowed(acc.matricula, g.player.userid)) throw new GolfisticsError("login_failed", MATRICULA_REMOTE);
   const accountId = acc.id as string;
   const clubName = acc.club_display as string;
   onProgress({ stage: "list" });
@@ -207,6 +214,7 @@ const loadAccount = async (id: string) =>
 export async function syncAccount(accountId: string, password?: string, budgetMs = 240_000, onProgress: OnProgress = () => {}, heldLease?: { token: string }): Promise<SyncResult> {
   const acc = await loadAccount(accountId);
   if (!acc) throw new Error("account not found");
+  await refuseForeignMatricula(String(acc.user_id), String(acc.matricula));
   if (acc.source === "app") return syncAppLink(acc.user_id, acc.matricula, { password, budgetMs, onProgress, leaseToken: heldLease?.token });
   const t0 = Date.now();
   const pass = password ?? (acc.password_enc ? decryptSecret(acc.password_enc) : null);
@@ -265,9 +273,11 @@ export async function linkSiteAccount(userId: string, clubId: number, matricula:
   budgetMs = 240_000, onProgress: OnProgress = () => {}): Promise<SyncResult & { account_ids: string[] }> {
   const [club] = await q(`select id, base_url, name, code from club where id=$1 and direct_login`, [clubId]);
   if (!club) throw new GolfisticsError("bad_url", "Ese club no se puede vincular directo");
+  await refuseForeignMatricula(userId, matricula);
   const t0 = Date.now();
   onProgress({ stage: "connect", club: club.name, club_index: 1, club_count: 1, club_code: club.code ?? null });
   const g = await new Golfistics(club.base_url, matricula, password).login();   // throws login_failed before anything is stored
+  if (!syncWriteAllowed(matricula, g.player.userid)) throw new GolfisticsError("login_failed", MATRICULA_REMOTE);
   if (club.code && g.club.club_code && g.club.club_code !== club.code) throw new GolfisticsError("login_failed", "Ese usuario es de otro club");
   let [acc] = await q(`select id, source from club_account where user_id=$1 and club_id=$2 and matricula=$3`, [userId, club.id, matricula]);
   if (!acc) [acc] = await q(`update club_account set user_id=$1 where id = (select id from club_account where user_id is null and club_id=$2 and matricula=$3 limit 1) and user_id is null returning id, source`, [userId, club.id, matricula]);
@@ -305,6 +315,7 @@ export async function ensureAppAccount(userId: string, clubId: number, matricula
 export async function syncAppLink(userId: string, matricula: string,
   o: { password?: string; savePassword?: boolean; budgetMs?: number; onProgress?: OnProgress; app?: GolfisticsApp; leaseToken?: string } = {}): Promise<SyncResult & { account_ids: string[] }> {
   const t0 = Date.now(), budgetMs = o.budgetMs ?? 240_000, onProgress = o.onProgress ?? (() => {});
+  await refuseForeignMatricula(userId, matricula);
   const linked = await q(`select id, password_enc, gender from club_account where user_id=$1 and matricula=$2 and source='app' order by created_at`, [userId, matricula]);
   const storedEnc = linked.find(a => a.password_enc)?.password_enc ?? null;
   const pass = o.password ?? (storedEnc ? decryptSecret(storedEnc) : null);
@@ -336,6 +347,7 @@ export async function syncAppLink(userId: string, matricula: string,
     try {
       on({ stage: "connect" });
       const g = await app.openClub(c.cc, { gender });
+      if (!syncWriteAllowed(matricula, g.player.userid)) throw new GolfisticsError("login_failed", MATRICULA_REMOTE);
       const club = await ensureClub(c.cc, c.name, g.base);
       accId = await ensureAppAccount(userId, club.id, matricula, enc !== undefined ? enc : storedEnc);
       ids.push(accId);

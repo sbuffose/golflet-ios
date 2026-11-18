@@ -94,15 +94,25 @@ struct HoleDetailView: View {
                     .frame(height: 340)
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .accessibilityIdentifier("hole-satellite-map")
-                Text(AzulCourse.credit)
+                Text(AzulCourse.isJockeyColorada(courseName) ? "Salida al centro del green. El centro no es el pin del día." : AzulCourse.mapCredit(forCourse: courseName))
+                    .font(GFont.ui(12))
+                    .foregroundStyle(p.ink2)
+                Text(AzulCourse.mapCredit(forCourse: courseName))
                     .font(GFont.ui(10))
                     .foregroundStyle(p.ink3)
             } else {
-                Text("Esta cancha todavía no tiene el mapa satelital.")
-                    .font(GType.body)
-                    .foregroundStyle(p.ink2)
-                    .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-                    .accessibilityIdentifier("hole-map-unavailable")
+                HStack(alignment: .center, spacing: 10) {
+                    MissingMark(kind: .geo)
+                    Text("Sin satélite. No dibujo una línea inventada del tee al green.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+                .padding(.horizontal, 12)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .accessibilityIdentifier("hole-map-unavailable")
             }
         }
     }
@@ -112,9 +122,9 @@ struct HoleDetailView: View {
             HStack {
                 labeled("Hoyo", "\(currentHole)")
                 Spacer()
-                labeled("Par", "\(stat?.par ?? courseHole?.par ?? 4)")
+                labeled(courseHole?.parCaption ?? "Par", "\(stat?.par ?? courseHole?.par ?? 4)")
                 Spacer()
-                labeled("Yardas", longestYardage.map(String.init) ?? "—")
+                labeled("Yardas", cardYardage.map(String.init) ?? "—")
                 Spacer()
                 labeled("Handicap", "\(stat?.handicap ?? courseHole?.handicap ?? currentHole)")
             }
@@ -294,8 +304,10 @@ struct HoleDetailView: View {
         }
     }
 
-    private var longestYardage: Int? {
-        courseHole?.yards.values.max()
+    private var cardYardage: Int? {
+        let yards = courseHole?.yards ?? [:]
+        if let red = yards["ROJO"] { return red }
+        return yards.values.max()
     }
 
     private func step(_ delta: Int) {

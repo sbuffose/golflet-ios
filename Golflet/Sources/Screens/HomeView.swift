@@ -11,8 +11,10 @@ struct HomeView: View {
     @State private var showsHomeGroups = false
     @State private var showsHomeProfesores = false
     @State private var showsAgregarProfesor = false
+    @State private var showsScorecards = false
     @State private var highlightPartners = false
     @State private var modeOpen = false
+    @State private var groupPlaces: [String: Int] = [:]
     @Namespace private var roundZoom
 
     var body: some View {
@@ -28,16 +30,36 @@ struct HomeView: View {
                                 .accessibilityIdentifier("home-ready")
                         }
                         header(scroll: proxy)
+                        if model.rounds.isEmpty && model.clubs.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Vinculá tu matrícula para ver tu hándicap y tus tarjetas.")
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink)
+                                NavigationLink { ClubsView() } label: {
+                                    Text("Vincular matrícula")
+                                        .font(GType.headline)
+                                        .foregroundStyle(Color.white)
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                        .background(p.primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("vincular-matricula")
+                            }
+                        }
+                        if model.clubs.contains(where: { $0.lastSyncStatus == "error" }) {
+                            Text("No se pudo actualizar. Probá de nuevo desde Cuenta.")
+                                .font(GType.body)
+                                .foregroundStyle(p.ink)
+                                .accessibilityIdentifier("sync-failed")
+                        }
                         handicapCard
+                        homeCircle
                         if model.homeMode == .mej, !model.liveShots.isEmpty {
                             SGCard(shots: model.liveShots)
                         }
                         lastRound
                         teeTimesCard
-                        scorecardFetchCard
-                        groups
-                        clubs
-                        moreLegacy
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 160)
@@ -51,6 +73,9 @@ struct HomeView: View {
         .accessibilityIdentifier("screen-inicio")
         .onAppear {
             Task { await model.refreshTeeTimes() }
+        }
+        .task(id: model.groups.map(\.id).joined(separator: ",")) {
+            await loadGroupPlaces()
         }
         .onChange(of: model.selectedTab) { _, tab in
             if tab == .inicio {
@@ -172,16 +197,6 @@ struct HomeView: View {
                 booking: model.nextTeeTime,
                 onTab: { revealPartners(scroll) }
             )
-            RangeMenuButton(
-                range: Binding(
-                    get: { model.statsRange },
-                    set: { model.setStatsRange($0) }
-                ),
-                count: model.rangeRoundCount
-            )
-            Text("\(model.rangeRoundCount) \(model.rangeRoundCount == 1 ? "ronda" : "rondas")")
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
         }
     }
 
@@ -236,10 +251,10 @@ struct HomeView: View {
 
     private var handicapCard: some View {
         let snap = model.home
-        return GCard(fill: p.primary, radius: 28, padding: 20) {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 10) {
+        return GCard(fill: p.primary, radius: 28, padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
                         GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
                         NavigationLink(value: MetricRoute.handicap) {
                             CountUpText(value: snap.handicapIndex, format: FormatAR.one)
@@ -259,34 +274,37 @@ struct HomeView: View {
                             Text("Índice al \(FormatAR.webDay(when))")
                                 .font(GType.label)
                                 .foregroundStyle(p.onPrimary.opacity(0.7))
+                                .lineLimit(1)
                         }
                         if !snap.trendSinceLabel.isEmpty {
                             let arrow = snap.trendDelta < 0 ? "↓" : "↑"
                             Text("\(arrow) \(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
                                 .font(GType.label)
                                 .foregroundStyle(p.onPrimary.opacity(0.7))
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Button { showsHcpImpact = true } label: {
-                            Text("Cambios")
-                                .font(GType.label)
-                                .foregroundStyle(p.onPrimary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(p.onPrimary.opacity(0.72), lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("home-hcp-cambios")
                     }
-                    Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 8) {
+                    .layoutPriority(1)
+                    Spacer(minLength: 4)
+                    VStack(alignment: .trailing, spacing: 0) {
                         HomeHcpPeople(
                             profesores: model.profesores,
                             groups: model.groups,
+                            places: groupPlaces,
                             onProfesor: { presentProfesor($0) },
                             onProfesores: { showsHomeProfesores = true },
                             onAddProfesor: { showsAgregarProfesor = true },
-                            onGroups: { showsHomeGroups = true },
-                            onCreate: { model.presentCreateGroup() }
+                            onGroup: { model.presentGroupDetail($0.id) },
+                            onGroups: {
+                                if model.groups.count == 1, let group = model.groups.first {
+                                    model.presentGroupDetail(group.id)
+                                } else {
+                                    model.presentGroups()
+                                }
+                            },
+                            onCreate: { model.presentCreateGroup() },
+                            compact: true
                         )
                         Button { model.showsPlay = true } label: {
                             HStack(spacing: 6) {
@@ -298,50 +316,33 @@ struct HomeView: View {
                             }
                             .foregroundStyle(p.onPrimary)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .frame(minHeight: 36)
                             .background(p.accent)
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Jugar")
                         .accessibilityIdentifier("play-start")
-                    }
-                }
-
-                HStack(alignment: .top) {
-                    NavigationLink(value: MetricRoute.roundList(.allCards)) {
-                        heroMini("Tarjetas", "\(shownCards ?? snap.cards)", gold: cardsGold)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("metric-tarjetas")
-                    .accessibilityElement(children: .contain)
-                    .overlay { GProbe(id: "metric-tarjetas", label: "Tarjetas") }
-                    Spacer()
-                    NavigationLink(value: MetricRoute.roundList(.bestGross(yearOnly: false))) {
-                        heroMini("Mejor gross", snap.bestGross.map(String.init) ?? "—")
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("metric-best-gross")
-                    .accessibilityElement(children: .contain)
-                    .overlay { GProbe(id: "metric-best-gross", label: "Mejor gross") }
-                    Spacer()
-                    NavigationLink(value: MetricRoute.roundList(.average(yearOnly: true))) {
-                        heroMini("Promedio", model.summary.averageGross.map(FormatAR.one) ?? "—")
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("metric-average")
-                    .accessibilityElement(children: .contain)
-                    .overlay { GProbe(id: "metric-average", label: "Promedio") }
-                    if let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact {
-                        Spacer()
                         Button { showsHcpImpact = true } label: {
-                            heroMini(hcpImpactLabel(impact), hcpImpactValue(impact), gold: impact.delta < 0)
+                            Text("Cambios")
+                                .font(GFont.ui(13, weight: .regular))
+                                .underline()
+                                .foregroundStyle(p.onPrimary.opacity(0.72))
+                                .frame(minWidth: 44, minHeight: 44)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("metric-hcp-impact")
+                        .accessibilityIdentifier("home-hcp-cambios")
                     }
                 }
-                .padding(.top, 4)
+                Rectangle()
+                    .fill(p.onPrimary.opacity(0.16))
+                    .frame(height: 1)
+                HStack(alignment: .top, spacing: 8) {
+                    hiStat("Tarjetas", "\(snap.cards)", .roundList(.allCards))
+                    hiStat("Mejor", snap.bestGross.map(String.init) ?? "–", .roundList(.bestGross(yearOnly: false)))
+                    hiStat("Prom.", snap.yearAverage.map { FormatAR.one($0) } ?? "–", .roundList(.average(yearOnly: false)))
+                    hiStat("Impacto", impactText, nil)
+                }
             }
         }
         .background(alignment: .topLeading) {
@@ -349,13 +350,105 @@ struct HomeView: View {
         }
     }
 
-    private func heroMini(_ label: String, _ value: String, gold: Bool = false) -> some View {
+    private var impactText: String {
+        guard let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact else { return "–" }
+        return hcpImpactValue(impact)
+    }
+
+    private func hiStat(_ label: String, _ value: String, _ route: MetricRoute?) -> some View {
+        let stack = VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(GFont.ui(11, weight: .regular))
+                .foregroundStyle(p.onPrimary.opacity(0.62))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(value)
+                .font(GType.statM)
+                .tabular()
+                .foregroundStyle(p.onPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        return Group {
+            if let route {
+                NavigationLink(value: route) { stack }
+                    .buttonStyle(.plain)
+            } else {
+                Button { showsHcpImpact = true } label: { stack }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("metric-hcp-impact")
+            }
+        }
+    }
+
+    private var homeCircle: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let invite = model.pendingInvites.first {
+                Button { model.presentInvite(invite) } label: {
+                    HStack(spacing: 12) {
+                        Text(invite.ownerInitials)
+                            .font(GFont.ui(16, weight: .semibold))
+                            .foregroundStyle(p.ink)
+                            .frame(width: 44, height: 44)
+                            .background(p.surface2)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color(hex: 0xC8102E), lineWidth: 2))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(invite.name)
+                                .font(GType.headline)
+                                .foregroundStyle(p.ink)
+                                .lineLimit(1)
+                            Text("Te invita \(invite.ownerName)")
+                                .font(GType.label)
+                                .foregroundStyle(p.ink2)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(p.ink3)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 64)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home-pending-invite")
+                .accessibilityLabel("Invitación pendiente, \(invite.name)")
+            }
+        }
+    }
+
+    private func loadGroupPlaces() async {
+        var next: [String: Int] = [:]
+        for group in model.groups.prefix(3) {
+            if Task.isCancelled { return }
+            do {
+                let config = try await model.api.groupView(groupID: group.id)
+                let comparison = try await model.api.groupComparison(groupID: group.id, config: config)
+                guard let mine = comparison.hero?.memberID,
+                      let row = comparison.rows.first(where: { $0.metric == .gross }),
+                      let place = row.rank(of: mine) else { continue }
+                next[group.id] = place
+            } catch {
+                continue
+            }
+        }
+        if !Task.isCancelled { groupPlaces = next }
+    }
+
+    private func heroMini(_ label: String, _ value: String, gold: Bool = false, access: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 Text(label)
                     .font(GType.label)
                     .foregroundStyle(p.onPrimary.opacity(0.5))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 MetricChevron(color: p.onPrimary.opacity(0.35))
             }
             Text(value)
@@ -366,6 +459,8 @@ struct HomeView: View {
                 .foregroundStyle(gold ? p.accentOnNavy : p.onPrimary)
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(access ?? label), \(value)")
     }
 
     private func countUpCards(to target: Int) async {
@@ -391,11 +486,45 @@ struct HomeView: View {
 
     private var teeTimesCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Próximos tee times")
-                .font(GType.section)
-                .foregroundStyle(p.ink)
+            HStack {
+                Text("Próxima reserva")
+                    .font(GType.section)
+                    .foregroundStyle(p.ink)
+                Spacer()
+                if model.nextTeeTime != nil {
+                    NavigationLink {
+                        TeeTimesHubView()
+                    } label: {
+                        Text("Ver todas")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink2)
+                    }
+                    .accessibilityIdentifier("home-tees-all")
+                }
+            }
             GCard(radius: 22, padding: 16) {
-                if model.upcomingTeeTimes.isEmpty {
+                if let booking = model.nextTeeTime {
+                    VStack(alignment: .leading, spacing: 12) {
+                        teeTimeRow(booking)
+                        ZStack(alignment: .topLeading) {
+                            NavigationLink {
+                                TeeTimePrepView(booking: booking)
+                            } label: {
+                                Text("Preparar la salida")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.onPrimary)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .background(p.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("home-open-jugar")
+                            .accessibilityLabel("Preparar la salida")
+                            GProbe(id: "home-open-jugar", label: "Preparar la salida")
+                        }
+                        .accessibilityElement(children: .contain)
+                    }
+                } else {
                     HStack(alignment: .top, spacing: 12) {
                         CaddieMark(height: 56)
                         VStack(alignment: .leading, spacing: 4) {
@@ -409,13 +538,6 @@ struct HomeView: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("home-tee-empty")
-                } else {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(Array(model.upcomingTeeTimes.enumerated()), id: \.element.id) { index, booking in
-                            if index > 0 { Hairline() }
-                            teeTimeRow(booking)
-                        }
-                    }
                 }
             }
             .overlay {
@@ -431,39 +553,48 @@ struct HomeView: View {
     @ViewBuilder
     private var scorecardFetchCard: some View {
         if !model.scorecardFetches.isEmpty || model.scorecardFetchNote != nil {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Tarjeta del club")
-                    .font(GType.section)
-                    .foregroundStyle(p.ink)
-                GCard(radius: 22, padding: 16) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let note = model.scorecardFetchNote, !note.isEmpty {
-                            Text(note)
-                                .font(GType.body)
-                                .foregroundStyle(p.ink2)
-                                .accessibilityIdentifier("home-scorecard-error")
-                        }
-                        ForEach(model.scorecardFetches) { job in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(job.clubName.isEmpty ? "Club" : job.clubName)
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                if !job.course.isEmpty || !job.time.isEmpty {
-                                    Text([job.date, job.time, job.course].filter { !$0.isEmpty }.joined(separator: " · "))
-                                        .font(GType.label)
-                                        .foregroundStyle(p.ink2)
-                                }
-                                Text(job.label)
-                                    .font(GType.body)
-                                    .foregroundStyle(p.ink)
-                            }
-                            .accessibilityIdentifier("home-scorecard-\(job.id)")
-                        }
-                    }
+            Button {
+                showsScorecards = true
+            } label: {
+                HStack(spacing: 10) {
+                    Text("Tarjetas del club")
+                        .font(GType.headline)
+                        .foregroundStyle(p.ink)
+                    Spacer(minLength: 8)
+                    Text(scorecardCount)
+                        .font(GType.label)
+                        .foregroundStyle(Color(hex: BrandHex.red))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(p.ink3)
                 }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 44)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("home-scorecard-fetches")
+            .accessibilityLabel("Tarjetas del club, \(scorecardCount)")
+            .sheet(isPresented: $showsScorecards) {
+                ScorecardFetchSheet(
+                    jobs: model.scorecardFetches,
+                    note: model.scorecardFetchNote,
+                    refreshID: "home-scorecard-refresh",
+                    sheetID: "home-scorecards"
+                ) {
+                    Task { await model.refreshScorecardFetches() }
+                }
+                .environment(model)
+            }
         }
+    }
+
+    private var scorecardCount: String {
+        let n = model.scorecardFetches.count
+        if n == 0 { return "Sin búsquedas" }
+        return n == 1 ? "1 búsqueda" : "\(n) búsquedas"
     }
 
     private func teeTimeRow(_ booking: TeeTime) -> some View {
@@ -884,10 +1015,6 @@ struct HomeView: View {
         )
     }
 
-    private func hcpImpactLabel(_ impact: HcpImpact) -> String {
-        "Impacto HCP"
-    }
-
     private func hcpImpactValue(_ impact: HcpImpact) -> String {
         let arrow = impact.delta < 0 ? "↓" : (impact.delta > 0 ? "↑" : "·")
         return "\(arrow)\(FormatAR.one(abs(impact.delta)))"
@@ -957,6 +1084,7 @@ struct RoundRow: View {
 
     var body: some View {
         GCard(radius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 14) {
                 let dm = FormatAR.dayMonth(round.date)
                 let year = Calendar.gregorian.component(.year, from: round.date)
@@ -981,27 +1109,16 @@ struct RoundRow: View {
                         .font(GType.headline)
                         .foregroundStyle(p.ink)
                         .lineLimit(2)
-                    HStack(spacing: 6) {
+                    HStack(alignment: .top, spacing: 6) {
                         if !round.isOtherCourse, !round.tee.isEmpty {
                             TeeDot(name: round.tee)
+                                .padding(.top, 4)
                         }
                         Text(meta)
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
-                            .lineLimit(1)
-                    }
-                    if !chips.isEmpty {
-                        HStack(spacing: 4) {
-                            ForEach(chips, id: \.label) { chip in
-                                Text(chip.label)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(chip.ink)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(chip.fill)
-                                    .clipShape(Capsule())
-                            }
-                        }
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 8)
@@ -1019,22 +1136,37 @@ struct RoundRow: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(p.ink3)
             }
+            if round.official && !chips.isEmpty {
+                SingleLineChipRow(chips: chips)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier(style == .home ? "last-round-chips" : "round-chips")
+            }
+            }
         }
     }
 
     private var chips: [(label: String, fill: Color, ink: Color)] {
         guard round.gross != nil else { return [] }
-        let birdie = round.counts.birdies == 1 ? "birdie" : "birdies"
-        let bogey = round.counts.bogeys == 1 ? "bogey" : "bogeys"
-        var items: [(String, Color, Color)] = [
-            ("\(round.counts.birdies) \(birdie)", Color(hex: 0x0B2545), Color(hex: 0xF6F7F9)),
-            ("\(round.counts.pars) pares", Color(hex: 0xECE7DB), p.ink),
-            ("\(round.counts.bogeys) \(bogey)", Color(hex: 0xC8102E), Color(hex: 0xFFF7F2))
+        let navy = Color(hex: 0x0B2545)
+        let white = Color(hex: 0xFFFFFF)
+        let gold = Color(hex: 0xC8A86A)
+        let beige = Color(hex: 0xECE7DB)
+        let red = Color(hex: 0xC8102E)
+        let charcoal = Color(hex: 0x3E4C62)
+        var items: [(label: String, fill: Color, ink: Color)] = [
+            ("\(round.counts.birdies) Bir", navy, white),
+            ("\(round.counts.pars) Par", beige, navy),
+            ("\(round.counts.bogeys) Bog", red, white)
         ]
         let eagles = max(round.counts.eagles, StatsEngine.count(.eagle, in: round).count)
         if eagles > 0 {
-            let word = eagles == 1 ? "águila" : "águilas"
-            items.insert(("\(eagles) \(word)", Color(hex: 0xC8102E), Color(hex: 0x2B230F)), at: 0)
+            items.insert(("\(eagles) Ág", gold, navy), at: 0)
+        }
+        let doubles = round.holes.isEmpty
+            ? round.counts.doubles + round.counts.triples + round.counts.worse
+            : round.holes.filter { $0.result == .doubleOrWorse }.count
+        if doubles > 0 {
+            items.append(("\(doubles) Dob", charcoal, white))
         }
         return items
     }
@@ -1047,6 +1179,7 @@ struct RoundRow: View {
             }
             return parts.joined(separator: " · ")
         }
+        if !round.official { return "No oficial · \(round.displayCourse)\(round.tee.isEmpty ? "" : " · \(round.tee)")" }
         var parts = [round.displayCourse]
         if !round.tee.isEmpty, round.tee.caseInsensitiveCompare(round.course) != .orderedSame {
             parts.append(round.tee)
@@ -1062,17 +1195,27 @@ struct HomeHcpPeople: View {
     @Environment(\.palette) private var p
     let profesores: [Profesor]
     let groups: [GolfletGroup]
+    var places: [String: Int] = [:]
     var onProfesor: (Profesor) -> Void
     var onProfesores: () -> Void
     var onAddProfesor: () -> Void
+    var onGroup: (GolfletGroup) -> Void = { _ in }
     var onGroups: () -> Void
     var onCreate: () -> Void
+    var compact: Bool = false
 
-    private let groupAvatar: CGFloat = HomeHcpPeopleLayout.groupAvatar
-    private let profesorAvatar: CGFloat = HomeHcpPeopleLayout.profesorAvatar
+    private let face: CGFloat = 44
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: HomeHcpPeopleLayout.stackSpacing) {
+        if compact {
+            compactStack
+        } else {
+            fullRows
+        }
+    }
+
+    private var fullRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
             if profesores.isEmpty {
                 addProfesor
             } else {
@@ -1081,12 +1224,110 @@ struct HomeHcpPeople: View {
             if groups.isEmpty {
                 createGroup
             } else {
-                groupsColumn
+                ForEach(Array(groups.prefix(3))) { group in
+                    groupRow(group)
+                }
+                if groups.count > 3 {
+                    Button(action: onGroups) {
+                        Text("Ver todos")
+                            .font(GType.headline)
+                            .foregroundStyle(p.primary)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home-hcp-groups-all")
+                }
             }
         }
-        .fixedSize(horizontal: true, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-hcp-people")
+    }
+
+    private var compactStack: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            if profesores.isEmpty {
+                compactAdd
+            } else {
+                compactProfesor
+            }
+            if groups.isEmpty {
+                compactCreate
+            } else {
+                compactGroups
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home-hcp-people")
+    }
+
+    private var compactProfesor: some View {
+        Group {
+            if profesores.count == 1, let first = profesores.first {
+                NavigationLink(value: first) { compactFace(url: first.photoURL, initials: first.initials, verified: first.verified) }
+            } else {
+                Button(action: onProfesores) { compactFace(url: profesores.first?.photoURL, initials: profesores.first?.initials ?? "P", verified: profesores.contains { $0.verified }) }
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityIdentifier("home-hcp-profesor")
+        .accessibilityLabel(profesorLabel)
+        .overlay { GProbe(id: "home-hcp-profesor", label: profesorLabel).allowsHitTesting(false) }
+    }
+
+    private var compactAdd: some View {
+        Button(action: onAddProfesor) {
+            Text("+")
+                .font(GFont.ui(16, weight: .semibold))
+                .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
+                .frame(width: 28, height: 28)
+                .overlay(Circle().strokeBorder(Color(hex: HomeHcpPeopleLayout.celeste), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])))
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityIdentifier("home-hcp-add-profesor")
+        .accessibilityLabel("Agregar profesor")
+        .overlay { GProbe(id: "home-hcp-add-profesor", label: "Agregar profesor") }
+    }
+
+    private var compactGroups: some View {
+        Button(action: onGroups) {
+            HStack(spacing: -8) {
+                ForEach(Array(groups.prefix(3))) { group in
+                    HomeHcpAvatar(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 22, fill: Color.white.opacity(0.16), ink: .white, ring: Color.white.opacity(0.85), verified: false)
+                }
+                Text("\(groups.count) \(groups.count == 1 ? "grupo" : "grupos")")
+                    .font(GFont.ui(12, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.82))
+                    .lineLimit(1)
+                    .padding(.leading, 10)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityIdentifier("home-hcp-groups")
+        .accessibilityLabel("\(groups.count) grupos")
+        .overlay { GProbe(id: "home-hcp-groups", label: groups.first?.name ?? "Grupos").allowsHitTesting(false) }
+    }
+
+    private var compactCreate: some View {
+        Button(action: onCreate) {
+            Text("+")
+                .font(GFont.ui(16, weight: .semibold))
+                .foregroundStyle(Color(hex: 0xC8A86A))
+                .frame(width: 28, height: 28)
+                .overlay(Circle().stroke(Color(hex: 0xC8A86A), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityIdentifier("home-hcp-crear-grupo")
+        .accessibilityLabel("Crear grupo")
+        .overlay { GProbe(id: "home-hcp-crear-grupo", label: "Crear grupo") }
+    }
+
+    private func compactFace(url: String?, initials: String, verified: Bool) -> some View {
+        HomeHcpAvatar(url: url, initials: initials, size: 28, fill: Color.white.opacity(0.16), ink: .white, ring: Color.white, verified: verified)
     }
 
     private var profesorAvatarButton: some View {
@@ -1102,8 +1343,6 @@ struct HomeHcpPeople: View {
             }
         }
         .buttonStyle(.plain)
-        .padding(8)
-        .contentShape(Rectangle())
         .accessibilityIdentifier("home-hcp-profesor")
         .accessibilityLabel(profesorLabel)
         .overlay {
@@ -1113,41 +1352,34 @@ struct HomeHcpPeople: View {
     }
 
     private var profesorAvatarLabel: some View {
-        Group {
-            if let caption = HomeHcpPeopleLayout.profesorCaption(profesores.count) {
-                VStack(alignment: .trailing, spacing: 6) {
-                    profesorStack
-                    Text(caption)
-                        .font(GType.label)
-                        .foregroundStyle(p.onPrimary.opacity(0.7))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
+        row {
+            if profesores.count == 1, let first = profesores.first {
+                HomeHcpAvatar(
+                    url: first.photoURL,
+                    initials: first.initials,
+                    size: face,
+                    fill: p.surface2,
+                    ink: p.ink,
+                    ring: Color(hex: HomeHcpPeopleLayout.celeste),
+                    verified: first.verified
+                )
+                copy(first.name, "Profesor")
             } else {
                 profesorStack
+                copy(HomeHcpPeopleLayout.profesorCaption(profesores.count) ?? "Profesores", "Tocá para verlos.")
             }
         }
     }
 
     private var addProfesor: some View {
         Button(action: onAddProfesor) {
-            VStack(alignment: .trailing, spacing: 6) {
-                ZStack {
-                    Circle()
-                        .strokeBorder(
-                            Color(hex: HomeHcpPeopleLayout.celeste),
-                            style: StrokeStyle(lineWidth: 1.5, dash: [3.5, 2.5])
-                        )
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
-                }
-                .frame(width: profesorAvatar, height: profesorAvatar)
-                Text(HomeHcpPeopleLayout.addLabel)
-                    .font(GType.label)
-                    .foregroundStyle(p.onPrimary.opacity(0.7))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+            row {
+                Text("+")
+                    .font(GFont.ui(22, weight: .semibold))
+                    .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
+                    .frame(width: face, height: face)
+                    .overlay(Circle().strokeBorder(Color(hex: HomeHcpPeopleLayout.celeste), style: StrokeStyle(lineWidth: 1.5, dash: [3.5, 2.5])))
+                copy(HomeHcpPeopleLayout.addLabel, "Todavía no hay uno vinculado.")
             }
         }
         .buttonStyle(.plain)
@@ -1156,43 +1388,85 @@ struct HomeHcpPeople: View {
         .overlay { GProbe(id: "home-hcp-add-profesor", label: "Agregar profesor") }
     }
 
-    private var groupsColumn: some View {
-        Button(action: onGroups) {
-            VStack(alignment: .trailing, spacing: 6) {
-                groupStack
-                Text(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
-                    .font(GType.label)
-                    .foregroundStyle(p.onPrimary.opacity(0.7))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+    private func groupRow(_ group: GolfletGroup) -> some View {
+        let players = group.memberCount
+        let sub = players > 0 ? "\(players) \(players == 1 ? "jugador" : "jugadores")" : "Grupo"
+        return Button { onGroup(group) } label: {
+            row {
+                HomeHcpAvatar(
+                    url: group.photoURL,
+                    initials: GroupsParser.initials(group.name),
+                    size: face,
+                    fill: p.surface2,
+                    ink: p.primary,
+                    ring: Color(hex: HomeHcpPeopleLayout.accent),
+                    verified: false
+                )
+                copy(group.name, sub)
+                if let place = places[group.id] {
+                    Text("\(place)º")
+                        .font(GType.headline)
+                        .foregroundStyle(p.primary)
+                        .accessibilityLabel("Puesto \(place)")
+                }
             }
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("home-hcp-groups")
-        .accessibilityLabel(groups.count == 1 ? "1 grupo" : "\(groups.count) grupos")
-        .overlay { GProbe(id: "home-hcp-groups", label: groups.count == 1 ? "1 grupo" : "\(groups.count) grupos") }
+        .accessibilityIdentifier(group.id == groups.first?.id ? "home-hcp-groups" : "home-hcp-group-\(group.id)")
+        .accessibilityLabel("Tu grupo: \(group.name)")
+        .overlay {
+            if group.id == groups.first?.id {
+                GProbe(id: "home-hcp-groups", label: group.name)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private var createGroup: some View {
         Button(action: onCreate) {
-            VStack(alignment: .trailing, spacing: 6) {
+            row {
                 Text("+")
                     .font(GFont.ui(22, weight: .semibold))
-                    .foregroundStyle(p.onPrimary)
-                    .frame(width: groupAvatar, height: groupAvatar)
-                    .background(p.accent)
-                    .clipShape(Circle())
-                Text("Crear grupo")
-                    .font(GType.label)
-                    .foregroundStyle(p.onPrimary.opacity(0.7))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .foregroundStyle(p.accent)
+                    .frame(width: face, height: face)
+                    .overlay(Circle().stroke(p.accent, lineWidth: 1.5))
+                copy("Crear grupo", "Compará con tus amigos.")
             }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-hcp-crear-grupo")
         .accessibilityLabel("Crear grupo")
         .overlay { GProbe(id: "home-hcp-crear-grupo", label: "Crear grupo") }
+    }
+
+    private func row<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            content()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(p.ink3)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
+        .frame(height: 64)
+        .background(p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(Rectangle())
+    }
+
+    private func copy(_ title: String, _ line: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+                .lineLimit(1)
+            Text(line)
+                .font(GType.label)
+                .foregroundStyle(p.ink2)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Web HI-card avatar: 28pt, celeste ring, dark fill, blue verified, max 3 + "N profes".
@@ -1204,43 +1478,15 @@ struct HomeHcpPeople: View {
                 HomeHcpAvatar(
                     url: profesor.photoURL,
                     initials: profesor.initials,
-                    size: profesorAvatar,
-                    fill: p.primary,
-                    ink: p.onPrimary,
+                    size: face,
+                    fill: p.surface2,
+                    ink: p.ink,
                     ring: ring,
                     verified: profesor.verified
                 )
                 .zIndex(Double(shown.count - index))
             }
         }
-        .allowsHitTesting(false)
-    }
-
-    private var groupStack: some View {
-        let shown = Array(groups.prefix(HomeHcpPeopleLayout.groupVisible))
-        let extra = groups.count - shown.count
-        let ring = Color(hex: HomeHcpPeopleLayout.accent)
-        return HStack(spacing: -HomeHcpPeopleLayout.groupOverlap) {
-            ForEach(shown) { group in
-                HomeHcpAvatar(
-                    url: group.photoURL,
-                    initials: GroupsParser.initials(group.name),
-                    size: groupAvatar,
-                    fill: p.onPrimary,
-                    ink: p.primary,
-                    ring: ring,
-                    verified: false
-                )
-            }
-            HomeHcpCountChip(
-                text: extra > 0 ? "+\(extra)" : "\(groups.count)",
-                size: groupAvatar,
-                fill: p.accent,
-                ink: p.onPrimary,
-                ring: ring
-            )
-        }
-        .allowsHitTesting(false)
     }
 
     private var profesorLabel: String {
@@ -1263,7 +1509,7 @@ enum HomeHcpPeopleLayout {
     static let profesorAvatar: CGFloat = 28
     static let groupAvatar: CGFloat = 36
     static let profesorOverlap: CGFloat = 7
-    static let groupOverlap: CGFloat = 12
+    static let groupOverlap: CGFloat = 8
     static let numberPeopleGap: CGFloat = 12
     static let accent: UInt32 = BrandHex.red
     static let celeste: UInt32 = 0xC8A86A
@@ -1300,7 +1546,7 @@ enum HomeHcpPeopleLayout {
     static func groupWidth(count: Int) -> CGFloat {
         if count == 0 { return max(groupAvatar, labelWidth("Crear grupo")) }
         let shown = min(count, groupVisible)
-        return stackWidth(count: shown, avatar: groupAvatar, overlap: groupOverlap, extraChip: true)
+        return stackWidth(count: shown, avatar: groupAvatar, overlap: groupOverlap, extraChip: false)
     }
 
     static func columnWidth(profesorCount: Int, groupCount: Int) -> CGFloat {
@@ -1354,11 +1600,17 @@ struct HomeHcpAvatar: View {
                     .font(GFont.ui(size <= 28 ? 10.5 : (size < 40 ? 12 : 16), weight: .semibold))
                     .foregroundStyle(ink)
                 if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
-                    AsyncImage(url: parsed) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Color.clear
+                    AsyncImage(url: parsed) { phase in
+                        if let image = phase.image {
+                            image.resizable()
+                                .scaledToFill()
+                                .frame(width: size, height: size)
+                                .clipShape(Circle())
+                        } else {
+                            Color.clear.frame(width: size, height: size)
+                        }
                     }
+                    .frame(width: size, height: size)
                 }
             }
             .frame(width: size, height: size)
@@ -1383,21 +1635,128 @@ struct HomeHcpAvatar: View {
     }
 }
 
-struct HomeHcpCountChip: View {
-    var text: String
-    var size: CGFloat
-    var fill: Color
-    var ink: Color
-    var ring: Color
+struct ScorecardFetchSheet: View {
+    @Environment(\.palette) private var p
+    let jobs: [ScorecardFetchJob]
+    var note: String? = nil
+    var refreshID: String
+    var sheetID: String
+    var onRefresh: () -> Void
 
     var body: some View {
-        Text(text)
-            .font(GFont.ui(size < 40 ? 12 : 16, weight: .semibold))
-            .foregroundStyle(ink)
-            .frame(width: size, height: size)
-            .background(fill)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(ring, lineWidth: 2))
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(scorecardSummary)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("scorecard-count")
+                    if jobs.contains(where: \.canRetry) {
+                        GProbe(id: refreshID, label: "Buscar de nuevo")
+                    }
+                    if let note, !note.isEmpty {
+                        Text(note)
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                            .accessibilityIdentifier("home-scorecard-error")
+                    }
+                    if jobs.isEmpty {
+                        emptyCard
+                    } else {
+                        ForEach(jobs) { job in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .center) {
+                                    Text(job.clubName.isEmpty ? "Club" : job.clubName)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 8)
+                                    Text(job.chipTitle)
+                                        .font(GFont.ui(12, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(scorecardChipColor(job.chipTitle))
+                                        .clipShape(Capsule())
+                                }
+                                if job.canRetry {
+                                    Button(action: onRefresh) {
+                                        Text("Buscar de nuevo")
+                                            .font(GType.headline)
+                                            .underline()
+                                            .foregroundStyle(p.ink)
+                                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier(refreshID)
+                                    .accessibilityLabel("Buscar de nuevo")
+                                }
+                                if !whenLine(job).isEmpty {
+                                    Text(whenLine(job))
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink2)
+                                }
+                                Text(job.label)
+                                    .font(GType.body)
+                                    .foregroundStyle(p.ink)
+                                Text(job.lastCheckLine)
+                                    .font(GType.label)
+                                    .foregroundStyle(p.ink3)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("home-scorecard-\(job.id)")
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .background(p.bg)
+            .navigationTitle("Tarjetas del club")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .golfletChrome()
+        .accessibilityIdentifier(sheetID)
+    }
+
+    private func scorecardChipColor(_ title: String) -> Color {
+        switch title {
+        case "No presentó": return Color(hex: 0x5C687B)
+        case "Error": return Color(hex: 0xC8102E)
+        default: return Color(hex: 0x0B2545)
+        }
+    }
+
+    private var scorecardSummary: String {
+        let absent = jobs.filter { $0.chipTitle == "No presentó" }.count
+        let pending = jobs.filter { $0.chipTitle == "Pendiente" }.count
+        let errors = jobs.filter { $0.chipTitle == "Error" }.count
+        let bits = [
+            absent > 0 ? "\(absent) sin tarjeta" : nil,
+            pending > 0 ? "\(pending) pendiente\(pending == 1 ? "" : "s")" : nil,
+            errors > 0 ? "\(errors) con error" : nil,
+        ].compactMap { $0 }
+        return bits.isEmpty ? "Sin búsquedas abiertas" : bits.joined(separator: " · ")
+    }
+
+    private func whenLine(_ job: ScorecardFetchJob) -> String {
+        [job.date, job.time, job.course].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private var emptyCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CaddieMark(height: 72)
+            Text("Todavía no hay tarjeta")
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+                .accessibilityIdentifier("scorecard-empty")
+            Text("El club todavía no publicó la tarjeta de esta salida.")
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

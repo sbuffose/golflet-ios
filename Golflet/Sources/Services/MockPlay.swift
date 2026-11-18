@@ -24,7 +24,13 @@ extension MockAPIClient {
     func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail {
         _ = lat
         _ = lng
-        guard let summary = Self.demoCourses.first(where: { $0.courseId == id }) ?? Self.demoCourses.first else {
+        let wanted = id.lowercased()
+        guard let summary = Self.demoCourses.first(where: { $0.courseId == id })
+            ?? Self.demoCourses.first(where: { wanted.contains("vieja") && $0.course.contains("Vieja") })
+            ?? Self.demoCourses.first(where: { wanted.contains("nueva") && $0.course.contains("Nueva") })
+            ?? Self.demoCourses.first(where: { wanted.contains("colorada") && $0.course.contains("Colorada") })
+            ?? Self.demoCourses.first(where: { wanted.contains("azul") && $0.course == "Azul" })
+            ?? Self.demoCourses.first else {
             throw GolfletError.decoding("course")
         }
         return GPSCourseDetail(
@@ -406,7 +412,14 @@ extension MockAPIClient {
             default: return .all
             }
         }()
-        let period: MetricPeriod = scope == "year" ? .year : .all
+        let period: MetricPeriod = {
+            switch range {
+            case "3m": return .threeMonths
+            case "6m": return .sixMonths
+            case "12m": return .twelveMonths
+            default: return scope == "year" ? .year : .all
+            }
+        }()
         let since = scope == "since" ? year : nil
         let query: RoundListQuery = {
             switch metric {
@@ -419,7 +432,7 @@ extension MockAPIClient {
         if let since {
             filtered = filtered.filter { Calendar.gregorian.component(.year, from: $0.date) >= since }
         }
-        if let statsRange = StatsRange(rawValue: range) {
+        if period == .year || period == .all, let statsRange = StatsRange(rawValue: range), statsRange != .all {
             filtered = StatsEngine.ranged(filtered, range: statsRange)
         }
         let field: MetricSortField = sort == "gross" ? .gross : (sort == "net" ? .net : .date)
@@ -719,14 +732,30 @@ extension MockAPIClient {
     ]
 
     private static func demoHoles(for courseId: String) -> [GPSHole] {
-        let origin = GPSCoord(lat: -34.485427, lng: -58.532351)
+        let origin = courseId.contains("vieja")
+            ? GPSCoord(lat: -38.037468, lng: -57.538187)
+            : GPSCoord(lat: -34.485427, lng: -58.532351)
         return (1...18).map { number in
             let step = Double(number - 1)
             let tee = GPSCoord(lat: origin.lat + step * 0.00055, lng: origin.lng + step * 0.00042)
             let center: GPSCoord
             let front: GPSCoord
             let back: GPSCoord
-            if number == 1, courseId.contains("azul") {
+            if number == 2, courseId.contains("vieja") {
+                return GPSHole(
+                    number: number,
+                    par: 4,
+                    hcp: number,
+                    yards: ["AZUL": 380],
+                    green: GPSGreen(front: nil, center: nil, back: nil),
+                    tee: nil
+                )
+            }
+            if number == 1, courseId.contains("vieja") {
+                front = GPSCoord(lat: -38.033692, lng: -57.538243)
+                center = GPSCoord(lat: -38.033812, lng: -57.538187)
+                back = GPSCoord(lat: -38.033921, lng: -57.538128)
+            } else if number == 1, courseId.contains("azul") {
                 front = GPSCoord(lat: -34.48311941, lng: -58.52894679)
                 center = GPSCoord(lat: -34.48305197, lng: -58.52881)
                 back = GPSCoord(lat: -34.48298896, lng: -58.52870807)
@@ -922,6 +951,13 @@ enum MetricAPIMap {
         let year = Calendar.gregorian.component(.year, from: Date())
         if let sinceYear { return ("since", sinceYear) }
         return period == .year ? ("year", year) : ("all", year)
+    }
+
+    /// Rolling windows send range=3m|6m|12m and scope=all. Este año sends scope=year and no range, so the API does not ignore the calendar year. Histórico sends scope=all and no range.
+    static func listQuery(_ period: MetricPeriod, sinceYear: Int?) -> (scope: String, year: Int, range: String) {
+        let scoped = scope(period, sinceYear: sinceYear)
+        if sinceYear != nil { return (scoped.0, scoped.1, "") }
+        return (scoped.0, scoped.1, period.rangeQuery)
     }
 
     static func sortKey(_ field: MetricSortField) -> String {

@@ -6,6 +6,7 @@ struct MetricRoundsView: View {
     let query: RoundListQuery
     var showsBack = true
     var screenID = "screen-metric-rounds"
+    var showsTrackBanner = false
 
     @State private var period: MetricPeriod
     @State private var course: MetricCourseBucket
@@ -14,10 +15,11 @@ struct MetricRoundsView: View {
     @State private var apiRounds: [Round]?
     @Namespace private var roundZoom
 
-    init(query: RoundListQuery, showsBack: Bool = true, screenID: String = "screen-metric-rounds") {
+    init(query: RoundListQuery, showsBack: Bool = true, screenID: String = "screen-metric-rounds", showsTrackBanner: Bool = false) {
         self.query = query
         self.showsBack = showsBack
         self.screenID = screenID
+        self.showsTrackBanner = showsTrackBanner
         _period = State(initialValue: query.periodDefault)
         _course = State(initialValue: .all)
         _sort = State(initialValue: query.defaultSort)
@@ -28,14 +30,9 @@ struct MetricRoundsView: View {
         GScreen(id: screenID) {
             VStack(alignment: .leading, spacing: 14) {
                 header
+                if showsTrackBanner { trackBanner }
                 if query.showPeriod {
-                    FilterPills(
-                        options: MetricPeriod.allCases.map(\.rawValue),
-                        selection: Binding(
-                            get: { period.rawValue },
-                            set: { period = MetricPeriod(rawValue: $0) ?? .all }
-                        )
-                    )
+                    MetricPeriodStrip(period: $period)
                 }
                 if query.showCourseFilter {
                     ScrollFilterPills(
@@ -114,6 +111,40 @@ struct MetricRoundsView: View {
                     .foregroundStyle(p.ink3)
             }
         }
+    }
+
+    private var trackBanner: some View {
+        ZStack(alignment: .topLeading) {
+            Button { model.showsReconstruct = true } label: {
+                HStack(spacing: 12) {
+                    Text("TRACK")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0xC8102E))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white)
+                        .clipShape(Capsule())
+                    Text("Cargar una vuelta ya jugada")
+                        .font(GFont.ui(16, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(2)
+                    Text("›")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0xC8A86A))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("reconstruct-start")
+            .accessibilityLabel("Cargar una vuelta ya jugada")
+            GProbe(id: "reconstruct-start", label: "Cargar una vuelta ya jugada")
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private var sortRow: some View {
@@ -212,15 +243,15 @@ struct MetricRoundsView: View {
     }
 
     private func loadAPI() async {
-        let (scope, year) = MetricAPIMap.scope(period, sinceYear: query.sinceYear)
+        let request = MetricAPIMap.listQuery(period, sinceYear: query.sinceYear)
         guard let drill = try? await model.api.metricDrilldown(
             metric: MetricAPIMap.name(for: query),
-            scope: scope,
-            year: year,
+            scope: request.scope,
+            year: request.year,
             course: MetricAPIMap.course(course),
             sort: MetricAPIMap.sortKey(sort),
             order: MetricAPIMap.orderKey(sort, order),
-            range: model.statsRange.query
+            range: request.range
         ), !drill.rounds.isEmpty else {
             apiRounds = nil
             return

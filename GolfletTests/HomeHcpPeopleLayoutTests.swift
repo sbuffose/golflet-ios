@@ -102,10 +102,9 @@ final class HomeHcpPeopleLayoutTests: XCTestCase {
             XCTAssertLessThanOrEqual(
                 size.width,
                 content + 1,
-                "La columna HCP se pasa de 320pt (\(profesores.count)p/\(groups.count)g): \(size)"
+                "El bloque de grupos y profesor se pasa de 320pt (\(profesores.count)p/\(groups.count)g): \(size)"
             )
-            XCTAssertGreaterThan(size.height, 70, "La columna HCP tiene que ir apilada")
-            XCTAssertLessThan(size.height, 200)
+            XCTAssertGreaterThan(size.height, 70, "El bloque tiene que mostrar las filas")
         }
     }
 

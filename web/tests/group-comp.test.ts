@@ -97,8 +97,7 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     assert.match(week, /Por ronda/);
     assert.match(week, /1 ronda esta semana/);
     assert.match(week, /Pocas tarjetas/);
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Sem");
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Semana");
+    assert.deepEqual(await page.$$eval(".gg-rng a", els => els.map(el => (el.textContent || "").trim())), ["3 meses", "6 meses", "12 meses", "Este año", "Histórico"]);
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
     assert.equal(await rowsOf(), 2);
     assert.deepEqual(await placesOf(), ["1", "2"]);
@@ -111,27 +110,27 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     const hist = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(hist, /Tu posición · .+ · 8 tarj\./);
     assert.match(hist, /Histórico/);
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Todo");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => (el.textContent || "").trim()), "Histórico");
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Histórico");
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
     assert.ok(await page.$(".gg-lb img.gg-img"));
-    const leaders = await page.$$eval(".gg-leaders button", els => els.length >= 3 && els[1].getBoundingClientRect().left < window.innerWidth && Math.abs(els[1].getBoundingClientRect().top - els[0].getBoundingClientRect().top) < 2);
+    const leaders = await page.$$eval(".gg-leaders button", els => els.length >= 3 && els[1].getBoundingClientRect().top > els[0].getBoundingClientRect().bottom - 2 && els[0].getBoundingClientRect().width > window.innerWidth * 0.7);
     assert.equal(leaders, true);
     await shot("grupo-2-historico-390");
     await open("g1", "12y");
     const year = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(year, /20 rondas este año/);
     assert.match(year, /Pocas tarjetas/);
-    assert.match(year, /Temporada 2026/);
+    assert.match(year, /Este año/);
     assert.match(year, /Tu posición · 1 · \+20 sobre Luis · 8 tarj\./);
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => (el.textContent || "").trim()), "Este año");
     await shot("grupo-2-anio-390");
     await open("g4", "all");
     assert.equal(await rowsOf(), 4);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Mateo Ruiz/);
     await shot("grupo-4-historico-390");
     await open("g4", "12y");
-    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.textContent), "Año");
+    assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => (el.textContent || "").trim()), "Este año");
     assert.equal(await rowsOf(), 4);
     await shot("grupo-4-anio-390");
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
@@ -159,16 +158,15 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await board("grupos6-empate-390");
     await open("g1", "1w");
     const fit = await page.$eval(".gg-filters", el => {
-      const row = el.getBoundingClientRect();
-      const course = el.querySelector(".gg-course summary")?.getBoundingClientRect();
+      const course = el.querySelector(".gg-course-btn")?.getBoundingClientRect();
       const pills = [...el.querySelectorAll(".gg-rng a")].map(a => a.getBoundingClientRect());
       const last = pills[pills.length - 1];
       return {
-        courseInside: !!course && !!last && course.right <= row.right + 1 && course.left >= last.right - 1 && course.top >= row.top - 1 && course.bottom <= row.bottom + 1,
+        courseBelow: !!course && !!last && course.top + 1 >= Math.max(...pills.map(p => p.bottom)) && course.height >= 44,
         oneRow: new Set(pills.map(p => Math.round(p.top))).size === 1,
       };
     });
-    assert.equal(fit.courseInside, true);
+    assert.equal(fit.courseBelow, true);
     assert.equal(fit.oneRow, true);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Pocas tarjetas/);
     assert.ok(await tableClearsNav() >= 8, "la última fila queda detrás de la barra");
@@ -187,6 +185,20 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     });
     assert.equal(yearFits, true);
     await board("grupos6-anio-390");
+    await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 2 });
+    await open("g1", "all");
+    const periods375 = await page.evaluate(() => {
+      const links = [...document.querySelectorAll(".gg-filters .gg-rng a")];
+      const parent = document.querySelector(".gg-filters")?.getBoundingClientRect();
+      return {
+        clipped: links.filter(el => el.scrollWidth > el.clientWidth + 1).map(el => `${el.textContent} ${el.scrollWidth}>${el.clientWidth}`),
+        oneRow: new Set(links.map(el => Math.round(el.getBoundingClientRect().top))).size === 1,
+        inside: !!parent && links.every(el => el.getBoundingClientRect().right <= parent.right + 1 && el.getBoundingClientRect().left >= parent.left - 1),
+      };
+    });
+    assert.deepEqual(periods375.clipped, []);
+    assert.equal(periods375.oneRow, true);
+    assert.equal(periods375.inside, true);
   } finally {
     await browser.close();
     server.close();

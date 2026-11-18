@@ -48,7 +48,7 @@ struct GolfletGroup: Identifiable, Hashable, Sendable {
     var members: [GroupMember]
     var myRole: GroupRole
     var invite: GroupInviteLink?
-    /// Total from the API (`member_count` or a numeric `members`). The member list can be shorter.
+    /// Total from the API (`member_count`, integer `accepted`, or a numeric `members`). The member list can be shorter. A boolean `accepted` is not a count.
     var reportedMemberCount: Int? = nil
     var matchRecords: [MatchFormatRecord] = []
     var recentMatches: [PlayedMatch] = []
@@ -356,10 +356,9 @@ enum GroupChartKind: String, CaseIterable, Identifiable, Codable, Sendable {
 
 /// Periods for a group only. The rest of the app keeps StatsRange.
 enum GroupPeriod: String, CaseIterable, Hashable, Codable, Sendable, Identifiable {
-    case week = "1w"
-    case month = "1m"
-    case quarter = "3q"
-    case semester = "6s"
+    case threeMonths = "3m"
+    case sixMonths = "6m"
+    case twelveMonths = "12m"
     case year = "12y"
     case all = "all"
 
@@ -367,35 +366,24 @@ enum GroupPeriod: String, CaseIterable, Hashable, Codable, Sendable, Identifiabl
 
     var title: String {
         switch self {
-        case .week: return "Semana"
-        case .month: return "Mes"
-        case .quarter: return "Trimestre"
-        case .semester: return "Semestre"
-        case .year: return "Año"
+        case .threeMonths: return "3 meses"
+        case .sixMonths: return "6 meses"
+        case .twelveMonths: return "12 meses"
+        case .year: return "Este año"
         case .all: return "Histórico"
         }
     }
 
-    /// One row on a phone. The full name stays in the accessibility label.
-    var short: String {
-        switch self {
-        case .week: return "Sem"
-        case .month: return "Mes"
-        case .quarter: return "Trim"
-        case .semester: return "6m"
-        case .year: return "Año"
-        case .all: return "Todo"
-        }
-    }
+    /// The row uses the same words as the rest of the app.
+    var short: String { title }
 
-    /// A saved 12m view stays on the year. 3m and 6m are not a quarter or a semester, so they fall back to histórico.
+    /// Old week, month and quarter views land on 3 meses. 12y stays Este año.
     static func parse(_ raw: String?) -> GroupPeriod {
         switch raw {
-        case "1w": return .week
-        case "1m": return .month
-        case "3q": return .quarter
-        case "6s": return .semester
-        case "12y", "12m": return .year
+        case "3m", "1w", "1m", "3q": return .threeMonths
+        case "6m", "6s": return .sixMonths
+        case "12m": return .twelveMonths
+        case "12y", "year": return .year
         default: return .all
         }
     }
@@ -497,11 +485,20 @@ struct GroupHero: Hashable, Sendable {
     var memberID: String? = nil
 }
 
+struct GroupCourseOption: Hashable, Sendable, Identifiable {
+    var id: String { key }
+    var key: String
+    var label: String
+    var club: String
+    var title: String { club.isEmpty || club == label ? label : "\(label) · \(club)" }
+}
+
 struct GroupComparison: Hashable, Sendable {
     var groupID: String
     var config: GroupViewConfig
     var rows: [GroupComparisonRow]
     var hero: GroupHero? = nil
+    var courses: [GroupCourseOption] = []
 }
 
 enum PendingInviteStore {

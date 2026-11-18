@@ -201,9 +201,9 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertFalse(onTheCup.holed)
         let putt = TrackSession.enter(state, at: flag, club: "Pt", onCup: true, putting: true)
         XCTAssertTrue(putt.holed)
-        XCTAssertEqual(GroupPeriod.parse("12m"), .year)
-        XCTAssertEqual(GroupPeriod.parse("3m"), .all)
-        XCTAssertEqual(GroupPeriod.parse("1w"), .week)
+        XCTAssertEqual(GroupPeriod.parse("12m"), .twelveMonths)
+        XCTAssertEqual(GroupPeriod.parse("3m"), .threeMonths)
+        XCTAssertEqual(GroupPeriod.parse("12y"), .year)
 
         var played = TrackSession.set(TrackSession.State(), at: TrackPoint(lat: 1, lng: 1))
         played = TrackSession.set(played, at: TrackPoint(lat: 1.01, lng: 1.01))

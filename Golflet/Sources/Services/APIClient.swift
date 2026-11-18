@@ -19,6 +19,7 @@ protocol GolfletAPI: Sendable {
     func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave
     func holeMarks(roundId: String) async throws -> [HoleMark]
     func saveBag(_ items: [BagClub]) async throws -> [BagClub]
+    func renameClub(code: String, label: String) async throws
     func saveIronSet(brand: String, model: String) async throws -> String
     func pollSyncProgress(progressID: String) async -> SyncAPIProgress?
 
@@ -91,12 +92,13 @@ protocol GolfletAPI: Sendable {
     func liveRoundPace(id: String) async throws -> LiveRoundPace
     func markPaceAlerted(id: String) async throws
     func reconstructionSetup() async throws -> ReconstructionSetup
-    func createReconstruction(date: String, courseId: String, roundId: String?) async throws -> ReconstructionRound
+    func createReconstruction(date: String, courseId: String, roundId: String?, tee: String?) async throws -> ReconstructionRound
     func reconstructionShots(liveRoundId: String) async throws -> [ReconstructionShot]
     func saveReconstructionShot(liveRoundId: String, shot: ReconstructionDraft) async throws -> ReconstructionShot
     func updateReconstructionShot(liveRoundId: String, shotId: String, shot: ReconstructionDraft) async throws -> ReconstructionShot
     func deleteReconstructionShot(liveRoundId: String, shotId: String) async throws
     func courseCenters(courseId: String) async throws -> [Int: ReconstructionPoint]
+    func courseMap(club: String, course: String) async throws -> [String: Any]
 }
 
 extension GolfletAPI {

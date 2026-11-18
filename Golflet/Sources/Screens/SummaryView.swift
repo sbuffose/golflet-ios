@@ -10,18 +10,7 @@ struct SummaryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     header
-                    NavigationLink { ClimaView() } label: {
-                        Text("Ver cómo afecta el clima")
-                            .font(GType.headline)
-                            .foregroundStyle(p.onPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
-                            .background(p.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("resumen-clima")
+                    RendimientoTiles(few: model.home.cards < 3)
                     filters
                     period
                     metricsEntry
@@ -63,9 +52,16 @@ struct SummaryView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            GOverline(text: "\(model.summary.firstYear) – \(model.summary.lastYear)")
+            GOverline(text: eyebrow)
             GTitle(text: "Resumen")
         }
+    }
+
+    /// One year when the cards in view share it. Otherwise the period name.
+    private var eyebrow: String {
+        let years = Set(model.rangedValidRounds().map { Calendar.gregorian.component(.year, from: $0.date) })
+        if years.count == 1, let year = years.first { return String(year) }
+        return model.statsRange.title
     }
 
     private var period: some View {
@@ -160,6 +156,22 @@ struct SummaryView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-best")
+                if snap.validRoundCount < 2 {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Peor ronda")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                        MissingMark(kind: .worst)
+                        Text("Con una sola tarjeta no hay otra para comparar.")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(p.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityIdentifier("metric-summary-worst")
+                } else {
                 NavigationLink(value: chart(.gross, title: "Peor ronda", course: course)) {
                     AccentStatCard(
                         tint: .danger,
@@ -172,6 +184,7 @@ struct SummaryView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("metric-summary-worst")
+                }
             }
             HStack(spacing: 10) {
                 NavigationLink(value: chart(.gross, title: "Promedio gross", course: course)) {

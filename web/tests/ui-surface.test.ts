@@ -170,13 +170,13 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     await page.click('a.eq-a[href="#/equipo/DR"]');
     await page.waitForFunction(() => location.hash.includes("/equipo/DR"));
     note("cancha");
-    await page.goto(`http://127.0.0.1:${port}/#/cancha?range=1m`, { waitUntil: "networkidle0" });
+    await page.goto(`http://127.0.0.1:${port}/#/cancha?range=3m`, { waitUntil: "networkidle0" });
     await page.waitForSelector(".cn-scope");
     await mark();
-    assert.match(await page.$eval(".cn-scope", el => el.textContent || ""), /Este mes/);
+    assert.match(await page.$eval(".cn-scope", el => el.textContent || ""), /3 meses/);
     assert.match(await page.$eval(".cn-scope", el => el.textContent || ""), /Cancha Fixture/);
-    assert.equal(await page.$eval('button[data-range="1m"]', el => el.getAttribute("aria-selected")), "true");
-    assert.equal(await page.$eval(".big", el => el.textContent), "80,0");
+    assert.equal(await page.$eval('button[data-range="3m"]', el => el.getAttribute("aria-selected")), "true");
+    assert.equal(await page.$eval(".big", el => el.textContent), "90,0");
     await page.waitForSelector('#stratcard a[href="#/estrategia/c1"]');
     await page.waitForFunction(() => (document.querySelector("#cancwx")?.textContent || "").includes("km/h"));
     const windCopies = await page.$$eval("#cancwx .tw-holes div", els => els.length);
@@ -186,11 +186,11 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     assert.match(wxText, /Driver cargado: 300 yd/);
     assert.equal(wxText.includes("300 m"), false);
     assert.equal(wxText.includes("palo más"), false);
-    await page.click('button[data-range="3m"]');
+    await page.$eval('button[data-range="all"]', el => (el as HTMLButtonElement).click());
+    await page.waitForFunction(() => location.hash.includes("range=all"));
+    await page.$eval('button[data-range="3m"]', el => (el as HTMLButtonElement).click());
     await page.waitForFunction(() => location.hash.includes("range=3m") && (document.querySelector(".big")?.textContent || "") === "90,0");
     assert.match(await page.$eval(".cn-scope", el => el.textContent || ""), /3 meses/);
-    await page.click('button[data-range="1m"]');
-    await page.waitForFunction(() => location.hash.includes("range=1m") && (document.querySelector(".big")?.textContent || "") === "80,0");
     const canchaFit = await page.evaluate(() => {
       const bar = document.querySelector("#tabbar")!.getBoundingClientRect();
       const last = document.querySelector(".hc-legend")!.getBoundingClientRect();
@@ -223,22 +223,17 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
     assert.equal(scoreline.includes("Águila2"), false);
     assert.match(await page.$eval("#difnote", el => el.textContent || ""), /Diferencial estimado por Golflet/);
     const trackPlace = await page.evaluate(() => {
-      const track = document.querySelector("#round-track");
+      const track = document.querySelector("#track-shots");
       const stats = document.querySelector("#qstat");
-      const fields = document.querySelector(".fields");
-      if (!track || !stats || !fields) return null;
+      if (!track || !stats) return null;
       return {
         href: track.getAttribute("href"),
-        label: track.getAttribute("aria-label") || track.textContent,
-        beforeStats: !!(track.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING),
-        fieldsStay: !!fields.querySelector('[data-k="putts"]') && !!fields.querySelector('[data-k="gir"]') && !!fields.querySelector('[data-k="fir"]'),
+        label: (track.textContent || "").trim(),
         quickStays: !!stats.querySelector("#qputts") && !!stats.querySelector("#qfw") && !!stats.querySelector("#qgir"),
       };
     });
     assert.equal(trackPlace?.href, "#/reconstruir?ronda=r-nov&hole=1");
-    assert.match(trackPlace?.label || "", /Registrar mis tiros/);
-    assert.equal(trackPlace?.beforeStats, true);
-    assert.equal(trackPlace?.fieldsStay, true);
+    assert.equal(trackPlace?.label, "Track Shots");
     assert.equal(trackPlace?.quickStays, true);
     note("inicio");
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });

@@ -61,19 +61,73 @@ const ago = d => { if(!d) return 'nunca'; const s=(Date.now()-new Date(d))/1000;
 let G = null, rounds = [], valid = [], asc = [], idxSeries = [], IDX_ALL = [], CCOL = {}, VIEW_GEN = 0;
 const course = k => G.courses.find(c => c.key === k);
 /* period selector (Inicio / Resumen / Cancha / métricas): ?range=1m|3m|6m|12m|all, same rules as lib/metrics.ts rangeSince */
-const RANGES = [['1m','Este mes'],['3m','3 meses'],['6m','6 meses'],['12m','Año'],['all','Histórico']], RKEYS = RANGES.map(x=>x[0]);
+const RANGES = [['3m','3 meses','3 meses'],['6m','6 meses','6 meses'],['12m','12 meses','12 meses'],['year','Este año','Este año'],['all','Histórico','Histórico']], RKEYS = RANGES.map(x=>x[0]);
 let RANGE = (() => { try { const v = sessionStorage.getItem('gl_range'); return RKEYS.includes(v) ? v : 'all'; } catch(e){ return 'all'; } })();
-const rlabel = k => (RANGES.find(x=>x[0]===k)||RANGES[4])[1];
+const rlabel = k => (RANGES.find(x=>x[0]===k)||RANGES[4])[2];
 function rangeSince(k){ if (k==='all') return null; const n = new Date(), y = n.getFullYear(), m = n.getMonth(), d = n.getDate(), p2 = x => String(x).padStart(2,'0');
-  if (k==='1m') return `${y}-${p2(m+1)}-01`; const b = k==='3m'?3:k==='6m'?6:12, t = new Date(y, m-b, 1), last = new Date(t.getFullYear(), t.getMonth()+1, 0).getDate();
+  if (k==='year') return `${y}-01-01`;
+  if (k==='1m') return `${y}-${p2(m+1)}-01`;
+  const b = k==='3m'?3:k==='6m'?6:k==='12m'?12:0; if (!b) return null;
+  const t = new Date(y, m-b, 1), last = new Date(t.getFullYear(), t.getMonth()+1, 0).getDate();
   return `${t.getFullYear()}-${p2(t.getMonth()+1)}-${p2(Math.min(d,last))}`; }
 const inR = r => { const s0 = rangeSince(RANGE); return !s0 || r.date >= s0; };
 const rlink = (m, q={}) => mlink(m, RANGE==='all' ? q : { ...q, range: RANGE });
 function setRange(k){ if (!RKEYS.includes(k)) return; RANGE = k; try { sessionStorage.setItem('gl_range', k); } catch(_){} }
 function rangeSeg(n, attr='range'){
-  return `<div class="rng"><div class="seg vx-seg rng-seg" role="tablist" aria-label="Período">${RANGES.map(([k,l])=>`<button type="button" role="tab" aria-selected="${k===RANGE}" class="${k===RANGE?'on':''}" data-${attr}="${k}">${l}</button>`).join('')}</div>
+  return `<div class="rng"><div class="seg vx-seg rng-seg" role="tablist" aria-label="Período">${RANGES.map(([k,short,full])=>`<button type="button" role="tab" aria-selected="${k===RANGE}" aria-label="${full}" class="${k===RANGE?'on':''}" data-${attr}="${k}">${short}</button>`).join('')}</div>
     <span class="rng-n"><b class="num">${n}</b> ${n===1?'ronda':'rondas'}${RANGE==='all'?'':` desde ${dmy(rangeSince(RANGE))}`}</span></div>`;
 }
+const MISS = {
+  putts: { k: 'Putts', source: 'Salen de Track o del editor de la tarjeta.', why: 'Esta vuelta no tiene putts.', action: 'Cargar putts', go: 'stats' },
+  greens: { k: 'Greens', source: 'Salen de Track o del editor de la tarjeta.', why: 'Esta vuelta no tiene greens.', action: 'Cargar putts', go: 'stats' },
+  fairways: { k: 'Fairways', source: 'Salen de Track o del editor de la tarjeta.', why: 'Esta vuelta no tiene fairways.', action: 'Cargar putts', go: 'stats' },
+  differential: { k: 'Diferencial', source: 'Sale de la tarjeta del club.', why: 'Esta tarjeta no trae diferencial.', action: '', go: '' },
+  gross: { k: 'Gross', source: 'Sale de la tarjeta del club.', why: 'Esta tarjeta no trae el gross.', action: '', go: '' },
+  net: { k: 'Neto', source: 'Sale de la tarjeta del club.', why: 'Esta tarjeta no trae el neto.', action: '', go: '' },
+  position: { k: 'Puesto', source: 'Sale de la tarjeta del club.', why: 'Esta tarjeta no trae el puesto.', action: '', go: '' },
+  weather: { k: 'Clima', source: 'Es el pronóstico de la hora y la cancha.', why: 'No hay pronóstico para esta salida.', action: '', go: '' },
+  course: { k: 'Cancha', source: 'Sale de la cancha que elegís.', why: 'Todavía no hay una cancha elegida.', action: 'Elegir cancha', go: '#/jugar' },
+  club: { k: 'Palo', source: 'Sale de tu bolsa.', why: 'La bolsa está vacía.', action: 'Agregar palo', go: '#/equipo/nuevo' },
+  ball: { k: 'Pelota', source: 'La cargás vos en la cuenta.', why: 'No hay una pelota elegida.', action: 'Elegir pelota', go: '#/pelota' },
+  handicap: { k: 'Hándicap', source: 'Sale de la matrícula del club.', why: 'No hay una matrícula vinculada.', action: 'Vincular matrícula', go: '#/vincular' },
+  worst: { k: 'Peor ronda', source: 'Es la tarjeta de mayor gross del período.', why: 'Hay una sola tarjeta, así que no hay una peor distinta.', action: '', go: '' },
+  geo: { k: 'Geometría', source: 'Sale de un trazado verificado del tee al centro del green.', why: 'Este hoyo no tiene geometría verificada. No marco un punto inventado.', action: '', go: '' },
+};
+function miss(kind, why){
+  const extra = why ? ` data-why="${esc(why)}"` : '';
+  return `<button type="button" class="miss" data-miss="${kind}"${extra} aria-label="Sin dato, ${MISS[kind] ? MISS[kind].k : 'dato'}">–</button>`;
+}
+function openMiss(kind, why){
+  const m = MISS[kind]; if (!m) return;
+  let dlg = document.getElementById('missdlg');
+  if (!dlg) {
+    dlg = document.createElement('div');
+    dlg.id = 'missdlg';
+    dlg.className = 'missdlg';
+    dlg.hidden = true;
+    dlg.innerHTML = '<button type="button" class="missdlg-back" data-miss-close aria-label="Cerrar"></button><div class="missdlg-card" role="dialog" aria-modal="true"><p class="missdlg-k" id="miss-k"></p><p id="miss-src"></p><p id="miss-why"></p><a class="btn" id="miss-go" hidden></a></div>';
+    document.body.appendChild(dlg);
+    dlg.addEventListener('click', ev => { if (ev.target.closest('[data-miss-close]')) dlg.hidden = true; });
+  }
+  dlg.querySelector('#miss-k').textContent = m.k;
+  dlg.querySelector('#miss-src').textContent = m.source;
+  dlg.querySelector('#miss-why').textContent = why || m.why;
+  const go = dlg.querySelector('#miss-go');
+  if (m.go === 'stats') {
+    go.hidden = false; go.textContent = m.action; go.removeAttribute('href');
+    go.onclick = ev => { ev.preventDefault(); dlg.hidden = true; const b = document.getElementById('load-round-stats'); if (b) b.click(); };
+  } else if (m.go) {
+    go.hidden = false; go.textContent = m.action; go.href = m.go; go.onclick = () => { dlg.hidden = true; };
+  } else go.hidden = true;
+  dlg.hidden = false;
+}
+document.addEventListener('click', ev => {
+  const b = ev.target.closest && ev.target.closest('[data-miss]');
+  if (!b) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  openMiss(b.dataset.miss, b.dataset.why || '');
+});
 /* per-hole strokes over par from the rounds in the period (server stats cover all history) */
 function holeStats(pool, ck){
   const o = {}; pool.filter(r=>r.course_key===ck && r.holes?.length).forEach(r=>r.holes.forEach(h=>{ if (h[1]==null||h[2]==null) return; const e = o[h[0]] ||= {n:0,over:0}; e.n++; e.over += h[2]-h[1]; }));
@@ -154,29 +208,45 @@ function hiBand(hi, d){
   const from = d != null ? `${MES[+hi[0].date.slice(5, 7) - 1]}. ${hi[0].date.slice(0, 4)}` : '';
   const arrow = d == null ? '' : (d < 0 ? '↓' : '↑');
   const facts = `${when ? `<p class="hi-when"><span>Índice al</span> <b class="num">${when}</b></p>` : ''}${d != null ? `<p class="hi-evo"><b class="num">${arrow} ${f1(Math.abs(d))}</b> <span>desde ${from}</span></p>` : ''}`;
-  return `<div class="hi-strip">${facts ? `<div class="hi-facts">${facts}</div>` : ''}<a class="hi-ch-l" href="#/cambios">Cambios</a></div>`;
+  return `<div class="hi-facts">${facts}</div>`;
+}
+function heroMeta(){
+  const cards = valid.length;
+  const grosses = valid.map(r => Number(r.gross)).filter(n => n > 0);
+  const best = grosses.length ? Math.min(...grosses) : null;
+  const avg = grosses.length ? grosses.reduce((s, n) => s + n, 0) / grosses.length : null;
+  return `<div class="meta">
+    <a href="#/rondas"><div>Tarjetas</div><b class="num">${cards}</b></a>
+    <a href="#/rondas"><div>Mejor</div><b class="num">${best == null ? '–' : best}</b></a>
+    <a href="${rlink('gross')}"><div>Prom.</div><b class="num">${avg == null ? '–' : f1(avg)}</b></a>
+    <a id="hcpimp" href="#/cambios"><div>Impacto</div><b class="num">–</b></a>
+  </div>`;
+}
+function heroActions(play){
+  if (!play) return '';
+  return `<div class="hi-avs"><div id="hiprofs" hidden></div><div id="higroups" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a><a class="hi-ch-l" href="#/cambios">Cambios</a></div></div>`;
+}
+function homeCircle(){
+  return '';
 }
 function vInicio(){
   const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
   const top = `<div class="top"><img class="cad xs" src="/brand/caddie.png" alt=""><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
-  if (!valid.length) return top + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas válidas. Tocá Actualizar para traerlas.</div>` : emptyData('Empecemos por tu club')) +
-    `<div id="tees"></div><div id="scorecards"></div>${reconEntry()}<div id="cardpull"></div><div id="sorteocard"></div>` + (G.clubs.length ? `<div class="section"><h2>Mis clubes</h2></div>${clubsCard()}` : '') + CT_LINKS;
+  if (!valid.length) return top + homeCircle() + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas. Actualizalas desde Cuenta.</div>` : emptyData('Empecemos por tu club'));
   const hi = G.hi_history, d = hi.length>1 ? hi[hi.length-1].hi - hi[0].hi : null;
-  const last = rounds[0], best = valid.slice().sort((a,b)=>a.gross-b.gross)[0];
-  const pr = valid.filter(inR), prAll = rounds.filter(inR), bestR = pr.slice().sort((a,b)=>a.gross-b.gross)[0];
+  const last = rounds.find(r => r.official !== false) || rounds[0];
   const hiNow = window.GolfletRules ? window.GolfletRules.officialIndex(G.player?.handicap_index, (hi || []).filter(h => h.hi != null).map(h => ({ date: h.date, hi: +h.hi }))) : (hi.at(-1)?.hi ?? G.player?.handicap_index ?? null);
-  return top + rangeSeg(prAll.length) + revealCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
-    <div class="hi-avs"><div id="hiprofs" class="hi-profs nolab" hidden></div><div id="higroups" class="hi-grp" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a></div></div>
+  const hiMark = hiNow == null ? miss('handicap') : `<div class="big num">${f1(hiNow)}</div>`;
+  return top + revealCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
+    ${heroActions(true)}
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
-    <div class="big num">${f1(hiNow)}</div></a>${hiBand(hi, d)}
-    <div class="meta"><a href="${rlink('rounds',{scope:'all',course:'all',sort:'date',order:'desc'})}">Tarjetas<b class="num">${prAll.length}</b></a><a href="${rlink('best-gross',{scope:'all',course:'all',sort:'gross',order:'asc'})}">Mejor gross<b class="num">${bestR?bestR.gross:'—'}</b></a><a href="${rlink('average',{scope:'all',course:'all',sort:'date',order:'desc'})}">Promedio<b class="num">${f1(mean(pr.map(r=>r.gross)))}</b></a><a id="hcpimp" class="hi-imp" href="#/impacto${RANGE==='all'?'':'?range='+RANGE}">Impacto HCP<b class="num">…</b></a></div>
-  </div></div>
+    ${hiMark}</a>${hiNow == null ? '' : hiBand(hi, d)}
+    ${heroMeta()}
+  </div>${homeCircle()}</div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
   ${roundRow(last, true, true)}</div></div>
-  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div><div class="o3" id="scorecards"></div><div class="o3">${reconEntry()}</div><div class="o3" id="cardpull"></div>
-  <div class="o3"><div class="section"><h2>Amigos</h2>${G.user?.group_invitations?`<span class="badge gold">${G.user.group_invitations} invitación${G.user.group_invitations===1?'':'es'}</span>`:''}</div><a class="card gg-home" href="#/amigos"><span class="gg-home-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="3.2"/><circle cx="16.5" cy="10" r="2.6"/><path d="M3.5 19c.9-3 3-4.6 5.5-4.6s4.6 1.6 5.5 4.6M14.5 15c2.6-.3 4.8 1 5.8 3.8"/></svg></span><div><b>${G.user?.group_invitations?'Te invitaron a un grupo':'Comparar con amigos'}</b><p>Tabla, evolución y hoyo por hoyo con tus amigos. Solo si cada uno acepta.</p></div>${ICON.chev}</a></div>
-  <div class="o5"><div class="section"><h2>Mis clubes</h2></div>${clubsCard()}</div></div></div>${CT_LINKS}`;
+  <div class="col-b"><div class="o3" id="teenow"></div><div class="o3" id="tees"></div></div></div>`;
 }
 /* t144u: gold cup before the title of competition cards (is_competition from the club's Puesto/Jugadores; casual cards get nothing) */
 const cup = r => r && r.is_competition ? '<svg class="cup" viewBox="0 0 24 24" aria-label="Torneo" role="img"><path fill="currentColor" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.35A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.35 12H8a4 4 0 0 1-4-4V5h3V3Zm0 4H6v1a2 2 0 0 0 1.1 1.79A5 5 0 0 1 7 9V7Zm10 0v2c0 .27-.03.53-.1.79A2 2 0 0 0 18 8V7h-1ZM7 20h10v1.5H7V20Z"/></svg>' : '';
@@ -185,14 +255,34 @@ function roundRow(r, single, withYr){
   const [y,m,d] = r.date.split('-');
   const sub = `${tee}${esc(r.course_label || clabel(r.course_key))}${r.tee?' · '+esc(r.tee):''}${r.position?` · ${r.position}º de ${r.field_size}`:''}`;
   const sc = r.valid_card && r.gross ? `<b class="num">${r.gross}</b><span>neto ${r.net??'—'}</span>` : `<span class="badge neg">${r.is_9_holes?'9 h · ':''}DES</span>`;
-  const inner = `${dateBlock(r.date, withYr)}<div class="body"><div class="t">${cup(r)+esc(short(r.tournament)||'Ronda')}</div><div class="s">${sub}</div>${rchips(r)}</div><div class="score">${sc}</div>${ICON.chev}`;
-  return single ? `<a class="list" href="#/ronda/${r.round_id}" style="display:block"><div class="row">${inner}</div></a>` : `<a class="row" href="#/ronda/${r.round_id}">${inner}</a>`;
+  const inner = `${dateBlock(r.date, withYr)}<div class="body"><div class="t">${cup(r)+esc(short(r.tournament)||'Ronda')}</div><div class="s">${sub}</div></div><div class="score">${sc}</div>${ICON.chev}${rchips(r)}`;
+  return single ? `<a class="list" href="#/ronda/${r.round_id}" style="display:block"><div class="row round-row">${inner}</div></a>` : `<a class="row round-row" href="#/ronda/${r.round_id}">${inner}</a>`;
 }
-/* TV-style chips per round (from /api/data: eagles, birdies, pars, bogeys, double_plus, putts_total) */
+/* Compact chips. Fixed abbreviations, same on iOS. Counts come from the holes when the card has them. */
+const CHIP_MARKS = [
+  ['eagles', 'Ág', 'águila', 'águilas', 'rc-e'],
+  ['birdies', 'Bir', 'birdie', 'birdies', 'rc-b'],
+  ['pars', 'Par', 'par', 'pares', 'rc-p'],
+  ['bogeys', 'Bog', 'bogey', 'bogeys', 'rc-g'],
+  ['doubles', 'Dob', 'doble', 'dobles', 'rc-d'],
+];
+function chipCounts(r){
+  const holes = Array.isArray(r.holes) ? r.holes.filter(h => h && h[1] != null && h[2] != null) : [];
+  if (holes.length) {
+    const c = { eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0 };
+    holes.forEach(h => { const d = h[2] - h[1]; if (d <= -2) c.eagles++; else if (d === -1) c.birdies++; else if (d === 0) c.pars++; else if (d === 1) c.bogeys++; else c.doubles++; });
+    return c;
+  }
+  if (r.birdies == null && r.eagles == null && r.double_plus == null) return null;
+  return { eagles: r.eagles || 0, birdies: r.birdies || 0, pars: r.pars || 0, bogeys: r.bogeys || 0, doubles: r.double_plus || 0 };
+}
 function rchips(r){
-  if (r.birdies == null && r.putts_total == null && !r.manual_putts) return '';
-  const c = (cls, n, l) => `<span class="rc ${cls}"><b class="num">${n}</b>${l}</span>`;
-  return `<div class="rchips">${r.eagles?c('rc-e', r.eagles, r.eagles===1?' águila':' águilas'):''}${r.birdies!=null?c('rc-b', r.birdies, r.birdies===1?' birdie':' birdies')+c('rc-p', r.pars, ' pares')+c('rc-g', r.bogeys, r.bogeys===1?' bogey':' bogeys'):''}${r.putts_total!=null?c('rc-u', r.putts_total, r.putts_source==='gps'?' putts GPS':' putts'):''}${r.manual_putts?c('rc-u', r.manual_putts, ' putts a mano'):''}</div>`;
+  const c = chipCounts(r); if (!c) return '';
+  const parts = CHIP_MARKS.filter(([key]) => key === 'birdies' || key === 'pars' || key === 'bogeys' || c[key] > 0).map(([key, short, one, many, cls]) => {
+    const n = c[key] || 0;
+    return `<span class="rc ${cls}" aria-label="${n} ${n === 1 ? one : many}"><b class="num">${n}</b> ${short}</span>`;
+  });
+  return parts.length ? `<div class="rchips">${parts.join('')}</div>` : '';
 }
 let sortL = 'date';
 /* t224u: chips show the course name only (the club in the tooltip/aria) unless two clubs share a course name */
@@ -231,12 +321,26 @@ const gpsLine = () => { const c = gpsCount(); return `Con GPS: <b class="num">${
 function paintGps(){ document.querySelectorAll('[data-gpsn]').forEach(e => e.innerHTML = gpsLine()); }
 async function loadGpsLive(){ try { const M = await api(`/api/game-metrics?${rq()}`); METLIVE = { range: RANGE, live: M.live || [] }; paintGps(); } catch(e){} }
 const metEntry = () => `<a class="card vx-tap met-entry" href="#/metricas"><div class="me-k">Métricas</div><div class="me-v">Tee, hierros, GIR y putting</div><div class="me-s" data-gpsn>${gpsLine()}</div><span class="me-ch" aria-hidden="true">›</span></a>`;
+function resumenBrow(list){
+  const dates = (list || []).map(r => r.date).filter(Boolean).sort();
+  const start = dates[0] ? dates[0].slice(0, 4) : '';
+  const end = dates.length ? dates[dates.length - 1].slice(0, 4) : '';
+  if (start && start === end) return start;
+  return rlabel(RANGE);
+}
+function rendTiles(){
+  const few = valid.length < 3 ? '<span class="rend-few">Pocas tarjetas</span>' : '';
+  return `<div class="rend" id="tu-rendimiento"><p class="overline">Tu rendimiento</p>
+    <a href="#/privado/horario"><b>Por horario</b><span>Mañana, mediodía o tarde.</span>${few}</a>
+    <a href="#/clima"><b>Por clima</b><span>El pronóstico de tus salidas.</span>${few}</a>
+    <a href="#/privado/companeros"><b>Con quién jugás</b><span>Solo lo ves vos.</span>${few}</a></div>`;
+}
 function vResumen(){
-  if (!valid.length) return `<h1 class="ltitle">Resumen</h1>${emptyData()}`;
+  if (!valid.length) return `<h1 class="ltitle">Resumen</h1>${rendTiles()}${emptyData()}`;
   if (segR!=='Todas' && !course(segR)) segR='Todas';
   const pool = valid.filter(r=>(segR==='Todas'||r.course_key===segR) && inR(r)), poolAll = rounds.filter(r=>(segR==='Todas'||r.course_key===segR) && inR(r)), ranged = RANGE!=='all';
   const yNow = new Date().getFullYear(), wSince = ranged ? (rangeSince(RANGE)||'') : String(yNow-5), rSince = String(yNow-1);
-  if (!pool.length) return `<h1 class="ltitle">Resumen</h1>${G.courses.length>1?`<div class="seg">${segBtns(segR,'seg')}</div>`:''}${rangeSeg(poolAll.length)}${metEntry()}<div class="msg" style="margin-top:12px">No hay tarjetas válidas en este período. Probá con un período más largo.</div>`;
+  if (!pool.length) return `<h1 class="ltitle">Resumen</h1>${rendTiles()}${G.courses.length>1?`<div class="seg">${segBtns(segR,'seg')}</div>`:''}${rangeSeg(poolAll.length)}${metEntry()}<div class="msg" style="margin-top:12px">No hay tarjetas válidas en este período. Probá con un período más largo.</div>`;
   const best = pool.slice().sort((a,b)=>a.gross-b.gross||a.net-b.net)[0];
   const worst = (pool.filter(r=>r.date>=wSince).length ? pool.filter(r=>r.date>=wSince) : pool).slice().sort((a,b)=>b.gross-a.gross)[0];
   const bd = pool.filter(r=>r.differential_computed!=null).sort((a,b)=>a.differential_computed-b.differential_computed)[0];
@@ -244,14 +348,17 @@ function vResumen(){
   const hard = G.courses.filter(c=>segR==='Todas'||c.key===segR).flatMap(c=>{ const hs = ranged ? holeStats(pool, c.key) : null; return c.holes.map(h=>({ck:c.key,club:c.club_name||'',course:c.course||'',...h,stats:hstat(h,hs)})).filter(h=>h.stats.n); }).sort((a,b)=>b.stats.avg_to_par-a.stats.avg_to_par).slice(0,4);
   const cq = segR==='Todas'?'all':segR;
   const card = (r,k,href,tone) => r ? `<a class="card stat vx-tap tone-${tone}" href="${href}"><div class="k"><i class="tdot" aria-hidden="true"></i>${k}</div><div class="v num">${r.gross}<small>neto ${r.net??'—'}</small></div><div class="d">${dmy(r.date)} · ${esc(clabel(r.course_key))}</div></a>` : '';
-  return `<div class="top"><span class="overline">${ranged ? `${rlabel(RANGE)} · desde ${dmy(rangeSince(RANGE))}` : `${rounds[rounds.length-1].date.slice(0,4)} – ${rounds[0].date.slice(0,4)}`}</span></div>
+  const worstCell = pool.length < 2
+    ? `<div class="card stat"><div class="k">Peor ronda</div><div class="v num">${miss('worst')}</div><div class="d">Con una sola tarjeta no hay otra para comparar.</div></div>`
+    : card(worst, ranged?'Peor ronda':`Peor (desde ${wSince})`, ranged?rlink('rounds',{scope:'all',course:cq,sort:'gross',order:'desc'}):mlink('rounds',{scope:'since',year:wSince,course:cq,sort:'gross',order:'desc'}),'r');
+  return `<div class="top"><span class="overline">${resumenBrow(pool)}</span></div>
   <h1 class="ltitle">Resumen</h1>
-  <button type="button" class="btn wx-jump" id="wx-jump">Ver cómo afecta el clima</button>
+  ${rendTiles()}
   ${G.courses.length>1?`<div class="seg">${segBtns(segR,'seg')}</div>`:''}
   ${rangeSeg(poolAll.length)}
   ${metEntry()}
   <div class="grid2">
-    ${card(best,'Mejor ronda',rlink('best-gross',{scope:'all',course:cq,sort:'gross',order:'asc'}),'g')}${card(worst,ranged?'Peor ronda':`Peor (desde ${wSince})`,ranged?rlink('rounds',{scope:'all',course:cq,sort:'gross',order:'desc'}):mlink('rounds',{scope:'since',year:wSince,course:cq,sort:'gross',order:'desc'}),'r')}
+    ${card(best,'Mejor ronda',rlink('best-gross',{scope:'all',course:cq,sort:'gross',order:'asc'}),'g')}${worstCell}
     <a class="card stat vx-tap" href="${rlink('average',{scope:'all',course:cq,sort:'date',order:'desc'})}"><div class="k">Promedio gross</div><div class="v num">${f1(mean(pool.map(r=>r.gross)))}</div><div class="d">${pool.length} rondas · neto ${f1(mean(pool.filter(r=>r.net).map(r=>r.net)))}</div></a>
     ${ranged?`<a class="card stat vx-tap" href="${rlink('average',{scope:'all',course:cq,sort:'net',order:'asc'})}"><div class="k">Neto promedio</div><div class="v num">${f1(mean(pool.filter(r=>r.net).map(r=>r.net)))}</div><div class="d">${pool.length} rondas${bd?` · <span class="hl">mejor dif. ${f1(bd.differential_computed)}</span>`:''}</div></a>`
     :`<a class="card stat vx-tap" href="${mlink('average',{scope:'since',year:rSince,course:cq,sort:'date',order:'desc'})}"><div class="k">Desde ${rSince}</div><div class="v num">${f1(mean(rec.map(r=>r.gross)))}${(()=>{ if (rec.length<3) return ''; const dd = mean(rec.map(r=>r.gross)) - mean(pool.map(r=>r.gross)); return Math.abs(dd)<0.05 ? '' : `<small class="tdelta ${dd<0?'up':'dn'}">${dd<0?'↓':'↑'}${f1(Math.abs(dd))}</small>`; })()}</div><div class="d">${rec.length} rondas${bd?` · <span class="hl">mejor dif. ${f1(bd.differential_computed)}</span>`:''}</div></a>`}
@@ -276,17 +383,19 @@ function vResumen(){
 /* ---------- RONDAS ---------- */
 let segL = 'Todas';
 function vRondas(){
-  if (!rounds.length) return `<h1 class="ltitle">Rondas</h1>${emptyData()}`;
+  if (!rounds.length && !(G.unofficial_rounds || []).length) return `<h1 class="ltitle">Rondas</h1>${reconEntry()}${emptyData()}`;
   if (segL!=='Todas' && !course(segL)) segL='Todas';
   const list = rounds.filter(r=>segL==='Todas'||r.course_key===segL), by = {};
   list.forEach(r=>(by[r.date.slice(0,4)] ||= []).push(r));
+  const unofficial = (G.unofficial_rounds || []).map(r => `<a class="row rc-off" href="#/reconstruir/${encodeURIComponent(r.id)}">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course || "Cancha")}</div><div class="s">No oficial${r.tee ? " · Tee " + esc(r.tee) : ""}</div></div><span class="badge">No oficial</span></a>`).join("");
+  const unofficialBlock = unofficial ? `<div class="section"><h2>No oficial</h2></div><p class="foot">Estas vueltas no tienen tarjeta del club. No entran en tus promedios ni en los números del grupo.</p><div class="list">${unofficial}</div>` : "";
   return `<div class="top"><span class="overline">${rounds.length} tarjetas · ${G.clubs.length===1?esc(G.clubs[0].club_name):G.clubs.length+' clubes'}</span></div>
-  <h1 class="ltitle">Rondas</h1>${G.courses.length>1?`<div class="seg">${segBtns(segL,'segl')}</div>`:''}
+  <h1 class="ltitle">Rondas</h1>${reconEntry()}${G.courses.length>1?`<div class="seg">${segBtns(segL,'segl')}</div>`:''}
   <div class="rsort" role="radiogroup" aria-label="Ordenar"><span aria-hidden="true">Ordenar</span>${[['date','Fecha'],['gross','Mejor gross'],['net','Mejor neto']].map(([k,l])=>`<button type="button" role="radio" aria-checked="${sortL===k}" class="${sortL===k?'on':''}" data-sortl="${k}">${l}</button>`).join('')}</div>
   ${sortL==='gross' ? `<div class="list">${list.filter(r=>r.valid_card&&r.gross&&!r.is_9_holes).sort((a,b)=>a.gross-b.gross||(a.date<b.date?1:-1)).map(r=>roundRow(r, false, true)).join('')}</div><p class="foot">Solo tarjetas válidas de 18 hoyos, de la mejor a la peor.</p>` :
     sortL==='net' ? `<div class="list">${list.filter(r=>r.valid_card&&r.gross&&!r.is_9_holes).sort((a,b)=>(a.net==null)-(b.net==null)||(a.net??0)-(b.net??0)||(a.date<b.date?1:-1)).map(r=>roundRow(r, false, true)).join('')}</div><p class="foot">Solo tarjetas válidas de 18 hoyos, por neto de menor a mayor; las que no tienen neto van al final.</p>` :
   Object.keys(by).sort().reverse().map(y=>{ const v=by[y].filter(r=>r.valid_card&&r.gross&&!r.is_9_holes), cur = y === curYear();
-    return `<section class="yrgrp${cur?' cur':''}">${cur ? '' : `<div class="yrpill" aria-hidden="true"><span class="num">${y}</span></div>`}<div class="yearhdr"><span>${cur ? 'Este año' : `<span class="sr">Año </span>${y}`}</span><span>${v.length?'prom. '+f1(mean(v.map(r=>r.gross))):''}</span></div><div class="list">${by[y].map(r=>roundRow(r)).join('')}</div></section>`; }).join('')}`;
+    return `<section class="yrgrp${cur?' cur':''}">${cur ? '' : `<div class="yrpill" aria-hidden="true"><span class="num">${y}</span></div>`}<div class="yearhdr"><span>${cur ? 'Este año' : `<span class="sr">Año </span>${y}`}</span><span>${v.length?'prom. '+f1(mean(v.map(r=>r.gross))):''}</span></div><div class="list">${by[y].map(r=>roundRow(r)).join('')}</div></section>`; }).join('')}${unofficialBlock}`;
 }
 
 /* ---------- RONDA (sheet) ---------- */
@@ -328,16 +437,19 @@ function sRonda(id){
   <div class="r-partners" id="rpartners" hidden></div>
   ${r.valid_card?'':'<div class="note-warn">Tarjeta DES: no presentada, levantada o descalificada. No cuenta en promedios.</div>'}
   <div class="grid3 rstats" style="gap:8px;margin-top:16px">
-    ${[['Gross',r.gross??'—'],['Neto',r.net??'—'],['Dif.*',f1(r.differential_computed)],['Puesto',r.position?r.position+'º':'—']].map(([kk,v],i)=>`<div class="card mini stat" style="padding:12px 10px;${i===0?'background:var(--color-primary);color:var(--color-onPrimary)':''}"><div class="k" style="${i===0?'color:#C8A86A':''}">${kk}</div><div class="v num" style="font-size:calc(25px*var(--ts,1))">${v}</div></div>`).join('')}
+    ${[['Gross', r.gross, 'gross'],['Neto', r.net, 'net'],['Dif.*', r.differential_computed, 'differential'],['Puesto', r.position, 'position']].map(([kk,v,kind],i)=>{
+      const shown = v == null ? miss(kind) : (kind === 'differential' ? f1(v) : kind === 'position' ? v + 'º' : v);
+      return `<div class="card mini stat" style="padding:12px 10px;${i===0?'background:var(--color-primary);color:var(--color-onPrimary)':''}"><div class="k" style="${i===0?'color:#C8A86A':''}">${kk}</div><div class="v num" style="font-size:calc(25px*var(--ts,1))">${shown}</div></div>`;
+    }).join('')}
   </div>
   ${r.holes?.length?`<div class="card" style="margin-top:12px;padding:14px 12px">${nine(r,c,0)}<div class="sc"><span class="div"></span></div>${nine(r,c,9)}
     ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
-  <div class="section"><h2>Estadísticas de la ronda</h2>${has?'':'<img class="cad xs" src="/brand/caddie.png" alt="">'}<span class="badge" id="gamebadge">${has?'Cargado':'Sin cargar'}</span></div>
-  <div class="rstats3" id="rstats3"><div><span>Putts</span><b class="num" id="rt-putts">${r.putts==null?'Sin cargar':r.putts}</b><small id="rt-putts-src">${r.putts==null?'':'Manual'}</small></div><div><span>Greens</span><b class="num" id="rt-gir">${r.gir==null?'Sin cargar':r.gir}</b><small id="rt-gir-src">${r.gir==null?'':'Manual'}</small></div><div><span>Fairways</span><b class="num" id="rt-fir">${r.fir==null?'Sin cargar':r.fir}</b><small id="rt-fir-src">${r.fir==null?'':'Manual'}</small></div></div>
+  <div class="section"><h2>Estadísticas de la ronda</h2>${has?'<span class="badge" id="gamebadge">Cargado</span>':''}</div>
+  <div class="rstats3" id="rstats3"><div><span>Putts</span><b class="num" id="rt-putts">${r.putts==null?miss('putts'):r.putts}</b><small id="rt-putts-src">${r.putts==null?'':'Manual'}</small></div><div><span>Greens</span><b class="num" id="rt-gir">${r.gir==null?miss('greens'):r.gir}</b><small id="rt-gir-src">${r.gir==null?'':'Manual'}</small></div><div><span>Fairways</span><b class="num" id="rt-fir">${r.fir==null?miss('fairways'):r.fir}</b><small id="rt-fir-src">${r.fir==null?'':'Manual'}</small></div></div>
   <button type="button" class="btn ghost" id="load-round-stats">Cargar putts, greens y fairways</button>
-  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qsrc"></p><p class="foot" id="qmsg">Sin cargar</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
+  <div class="card qstat" id="qstat" data-rid="${esc(r.round_id)}"><div class="q-nav"><button type="button" class="btn ghost sm" data-qh="-1">Anterior</button><b id="qhole">Hoyo</b><button type="button" class="btn ghost sm" data-qh="1">Siguiente</button></div><p class="foot" id="qpar" style="margin-top:6px"></p><div class="q-lab">Putts</div><div class="q-row" id="qputts"></div><div id="qfwbox"><div class="q-lab">Dónde fue el drive</div><div class="q-row" id="qfw"></div></div><div class="q-lab">Green en regulación</div><div class="q-row" id="qgir"></div><p class="foot" id="qtot"></p><p class="foot" id="qsrc"></p><p class="foot" id="qmsg">Todavía no hay putts en esta vuelta.</p><button type="button" class="btn ghost sm" id="qretry" hidden>Reintentar</button></div>
   <div class="fields">
     <label class="field"><span>Putts</span><input inputmode="numeric" data-k="putts" value="${r.putts??''}" placeholder="—"></label>
     <label class="field"><span>Greens</span><input inputmode="numeric" data-k="gir" value="${r.gir??''}" placeholder="—/18"></label>
@@ -345,10 +457,8 @@ function sRonda(id){
   </div>
   <div class="saved" id="saved" style="margin:8px 4px 0">${r.notes_at?'<img class="cad xs" src="/brand/caddie.png" alt="">':''}${ICON.pencil}<span>${r.notes_at?'Guardado en tu cuenta · '+ago(r.notes_at):'Se guarda en tu cuenta'}</span></div>
   ${recapBox(r.round_id)}
-  <div class="section"><h2>TRACK</h2></div>
-  <a class="card row rt-track" id="round-track" href="#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&amp;hole=1"><span class="rt-mark">TRACK</span><span class="body"><span class="t">Registrar mis tiros</span><span class="s">Cómo fueron los golpes en el mapa de esta vuelta, hoyo por hoyo. No cambia los putts, el drive ni el green.</span></span>${ICON.chev}</a>
   ${r.gps_shots?`<div class="section"><h2>Golpes con GPS</h2><span class="badge">${r.gps_shots}</span></div><div id="rshots"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>`:''}
-  <div class="section"><h2>Clima</h2></div><div id="rwx"></div>`;
+  <div id="rwx" hidden></div>`;
 }
 function sDif(id){
   const r = rounds.find(x => x.round_id === id);
@@ -386,7 +496,7 @@ function sDif(id){
 /* ---------- CANCHA ---------- */
 let segC = null;
 function vCancha(){
-  if (!G.courses.length) return `<h1 class="ltitle">Cancha</h1>${caddieEmpty('Sin cancha', 'Elegí una cancha para ver sus hoyos.')}`;
+  if (!G.courses.length) return `<h1 class="ltitle">Cancha</h1>${caddieEmpty('Sin cancha', 'Elegí una cancha para ver sus hoyos.')}<p style="margin-top:12px"><a class="btn" href="#/jugar">Elegir cancha</a></p>`;
   if (!course(segC)) segC = G.courses[0].key;
   const c = course(segC), ranged = RANGE!=='all', hs = ranged ? holeStats(valid.filter(inR), c.key) : null, HS = h => hstat(h, hs);
   const top = c.holes.filter(h=>HS(h).n).slice().sort((a,b)=>HS(b).avg_to_par-HS(a).avg_to_par).slice(0,3).map(h=>h.hole);
@@ -434,6 +544,8 @@ function sHoyo(ck, n){
   <div style="display:flex;justify-content:space-between;align-items:flex-end"><div class="ltitle" style="margin:2px 0 8px">Hoyo ${h.hole}</div>
     <div style="display:flex;gap:6px;margin-bottom:10px"><a class="close" href="#/hoyo/${K}/${prev}" aria-label="Anterior"><svg viewBox="0 0 12 12"><path d="M8 1L3 6l5 5" fill="none"/></svg></a><a class="close" href="#/hoyo/${K}/${next}" aria-label="Siguiente"><svg viewBox="0 0 12 12"><path d="M4 1l5 5-5 5" fill="none"/></svg></a></div></div>
   <div id="holegeo" data-ck="${esc(c.key)}" data-hole="${h.hole}"><div style="padding:18px 0;text-align:center"><span class="spin"></span></div></div>
+  <div id="holewx" data-club="${esc(c.club_name || '')}" data-ck="${esc(c.key)}" data-hole="${h.hole}"></div>
+  <a class="card lb-entry vx-tap" href="#/plan/cancha?ck=${K}"><div class="t">Libreta de la cancha</div><div class="s">Estrategia y fotos de la libreta. Sin reserva.</div></a>
   <div class="pills">
     <div class="pill dark"><b class="num">${h.hole}</b><span>Hoyo</span></div>
     <div class="pill"><b class="num">${h.par??'—'}</b><span>Par${alt?` · damas ${alt}`:''}</span></div>
@@ -509,38 +621,65 @@ function finiteLL(p){
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return null;
   return { lat, lng };
 }
-function holeTraceSVG(hole){
+function holeSpanOk(a, b){
+  const dy = (b.lat - a.lat) * 111320;
+  const dx = (b.lng - a.lng) * 111320 * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+  const m = Math.hypot(dx, dy);
+  return m >= 40 && m <= 750;
+}
+function holeSatHTML(hole){
   const tee = finiteLL(hole && hole.tee), center = finiteLL(hole && hole.green && hole.green.center);
-  if (!tee || !center) return '';
+  if (!tee || !center || !holeSpanOk(tee, center)) {
+    return `<div class="hole-empty" id="hole-satellite">${miss('geo')}<p class="foot">${esc(MISS.geo.why)} Sin satélite. No dibujo una línea inventada del tee al green.</p></div>`;
+  }
   const linePts = Array.isArray(hole.line) ? hole.line.map(finiteLL).filter(Boolean) : [];
-  const straight = !linePts.length;
-  const pts = [tee, ...linePts, center];
-  const lats = pts.map(p => p.lat), lngs = pts.map(p => p.lng);
+  const path = linePts.length >= 2 ? [tee, ...linePts, center] : [tee, center];
+  const lats = path.map(p => p.lat), lngs = path.map(p => p.lng);
   const minLa = Math.min(...lats), maxLa = Math.max(...lats), minLn = Math.min(...lngs), maxLn = Math.max(...lngs);
-  const dLa = Math.max(1e-6, maxLa - minLa), dLn = Math.max(1e-6, maxLn - minLn);
-  const W = 360, H = 470, pad = 36;
-  const xy = p => [pad + ((p.lng - minLn) / dLn) * (W - pad * 2), pad + ((maxLa - p.lat) / dLa) * (H - pad * 2)];
-  const d = pts.map((p, i) => { const [x, y] = xy(p); return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`; }).join(' ');
-  const [tx, ty] = xy(tee), [gx, gy] = xy(center);
-  const label = straight ? `Referencia recta del tee al green, hoyo ${hole.hole}. No es el trazado del hoyo.` : `Trazado con los puntos provistos del hoyo ${hole.hole}`;
-  const note = straight ? `<p class="msg">Referencia recta del tee al centro del green. No es el trazado del hoyo.</p>` : '';
-  return `<div class="holecard"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}"><path d="${d}" fill="none" stroke="#0F3D2E" stroke-width="3"/><circle cx="${tx}" cy="${ty}" r="6" fill="#C8A86A"/><circle cx="${gx}" cy="${gy}" r="8" fill="#0F3D2E"/></svg></div>${note}`;
+  const padLa = Math.max((maxLa - minLa) * 0.28, 0.0011), padLn = Math.max((maxLn - minLn) * 0.28, 0.0014);
+  const south = minLa - padLa, north = maxLa + padLa, west = minLn - padLn, east = maxLn + padLn;
+  const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${west},${south},${east},${north}&bboxSR=4326&imageSR=4326&size=800,1000&format=jpg&f=image`;
+  const x = lng => ((lng - west) / (east - west)) * 100;
+  const y = lat => ((north - lat) / (north - south)) * 100;
+  const d = path.map((p, i) => `${i ? 'L' : 'M'}${x(p.lng).toFixed(2)} ${y(p.lat).toFixed(2)}`).join(' ');
+  return `<div class="hole-sat" id="hole-satellite"><img alt="Satélite del hoyo ${hole.hole}, del tee al centro del green" src="${url}"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="#F6F7F9" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/><circle cx="${x(tee.lng).toFixed(2)}" cy="${y(tee.lat).toFixed(2)}" r="1.6" fill="#C8A86A"/><circle cx="${x(center.lng).toFixed(2)}" cy="${y(center.lat).toFixed(2)}" r="1.8" fill="#0F3D2E" stroke="#F6F7F9" stroke-width="0.4"/></svg></div><p class="hole-note">Salida al centro del green. El centro no es el pin del día.</p>`;
 }
 async function loadHoleGeo(){
   const el = $('#holegeo'); if (!el) return;
   const ck = el.dataset.ck, n = +el.dataset.hole, gen = VIEW_GEN;
-  const miss = () => { const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return; box.innerHTML = '<p class="msg">No hay un trazado verificado para este hoyo.</p>'; };
+  const empty = () => { const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return; box.innerHTML = holeSatHTML(null); };
   try {
     const geo = await gpsForCourse(ck);
     if (gen !== VIEW_GEN || !$('#holegeo') || +$('#holegeo').dataset.hole !== n) return;
-    if (!geo) return miss();
+    if (!geo) return empty();
     const hole = ((geo.course || geo).holes || []).find(h => h.hole === n);
-    const svg = holeTraceSVG(hole);
     const box = $('#holegeo'); if (!box || gen !== VIEW_GEN) return;
-    box.innerHTML = svg || '<p class="msg">No hay un trazado verificado para este hoyo.</p>';
+    box.innerHTML = holeSatHTML(hole);
   } catch (e) {
     const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return;
     box.innerHTML = errBox(e, 'el trazado');
+  }
+}
+async function loadHoleWx(){
+  const el = $('#holewx'); if (!el) return;
+  const ck = el.dataset.ck, n = +el.dataset.hole, gen = VIEW_GEN;
+  const pin = pinFor(el.dataset.club, ck) || coursePin(ck);
+  if (!pin) { el.innerHTML = `<p class="foot">${miss('weather')} No tenemos la ubicación de esta cancha para el viento.</p>`; return; }
+  try {
+    const [now, holes] = await Promise.all([
+      api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
+      holeBearings(ck).catch(() => []),
+    ]);
+    const box = $('#holewx'); if (!box || gen !== VIEW_GEN || box.dataset.ck !== ck) return;
+    const from = now && now.from_deg != null ? now.from_deg : null;
+    const kmh = now && now.kmh != null ? now.kmh : null;
+    const h = (holes || []).find(x => +x.hole === n);
+    const play = window.GolfletRules && h ? window.GolfletRules.windPlay(n, from, h.bearing, kmh) : null;
+    const fact = kmh != null ? `${Math.round(kmh)} km/h${from != null ? `, viene del ${windFrom(from)}` : ''}` : '';
+    const rel = play && play.relative && play.relative !== 'unavailable' && play.text ? play.text : '';
+    box.innerHTML = fact ? `<p class="hole-note">Viento ahora: ${esc(fact)}${rel ? ` · ${esc(rel)}` : ''}.</p>` : `<p class="foot">${miss('weather')} No hay viento para este hoyo.</p>`;
+  } catch (e) {
+    const box = $('#holewx'); if (box && gen === VIEW_GEN) box.innerHTML = `<p class="foot">${miss('weather')}</p>`;
   }
 }
 
@@ -624,7 +763,7 @@ document.fonts?.addEventListener?.('loadingdone', () => fitGreeting());
 async function loadTeeCard(fresh){
   const el = $('#tees'); if (!el) return;
   let d = fresh; if (!d) { try { d = await api('/api/tee-times?scope=upcoming&limit=4'); } catch(e){ el.innerHTML = ''; return; } }
-  if (!$('#tees')) return; const ts = d.tee_times;
+  if (!$('#tees')) return; const ts = Array.isArray(d?.tee_times) ? d.tee_times.slice(0, 1) : [];
   const pill = $('#ttpill');                                     // next booking in the header → scroll to this card
   if (pill && ts.length) { const t = ts[0], wd = WD[dU(t.date).getUTCDay()];
     const when = `${wd[0].toUpperCase()+wd.slice(1,3)} ${+t.date.slice(8,10)} · ${t.time}`, where = t.course_label || '';
@@ -635,8 +774,10 @@ async function loadTeeCard(fresh){
     fitGreeting();
     pill.onclick = ev => { ev.preventDefault(); const sec = $('#tees'), c = sec?.querySelector('.tt-next') || sec; if (!c) return; sec.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
       c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1800); }; }
-  el.innerHTML = `<div class="section"><h2>Próximos tee times</h2>${ts.length?`<a href="#/tees">Ver todos</a>`:''}</div><p class="foot" id="teenote">${esc(TEE_NOTE)}</p>` + (ts.length
-    ? `${yrList(ts.slice(0,3), t => t.date, teeRow)}`.replace('<a class="row" href="#/tee/', '<a class="row tt-next" href="#/tee/')
+  const list = ts.length ? `${yrList(ts, t => t.date, teeRow)}`.replace('<a class="row" href="#/tee/', '<a class="row tt-next" href="#/tee/') : '';
+  const prep = ts.length ? `<a class="tee-prep" href="#/tee/${esc(ts[0].id)}">Preparar la salida</a>` : '';
+  el.innerHTML = `<div class="section"><h2>Próxima reserva</h2>${ts.length?`<a href="#/tees">Ver todas</a>`:''}</div><p class="foot" id="teenote">${esc(TEE_NOTE)}</p>` + (ts.length
+    ? `<div class="tt-card">${list}${prep}</div>`
     : caddieEmpty('Sin reservas próximas', 'Cuando reserves una salida en tu club, aparece acá.'));
   if (fresh) for (const id of [...(fresh.new || []), ...(fresh.changed || [])]) { const a = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"]`); if (a) { a.classList.add('tt-in'); setTimeout(() => a.classList.remove('tt-in'), 2600); } }
   if (fresh) for (const id of fresh.new || []) { const sp = el.querySelector(`a[href="#/tee/${CSS.escape(id)}"] .score span`); if (sp) { sp.textContent = 'nueva'; sp.classList.add('tt-newb'); } }
@@ -724,21 +865,35 @@ async function loadScorecards(){
     const d = await api('/api/scorecard-fetches');
     const rows = d.fetches || [];
     if (!rows.length) { el.innerHTML = ''; return; }
-    const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
-    const rowText = f => f.heading === 'No presentó' ? 'El club respondió y no había tarjeta.' : (f.label || '');
-    const shown = (title, list) => title === 'No presentó' ? list.slice(0, 6) : list;
-    const block = (title, list) => {
-      const rows = shown(title, list);
-      if (!rows.length) return '';
-      const more = title === 'No presentó' && list.length > rows.length ? `<p class="foot">Hay ${list.length - rows.length} más en «No presentó». No cambia el hándicap.</p>` : '';
-      return `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${rows.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(rowText(f))}</div></div></div>`).join('')}</div>${more}`;
+    const when = f => [f.date ? dmy(f.date) : '', f.time || '', f.course_label || ''].filter(Boolean).join(' · ');
+    const lastCheck = f => f.last_attempt_at ? `Última lectura ${ago(f.last_attempt_at)}` : 'Todavía sin una lectura del club.';
+    const chipOf = f => {
+      const blob = `${f.status || ''} ${f.heading || ''} ${f.label || ''}`.toLowerCase();
+      if (blob.includes('no presentó') || f.status === 'absent') return ['No presentó', 'gray'];
+      if (['error', 'needs_credentials', 'stopped'].includes(f.status) || blob.includes('sin confirmar')) return ['Error', 'red'];
+      return ['Pendiente', 'navy'];
     };
-    const headed = rows.some(f => f.heading);
-    const groups = headed ? ['Próxima', 'En curso', 'No presentó', 'Sin confirmar', 'Otras'] : ['En curso', 'Otras'];
-    const bucket = f => f.heading || (f.status === 'complete' ? 'Ya está' : ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status) ? 'En curso' : 'Otras');
-    const open = rows.filter(f => bucket(f) !== 'Ya está');
+    const open = rows.filter(f => f.status !== 'complete' && !f.round_id);
     if (!open.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div>${groups.map(title => block(title, open.filter(f => bucket(f) === title))).join('')}<p class="foot">Acá quedan las búsquedas que todavía piden algo. Las tarjetas que ya llegaron están en Rondas. «No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
+    const nAbsent = open.filter(f => chipOf(f)[0] === 'No presentó').length;
+    const nPending = open.filter(f => chipOf(f)[0] === 'Pendiente').length;
+    const nError = open.filter(f => chipOf(f)[0] === 'Error').length;
+    const summary = [nAbsent ? `${nAbsent} sin tarjeta` : '', nPending ? `${nPending} pendiente${nPending === 1 ? '' : 's'}` : '', nError ? `${nError} con error` : ''].filter(Boolean).join(' · ');
+    const list = open.map(f => {
+      const [name, tone] = chipOf(f);
+      const retry = name === 'Pendiente' || name === 'Error' ? `<button type="button" class="sc-retry" data-sc-retry>Buscar de nuevo</button>` : '';
+      return `<div class="sc-row"><div class="sc-row-h"><b>${esc(f.club_name || 'Club')}</b><span class="sc-chip ${tone}">${name}</span></div><div class="s">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div><div class="s">${esc(lastCheck(f))}</div>${retry}</div>`;
+    }).join('');
+    const detail = `<p class="sc-sum">${esc(summary)}</p><div class="sc-list">${list}</div>`;
+    el.innerHTML = `<button type="button" class="sc-open" id="sc-open"><span>Tarjetas del club</span><b class="num">${open.length}</b><svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></button>`;
+    let dlg = document.getElementById('sc-dialog');
+    if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'sc-dialog'; dlg.className = 'sc-dialog'; document.body.appendChild(dlg); }
+    dlg.innerHTML = `<div class="sc-head"><b>Tarjetas del club</b><button type="button" class="close" id="sc-close" aria-label="Cerrar">${ICON.x}</button></div>${detail}`;
+    const openBtn = document.getElementById('sc-open');
+    if (openBtn) openBtn.onclick = () => { if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); };
+    const closeBtn = document.getElementById('sc-close');
+    if (closeBtn) closeBtn.onclick = () => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
+    dlg.querySelectorAll('[data-sc-retry]').forEach(b => { b.onclick = () => { b.disabled = true; loadScorecards(); }; });
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -965,16 +1120,20 @@ async function loadTee(id, opts){
   try {
     const d = await api(`/api/tee-times/${encodeURIComponent(id)}?${teeQS(id)}`); if (!$('#tee')) return;
     const t = d.tee_time, dd = dU(t.date), past = daysTo(t.date) < 0, minsTo = (Date.parse(t.starts_at || `${t.date}T${t.time}:00-03:00`) - Date.now()) / 60000;
-    el.innerHTML = `<div class="tt-hero"><div class="overline">${past?'Ya jugado':relDay(t.date)}</div><div class="tt-when"><b class="num">${esc(t.time)}</b><span>${WDL[dd.getUTCDay()]} ${dd.getUTCDate()} de ${MESL[dd.getUTCMonth()]}${t.start_hole?` · sale del hoyo ${t.start_hole}`:''}</span></div>
+    const dayName = WDL[dd.getUTCDay()] || '';
+    const dayLabel = dayName ? dayName.charAt(0).toUpperCase() + dayName.slice(1) : '';
+    el.innerHTML = `<div class="tt-hero"><div class="overline">${past?'Ya jugado':relDay(t.date)}</div><div class="tt-when"><b class="num">${esc(t.time)}</b><span>${dayLabel} ${dd.getUTCDate()} de ${MESL[dd.getUTCMonth()]}${t.start_hole?` · sale del hoyo ${t.start_hole}`:''}</span></div>
         <div class="tt-where"><b>${esc(t.club_name)}</b>${t.course_label?`<span>Cancha ${esc(t.course_label)}</span>`:'<span>La reserva no especifica la cancha.</span>'}${t.modality?`<span>${esc(t.modality)}</span>`:''}</div></div>
       ${t.event_name?`<p class="foot" style="margin-top:8px">${esc(t.event_name)}</p>`:''}
       <button type="button" class="btn ghost sm" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>
       <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
-      <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HCP ${f1(c.hcp)}`:''}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HCP</span></div>`:''}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
+      <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HI ${f1(c.hcp)}`:', HI no disponible'}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HI</span></div>`:`<div class="score"><span>HI no disponible</span></div>`}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
+      <div id="scorecards"></div>
       ${past ? '' : `<div class="section"><h2>Tu hándicap de juego</h2></div><div class="card tt-now">${teeBlock(d, t.id)}</div>`}
       <p class="foot">Última lectura guardada${t.seen_at?` · ${ago(t.seen_at)}`:''}. Golflet no reserva ni cancela: eso se hace en ${esc(t.club_name)}.</p>`;
     const rb = $('#refresh-booking'); if (rb) rb.onclick = () => refreshBooking(id, rb);
+    loadScorecards();
     el.insertAdjacentHTML('beforeend', '<div id="teeprep"></div>');
     if (!opts?.quiet) refreshReservations(navigator.onLine !== false).then(d => { if (d?.fresh && $('#tee')?.dataset.id === id) loadTee(id, { quiet: true }); });
     bindTeeBlock(el, t.id, () => loadTee(id));
@@ -1280,14 +1439,16 @@ async function loadJugar(id){
     if (!$('#jugbody')) return;
     const today = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10), open = (L.live_rounds || []).find(l => !l.ended_at && String(l.date).slice(0, 10) === today);
     const cs = (C.courses || []).filter(c => c.mine !== false);
+    const catalog = (C.catalog || []).filter(c => c && c.course_id && c.club_name);
     const groups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(cs) : [{ code: 'c', club: '', distance: null, rows: cs.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
-    const courseRadios = (rows, checkedFirst) => rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${checkedFirst && i === 0 ? 'checked' : ''}><span class="t">${esc(c.name)}</span>${c.club ? `<span class="s">${esc(c.club)}</span>` : ''}<svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('');
+    const courseRadios = (rows, checkedFirst) => rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${checkedFirst && i === 0 ? 'checked' : ''}><span class="body"><span class="t">${esc(c.name)}</span>${c.club ? `<span class="s">${esc(c.club)}</span>` : ''}</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('');
     el.innerHTML = `<div class="stitle">Empezar ronda</div>
       ${open ? `<a class="card row vx-tap jg-open" href="#/jugar/${esc(open.id)}"><div><div class="t">Seguir la ronda de hoy</div><div class="s">${esc(open.course || open.vm_course || 'Cancha')} · hoyo ${open.current_hole || 1}</div></div>${ICON.chev || '›'}</a>` : ''}
       <p class="lede">Elegí la cancha. En el hoyo confirmás el tee, después la bandera, y cada golpe con ENTER. El mapa se mueve bajo la mira.</p>
       <div class="section"><h2>Mis clubes</h2></div>
       ${cs.length ? groups.map((g, gi) => `<section class="jg-club" id="club-${esc(g.code)}"><div class="jg-club-h"><b>${esc(g.club)}</b>${g.distance ? `<span>${esc(g.distance)}</span>` : ''}</div>${courseRadios(g.rows.map(r => ({ ...r, club: '' })), gi === 0)}</section>`).join('')
         : `<div class="msg">No encontramos canchas de tus clubes. Podés buscar otra en el catálogo.</div>`}
+      <div id="jgnear"></div>
       <div class="section"><h2>Otra cancha</h2></div>
       <label class="jg-find">Buscar por club o cancha<input id="jgq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Ej. Pilar, Norte"></label>
       <div id="jgqout"></div>
@@ -1296,12 +1457,48 @@ async function loadJugar(id){
       <button class="btn" id="jgstart" ${cs.length ? '' : 'disabled'}>Empezar ronda</button><div id="jgerr"></div>`;
     let qGen = 0;
     const known = new Set(cs.map(c => c.course_id));
+    const foldQ = s => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+    const kmBetween = (a, b) => {
+      const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+      const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+    };
+    const paintHits = (hits, already, covLine) => {
+      if (!$('#jgqout')) return;
+      if (!hits.length && !already.length) { $('#jgqout').innerHTML = `<p class="foot">No hay una cancha con ese nombre en el catálogo.</p>${covLine}`; return; }
+      const foundGroups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(hits) : [{ code: 'o', club: '', rows: hits.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
+      $('#jgqout').innerHTML = `${already.length && !hits.length ? '<p class="foot">Esa cancha ya está en Mis clubes.</p>' : ''}
+        ${hits.length ? foundGroups.map(g => `<section class="jg-club"><div class="jg-club-h"><b>${esc(g.club)}</b></div>${courseRadios(g.rows.map(r => ({ ...r, club: g.club })), false)}</section>`).join('') : ''}
+        ${already.length && hits.length ? `<p class="foot">${already.length === 1 ? 'Otra coincidencia ya está en Mis clubes.' : 'Algunas coincidencias ya están en Mis clubes.'}</p>` : ''}${covLine}`;
+      $('#jgqout').querySelectorAll('input[name=jgc]').forEach(inp => inp.onchange = () => { const b = $('#jgstart'); if (b) b.disabled = false; });
+    };
+    const paintNearby = pos => {
+      const box = $('#jgnear'); if (!box || !pos) return;
+      const rows = catalog.map(c => ({ ...c, distance_km: c.lat == null || c.lng == null ? null : Math.round(kmBetween(pos, { lat: +c.lat, lng: +c.lng }) * 10) / 10 }))
+        .filter(c => c.distance_km != null && c.distance_km <= 40 && !known.has(c.course_id))
+        .sort((a, b) => a.distance_km - b.distance_km).slice(0, 8);
+      if (!rows.length) { box.innerHTML = ''; return; }
+      const nearGroups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(rows) : [];
+      box.innerHTML = `<div class="section"><h2>Cerca</h2></div>${nearGroups.map(g => `<section class="jg-club"><div class="jg-club-h"><b>${esc(g.club)}</b>${g.distance ? `<span>${esc(g.distance)}</span>` : ''}</div>${courseRadios(g.rows.map(r => ({ ...r, club: g.club })), false)}</section>`).join('')}`;
+      box.querySelectorAll('input[name=jgc]').forEach(inp => inp.onchange = () => { const b = $('#jgstart'); if (b) b.disabled = false; });
+    };
+    if (catalog.length && navigator.geolocation) navigator.geolocation.getCurrentPosition(p => paintNearby({ lat: p.coords.latitude, lng: p.coords.longitude }), () => {}, { enableHighAccuracy: false, timeout: 4000, maximumAge: 120000 });
     $('#jgq').oninput = () => {
       const q = $('#jgq').value.trim();
       clearTimeout($('#jgq')._t);
       if (q.length < 2) { $('#jgqout').innerHTML = q ? '<p class="foot">Escribí al menos 2 letras.</p>' : ''; return; }
       $('#jgq')._t = setTimeout(async () => {
-        const gen = ++qGen; $('#jgqout').innerHTML = '<p class="foot">Buscando en el catálogo…</p>';
+        const gen = ++qGen;
+        if (catalog.length) {
+          const tokens = foldQ(q).split(/[^a-z0-9]+/).filter(t => t.length >= 2);
+          const matched = tokens.length ? catalog.filter(c => tokens.every(t => foldQ([c.club_name, c.course_label, c.vm_course, c.label].filter(Boolean).join(' ')).includes(t))) : [];
+          const hits = matched.filter(c => !known.has(c.course_id)).slice(0, 12);
+          const already = matched.filter(c => known.has(c.course_id));
+          const clubs = new Set(catalog.map(c => c.club_code)).size;
+          paintHits(hits, already, `<p class="foot">Catálogo: ${catalog.length} canchas en ${clubs} clubes.${matched.length > 12 ? ' Hay más: afiná el nombre.' : ''}</p>`);
+          return;
+        }
+        $('#jgqout').innerHTML = '<p class="foot">Buscando en el catálogo…</p>';
         try {
           const d = await api('/api/gps/courses?q=' + encodeURIComponent(q));
           if (gen !== qGen || !$('#jgqout')) return;
@@ -1310,12 +1507,7 @@ async function loadJugar(id){
           const cov = d.coverage;
           const covLine = cov && cov.catalog ? `<p class="foot">Catálogo: ${cov.catalog} canchas en ${cov.clubs} clubes.${cov.truncated ? ' Hay más: afiná el nombre.' : ''}</p>` : '';
           if (d.reason === 'short') { $('#jgqout').innerHTML = '<p class="foot">Escribí al menos 2 letras.</p>'; return; }
-          if (!hits.length && !already.length) { $('#jgqout').innerHTML = `<p class="foot">No hay una cancha con ese nombre en el catálogo.</p>${covLine}`; return; }
-          const foundGroups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(hits) : [{ code: 'o', club: '', rows: hits.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
-          $('#jgqout').innerHTML = `${already.length && !hits.length ? '<p class="foot">Esa cancha ya está en Mis clubes.</p>' : ''}
-            ${hits.length ? foundGroups.map(g => `<section class="jg-club"><div class="jg-club-h"><b>${esc(g.club)}</b></div>${courseRadios(g.rows.map(r => ({ ...r, club: g.club })), false)}</section>`).join('') : ''}
-            ${already.length && hits.length ? `<p class="foot">${already.length === 1 ? 'Otra coincidencia ya está en Mis clubes.' : 'Algunas coincidencias ya están en Mis clubes.'}</p>` : ''}${covLine}`;
-          $('#jgqout').querySelectorAll('input[name=jgc]').forEach(inp => inp.onchange = () => { const b = $('#jgstart'); if (b) b.disabled = false; });
+          paintHits(hits, already, covLine);
         } catch (e) { if (gen === qGen && $('#jgqout')) $('#jgqout').innerHTML = errBox(e, 'el catálogo'); }
       }, 300);
     };
@@ -1557,7 +1749,7 @@ function vBolsa(){
   <div class="section"><h2>Mis palos</h2><span><a class="badge" href="#/equipo/juego">Juego de hierros</a> <a class="badge" href="#/equipo/nuevo">+ Agregar palo</a></span></div><div id="equip"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>
   <a class="card bagball" id="bagball" href="#/pelota"><span class="gi">${BALL_IC}</span><span class="bb-t">Pelota<small>&nbsp;</small></span>${ICON.chev}</a>
   <div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div>
-  <div class="card bagsum"><p class="bagsum-n num" id="bagcount">${filled} de ${yard.length}</p><div id="bagmsg" class="bagsum-d">${filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste. El putter no lleva yardas acá.</p></div>
+  <div class="card bagsum">${yard.length?`<p class="bagsum-n num" id="bagcount">${filled} de ${yard.length}</p>`:`<p><a class="btn" id="bag-add" href="#/equipo/nuevo">Agregar palo</a></p>`}<div id="bagmsg" class="bagsum-d">${yard.length?(filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'):'La bolsa está vacía.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste. El putter no lleva yardas acá.</p></div>
   <div class="bagtable"><div class="baghdr" aria-hidden="true"><span>Palo</span><span>Carry</span><span>Total</span></div>
   <div class="list">${bag.map((b,i)=>isPutterName(b.club) ? `<div class="bagrow bag-putter" data-club="${esc(b.club)}" data-putter="1"><span class="n">${esc(b.club)}<small class="bsrc">Sin distancia en la bolsa</small></span><span class="bag-noputt">El putter no lleva yardas. En TRACK los metros del putt se cargan en el hoyo.</span></div>` : `<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
   <p class="foot" id="bagsaved">Tu distancia es la que manda. Al lado, lo que mediste con GPS (total, no carry). Yardas, sin datos inventados.</p>
@@ -1594,18 +1786,17 @@ const impTxt = h => h?.delta == null ? '—' : `${h.delta < 0 ? '↓' : h.delta 
 const impCls = h => h?.delta == null ? '' : h.delta < 0 ? 'dn' : h.delta > 0 ? 'up' : 'flat';
 /* t125u: linked profesores on the Inicio HI card (max 3 + N; tap → profesor page, or Tu cuenta › Profesores if several) */
 async function loadHiProfs(){
-  /* t155u/t156u: 1 profesor → single avatar (→ its page); 2+ → stacked avatars + "N profes" (→ Mis profesores); none → empty celeste circle "Agregar profesor" (→ add/search page). Celeste ring = profesores, gold = groups. */
   const el = $('#hiprofs'); if (!el) return;
   const av = p => `<span class="hp-av">${p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : esc(compInit(p.name))}${p.verified ? '<i class="hp-v" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3.3 6.2l1.7 1.6 3.4-3.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i>' : ''}</span>`;
   try { const ps = (await api('/api/profesores')).profesores; if (!$('#hiprofs')) return; PROFS = ps;
     if (!ps.length) {
-      el.innerHTML = `<a class="hg-link hp-add" href="#/profesores/buscar" aria-label="Agregar profesor"><span class="hp-av hp-empty" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="6.4" cy="5.4" r="2.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.2 13c.6-2.3 2.2-3.5 4.2-3.5s3.6 1.2 4.2 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12.6 4.2v4M10.6 6.2h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span><span class="hg-n">Agregar profesor</span></a>`;
+      el.innerHTML = `<a class="hp-mini hp-add" href="#/profesores/buscar" aria-label="Agregar profesor"><span class="hp-av hp-empty" aria-hidden="true">+</span></a>`;
     } else if (ps.length === 1) {
-      el.innerHTML = `<a class="hg-link" href="#/profesor/${encodeURIComponent(ps[0].profesor_id)}" aria-label="Tu profesor: ${esc(ps[0].name)}">${av(ps[0])}</a>`;
+      el.innerHTML = `<a class="hp-mini" href="#/profesor/${encodeURIComponent(ps[0].profesor_id)}" aria-label="Tu profesor: ${esc(ps[0].name)}">${av(ps[0])}</a>`;
     } else {
-      el.innerHTML = `<a class="hg-link" href="#/profesores" aria-label="Tus profesores: ${ps.length}">${ps.slice(0, 3).map(av).join('')}<span class="hg-n num">${ps.length} profes</span></a>`;
+      el.innerHTML = `<a class="hp-mini" href="#/profesores" aria-label="Tus profesores: ${ps.length}">${av(ps[0])}</a>`;
     }
-    el.hidden = false; sizeHiAvs();
+    el.hidden = false;
   } catch(e){ el.hidden = true; }
 }
 /* t147u/t148u/t149u: the player's groups on the HI card, as ONE element (stacked photos/initials + count) → #/amigos (list) → #/grupo/:id.
@@ -1618,19 +1809,40 @@ function sizeHiAvs(){ const a = document.querySelector('.hero .hi-avs'), h = a?.
   const big = h.querySelector('.big'); if (!big) return; const rg = document.createRange(); rg.selectNodeContents(big); const b = rg.getBoundingClientRect(), r = a.getBoundingClientRect();
   if (r.left < b.right + 10 && r.bottom > b.top + 6) h.classList.add('avs-below'); }
 addEventListener('resize', () => sizeHiAvs());
+function grossPlace(members){
+  const rows = (members || []).filter(m => m && m.avg_gross != null && !(m.hidden || []).includes('scores'));
+  const me = rows.find(m => m.is_me);
+  if (!me) return null;
+  return rows.filter(m => m.avg_gross < me.avg_gross).length + 1;
+}
 async function loadHiGroups(){
   const el = $('#higroups'); if (!el) return;
   try { const gs = (await api('/api/groups')).groups || []; if (!$('#higroups')) return;
-    if (!gs.length) { el.innerHTML = `<a class="hg-link hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M6 2.2v7.6M2.2 6h7.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span class="hg-n">Crear grupo</span></a>`; el.hidden = false; return; }
+    if (!gs.length) { el.innerHTML = `<a class="hp-mini hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true">+</span></a>`; el.hidden = false; return; }
     const show = gs.slice(0, 3);
-    el.innerHTML = `<a class="hg-link" href="#/amigos" aria-label="Tus grupos: ${gs.length}">${show.map(g => `<span class="hp-av">${g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase())}</span>`).join('')}<span class="hg-n num">${gs.length} grupo${gs.length === 1 ? '' : 's'}</span></a>`;
+    const href = gs.length === 1 ? `#/grupo/${encodeURIComponent(gs[0].id)}` : '#/amigos';
+    el.innerHTML = `<a class="hp-stack" href="${href}" aria-label="${gs.length} grupos">${show.map(g => {
+      const face = g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase());
+      return `<span class="hp-av">${face}</span>`;
+    }).join('')}<span class="hg-n">${gs.length} ${gs.length === 1 ? 'grupo' : 'grupos'}</span></a>`;
     el.hidden = false;
+    await Promise.all(show.map(async g => {
+      try {
+        const d = await api(`/api/groups/${encodeURIComponent(g.id)}?range=12y`);
+        const place = grossPlace(d.members);
+        const row = [...el.querySelectorAll('[data-gid]')].find(x => x.getAttribute('data-gid') === g.id);
+        const mark = row && row.querySelector('.hg-place');
+        if (place && mark) { mark.hidden = false; mark.textContent = `${place}º`; }
+      } catch (e) {}
+    }));
   } catch(e){ el.hidden = true; } finally { sizeHiAvs(); }
 }
 async function loadHcpImp(){
   const a = $('#hcpimp'); if (!a) return;
   try { const { hcp_impact: h } = await api(`/api/metrics/hcp-impact?range=${RANGE}`); if (!$('#hcpimp')) return;
-    a.innerHTML = `Impacto HCP${h.delta != null && h.estimated ? ' <small>est.</small>' : ''}<b class="num ${impCls(h)}">${impTxt(h)}</b>`;
+    const mark = a.querySelector('b');
+    if (mark) { mark.className = `num ${impCls(h)}`; mark.textContent = impTxt(h); }
+    else a.innerHTML = `Impacto<b class="num ${impCls(h)}">${impTxt(h)}</b>`;
     a.setAttribute('aria-label', h.delta == null ? 'Impacto en el hándicap: sin historia suficiente' : `Impacto en el hándicap: ${h.delta < 0 ? 'bajó' : h.delta > 0 ? 'subió' : 'sin cambio'} ${f1(Math.abs(h.delta))}${h.estimated ? ', estimado' : ''}`);
   } catch(e){ a.querySelector('b').textContent = '—'; }
 }
@@ -1697,6 +1909,7 @@ async function loadEquipList(){
   const el = $('#equip'); if (!el) return;
   try {
     const [{ clubs }, cat] = await Promise.all([api('/api/my-clubs/items'), bagCat()]); if (!$('#equip')) return;
+    if (!Array.isArray(clubs) || !clubs.length) { el.innerHTML = '<p class="foot">Todavía no hay palos. Agregá el primero.</p>'; return; }
     const typ = code => cat.types.find(t => t.code.toLowerCase() === code.toLowerCase());
     const groups = {}; clubs.forEach(c => { const k = typ(c.code)?.category || 'otros'; (groups[k] ||= []).push(c); });
     const done = clubs.filter(c => c.brand).length, nm = x => String(x || '').trim().toLowerCase();
@@ -1859,6 +2072,7 @@ async function loadEquipo(code, edit){
     if (cur && brand && category && !brandsIn(category).includes(brand)) brandOther = true;
     el.innerHTML = `<div class="stitle">${cur ? 'Editar ' + esc(cur.label) : 'Agregar palo'}</div>
       <form class="gg-form tt-form" id="eqf" novalidate>
+        ${cur ? `<label class="tt-lab" for="eqn">Nombre</label><input id="eqn" maxlength="12" value="${esc(cur.label)}" autocomplete="off"><button type="button" class="btn ghost sm" id="eqsuggest" hidden>Usar el loft</button>` : ''}
         ${cur ? '' : `<div class="tt-lab">Tipo de palo</div><div class="seg tt-seg eq-cats" role="radiogroup" aria-label="Categoría">${Object.entries(CATL).map(([k,l]) => `<button type="button" role="radio" data-cat="${k}">${l}</button>`).join('')}</div><div id="eqtypes"></div>`}
         <div id="eqbrand"></div><div id="eqmodel"></div><div id="eqloft"></div>
         <div id="eqmsg" role="alert"></div>
@@ -1881,15 +2095,33 @@ async function loadEquipo(code, edit){
         ${modelOther || !ms.length ? `<input type="text" id="eqmo" maxlength="60" placeholder="${ms.length ? 'Escribí el modelo' : 'Modelo'}" value="${esc(model)}" aria-label="Modelo escrito a mano">` : ''}`;
       const sel = $('#eqm'); if (sel) sel.onchange = e => { modelOther = e.target.value === '__other'; model = modelOther ? '' : e.target.value; drawModel(); if (modelOther) $('#eqmo')?.focus(); };
       const mo = $('#eqmo'); if (mo) mo.oninput = () => model = mo.value; };
+    const loftHint = () => category === 'wedge' ? 'Ej.: 50' : category === 'iron' ? 'Ej.: 30' : category === 'driver' ? 'Ej.: 10,5' : 'Ej.: 15';
     const drawLoft = () => { const host = $('#eqloft'); const t = code0 && typ(code0); const show = category && category !== 'putter';
-      host.innerHTML = show ? `<label class="tt-lab" for="eql">Loft <small>(opcional, en grados)</small></label><input type="text" inputmode="decimal" id="eql" maxlength="5" placeholder="${t?.loft ? t.loft : 'Ej.: 10,5'}" value="${cur?.loft != null ? String(cur.loft).replace('.',',') : t?.loft ?? ''}">` : ''; };
+      host.innerHTML = show ? `<label class="tt-lab" for="eql">Loft <small>(opcional, en grados)</small></label><input type="text" inputmode="decimal" id="eql" maxlength="5" placeholder="${t?.loft ? String(t.loft).replace('.', ',') : loftHint()}" value="${cur?.loft != null ? String(cur.loft).replace('.',',') : t?.loft ?? ''}">` : '';
+      const suggest = $('#eqsuggest');
+      if (suggest) {
+        const showSuggest = category === 'wedge';
+        suggest.hidden = !showSuggest;
+        suggest.onclick = () => {
+          const raw = ($('#eql')?.value || '').trim().replace(',', '.');
+          const n = Number(raw);
+          if (!n) return;
+          const name = `${String(n).replace('.', ',')}°`.slice(0, 12);
+          const input = $('#eqn'); if (input) input.value = name;
+        };
+        suggest.textContent = 'Usar el loft como nombre';
+      }
+    };
     el.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { if (category !== b.dataset.cat) { category = b.dataset.cat; code0 = null; brand = ''; model = ''; brandOther = modelOther = false; } drawCats(); drawTypes(); drawBrand(); drawModel(); drawLoft(); });
     drawCats(); drawTypes(); drawBrand(); drawModel(); drawLoft();
     $('#eqf').onsubmit = async e => { e.preventDefault(); const msg = $('#eqmsg'); msg.innerHTML = '';
       const err = t => { msg.innerHTML = '<div class="msg err"></div>'; msg.firstChild.textContent = t; };
       if (!cur && !category) return err('Elegí el tipo de palo.'); if (!cur && !code0) return err('Elegí cuál ' + (category === 'putter' || category === 'driver' ? 'palo' : 'de los ' + CATL[category].toLowerCase()) + '.');
       if (brandOther && !brand.trim()) return err('Escribí la marca.');
-      const body = { brand: brand.trim() || null, model: model.trim() || null, loft: $('#eql')?.value.trim().replace(',', '.') || null, ...(cur ? {} : { code: code0 }) };
+      const named = $('#eqn')?.value.trim();
+      if (cur && named != null && !named) return err('Escribí el nombre.');
+      if (cur && named && named.length > 12) return err('El nombre entra en 12 caracteres.');
+      const body = { brand: brand.trim() || null, model: model.trim() || null, loft: $('#eql')?.value.trim().replace(',', '.') || null, ...(cur ? { label: named } : { code: code0 }) };
       const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
       try { const r = await api(cur ? `/api/my-clubs/items/${eqCode(cur)}` : '/api/my-clubs/items', { method: cur ? 'PATCH' : 'POST', body: JSON.stringify(body) });
         if (!cur) G.bag = (await api('/api/bag')).bag;
@@ -2015,6 +2247,7 @@ function sCuenta(){
   ${PROFE?.account_status === 'active' ? `<div class="section"><h2>Espacio profesor</h2></div><a class="card gg-home" href="#/profe"><div><b>Tus alumnos y tu perfil</b><p>Ves solo a los jugadores que comparten sus métricas con vos.</p></div>${ICON.chev}</a>` : ''}
   <div class="section"><h2>Profesores</h2></div><div id="profs"><div class="card" style="text-align:center"><span class="spin"></span></div></div>
   <div class="section"><h2>Amigos</h2></div><a class="card gg-home" href="#/compartir"><div><b>Qué comparto</b><p>Elegí qué ven de vos los jugadores de tus grupos. Notas de voz, notas y estrategia nunca se comparten.</p></div>${ICON.chev}</a>
+  <div id="scorecards"></div><div id="cardpull"></div>
   <div style="height:18px"></div><button class="btn ghost" data-logout>Salir</button>`;
 }
 
@@ -2054,13 +2287,13 @@ async function loadPaceSetting(){
 async function loadGear(){
   loadPaceSetting();
   try { const [b, so] = await Promise.all([api('/api/ball'), api('/api/sorteos')]); BALL = b;
-    const a = $('#gearball'), c = $('#gearsort'); if (a) a.textContent = b.ball ? ballTxt(b.ball) : 'Contanos con qué pelota jugás';
+    const a = $('#gearball'), c = $('#gearsort'); if (a) { if (b.ball) a.textContent = ballTxt(b.ball); else a.innerHTML = miss('ball'); }
     if (c) c.textContent = so.open ? `${so.open} ${so.open === 1 ? 'abierto' : 'abiertos'}${so.sorteos.some(x => x.entered && x.status === 'abierto') ? ' · estás participando' : ''}` : so.sorteos.some(x => x.won) ? '¡Ganaste un sorteo!' : 'No hay sorteos abiertos';
   } catch(e){}
 }
 async function loadBagBall(){
   const el = $('#bagball'); if (!el) return;
-  try { const b = await api('/api/ball'); BALL = b; const sm = el.querySelector('small'); if (sm) sm.textContent = b.ball ? ballTxt(b.ball) : 'Sin cargar'; } catch(e){ el.remove(); }
+  try { const b = await api('/api/ball'); BALL = b; const sm = el.querySelector('small'); if (sm) { if (b.ball) sm.textContent = ballTxt(b.ball); else sm.innerHTML = miss('ball'); } } catch(e){ el.remove(); }
 }
 function sPelota(){ return `<div class="bar"><span class="overline">Tu juego</span><button class="close" data-close>${ICON.x}</button></div><div class="stitle">Mi pelota</div><div id="pelbody"><div style="padding:40px 0;text-align:center"><span class="spin"></span></div></div>`; }
 async function loadPelota(){
@@ -2185,12 +2418,30 @@ const MTITLE = { rounds:'Rondas', 'best-gross':'Mejor gross', average:'Promedio'
 const SCOREK = ['eagles','birdies','pars','bogeys','doubles'];
 let MQ = {};   // metric -> {scope, year, course, sort, order}
 const mlink = (metric, q={}) => { q = Object.fromEntries(Object.entries(q).filter(([,v])=>v!==''&&v!=null)); return `#/metrica/${metric}${Object.keys(q).length?'?'+new URLSearchParams(q):''}`; };
+const LIST_PERIODS = [['3m','3 meses'],['6m','6 meses'],['12m','12 meses'],['year','Este año'],['all','Histórico']];
 function mstate(metric, qs){
   const p = new URLSearchParams(qs||''), cur = MQ[metric] || {};
+  const fromURL = ['3m','6m','12m'].includes(p.get('range')) ? p.get('range') : '';
   const st = { scope: p.get('scope') || cur.scope || 'year', year: p.get('year') || cur.year || String(new Date().getFullYear()), course: p.get('course') || cur.course || 'all',
     sort: p.get('sort') || cur.sort || (metric==='best-gross'?'gross':'date'), order: p.get('order') || cur.order || (metric==='best-gross'?'asc':'desc'),
-    range: qs ? (RKEYS.includes(p.get('range')) ? p.get('range') : '') : (cur.range || '') };
+    range: qs ? fromURL : (cur.range || ''), lp: (qs && LIST_PERIODS.some(([k]) => k === p.get('lp'))) ? p.get('lp') : (cur.lp || ''), scopeFromURL: !!(qs && p.get('scope')) };
   if (qs) MQ[metric] = st; return MQ[metric] = MQ[metric] || st;
+}
+function listPeriod(st){
+  if (LIST_PERIODS.some(([k]) => k === st.lp)) return st.lp;
+  if (st.range === '3m' || st.range === '6m' || st.range === '12m') return st.range;
+  if (st.scope === 'since' && !st.lp) return '';
+  if (st.scope === 'year' && st.scopeFromURL && !st.range) return 'year';
+  return '12m';
+}
+function metricQuery(st){
+  const q = { course: st.course, sort: st.sort, order: st.order, year: st.year };
+  if (st.scope === 'since' && !st.lp && st.range !== '3m' && st.range !== '6m' && st.range !== '12m') { q.scope = 'since'; return q; }
+  const lp = listPeriod(st);
+  if (lp === 'year') { q.scope = 'year'; q.lp = 'year'; }
+  else if (lp === 'all') { q.scope = 'all'; q.lp = 'all'; }
+  else { q.scope = 'all'; q.range = lp || '12m'; }
+  return q;
 }
 function sMetric(metric, qs){
   if (!MTITLE[metric]) return '<p>Métrica no encontrada.</p>';
@@ -2202,11 +2453,11 @@ function sMetric(metric, qs){
 }
 async function loadMetric(metric){
   const el = $('#mbody'); if (!el) return;
-  const st = MQ[metric]; const q = new URLSearchParams(Object.fromEntries(Object.entries(st).filter(([,v])=>v)));
+  const st = MQ[metric]; const q = new URLSearchParams(Object.fromEntries(Object.entries(metricQuery(st)).filter(([,v])=>v)));
   let d; try { d = await api(`/api/metrics/${metric}?${q}`); } catch(e){ el.innerHTML = `${errBox(e)}`; return; }
   if (!$('#mbody') || location.hash.indexOf('#/metrica/'+metric) !== 0) return;
-  const yr = st.year, rg = st.range || '';
-  const scopeSeg = `<div class="rng"><div class="seg vx-seg rng-seg" role="tablist" aria-label="Período">${RANGES.map(([k,l])=>`<button type="button" role="tab" aria-selected="${k===rg}" class="${k===rg?'on':''}" data-mset="range=${k}">${l}</button>`).join('')}${!rg?`<button type="button" class="on" data-mset="range=">${st.scope==='since'?'Desde '+yr:st.scope==='all'?'Todas':yr}</button>`:''}</div>
+  const lp = listPeriod(st);
+  const scopeSeg = `<div class="rng"><div class="seg vx-seg rng-seg lp-seg" role="tablist" aria-label="Período">${LIST_PERIODS.map(([k,l])=>`<button type="button" role="tab" aria-selected="${k===lp}" class="${k===lp?'on':''}" data-lp="${k}">${l}</button>`).join('')}</div>
     <span class="rng-n"><b class="num">${metric==='handicap'?(d.history||[]).length:d.rounds_in_range}</b> ${metric==='handicap'?'registros':(d.rounds_in_range===1?'ronda':'rondas')}${d.since?` desde ${dmy(d.since)}`:''}</span></div>` + overTime(metric, d);
   const courseSeg = d.courses.length>2 ? `<div class="vx-chips">${d.courses.filter(c=>c.rounds||c.key==='all').map(c=>`<button class="vx-chip ${c.key===st.course?'on':''}" data-mset="course=${encodeURIComponent(c.key)}">${esc(c.label)}<span class="num">${c.rounds}</span></button>`).join('')}</div>` : '';
   let html = '';
@@ -2236,7 +2487,16 @@ async function loadMetric(metric){
       ${d.rounds_with_hole_detail<d.rounds_considered?`<p class="foot">Las tarjetas sin detalle hoyo por hoyo cuentan por el total que publica tu club, sin hoyos.</p>`:''}`;
   }
   el.innerHTML = html;
-  el.querySelectorAll('[data-mset]').forEach(b => b.onclick = () => { const p = new URLSearchParams(b.dataset.mset); const st = { ...MQ[metric] }; p.forEach((v,k)=>{ st[k] = decodeURIComponent(v); }); if (st.range) setRange(st.range); MQ[metric] = st; history.replaceState(null, '', mlink(metric, st)); loadMetric(metric); });
+  el.querySelectorAll('[data-lp]').forEach(b => b.onclick = () => {
+    const next = { ...MQ[metric], lp: b.dataset.lp };
+    if (next.lp === 'year') { next.range = ''; next.scope = 'year'; }
+    else if (next.lp === 'all') { next.range = ''; next.scope = 'all'; }
+    else { next.range = next.lp; next.scope = 'all'; }
+    MQ[metric] = next;
+    history.replaceState(null, '', mlink(metric, metricQuery(next)));
+    loadMetric(metric);
+  });
+  el.querySelectorAll('[data-mset]').forEach(b => b.onclick = () => { const p = new URLSearchParams(b.dataset.mset); const st = { ...MQ[metric] }; p.forEach((v,k)=>{ st[k] = decodeURIComponent(v); }); MQ[metric] = st; history.replaceState(null, '', mlink(metric, metricQuery(st))); loadMetric(metric); });
   const det = el.querySelector('#modetail'), sc = el.querySelector('#moscroll');
   el.querySelectorAll('[data-mo]').forEach(b => b.onclick = () => { if (!det) return; det.hidden = false; det.textContent = b.getAttribute('aria-label') || ''; });
   if (sc) sc.scrollLeft = sc.scrollWidth;
@@ -2788,7 +3048,7 @@ function holeMapSvg(h, zoom){
 async function loadHoleMap(roundId){
   const el = $('#hmap'); if (!el) return;
   let d; try { d = await api(`/api/rounds/${roundId}/shots/map`); } catch(e){ el.innerHTML = ''; return; }
-  if (!$('#hmap')) return; if (!d.holes.length) { el.innerHTML = ''; return; }
+  if (!$('#hmap')) return; if (!d?.holes?.length) { el.innerHTML = ''; return; }
   if (!d.holes.some(h => h.hole === HM.hole)) HM.hole = d.holes[0].hole;
   const draw = () => { const h = d.holes.find(x => x.hole === HM.hole), hasPutts = h.shots.some(x => x.kind === 'putt') || h.points.some(p => p.lie === 'green');
     const rows = [...h.shots.map(x => ({ n: x.order, kind: x.kind, club: x.club, dist: x.distance_m, left: x.left_to_flag_m, holed: x.holed })),
@@ -2809,11 +3069,13 @@ async function loadBagExtras(){
   try {
     const [cd, lr] = await Promise.all([api('/api/club-stats'), api('/api/live-rounds')]);
     if (!$('#cdist')) return;
-    d.innerHTML = cd.clubs.length ? `<div class="card vx-dist"><div class="vx-dist-h"><span>Palo</span><span>Golpes</span><span>Mediana</span><span>Prom.</span><span>Máx.</span></div>
-      ${cd.clubs.map(c => `<a class="vx-dist-r" href="#/palo/${encodeURIComponent(c.club)}"><span>${esc(c.label)}${c.source&&c.source!=='gps'?' <i class="vx-src">'+(c.source==='mixed'?'GPS + LM':'LM')+'</i>':''}</span><span class="num">${c.shots||c.launch_monitor?.shots||0}</span><b class="num">${c.distance?.median_yd ?? c.launch_monitor?.carry?.median_yd ?? '—'}</b><span class="num">${c.distance?.avg_yd ?? c.launch_monitor?.carry?.avg_yd ?? '—'}</span><span class="num">${c.distance?.max_yd ?? c.launch_monitor?.carry?.max_yd ?? '—'}</span></a>`).join('')}</div>
+    const clubs = Array.isArray(cd?.clubs) ? cd.clubs : [];
+    const lives = Array.isArray(lr?.live_rounds) ? lr.live_rounds : [];
+    d.innerHTML = clubs.length ? `<div class="card vx-dist"><div class="vx-dist-h"><span>Palo</span><span>Golpes</span><span>Mediana</span><span>Prom.</span><span>Máx.</span></div>
+      ${clubs.map(c => `<a class="vx-dist-r" href="#/palo/${encodeURIComponent(c.club)}"><span>${esc(c.label)}${c.source&&c.source!=='gps'?' <i class="vx-src">'+(c.source==='mixed'?'GPS + LM':'LM')+'</i>':''}</span><span class="num">${c.shots||c.launch_monitor?.shots||0}</span><b class="num">${c.distance?.median_yd ?? c.launch_monitor?.carry?.median_yd ?? '—'}</b><span class="num">${c.distance?.avg_yd ?? c.launch_monitor?.carry?.avg_yd ?? '—'}</span><span class="num">${c.distance?.max_yd ?? c.launch_monitor?.carry?.max_yd ?? '—'}</span></a>`).join('')}</div>
       <p class="foot">Yardas, medidas por GPS entre cada golpe y el siguiente, sin putts, penalidades, OB, golpes pegados feo ni valores atípicos. Tocá un palo para ver hacia dónde se te va.</p>`
       : `<div class="empty-card">${ICON.target}<b>Todavía sin golpes registrados</b>En el iPhone, Golflet te muestra la distancia al green; después de pegar marcás el palo y acá se arma tu tabla real de distancias.</div>`;
-    g.innerHTML = lr.live_rounds.length ? `<div class="section"><h2>Rondas con GPS</h2></div>${yrList(lr.live_rounds, l => l.date, l => { const [y,m,dd] = l.date.split('-'); return `<a class="row" href="#/gps/${l.id}">${dateBlock(l.date)}<div class="body"><div class="t">${esc(l.course?title(l.course):'Ronda Golflet')}</div><div class="s">${l.shots} golpes${l.recap_id?' · audio':''}${l.round_id?' · con tarjeta':''}</div></div>${ICON.chev}</a>`; })}` : '';
+    g.innerHTML = lives.length ? `<div class="section"><h2>Rondas con GPS</h2></div>${yrList(lives, l => l.date, l => { const [y,m,dd] = l.date.split('-'); return `<a class="row" href="#/gps/${l.id}">${dateBlock(l.date)}<div class="body"><div class="t">${esc(l.course?title(l.course):'Ronda Golflet')}</div><div class="s">${l.shots} golpes${l.recap_id?' · audio':''}${l.round_id?' · con tarjeta':''}</div></div>${ICON.chev}</a>`; })}` : '';
   } catch(e){ d.innerHTML = `${errBox(e)}`; }
 }
 async function loadRecurring(){
@@ -3091,7 +3353,7 @@ function bindQuick(id){
         if (mine !== gen || !box.isConnected) return;
         phase = 'saved';
         readFailed = false;
-        const b = $('#gamebadge'); if (b) b.textContent = rows.length ? 'Cargado' : 'Sin cargar';
+        const b = $('#gamebadge'); if (b) { b.hidden = !rows.length; if (rows.length) b.textContent = 'Cargado'; }
         paint();
       } catch (e) {
         if (mine !== gen || !box.isConnected) return;
@@ -3148,8 +3410,8 @@ function bindQuick(id){
     if (msg) {
       if (readFailed && phase === 'error') msg.textContent = 'No se pudo leer la cuenta. Los totales de la tarjeta siguen igual.';
       else if (!seeded && phase === 'idle') msg.textContent = 'Leyendo la cuenta…';
-      else if (phase === 'idle') msg.textContent = any ? 'Guardado en este dispositivo' : 'Sin cargar';
-      else if (phase === 'saved') msg.textContent = any ? Q.saveMessage('saved') : 'Sin cargar';
+      else if (phase === 'idle') msg.textContent = any ? 'Guardado en este dispositivo' : 'Todavía no hay putts en esta vuelta.';
+      else if (phase === 'saved') msg.textContent = any ? Q.saveMessage('saved') : 'Todavía no hay putts en esta vuelta.';
       else msg.textContent = Q ? Q.saveMessage(phase) : 'No se pudo guardar. Lo que marcaste sigue acá.';
     }
     const retry = $('#qretry');
@@ -3157,7 +3419,7 @@ function bindQuick(id){
       retry.hidden = phase !== 'conflict' && phase !== 'error';
       retry.onclick = () => { if (phase === 'conflict') reloadAccount(); else retryLoad(); };
     }
-    const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.textContent = 'Sin cargar';
+    const b = $('#gamebadge'); if (b && !any && !(r.putts != null || r.gir != null || r.fir != null)) b.hidden = true;
     const src = $('#qsrc');
     if (src) {
       const d = derived.get(h[0]);
@@ -3180,7 +3442,7 @@ function bindQuick(id){
     tot('rt-putts', 'rt-putts-src', r.putts, puttH, xs => xs.reduce((s, x) => s + x.putts, 0), trackOwned.putts);
     tot('rt-gir', 'rt-gir-src', r.gir, girH, xs => xs.filter(x => x.gir).length, trackOwned.gir);
     tot('rt-fir', 'rt-fir-src', r.fir, fwH, xs => xs.filter(x => x.drive === 'fairway').length, trackOwned.drive);
-    const track = document.getElementById('round-track');
+    const track = document.getElementById('track-shots');
     if (track) track.setAttribute('href', `#/reconstruir?ronda=${encodeURIComponent(r.round_id)}&hole=${h[0]}`);
   };
   box.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { idx = (idx + holes.length + Number(b.dataset.qh)) % holes.length; paint(); });
@@ -3193,7 +3455,7 @@ function bindQuick(id){
       penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0,
       lost: s.result === 'lost',
       holed: s.result === 'holed',
-      putt: /^pt$|putter/i.test(club) || s.lie === 'green',
+      putt: s.intent === 'conceded' || /^pt$|putter/i.test(club) || s.lie === 'green',
       originGreen: s.lie === 'green',
       endLie, direction,
     };
@@ -3292,11 +3554,20 @@ function wxMiss(reason){
   if (reason === 'error') return `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>No pudimos consultar el clima.</span>${retry}</div>`;
   return `<div class="card wx-card wx-none"><span class="overline">Clima</span><span>Todavía no leímos el clima de ese día.</span>${retry}</div>`;
 }
+function wxWhy(reason){
+  if (reason === 'no_course_location') return 'No tenemos la ubicación de esta cancha.';
+  if (reason === 'not_played' || reason === 'future') return 'Esa fecha todavía no llegó.';
+  if (reason === 'unavailable') return 'No hay pronóstico para ese día y esa cancha.';
+  if (reason === 'error') return 'No pudimos consultar el clima.';
+  return 'No hay pronóstico para esta salida.';
+}
 async function loadRoundWx(id, retry){
   const el = $('#rwx'); if (!el) return;
-  let d; try { d = await api(`/api/rounds/${encodeURIComponent(id)}/weather${retry ? '?retry=1' : ''}`); } catch(e){ if ($('#rwx')) { $('#rwx').innerHTML = wxMiss('error'); const b = $('#wxretry'); if (b) b.onclick = () => loadRoundWx(id, true); } return; }
+  const arm = () => { const b = $('#wxretry'); if (b) b.onclick = () => loadRoundWx(id, true); };
+  let d; try { d = await api(`/api/rounds/${encodeURIComponent(id)}/weather${retry ? '?retry=1' : ''}`); } catch(e){ if ($('#rwx')) { $('#rwx').hidden = false; $('#rwx').innerHTML = wxMiss('error'); arm(); } return; }
   if (!$('#rwx')) return; const w = d.weather;
-  if (!w) { el.innerHTML = wxMiss(d.reason); const b = $('#wxretry'); if (b) b.onclick = () => loadRoundWx(id, true); return; }
+  if (!w) { el.hidden = false; el.innerHTML = wxMiss(d.reason); arm(); return; }
+  el.hidden = false;
   const forecast = w.kind === 'forecast' || w.source === 'open-meteo-forecast';
   el.innerHTML = `<div class="card wx-card"><div class="wx-h"><span class="wx-ic">${WX_IC[w.condition]||''}</span><div><span class="overline">${forecast ? 'Pronóstico, no es el histórico' : `Clima ${w.basis==='tee_time'?'en tu salida':'durante el día'}`}</span><b>${WX_L[w.condition]||'—'}</b></div></div>
     <div class="wx-kv"><div><span>Temperatura</span><b class="num">${n1(w.temp_c)}°</b></div><div><span>Lluvia</span><b class="num">${n1(w.precip_mm)} mm</b></div><div><span>Viento</span><b class="num">${w.wind_kmh!=null?Math.round(w.wind_kmh):'—'} km/h</b></div><div><span>Ráfagas</span><b class="num">${w.gust_kmh!=null?Math.round(w.gust_kmh):'—'} km/h</b></div></div>
@@ -3363,7 +3634,7 @@ async function loadPrivRes(){
     <a class="row" href="#/privado/companeros"><div class="body"><div class="t">Con quién jugás</div><div class="s">${top.length ? top.map(p => `${esc(p.name)} <b class="num">${p.count}</b>${p.impact!=null?` · ${impactLabel(p.impact)}`:''}`).join(' · ') : 'Se arma a medida que juegues'}</div></div>${ICON.chev}</a></div>
     <p class="foot">Privado: solo lo ves vos. No aparece en grupos, profesores ni enlaces compartidos. El número de al lado del nombre es la cantidad de salidas.</p>`;
 }
-function sPrivado(){ return `<div class="bar"><span class="overline">Solo para vos</span><button class="close" data-close>${ICON.x}</button></div><div id="privado"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
+function sPrivado(){ return `<div class="bar"><span class="overline">Solo para vos</span><button class="close" data-close>${ICON.x}</button></div><div id="privado"><div class="msg">Leyendo tus tarjetas.</div></div>`; }
 const scoreFoot = s => s ? `En ${s.cards} tarjetas (${s.holes} hoyos), cada 18: ${s.eagles==null?'':per18(s.eagles)+' águilas · '}${per18(s.birdies)} birdies · ${per18(s.pars)} pares · ${per18(s.bogeys)} bogeys · ${per18(s.doubles)} dobles o peor. Es un promedio, no la suma. Más bajo en el diferencial es mejor.` : 'El resultado por hoyo aparece con al menos 3 tarjetas que tengan el detalle. No lo invento.';
 const teeRowP = t => `<${t.round_id?`a href="#/ronda/${t.round_id}"`:'div'} class="row">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name||'')}${t.course_label?' · '+esc(t.course_label):''}</div><div class="s">${esc(t.time)} · ${t.companions.length?esc(t.companions.join(', ')):'sin compañeros leídos'}</div></div>${t.round_id?`<div class="score"><b class="num">${n1(t.differential)}</b><span>dif.</span></div>${ICON.chev}`:'<div class="score"><span>sin tarjeta</span></div>'}</${t.round_id?'a':'div'}>`;
 async function loadPrivado(what, arg){
@@ -3529,13 +3800,14 @@ function render(keepScroll){
     const here = location.hash || '#/inicio', back = (GROUPISH(p[0]) && GG) ? GG.parent(here) : (p[0] === 'plan' && GP) ? GP.parent(here) : ((p[0] === 'partido' || p[0] === 'partidos') && GM) ? GM.parent(here) : (p[0] === 'metricas' && p[2]) ? `#/metricas/${metTab(p[1])}` : (p[0] === 'diferencial' && p[1]) ? (BACK[here] || `#/ronda/${p[1]}`) : (BACK[here] || PARENT[p[0]] || '#/inicio');
     detail = detail.replace(/<button class="close" data-close>[\s\S]*?<\/button>/g, '');
     view.dataset.v = 'd-' + p[0];
-    view.innerHTML = `<div class="pg"><nav class="crumbs" aria-label="Volver"><a class="crumb-back" href="${esc(back)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1L3 6l5 5"/></svg>${esc(labelFor(back))}</a></nav>
+    const trackShots = p[0] === 'ronda' && p[1] ? `<a class="track-shots" id="track-shots" href="#/reconstruir?ronda=${encodeURIComponent(p[1])}&amp;hole=1">Track Shots</a>` : '';
+    view.innerHTML = `<div class="pg"><nav class="crumbs" aria-label="Volver"><a class="crumb-back" href="${esc(back)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1L3 6l5 5"/></svg>${esc(labelFor(back))}</a>${trackShots}</nav>
       <div class="md${aside ? ' has-aside' : ''}">${aside ? `<aside class="md-list">${aside}</aside>` : ''}<article class="md-detail">${detail}</article></div></div>`;
     window.scrollTo(0, 0);
     const on = view.querySelector('.md-list .on'); if (on) on.scrollIntoView({ block: 'nearest' });
   } else {
     const V = {inicio:vInicio,resumen:vResumen,rondas:vRondas,cancha:vCancha,bolsa:vBolsa}[base];
-    view.dataset.v = base; try { view.innerHTML = V(); } catch (e) { console.error('view', base, e?.message); view.innerHTML = `<div class="pg">${errBox(e, 'esta pantalla')}<p class="foot"><a href="#/jugar">Jugar</a></p></div>`; }   // t254u: never a blank screen
+    view.dataset.v = base; try { view.innerHTML = V(); const spinGen = VIEW_GEN; setTimeout(() => { if (spinGen !== VIEW_GEN) return; view.querySelectorAll('.spin').forEach(s => { const host = s.parentElement; if (host) host.innerHTML = '<div class="msg">No llegó la lectura. Reintentá.</div>'; }); }, 12000); } catch (e) { console.error('view', base, e?.message); view.innerHTML = `<div class="pg">${errBox(e, 'esta pantalla')}<p class="foot"><a href="#/jugar">Jugar</a></p></div>`; }   // t254u: never a blank screen
     window.scrollTo(0, keepScroll ? y : 0);
   }
   sheetRoot.innerHTML = ''; document.body.classList.remove('sheet-open');
@@ -3603,7 +3875,7 @@ function bind(p, isDetail){
   if ($('.met-entry')) loadGpsLive();
   if (p[0]==='sorteo') loadSorteo(p[1], p[2]==='bases');
   if (p[0]==='cuenta') loadGear();
-  if (p[0]==='hoyo') { loadHoleGeo(); loadHowto(); }
+  if (p[0]==='hoyo') { loadHoleGeo(); loadHoleWx(); loadHowto(); }
   if (p[0]==='estrategia') loadEstrategia(decodeURIComponent(p[1]||''));
   if (p[0]==='nivel') loadNivel((p[1]||'').split('?')[0]);
   if (p[0]==='tees') loadTees();
@@ -3614,7 +3886,7 @@ function bind(p, isDetail){
   if (p[0]==='profesores') { if (p[1]==='encontrar') loadMatch(p[2] || '1'); else if (p[1]) bindProfBuscar(); else loadProfsCard(); }
   if (p[0]==='profesor') loadProfesor(decodeURIComponent(p[1]||''));
   if (p[0]==='profe') { if (p[1]==='perfil') loadProfePerfil(); else if (p[1]==='alumno') { const sid = decodeURIComponent(p[2]||''); if (p[3]==='clase') bindProfeClase(sid); else if (p[3]==='contenido') loadProfeContenido(sid); else loadProfeAlumno(sid); } else loadProfe(); }
-  if (p[0]==='cuenta') { loadProfsCard().then(() => { if (sessionStorage.getItem('goProfs')) { sessionStorage.removeItem('goProfs'); $('#profs')?.scrollIntoView({ behavior:'smooth', block:'start' }); } }); bindNick(); bindPhoto(); }
+  if (p[0]==='cuenta') { loadProfsCard().then(() => { if (sessionStorage.getItem('goProfs')) { sessionStorage.removeItem('goProfs'); $('#profs')?.scrollIntoView({ behavior:'smooth', block:'start' }); } }); bindNick(); bindPhoto(); paintCardPull(); loadScorecards(); }
   if (p[0]==='club-faltante') bindClubFaltante();
   if (p[0]==='equipo' && decodeURIComponent((p[1]||'').split('?')[0]) === 'juego') loadIronSet();
   else if (p[0]==='equipo') loadEquipo(decodeURIComponent((p[1]||'nuevo').split('?')[0]), (p[2]||'').startsWith('editar'));
@@ -3666,8 +3938,6 @@ function bind(p, isDetail){
 }
 addEventListener('hashchange', () => render());
 document.addEventListener('click', ev => {
-  const jump = ev.target && ev.target.closest && ev.target.closest('#wx-jump');
-  if (jump) { ev.preventDefault(); const t = document.getElementById('wxres'); if (t) t.scrollIntoView({ block: 'start' }); return; }
   const b = ev.target && ev.target.closest && ev.target.closest('#view [data-range]');
   if (!b) return;
   const k = b.getAttribute('data-range');

@@ -669,8 +669,13 @@
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
       if (retro && !mapOk()) {
+        const pts = [];
+        (S.holes || []).forEach(h => { const t = asLL(h.tee), f = asLL(h.green) || asLL(h.flag) || asLL(h.pin); if (t) pts.push(t); if (f) pts.push(f); });
+        const focus = pts.length ? { lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length } : null;
+        const sat = focus ? `<div class="tk-sat" id="hole-satellite" style="height:220px;border-radius:12px;background:#0B2545 center/cover no-repeat;background-image:url('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${focus.lng - 0.01},${focus.lat - 0.008},${focus.lng + 0.01},${focus.lat + 0.008}&bboxSR=4326&imageSR=4326&size=800,480&f=image')"></div>` : '';
         el.innerHTML = `<div class="tk" id="play-track">
           <div class="tk-top"><button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button><b class="tk-cn">${name}</b></div>
+          ${sat}
           <p class="tk-empty" id="rc-nogeo">Este hoyo no tiene geometría verificada. No marco un punto inventado.</p>
           <div class="tk-dock"><div class="tk-nav">
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>
@@ -706,7 +711,8 @@
           if (landed && prevKnown && hav(prevKnown, landed) > 3) prevKnown = landed;
         }
         const lost = s.result === 'lost';
-        return { id: s.id, club: penalty ? 'Penalidad' : (lost ? 'Perdida' : (clubLabel(s.club) || s.club)), yards: lost || penalty || !(label.text && label.kind !== 'penalty') ? '' : label.text, unknown: !lost && !penalty && label.kind === 'missing', n: i + 1, sacada: s.intent === 'recovery' };
+        const conceded = s.intent === 'conceded';
+        return { id: s.id, club: conceded ? 'A buena' : (penalty ? 'Penalidad' : (lost ? 'Perdida' : (clubLabel(s.club) || s.club))), yards: conceded || lost || penalty || !(label.text && label.kind !== 'penalty') ? '' : label.text, unknown: !conceded && !lost && !penalty && label.kind === 'missing', n: i + 1, sacada: s.intent === 'recovery' };
       });
       const railSource = savedRail.length ? savedRail : S.track.marks.filter(m => m.countsStroke).map((m, i) => {
         const prev = playingPoint(S.track.marks.slice(0, S.track.marks.indexOf(m)));
@@ -727,7 +733,7 @@
           const start = R().knownPoint(s.lat, s.lng);
           const penalty = s.result === 'penalty' || Number(s.penalty_strokes) > 0;
           const flown = start && end ? hav(start, end) : null;
-          return { penalty, holed: s.result === 'holed', originGreen: !penalty && s.lie === 'green' && (flown == null || flown <= 50), endLie: penalty ? null : (lieAt(end) || null) };
+          return { penalty, holed: s.result === 'holed' || s.intent === 'conceded', putt: s.intent === 'conceded', originGreen: !penalty && s.intent !== 'conceded' && s.lie === 'green' && (flown == null || flown <= 50), endLie: penalty || s.intent === 'conceded' ? null : (lieAt(end) || null) };
         });
         const sum = R().trackHoleSummary(par || null, facts);
         S.derived = { putts: sum.putts, gir: sum.gir, fir: sum.fir };
@@ -737,7 +743,7 @@
       const setup = retro && (phase === 'confirmTee' || phase === 'confirmFlag');
       const marking = retro && phase === 'tracking' && !S.done && phase !== 'relief';
       const holeBits = [par ? `Par ${par}` : '', cardYd, verifiedFlag() && !verifiedTee() ? 'Sin salida verificada' : ''].filter(Boolean);
-      const holeChip = retro ? `<div class="tk-hole" id="tk-hole"><b>Hoyo ${S.hole}</b>${holeBits.length ? `<span>${esc(holeBits.join(' · '))}</span>` : ''}</div>` : '';
+      const holeChip = retro ? `<div class="tk-hole" id="tk-hole"><b>Hoyo ${S.hole}</b>${H.unofficial ? `<span class="tk-unofficial">No oficial</span>` : ''}${holeBits.length ? `<span>${esc(holeBits.join(' · '))}</span>` : ''}</div>` : '';
       const read = cursorRead(here);
       const cursorKind = phase === 'penaltyWhere' ? 'penalty' : phase === 'drop' ? 'drop' : phase === 'confirmFlag' ? 'flag' : (phase === 'confirmTee' && S.frame === 'tee') ? 'tee' : 'shot';
       const nextStroke = S.track.marks.filter(m => m.countsStroke).length + 1;
@@ -786,7 +792,7 @@
           </div>`}
           ${S.teeSource === 'jugador' ? `<p class="tk-player" id="tk-player">Salida confirmada por vos. No es una medida.</p>` : ''}
           ${S.flagSource === 'jugador' ? `<p class="tk-player" id="tk-flag-player">Hoyo confirmado por vos. No es una medida.</p>` : ''}
-          ${S.msg ? `<p class="tk-msg">${esc(S.msg)}</p>` : ''}
+          ${S.msg ? `<p class="tk-msg" id="${S.msg.startsWith('Hoyo cerrado') ? 'play-conceded' : 'tk-msg'}">${esc(S.msg)}</p>` : ''}
           <div class="tk-acts">
             <div class="tk-play">
               ${clubTile}
@@ -798,7 +804,7 @@
             <div class="tk-rounds">
               ${marking && S.track.marks.length ? `<button type="button" class="tk-round" id="play-undo" aria-label="Deshacer"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8.5 7.5H4.5V3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 8.2A8 8 0 1 1 6.4 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>` : ''}
               ${(marking || (!retro && phase === 'tracking')) ? `<div class="tk-penwrap"><button type="button" class="tk-round tk-pen" id="play-penalty" aria-haspopup="menu" aria-expanded="false" aria-controls="play-pen-menu" aria-label="Penalidad">P+1</button><div class="tk-penmenu" id="play-pen-menu" role="menu" hidden><button type="button" id="play-pen-stroke" role="menuitem">Penalidad +1</button>${marking ? '<button type="button" id="play-lost" role="menuitem">Pelota perdida / fuera de límites</button><button type="button" id="play-lost-prov" role="menuitem">Pelota perdida · jugué la provisional</button>' : ''}</div></div>` : ''}
-              ${marking ? `<button type="button" class="tk-round${S.recovery ? ' on' : ''}" id="play-recovery" aria-pressed="${S.recovery ? 'true' : 'false'}" aria-label="Sacada a buena">Sacada</button>` : ''}
+              ${(marking || (!retro && phase === 'tracking')) && !S.done ? `<button type="button" class="tk-round" id="play-good" aria-label="A buena, putt concedido">A buena</button>` : ''}
               ${!retro && phase === 'relief' ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
               ${retro && (phase === 'relief') ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
               ${marking && !hasGreenPoly() && !originOnGreen() ? `<button type="button" class="tk-ghost tk-side" id="play-lie">En el green</button>` : ''}
@@ -1048,6 +1054,23 @@
       S.shots = r.shots || S.shots;
       const rows = (S.shots || []).filter(s => s.hole === S.hole);
       return rows[rows.length - 1]?.id || null;
+    };
+    const concedePutt = async () => {
+      if (S.done) return;
+      if (retro && typeof H.onSave === 'function') {
+        const shots = await H.onSave({ hole: S.hole, from: null, land: null, result: 'holed', club: '', penalty: false, lie: null, intent: 'conceded', distance_m: null, distance_kind: null });
+        if (!S.alive || shots == null) return;
+        if (Array.isArray(shots)) S.saved = shots;
+        S.done = true;
+        S.msg = 'Hoyo cerrado. A buena cuenta un golpe y un putt, sin punto en el mapa.';
+        render();
+        return;
+      }
+      const r = await api(`/api/live-rounds/${encodeURIComponent(S.id)}/shots`, { method: 'POST', body: JSON.stringify({ client_id: cid(), hole: S.hole, result: 'holed', intent: 'conceded' }) });
+      S.shots = r.shots || S.shots;
+      S.done = (S.shots || []).some(s => s.hole === S.hole && (s.result === 'holed' || s.intent === 'conceded'));
+      if (S.done) S.msg = 'Hoyo cerrado. A buena cuenta un golpe y un putt, sin punto en el mapa.';
+      render();
     };
 
     const targetFrame = () => {
@@ -1356,8 +1379,8 @@
         } catch (e) { if (!S.alive) return; S.msg = e.message || 'No se pudo guardar.'; }
         render();
       };
-      const recBtn = el.querySelector('#play-recovery');
-      if (recBtn) recBtn.onclick = () => { S.recovery = !S.recovery; render(); };
+      const goodBtn = el.querySelector('#play-good');
+      if (goodBtn) goodBtn.onclick = () => { concedePutt(); };
       const postLost = async provisional => {
         const here = fromCenter();
         const from = S.track.ball || S.track.tee;

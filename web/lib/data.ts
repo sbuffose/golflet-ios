@@ -5,6 +5,15 @@ import { applyHolesOverride, parTotal } from "./course-override";
 import { clubDisplayName } from "./course-names";
 import { roundChips } from "./metrics";
 import { gpsPuttSql, gpsShotSql, manualPuttSql } from "./gps-shot";
+import { isUndefinedColumn } from "./scorecard-lease";
+
+async function qFlex(withFlag: string, withoutFlag: string, params: unknown[]) {
+  try { return await q(withFlag, params); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "official")) throw e;
+    return q(withoutFlag, params);
+  }
+}
 
 export const DEFAULT_BAG = ["Driver", "Madera 3", "Híbrido", "Hierro 4", "Hierro 5", "Hierro 6", "Hierro 7", "Hierro 8", "Hierro 9", "PW", "GW", "SW", "LW"]
   .map(club => ({ club, carry: null as number | null, total: null as number | null }));
@@ -23,10 +32,16 @@ function warnFor(par: number | null, yards: Record<string, number | null>) {
 /** Minimal round rows for every account of the user, with the cross-club dedupe applied. */
 async function userRoundKeys(userId: string) {
   const accts = await q(`select id from club_account where user_id=$1 order by created_at`, [userId]);
-  const rows = await q(`select r.id, r.club_account_id as account_id, r.date::text as date, r.course, r.data->>'club_played' as club_played,
+  const rows = await qFlex(
+    `select r.id, r.club_account_id as account_id, r.date::text as date, r.course, r.data->>'club_played' as club_played,
       (r.data->>'gross')::int as gross, r.data->>'card_status' as card_status, jsonb_array_length(r.holes) as holes_n,
       coalesce((r.data->>'other_course')::boolean, false) as other_course, (n.round_id is not null) as has_notes
-    from round r join club_account a on a.id=r.club_account_id left join round_note n on n.round_id=r.id where a.user_id=$1`, [userId]);
+    from round r join club_account a on a.id=r.club_account_id left join round_note n on n.round_id=r.id where a.user_id=$1 and coalesce(r.official, true)`,
+    `select r.id, r.club_account_id as account_id, r.date::text as date, r.course, r.data->>'club_played' as club_played,
+      (r.data->>'gross')::int as gross, r.data->>'card_status' as card_status, jsonb_array_length(r.holes) as holes_n,
+      coalesce((r.data->>'other_course')::boolean, false) as other_course, (n.round_id is not null) as has_notes
+    from round r join club_account a on a.id=r.club_account_id left join round_note n on n.round_id=r.id where a.user_id=$1`,
+    [userId]);
   return dedupeRounds(rows as any[], accts.map(a => a.id));
 }
 
@@ -49,14 +64,16 @@ export async function buildData(userId: string) {
   const accounts = await listAccounts(userId);
   const ids = accounts.map(a => a.id);
   const multi = new Set(accounts.map((a: any) => a.club_id)).size > 1;
-  const rows = ids.length ? await q(`select r.id, r.club_account_id, r.date::text as date, r.course, r.data, r.holes, a.club_id,
+  const roundSql = (flag: boolean) => `select r.id, r.club_account_id, r.date::text as date, r.course, r.data, r.holes, a.club_id,
+        ${flag ? "coalesce(r.official, true)" : "true"} as official,
         n.putts, n.gir, n.fir, n.notes, n.updated_at as notes_at,
         (select rr.id from round_recap rr where rr.round_id=r.id) as recap_id,
         (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and ${gpsShotSql("s")}) as gps_shots,
         (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and ${gpsPuttSql("s")}) as gps_putts,
         (select count(*)::int from shot s join live_round l on l.id=s.live_round_id where l.round_id=r.id and ${manualPuttSql("s")}) as manual_putts
       from round r join club_account a on a.id=r.club_account_id left join round_note n on n.round_id=r.id
-      where r.club_account_id = any($1) order by r.date desc`, [ids]) : [];
+      where r.club_account_id = any($1) ${flag ? "and coalesce(r.official, true)" : ""} order by r.date desc`;
+  const rows = ids.length ? await qFlex(roundSql(true), roundSql(false), [ids]) : [];
   const clubName = new Map(accounts.map(a => [a.club_id, a.club_name]));
   const keep = await visibleRoundIds(userId);
   const localName = new Map<string, string>();
@@ -73,7 +90,7 @@ export async function buildData(userId: string) {
       course_key: other ? `x:${played}:${r.course}` : `${r.club_id}:${r.course}`,
       course_label: other ? (r.course && r.course !== played ? `${r.course} · ${played}` : played) : null,
       putts: r.putts, gir: r.gir, fir: r.fir, notes: r.notes, notes_at: r.notes_at,
-      recap_id: r.recap_id ?? null, gps_shots: r.gps_shots ?? 0, manual_putts: r.manual_putts ?? 0,
+      recap_id: r.recap_id ?? null, gps_shots: r.gps_shots ?? 0, manual_putts: r.manual_putts ?? 0, official: r.official !== false,
       ...roundChips({ holes: r.holes, summary_counts: r.data.summary_counts, is_9_holes: r.data.is_9_holes }, r.putts, r.gps_putts),
     };
   });
@@ -124,13 +141,28 @@ export async function buildData(userId: string) {
     courses: (courses as any[]).filter((c: any) => c.key.split(":")[0] === String(id)).map((c: any) => ({ key: c.key, course: c.course, label: c.label, rounds: rounds.filter(r => r.course_key === c.key).length })) }))
     .filter(g => g.courses.length || g.rounds);
   const otherN = rounds.filter(r => r.other_course).length;
+  let unofficial: any[] = [];
+  try {
+    unofficial = await q(`select id, date::text as date, course, tee, club_code from live_round where user_id=$1 and official = false order by date desc limit 40`, [userId]);
+  } catch (e) {
+    if (!isUndefinedColumn(e, "official")) throw e;
+    try {
+      unofficial = await q(`select id, date::text as date, course, tee, club_code from live_round where user_id=$1 and origin='manual' and round_id is null order by date desc limit 40`, [userId]);
+    } catch (e2) {
+      if (!isUndefinedColumn(e2, "origin") && !isUndefinedColumn(e2, "tee")) throw e2;
+      unofficial = [];
+    }
+  }
+  const unofficial_rounds = unofficial.map(r => ({
+    id: String(r.id), date: String(r.date).slice(0, 10), course: r.course || "", tee: r.tee || "", club_code: r.club_code || "", official: false,
+  }));
   return {
     generated: new Date().toISOString(),
     course_groups, other_course_rounds: otherN,
     player: lead ? { name: lead.player_name ?? fresh?.player_name ?? null, handicap_index: (fresh?.handicap_index ?? lead.handicap_index) == null ? null : Number(fresh?.handicap_index ?? lead.handicap_index), txtkey: lead.matricula } : null,
     clubs: accounts,
     hi_history: [...hiByDate.values()],
-    rounds, courses,
+    rounds, unofficial_rounds, courses,
     bag: bag?.clubs || DEFAULT_BAG,
   };
 }

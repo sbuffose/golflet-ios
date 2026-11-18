@@ -5,6 +5,28 @@ struct ReconstructionPoint: Equatable, Sendable {
     var lng: Double
 }
 
+struct HoleEnds: Equatable, Sendable {
+    var tee: ReconstructionPoint?
+    var flag: ReconstructionPoint?
+
+    func verified() -> (tee: ReconstructionPoint, flag: ReconstructionPoint)? {
+        guard let tee, let flag else { return nil }
+        let meters = HoleEnds.meters(tee, flag)
+        guard meters >= 40, meters <= 700 else { return nil }
+        return (tee, flag)
+    }
+
+    static func meters(_ a: ReconstructionPoint, _ b: ReconstructionPoint) -> Double {
+        let radius = 6_371_000.0
+        let p1 = a.lat * .pi / 180
+        let p2 = b.lat * .pi / 180
+        let dLat = (b.lat - a.lat) * .pi / 180
+        let dLng = (b.lng - a.lng) * .pi / 180
+        let h = sin(dLat / 2) * sin(dLat / 2) + cos(p1) * cos(p2) * sin(dLng / 2) * sin(dLng / 2)
+        return 2 * radius * asin(min(1, sqrt(h)))
+    }
+}
+
 struct ReconstructionRound: Identifiable, Equatable, Sendable {
     var id: String
     var date: String
@@ -13,6 +35,10 @@ struct ReconstructionRound: Identifiable, Equatable, Sendable {
     var clubCode: String
     var vmCourse: String
     var roundId: String?
+    var tee: String = ""
+    var gross: Int? = nil
+    var tracked: Bool = false
+    var official: Bool = true
 }
 
 struct ReconstructionSetup: Equatable, Sendable {
@@ -61,6 +87,7 @@ struct ReconstructionShot: Identifiable, Equatable, Sendable {
     var lie: String?
     var positionLabel: String
     var distanceLabel: String
+    var intent: String? = nil
 
     var draft: ReconstructionDraft {
         ReconstructionDraft(hole: hole, club: club, result: result, penaltyStrokes: penaltyStrokes, lat: lat, lng: lng, endLat: endLat, endLng: endLng, distanceM: lat == nil ? distanceM : nil)

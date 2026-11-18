@@ -28,13 +28,18 @@ export async function ownLive(userId: string, id: string) {
 
 /** Attach unlinked Golflet rounds to the synced Golfistics card of the same date + club + course (the kept copy after dedupe). */
 export async function linkLiveRounds(userId: string): Promise<number> {
+  const openSql = (origin: boolean, official: boolean) => `select id, date::text as date, club_id, course from live_round
+    where user_id=$1 and round_id is null and club_id is not null and course is not null
+    ${origin ? "and coalesce(origin,'live')='live'" : ""} ${official ? "and coalesce(official, true)" : ""}`;
   let open: any[];
-  try {
-    open = await q(`select id, date::text as date, club_id, course from live_round where user_id=$1 and round_id is null and club_id is not null and course is not null and coalesce(origin,'live')='live'`, [userId]);
-  } catch (e) {
-    const err = e as { code?: string; message?: string };
-    if (err?.code !== "42703" || !/origin/i.test(String(err?.message || ""))) throw e;
-    open = await q(`select id, date::text as date, club_id, course from live_round where user_id=$1 and round_id is null and club_id is not null and course is not null`, [userId]);
+  try { open = await q(openSql(true, true), [userId]); }
+  catch (e) {
+    if (!isUndefinedColumn(e, "official") && !isUndefinedColumn(e, "origin")) throw e;
+    try { open = await q(openSql(!isUndefinedColumn(e, "origin"), false), [userId]); }
+    catch (e2) {
+      if (!isUndefinedColumn(e2, "origin")) throw e2;
+      open = await q(openSql(false, false), [userId]);
+    }
   }
   if (!open.length) return 0;
   const keep = await visibleRoundIds(userId); let n = 0;

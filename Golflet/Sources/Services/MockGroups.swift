@@ -303,13 +303,18 @@ extension MockAPIClient {
                             return nil
                         }
                     }()
+                    let scaled: Double? = {
+                        guard shared, let value = sample.value else { return nil }
+                        guard config.courseFilter != nil else { return value }
+                        return (value / 2 * 10).rounded() / 10
+                    }()
                     return MemberMetricValue(
                         memberID: member.id,
                         memberName: member.name,
                         initials: member.initials,
                         shared: shared,
-                        value: shared ? sample.value : nil,
-                        text: shared ? sample.text : nil,
+                        value: scaled,
+                        text: config.courseFilter == nil && shared ? sample.text : nil,
                         perRound: perRound,
                         sample: shared ? 18 : nil
                     )
@@ -319,7 +324,11 @@ extension MockAPIClient {
         let me = group.members.first { $0.id == MockGroupStore.meID }
         let rank = me.flatMap { rows.first { $0.metric == .birdies }?.rank(of: $0.id) }
         let hero = rank.map { GroupHero(rank: $0, cards: "18 tarjetas", memberID: me?.id) }
-        return GroupComparison(groupID: groupID, config: config, rows: rows, hero: hero)
+        let courses = [
+            GroupCourseOption(key: "1:Azul", label: "Azul", club: "Jockey Club Buenos Aires"),
+            GroupCourseOption(key: "1:Colorada", label: "Colorada", club: "Jockey Club Buenos Aires"),
+        ]
+        return GroupComparison(groupID: groupID, config: config, rows: rows, hero: hero, courses: courses)
     }
 
     func groupPeriod(groupID: String, kind: ComparativoKind, off: Int) async throws -> ComparativoData {
