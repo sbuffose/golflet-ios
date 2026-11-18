@@ -1796,9 +1796,6 @@ final class GolfletUITests: XCTestCase {
         }
         XCTAssertTrue(scorecardSheetOpen(app), "No se abrió la hoja de tarjetas")
         XCTAssertTrue(app.staticTexts["1 pendiente"].waitForExistence(timeout: 4), "Falta el resumen de la hoja")
-        if !first(app, "tee-prep-scorecard-refresh").exists {
-            app.swipeUp()
-        }
         XCTAssertTrue(first(app, "tee-prep-scorecard-refresh").waitForExistence(timeout: 4), "Falta Buscar de nuevo")
         XCTAssertTrue(app.staticTexts["Pendiente"].exists, "Falta el chip Pendiente")
         XCTAssertFalse(app.staticTexts["Todavía no hay tarjeta"].exists)
