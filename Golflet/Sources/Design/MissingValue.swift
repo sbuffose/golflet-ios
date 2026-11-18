@@ -83,12 +83,16 @@ struct MissingMark: View {
     @State private var open = false
 
     var body: some View {
-        Button("–") { open = true }
-            .font(GType.headline)
-            .foregroundStyle(p.ink)
-            .buttonStyle(.plain)
-            .accessibilityLabel("Sin dato, \(kind.title)")
-            .accessibilityIdentifier("missing-\(kind.rawValue)")
+        Button { open = true } label: {
+            Text("–")
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+                .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Sin dato, \(kind.title)")
+        .accessibilityIdentifier("missing-\(kind.rawValue)")
             .sheet(isPresented: $open) {
                 MissingSheet(kind: kind, action: action)
                     .presentationDetents([.height(280)])
