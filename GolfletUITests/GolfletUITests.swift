@@ -1654,6 +1654,9 @@ final class GolfletUITests: XCTestCase {
         tapTab(app, "Inicio")
         XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 6))
         shot("inicio-hi")
+        for _ in 0..<4 { nudgePage(app, up: true) }
+        shot("inicio-scroll")
+        for _ in 0..<6 { nudgePage(app, up: false) }
 
         reveal(app, "home-hcp-profesor")
         let profesor = largest(app, "home-hcp-profesor")
@@ -1694,8 +1697,15 @@ final class GolfletUITests: XCTestCase {
 
         tapTab(app, "Rondas")
         XCTAssertTrue(waitFor(app, "screen-rondas", timeout: 6), "La lista de rondas no se abrió")
-        assertRoundChipsOneLine(app)
+        let banner = first(app, "reconstruct-start")
+        XCTAssertTrue(banner.waitForExistence(timeout: 4), "Falta el banner de cargar la vuelta")
+        XCTAssertLessThan(banner.frame.maxY, window.frame.height * 0.62, "El banner quedó abajo y tapa una ronda")
+        let chipRow = largest(app, "round-chips")
+        if chipRow.exists, chipRow.frame.height > 8 {
+            XCTAssertGreaterThan(chipRow.frame.minY, banner.frame.maxY - 1, "El banner tapa los chips")
+        }
         shot("rondas-chips")
+        assertRoundChipsOneLine(app)
 
         reveal(app, "reconstruct-start")
         let start = first(app, "reconstruct-start")
@@ -1721,6 +1731,15 @@ final class GolfletUITests: XCTestCase {
             first(app, "last-round-card").tap()
             XCTAssertTrue(waitFor(app, "track-shots", timeout: 6), "Falta Track Shots")
             shot("track-shots")
+            reveal(app, "missing-putts")
+            let dash = first(app, "missing-putts")
+            XCTAssertTrue(dash.waitForExistence(timeout: 4), "Falta el guion de putts")
+            if dash.isHittable { dash.tap() } else { dash.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            XCTAssertTrue(waitFor(app, "missing-sheet", timeout: 4), "No se abrió la hoja del guion")
+            shot("guion")
+            let sheet = first(app, "missing-sheet")
+            let handle = sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
+            handle.press(forDuration: 0.05, thenDragTo: sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 2.2)))
             dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
         }
         tapTab(app, "Inicio")
@@ -1820,8 +1839,9 @@ final class GolfletUITests: XCTestCase {
                 if twoDigits { sawTwoDigits = true }
                 let joined = labels.joined(separator: " | ")
                 XCTAssertLessThan(box.frame.height, 26, "Los chips ocupan más de una línea: \(joined)", file: file, line: line)
-                XCTAssertTrue(joined.contains("birdie") && joined.contains("pares") && joined.contains("bogey"), joined, file: file, line: line)
-                XCTAssertFalse(labels.contains { $0.contains("\n") }, "El número y la palabra no van en la misma línea: \(joined)", file: file, line: line)
+                XCTAssertTrue(joined.contains("Bir") && joined.contains("Par") && joined.contains("Bog"), joined, file: file, line: line)
+                XCTAssertFalse(labels.contains { $0.contains("…") || $0.contains("...") || $0.contains("\n") }, "Un chip se cortó: \(joined)", file: file, line: line)
+                XCTAssertTrue(labels.allSatisfy { $0.range(of: #"^\d+ (Ág|Bir|Par|Bog|Dob)$"#, options: .regularExpression) != nil }, "Formato compacto: \(joined)", file: file, line: line)
                 if framed.count >= 3 {
                     let sameLine = framed.filter { abs($0.1.minY - framed[0].1.minY) < 2 }
                     let sample = sameLine.count >= 3 ? sameLine : framed

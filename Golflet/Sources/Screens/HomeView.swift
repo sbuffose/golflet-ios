@@ -1044,6 +1044,7 @@ struct RoundRow: View {
 
     var body: some View {
         GCard(radius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 14) {
                 let dm = FormatAR.dayMonth(round.date)
                 let year = Calendar.gregorian.component(.year, from: round.date)
@@ -1079,13 +1080,6 @@ struct RoundRow: View {
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if round.official && !chips.isEmpty {
-                        SingleLineChipRow(chips: chips)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(chips.map(\.0).joined(separator: " | "))
-                            .accessibilityValue(chips.map(\.0).joined(separator: " | "))
-                            .accessibilityIdentifier(style == .home ? "last-round-chips" : "round-chips")
-                    }
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 2) {
@@ -1102,6 +1096,12 @@ struct RoundRow: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(p.ink3)
             }
+            if round.official && !chips.isEmpty {
+                SingleLineChipRow(chips: chips)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier(style == .home ? "last-round-chips" : "round-chips")
+            }
+            }
         }
     }
 
@@ -1113,24 +1113,20 @@ struct RoundRow: View {
         let beige = Color(hex: 0xECE7DB)
         let red = Color(hex: 0xC8102E)
         let charcoal = Color(hex: 0x3E4C62)
-        let birdie = round.counts.birdies == 1 ? "birdie" : "birdies"
-        let bogey = round.counts.bogeys == 1 ? "bogey" : "bogeys"
-        var items: [(String, Color, Color)] = [
-            ("\(round.counts.birdies) \(birdie)", navy, white),
-            ("\(round.counts.pars) pares", beige, navy),
-            ("\(round.counts.bogeys) \(bogey)", red, white)
+        var items: [(label: String, fill: Color, ink: Color)] = [
+            ("\(round.counts.birdies) Bir", navy, white),
+            ("\(round.counts.pars) Par", beige, navy),
+            ("\(round.counts.bogeys) Bog", red, white)
         ]
         let eagles = max(round.counts.eagles, StatsEngine.count(.eagle, in: round).count)
         if eagles > 0 {
-            let word = eagles == 1 ? "águila" : "águilas"
-            items.insert(("\(eagles) \(word)", gold, navy), at: 0)
+            items.insert(("\(eagles) Ág", gold, navy), at: 0)
         }
         let doubles = round.holes.isEmpty
             ? round.counts.doubles + round.counts.triples + round.counts.worse
             : round.holes.filter { $0.result == .doubleOrWorse }.count
         if doubles > 0 {
-            let word = doubles == 1 ? "doble" : "dobles"
-            items.append(("\(doubles) \(word)", charcoal, white))
+            items.append(("\(doubles) Dob", charcoal, white))
         }
         return items
     }

@@ -1267,15 +1267,11 @@ a.gg-hrow:hover .gg-cell{filter:brightness(1.05)}
 .pr-k-eagles{color:#8C6A2F}.pr-k-birdies{color:#0B2545}.pr-k-bogeys{color:#C8102E}
 @media (max-width:520px){.pr-others{grid-template-columns:repeat(2,1fr)}.grid4{grid-template-columns:repeat(2,1fr)}}
 
-/* v13 — round chips + sort toggle */
-.rchips{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;margin-top:6px;max-width:100%;min-width:0}
-.rc{display:inline-flex;flex-direction:row;align-items:center;flex:0 0 auto;gap:3px;height:18px;box-sizing:border-box;font-size:10px;line-height:1;padding:0 6px;border-radius:6px;white-space:nowrap;font-weight:var(--fw600,600)}
-.rc b{font-weight:var(--fw700,700);font-size:10px;line-height:1}
-@container roundbody (max-width: 220px){
-  .rchips{gap:2px}
-  .rc{gap:2px;padding:0 4px;font-size:9.5px}
-  .rc b{font-size:9.5px}
-}
+/* v13 — round chips sit on their own full-width line. Fixed short labels, never ellipsis. */
+.round-row{flex-wrap:wrap;align-items:center}
+.rchips{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;flex:1 0 100%;margin-top:8px;max-width:100%;min-width:0;overflow:visible}
+.rc{display:inline-flex;flex-direction:row;align-items:center;flex:0 0 auto;gap:3px;height:18px;box-sizing:border-box;font-size:11px;line-height:1;padding:0 6px;border-radius:6px;white-space:nowrap;overflow:visible;text-overflow:clip;font-weight:var(--fw600,600)}
+.rc b{font-weight:var(--fw700,700);font-size:11px;line-height:1}
 .rc-e{background:#C8A86A;color:#0B2545}.rc-b{background:#0B2545;color:#FFFFFF}.rc-p{background:#ECE7DB;color:#0B2545}.rc-g{background:#C8102E;color:#FFFFFF}.rc-d{background:#3E4C62;color:#FFFFFF}.rc-u{background:#FFFFFF;color:#0B2545;box-shadow:inset 0 0 0 1px #DCD6C8}
 .rsort{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;white-space:nowrap;max-width:100%;background:var(--color-surface2,#ECE8DE);border-radius:10px;padding:3px;margin:4px 0 10px}
 .rsort span{font-size:calc(12.5px*var(--ts,1));color:var(--color-ink3);padding:0 8px 0 6px}

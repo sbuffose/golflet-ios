@@ -13,10 +13,18 @@ const SHOTS = "/opt/cursor/artifacts";
 let saveShots = false;
 try { mkdirSync(SHOTS, { recursive: true }); saveShots = true; } catch { saveShots = false; }
 
-const round = (id: string, date: string, title: string, birdies: number, pars: number, bogeys: number) => ({
+const plan = (n: number, par: number, strokes: number) => Array.from({ length: n }, () => [par, strokes] as const);
+const holes = [...[[4, 2]] as const, ...plan(2, 4, 3), ...plan(10, 4, 4), ...plan(4, 4, 5), ...[[4, 6]] as const]
+  .map(([par, strokes], i) => [i + 1, par, strokes]);
+const played = (id: string, date: string, title: string) => ({
   round_id: id, date, tournament: title, course: "Azul", course_key: "118:Azul", course_label: "Azul", tee: "Azul",
-  valid_card: true, gross: 76, net: 74, is_9_holes: false, birdies, pars, bogeys, eagles: 0, double_plus: 0, holes: [],
+  valid_card: true, gross: 74, net: 72, is_9_holes: false, holes,
 });
+const worst = {
+  round_id: "worst", date: "2026-11-15", tournament: "Peor caso", course: "Azul", course_key: "118:Azul", course_label: "Azul", tee: "Azul",
+  valid_card: true, gross: 99, net: 90, is_9_holes: false, holes: [],
+  eagles: 12, birdies: 18, pars: 16, bogeys: 14, double_plus: 11,
+};
 
 test("los chips de Rondas quedan en una sola línea con el número y la palabra juntos", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   const css = await readFile(new URL("../public/style.css", import.meta.url), "utf8");
@@ -36,10 +44,9 @@ test("los chips de Rondas quedan en una sola línea con el número y la palabra 
         clubs: [{ id: "c1", club_name: "Club Fixture", rounds: 4 }],
         courses: [{ key: "118:Azul", course: "Azul", label: "Azul", holes: [] }],
         rounds: [
-          round("r1", "2026-11-08", "Copa", 2, 10, 9),
-          round("r2", "2026-11-01", "Mensual", 1, 10, 5),
-          round("r3", "2026-10-18", "Copa", 2, 8, 5),
-          round("r4", "2026-10-04", "Medal", 1, 8, 3),
+          played("r1", "2026-11-08", "Copa"),
+          worst,
+          played("r2", "2026-10-04", "Medal"),
         ],
       });
       return json({});
@@ -60,7 +67,7 @@ test("los chips de Rondas quedan en una sola línea con el número y la palabra 
       const page = await browser.newPage();
       await page.setViewport({ width, height: 900, deviceScaleFactor: 2 });
       await page.goto(`http://127.0.0.1:${port}/#/rondas`, { waitUntil: "networkidle0" });
-      await page.waitForFunction(() => document.querySelectorAll(".rchips").length >= 4);
+      await page.waitForFunction(() => document.querySelectorAll(".rchips").length >= 3);
       const rows = await page.evaluate(() => [...document.querySelectorAll(".rchips")].map(row => {
         const style = getComputedStyle(row);
         const chips = [...row.querySelectorAll(".rc")].map(el => {
@@ -77,14 +84,16 @@ test("los chips de Rondas quedan en una sola línea con el número y la palabra 
         });
         return { wrap: style.flexWrap, h: Math.round(row.getBoundingClientRect().height), scroll: row.scrollWidth, client: row.clientWidth, chips };
       }));
-      assert.equal(rows.length, 4, `faltan filas en ${width}`);
+      assert.equal(rows.length, 3, `faltan filas en ${width}`);
       const texts = rows.map(row => row.chips.map(chip => chip.text).join(" / "));
-      assert.ok(texts.some(t => t.includes("2 birdies") && t.includes("10 pares") && t.includes("9 bogeys")), texts.join(" || "));
+      assert.ok(texts.some(t => t === "1 Ág / 2 Bir / 10 Par / 4 Bog / 1 Dob"), `falta la tarjeta con hoyos: ${texts.join(" || ")}`);
+      assert.ok(texts.some(t => t === "12 Ág / 18 Bir / 16 Par / 14 Bog / 11 Dob"), `falta el peor caso: ${texts.join(" || ")}`);
       for (const row of rows) {
         assert.equal(row.wrap, "nowrap", `${width} ${texts}`);
-        assert.ok(row.h > 14 && row.h < 26, `alto ${row.h} en ${width}: ${texts}`);
+        assert.ok(row.h > 14 && row.h < 28, `alto ${row.h} en ${width}: ${texts}`);
         assert.ok(row.scroll <= row.client + 1, `se sale del renglón en ${width}: ${row.scroll}>${row.client} ${texts}`);
-        assert.equal(row.chips.length, 3, texts.join(" || "));
+        assert.ok(row.chips.length >= 3 && row.chips.length <= 5, texts.join(" || "));
+        assert.ok(row.chips.every(chip => /^\d+ (Ág|Bir|Par|Bog|Dob)$/.test(chip.text) && !chip.text.includes("…")), texts.join(" || "));
         const tops = row.chips.map(chip => chip.top);
         const heights = row.chips.map(chip => chip.h);
         assert.ok(Math.max(...tops) - Math.min(...tops) < 2, `segunda línea en ${width}: ${texts}`);
@@ -92,7 +101,10 @@ test("los chips de Rondas quedan en una sola línea con el número y la palabra 
         assert.ok(heights.every(h => h >= 16 && h <= 20), `alto de chip en ${width}: ${heights}`);
         assert.ok(row.chips.every(chip => chip.nowrap === "nowrap" && chip.numberInside && !chip.text.includes("\n")), texts.join(" || "));
       }
-      if (saveShots) await page.screenshot({ path: `${SHOTS}/web-${width}-rondas-chips.png` });
+      if (saveShots) {
+        await page.screenshot({ path: `${SHOTS}/web-${width}-rondas-chips.png` });
+        if (width === 375) await page.screenshot({ path: `${SHOTS}/after-web-375-rondas.png` });
+      }
       await page.close();
     }
   } finally {

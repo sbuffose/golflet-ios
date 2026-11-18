@@ -241,15 +241,34 @@ function roundRow(r, single, withYr){
   const [y,m,d] = r.date.split('-');
   const sub = `${tee}${esc(r.course_label || clabel(r.course_key))}${r.tee?' · '+esc(r.tee):''}${r.position?` · ${r.position}º de ${r.field_size}`:''}`;
   const sc = r.valid_card && r.gross ? `<b class="num">${r.gross}</b><span>neto ${r.net??'—'}</span>` : `<span class="badge neg">${r.is_9_holes?'9 h · ':''}DES</span>`;
-  const inner = `${dateBlock(r.date, withYr)}<div class="body"><div class="t">${cup(r)+esc(short(r.tournament)||'Ronda')}</div><div class="s">${sub}</div>${rchips(r)}</div><div class="score">${sc}</div>${ICON.chev}`;
-  return single ? `<a class="list" href="#/ronda/${r.round_id}" style="display:block"><div class="row">${inner}</div></a>` : `<a class="row" href="#/ronda/${r.round_id}">${inner}</a>`;
+  const inner = `${dateBlock(r.date, withYr)}<div class="body"><div class="t">${cup(r)+esc(short(r.tournament)||'Ronda')}</div><div class="s">${sub}</div></div><div class="score">${sc}</div>${ICON.chev}${rchips(r)}`;
+  return single ? `<a class="list" href="#/ronda/${r.round_id}" style="display:block"><div class="row round-row">${inner}</div></a>` : `<a class="row round-row" href="#/ronda/${r.round_id}">${inner}</a>`;
 }
-/* TV-style chips per round (from /api/data: eagles, birdies, pars, bogeys, double_plus, putts_total) */
+/* Compact chips. Fixed abbreviations, same on iOS. Counts come from the holes when the card has them. */
+const CHIP_MARKS = [
+  ['eagles', 'Ág', 'águila', 'águilas', 'rc-e'],
+  ['birdies', 'Bir', 'birdie', 'birdies', 'rc-b'],
+  ['pars', 'Par', 'par', 'pares', 'rc-p'],
+  ['bogeys', 'Bog', 'bogey', 'bogeys', 'rc-g'],
+  ['doubles', 'Dob', 'doble', 'dobles', 'rc-d'],
+];
+function chipCounts(r){
+  const holes = Array.isArray(r.holes) ? r.holes.filter(h => h && h[1] != null && h[2] != null) : [];
+  if (holes.length) {
+    const c = { eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0 };
+    holes.forEach(h => { const d = h[2] - h[1]; if (d <= -2) c.eagles++; else if (d === -1) c.birdies++; else if (d === 0) c.pars++; else if (d === 1) c.bogeys++; else c.doubles++; });
+    return c;
+  }
+  if (r.birdies == null && r.eagles == null && r.double_plus == null) return null;
+  return { eagles: r.eagles || 0, birdies: r.birdies || 0, pars: r.pars || 0, bogeys: r.bogeys || 0, doubles: r.double_plus || 0 };
+}
 function rchips(r){
-  const doubles = r.double_plus;
-  if (r.birdies == null && r.putts_total == null && !r.manual_putts && !r.eagles && !doubles) return '';
-  const c = (cls, n, l) => `<span class="rc ${cls}"><b class="num">${n}</b>${l}</span>`;
-  return `<div class="rchips">${r.eagles?c('rc-e', r.eagles, r.eagles===1?' águila':' águilas'):''}${r.birdies!=null?c('rc-b', r.birdies, r.birdies===1?' birdie':' birdies')+c('rc-p', r.pars||0, ' pares')+c('rc-g', r.bogeys||0, r.bogeys===1?' bogey':' bogeys'):''}${doubles?c('rc-d', doubles, doubles===1?' doble':' dobles'):''}${r.putts_total!=null?c('rc-u', r.putts_total, r.putts_source==='gps'?' putts GPS':' putts'):''}${r.manual_putts?c('rc-u', r.manual_putts, ' putts a mano'):''}</div>`;
+  const c = chipCounts(r); if (!c) return '';
+  const parts = CHIP_MARKS.filter(([key]) => key === 'birdies' || key === 'pars' || key === 'bogeys' || c[key] > 0).map(([key, short, one, many, cls]) => {
+    const n = c[key] || 0;
+    return `<span class="rc ${cls}" aria-label="${n} ${n === 1 ? one : many}"><b class="num">${n}</b> ${short}</span>`;
+  });
+  return parts.length ? `<div class="rchips">${parts.join('')}</div>` : '';
 }
 let sortL = 'date';
 /* t224u: chips show the course name only (the club in the tooltip/aria) unless two clubs share a course name */
