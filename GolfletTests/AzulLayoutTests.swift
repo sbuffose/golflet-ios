@@ -11,7 +11,12 @@ final class AzulLayoutTests: XCTestCase {
     }
 
     func testOtherCoursesDoNotUseAzulGeometry() {
-        XCTAssertNil(AzulCourse.layout(forCourse: "Colorada", hole: 2))
+        let colorada = AzulCourse.layout(forCourse: "Colorada", hole: 2)
+        let azul = AzulCourse.layout(forCourse: "Azul", hole: 2)
+        XCTAssertEqual(colorada?.line.count, 2)
+        XCTAssertEqual(colorada?.green.count, 0, "Colorada no usa el polígono del green de la Azul")
+        XCTAssertNotEqual(colorada?.line.first?.lat, azul?.line.first?.lat)
+        XCTAssertNil(AzulCourse.layout(forCourse: "Colorada", hole: 99))
         XCTAssertNil(AzulCourse.layout(forCourse: "Cancha Nueva", hole: 1))
         XCTAssertNil(AzulCourse.layout(forCourse: "Azul", hole: 99))
     }
