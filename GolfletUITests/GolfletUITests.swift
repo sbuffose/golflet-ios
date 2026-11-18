@@ -141,8 +141,8 @@ final class GolfletUITests: XCTestCase {
         }
 
         tapTab(app, "Inicio")
-        let liveGroup = first(app, "home-hcp-groups")
-        reveal(app, liveGroup)
+        reveal(app, "home-hcp-groups")
+        let liveGroup = largest(app, "home-hcp-groups")
         XCTAssertTrue(liveGroup.waitForExistence(timeout: 4), "Inicio no muestra el grupo de la cuenta")
         XCTAssertFalse(app.staticTexts["Miércoles 9 hoyos"].exists, "Sigue el segundo grupo de ejemplo")
         let tee = first(app, "home-tee-row-tt-jockey-1")
@@ -153,11 +153,9 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "home-open-jugar").exists, "Falta preparar la salida")
         saveShot("60_grupos")
         saveShot("parity-ios-grupos")
-        if liveGroup.isHittable {
-            liveGroup.tap()
-        } else {
-            liveGroup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        reveal(app, "home-hcp-groups")
+        tapLargest(app, "home-hcp-groups")
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "El grupo no se abrió")
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6), "El grupo no abrió la clasificación")
         saveShot("parity-ios-grupos-usga")
 
@@ -1790,7 +1788,10 @@ final class GolfletUITests: XCTestCase {
         }
         XCTAssertTrue(scorecardSheetOpen(app), "No se abrió la hoja de tarjetas")
         XCTAssertTrue(app.staticTexts["1 pendiente"].waitForExistence(timeout: 4), "Falta el resumen de la hoja")
-        XCTAssertTrue(app.buttons["tee-prep-scorecard-refresh"].waitForExistence(timeout: 4), "Falta Buscar de nuevo")
+        if !first(app, "tee-prep-scorecard-refresh").exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(first(app, "tee-prep-scorecard-refresh").waitForExistence(timeout: 4), "Falta Buscar de nuevo")
         XCTAssertTrue(app.staticTexts["Pendiente"].exists, "Falta el chip Pendiente")
         XCTAssertFalse(app.staticTexts["Todavía no hay tarjeta"].exists)
         shot("reserva-tarjetas")

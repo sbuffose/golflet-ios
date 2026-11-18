@@ -1662,7 +1662,7 @@ struct ScorecardFetchSheet: View {
                     } else {
                         ForEach(jobs) { job in
                             VStack(alignment: .leading, spacing: 4) {
-                                HStack {
+                                HStack(alignment: .center) {
                                     Text(job.clubName.isEmpty ? "Club" : job.clubName)
                                         .font(GType.headline)
                                         .foregroundStyle(p.ink)
@@ -1676,6 +1676,18 @@ struct ScorecardFetchSheet: View {
                                         .background(scorecardChipColor(job.chipTitle))
                                         .clipShape(Capsule())
                                 }
+                                if job.canRetry {
+                                    Button(action: onRefresh) {
+                                        Text("Buscar de nuevo")
+                                            .font(GType.headline)
+                                            .underline()
+                                            .foregroundStyle(p.ink)
+                                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier(refreshID)
+                                    .accessibilityLabel("Buscar de nuevo")
+                                }
                                 if !whenLine(job).isEmpty {
                                     Text(whenLine(job))
                                         .font(GType.label)
@@ -1687,17 +1699,6 @@ struct ScorecardFetchSheet: View {
                                 Text(job.lastCheckLine)
                                     .font(GType.label)
                                     .foregroundStyle(p.ink3)
-                                if job.canRetry {
-                                    Button(action: onRefresh) {
-                                        Text("Buscar de nuevo")
-                                            .font(GType.headline)
-                                            .underline()
-                                            .foregroundStyle(p.ink)
-                                            .frame(minHeight: 44)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityIdentifier(refreshID)
-                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 8)
@@ -1712,7 +1713,6 @@ struct ScorecardFetchSheet: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .golfletChrome()
-        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(sheetID)
     }
 
