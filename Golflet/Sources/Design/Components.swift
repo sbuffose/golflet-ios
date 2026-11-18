@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct GProbe: View {
     let id: String
@@ -39,7 +40,30 @@ struct GScreen<Content: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(p.bg.ignoresSafeArea())
+        .overlay(alignment: .top) {
+            StatusBarCover()
+        }
         .toolbar(.hidden, for: .navigationBar)
+    }
+}
+
+/// Scroll content reaches the top of the screen. Paint the page color over
+/// that strip so the clock does not sit on a row.
+private struct StatusBarCover: View {
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        p.bg
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.barHeight)
+            .allowsHitTesting(false)
+    }
+
+    private static var barHeight: CGFloat {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let bar = scene?.statusBarManager?.statusBarFrame.height ?? 0
+        if bar > 1 { return bar }
+        return scene?.keyWindow?.safeAreaInsets.top ?? 0
     }
 }
 
