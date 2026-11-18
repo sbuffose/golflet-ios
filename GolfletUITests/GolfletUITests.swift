@@ -1919,10 +1919,10 @@ final class GolfletUITests: XCTestCase {
             if course.isHittable { course.tap() } else { course.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
             let azul = app.buttons["group-course-1:Azul"]
             XCTAssertTrue(azul.waitForExistence(timeout: 4), "No se abrió el menú de canchas")
-            shot("grupo-canchas")
+            saveShot("ios-\(Int(window.frame.width.rounded()))-grupo-canchas")
             azul.tap()
             XCTAssertTrue(app.staticTexts["22"].waitForExistence(timeout: 4), "El filtro de cancha no cambió el número")
-            shot("grupo-cancha-filtrada")
+            saveShot("ios-\(Int(window.frame.width.rounded()))-grupo-cancha-filtrada")
         }
     }
 
