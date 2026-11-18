@@ -114,33 +114,37 @@ struct MetricRoundsView: View {
     }
 
     private var trackBanner: some View {
-        Button { model.showsReconstruct = true } label: {
-            HStack(spacing: 12) {
-                Text("TRACK")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(hex: 0xC8102E))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.white)
-                    .clipShape(Capsule())
-                Text("Cargar una vuelta ya jugada")
-                    .font(GFont.ui(16, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .lineLimit(2)
-                Text("›")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(Color(hex: 0xC8A86A))
+        ZStack(alignment: .topLeading) {
+            Button { model.showsReconstruct = true } label: {
+                HStack(spacing: 12) {
+                    Text("TRACK")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0xC8102E))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white)
+                        .clipShape(Capsule())
+                    Text("Cargar una vuelta ya jugada")
+                        .font(GFont.ui(16, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(2)
+                    Text("›")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0xC8A86A))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .background(p.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-            .background(p.primary)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("reconstruct-start")
+            .accessibilityLabel("Cargar una vuelta ya jugada")
+            GProbe(id: "reconstruct-start", label: "Cargar una vuelta ya jugada")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("reconstruct-start")
-        .accessibilityLabel("Cargar una vuelta ya jugada")
+        .accessibilityElement(children: .contain)
     }
 
     private var sortRow: some View {
