@@ -1933,16 +1933,16 @@ final class GolfletUITests: XCTestCase {
 
     private func reveal(_ app: XCUIApplication, _ id: String) {
         let height = app.windows.firstMatch.frame.height
-        for _ in 0..<14 {
+        for _ in 0..<16 {
             let element = largest(app, id)
             guard element.exists else {
-                app.swipeUp()
+                nudgePage(app, up: true)
                 continue
             }
             let frame = element.frame
-            // Stay clear of the tab bar. On the Plus its center sat on Resumen and the tap left the reserva.
+            // A full swipe on the SE salta la franja libre y la fila queda otra vez bajo la barra.
             if frame.width > 20, frame.minY > 64, frame.maxY < height - 128 { return }
-            if frame.minY < 64 { app.swipeDown() } else { app.swipeUp() }
+            nudgePage(app, up: frame.minY >= 64)
         }
     }
 
