@@ -8,6 +8,9 @@ struct BagView: View {
     @State private var ironModel = ""
     @State private var ironStatus = ""
     @State private var savingIron = false
+    @State private var renaming: BagClub?
+    @State private var renameDraft = ""
+    @State private var renameError = ""
     private let ironCatalog = [
         "Titleist": ["T100", "T150", "T200", "T250", "T350"],
         "Callaway": ["Apex", "Apex Pro", "Paradym"],
@@ -137,6 +140,37 @@ struct BagView: View {
         .metricDestinations()
         .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .onAppear(perform: restoreIron)
+        .sheet(item: $renaming) { club in
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Nombre")
+                        .font(GType.label)
+                    TextField("Nombre", text: $renameDraft)
+                        .textInputAutocapitalization(.never)
+                        .font(GType.sheetTitle)
+                        .accessibilityIdentifier("club-name-field")
+                    Text("Hasta 12 caracteres. El palo sigue siendo el mismo.")
+                        .font(GType.label)
+                        .foregroundStyle(p.ink3)
+                    if !renameError.isEmpty {
+                        Text(renameError).font(GType.label).foregroundStyle(p.negative)
+                    }
+                    Spacer()
+                }
+                .padding(20)
+                .navigationTitle("Nombre del palo")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cerrar") { renaming = nil }.accessibilityIdentifier("club-name-close")
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Guardar") { Task { await saveName(club) } }.accessibilityIdentifier("club-name-save")
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     private func bagChip(_ title: String) -> some View {
@@ -199,6 +233,11 @@ struct BagView: View {
     }
 
     private func equipmentRow(_ club: BagClub) -> some View {
+        Button {
+            renameDraft = club.face
+            renameError = ""
+            renaming = club
+        } label: {
         HStack(spacing: 0) {
                     Text(club.code ?? equipmentCode(club.name))
                         .font(GFont.ui(13, weight: .bold))
@@ -207,7 +246,7 @@ struct BagView: View {
                         .background(Color(hex: 0xF1EDE3))
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(club.name)
+                        Text(club.face)
                             .font(GType.headline)
                             .foregroundStyle(p.ink)
                             .lineLimit(1)
@@ -228,8 +267,34 @@ struct BagView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(club.name), \(club.equipmentLine)")
+                .accessibilityLabel("\(club.face), \(club.equipmentLine)")
                 .accessibilityIdentifier("equip-\(club.name)")
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func saveName(_ club: BagClub) async {
+        let name = renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 12 else {
+            renameError = "El nombre entra en 12 caracteres."
+            return
+        }
+        let key = club.code ?? club.name
+        if let code = club.code, !code.isEmpty {
+            do { try await model.api.renameClub(code: code, label: name) }
+            catch {
+                renameError = "No pude guardar el nombre."
+                return
+            }
+        }
+        UserDefaults.standard.set(name, forKey: "golflet.clubName.\(key)")
+        model.bag = model.bag.map { item in
+            guard item.name == club.name else { return item }
+            var next = item
+            next.displayName = name
+            return next
+        }
+        renaming = nil
     }
 
     private func equipmentYards(_ club: BagClub) -> some View {

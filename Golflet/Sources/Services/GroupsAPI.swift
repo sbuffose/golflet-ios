@@ -238,7 +238,14 @@ enum GroupsParser {
         }
         let members = (blob["members"] as? [Any] ?? json["members"] as? [Any] ?? []).compactMap { $0 as? [String: Any] }
         let built = rows.isEmpty ? memberRows(members) : rows
-        return GroupComparison(groupID: groupID, config: config, rows: built, hero: hero(from: members))
+        let filters = blob["filters"] as? [String: Any] ?? json["filters"] as? [String: Any]
+        let courses = (filters?["courses"] as? [Any] ?? []).compactMap { raw -> GroupCourseOption? in
+            guard let item = raw as? [String: Any] else { return nil }
+            let key = string(item["key"])
+            guard !key.isEmpty else { return nil }
+            return GroupCourseOption(key: key, label: string(item["label"]), club: string(item["club"] ?? item["club_name"]))
+        }
+        return GroupComparison(groupID: groupID, config: config, rows: built, hero: hero(from: members), courses: courses)
     }
 
     /// The web group payload is members with card totals, not a rows array. Same numbers, no invented ranks.

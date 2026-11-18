@@ -91,6 +91,7 @@ const MISS = {
   ball: { k: 'Pelota', source: 'La cargás vos en la cuenta.', why: 'No hay una pelota elegida.', action: 'Elegir pelota', go: '#/pelota' },
   handicap: { k: 'Hándicap', source: 'Sale de la matrícula del club.', why: 'No hay una matrícula vinculada.', action: 'Vincular matrícula', go: '#/vincular' },
   worst: { k: 'Peor ronda', source: 'Es la tarjeta de mayor gross del período.', why: 'Hay una sola tarjeta, así que no hay una peor distinta.', action: '', go: '' },
+  geo: { k: 'Geometría', source: 'Sale de un trazado verificado del tee al centro del green.', why: 'Este hoyo no tiene geometría verificada. No marco un punto inventado.', action: '', go: '' },
 };
 function miss(kind, why){
   const extra = why ? ` data-why="${esc(why)}"` : '';
@@ -207,14 +208,26 @@ function hiBand(hi, d){
   const from = d != null ? `${MES[+hi[0].date.slice(5, 7) - 1]}. ${hi[0].date.slice(0, 4)}` : '';
   const arrow = d == null ? '' : (d < 0 ? '↓' : '↑');
   const facts = `${when ? `<p class="hi-when"><span>Índice al</span> <b class="num">${when}</b></p>` : ''}${d != null ? `<p class="hi-evo"><b class="num">${arrow} ${f1(Math.abs(d))}</b> <span>desde ${from}</span></p>` : ''}`;
-  return `<div class="hi-strip">${facts ? `<div class="hi-facts">${facts}</div>` : ''}<a class="hi-ch-l" href="#/cambios">Cambios</a></div>`;
+  return `<div class="hi-facts">${facts}</div>`;
+}
+function heroMeta(){
+  const cards = valid.length;
+  const grosses = valid.map(r => Number(r.gross)).filter(n => n > 0);
+  const best = grosses.length ? Math.min(...grosses) : null;
+  const avg = grosses.length ? grosses.reduce((s, n) => s + n, 0) / grosses.length : null;
+  return `<div class="meta">
+    <a href="#/rondas"><div>Tarjetas</div><b class="num">${cards}</b></a>
+    <a href="#/rondas"><div>Mejor</div><b class="num">${best == null ? '–' : best}</b></a>
+    <a href="${rlink('gross')}"><div>Prom.</div><b class="num">${avg == null ? '–' : f1(avg)}</b></a>
+    <a id="hcpimp" href="#/cambios"><div>Impacto</div><b class="num">–</b></a>
+  </div>`;
 }
 function heroActions(play){
   if (!play) return '';
-  return `<div class="hi-avs"><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a></div></div>`;
+  return `<div class="hi-avs"><div id="hiprofs" hidden></div><div id="higroups" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a><a class="hi-ch-l" href="#/cambios">Cambios</a></div></div>`;
 }
 function homeCircle(){
-  return `<div class="home-circle" id="home-circle"><div id="hiprofs" hidden></div><div id="higroups" hidden></div></div>`;
+  return '';
 }
 function vInicio(){
   const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
@@ -229,6 +242,7 @@ function vInicio(){
     ${heroActions(true)}
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
     ${hiMark}</a>${hiNow == null ? '' : hiBand(hi, d)}
+    ${heroMeta()}
   </div>${homeCircle()}</div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
   ${roundRow(last, true, true)}</div></div>
@@ -530,6 +544,8 @@ function sHoyo(ck, n){
   <div style="display:flex;justify-content:space-between;align-items:flex-end"><div class="ltitle" style="margin:2px 0 8px">Hoyo ${h.hole}</div>
     <div style="display:flex;gap:6px;margin-bottom:10px"><a class="close" href="#/hoyo/${K}/${prev}" aria-label="Anterior"><svg viewBox="0 0 12 12"><path d="M8 1L3 6l5 5" fill="none"/></svg></a><a class="close" href="#/hoyo/${K}/${next}" aria-label="Siguiente"><svg viewBox="0 0 12 12"><path d="M4 1l5 5-5 5" fill="none"/></svg></a></div></div>
   <div id="holegeo" data-ck="${esc(c.key)}" data-hole="${h.hole}"><div style="padding:18px 0;text-align:center"><span class="spin"></span></div></div>
+  <div id="holewx" data-club="${esc(c.club_name || '')}" data-ck="${esc(c.key)}" data-hole="${h.hole}"></div>
+  <a class="card lb-entry vx-tap" href="#/plan/cancha?ck=${K}"><div class="t">Libreta de la cancha</div><div class="s">Estrategia y fotos de la libreta. Sin reserva.</div></a>
   <div class="pills">
     <div class="pill dark"><b class="num">${h.hole}</b><span>Hoyo</span></div>
     <div class="pill"><b class="num">${h.par??'—'}</b><span>Par${alt?` · damas ${alt}`:''}</span></div>
@@ -605,38 +621,65 @@ function finiteLL(p){
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return null;
   return { lat, lng };
 }
-function holeTraceSVG(hole){
+function holeSpanOk(a, b){
+  const dy = (b.lat - a.lat) * 111320;
+  const dx = (b.lng - a.lng) * 111320 * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+  const m = Math.hypot(dx, dy);
+  return m >= 40 && m <= 750;
+}
+function holeSatHTML(hole){
   const tee = finiteLL(hole && hole.tee), center = finiteLL(hole && hole.green && hole.green.center);
-  if (!tee || !center) return '';
+  if (!tee || !center || !holeSpanOk(tee, center)) {
+    return `<div class="hole-empty" id="hole-satellite">${miss('geo')}<p class="foot">${esc(MISS.geo.why)} Sin satélite. No dibujo una línea inventada del tee al green.</p></div>`;
+  }
   const linePts = Array.isArray(hole.line) ? hole.line.map(finiteLL).filter(Boolean) : [];
-  const straight = !linePts.length;
-  const pts = [tee, ...linePts, center];
-  const lats = pts.map(p => p.lat), lngs = pts.map(p => p.lng);
+  const path = linePts.length >= 2 ? [tee, ...linePts, center] : [tee, center];
+  const lats = path.map(p => p.lat), lngs = path.map(p => p.lng);
   const minLa = Math.min(...lats), maxLa = Math.max(...lats), minLn = Math.min(...lngs), maxLn = Math.max(...lngs);
-  const dLa = Math.max(1e-6, maxLa - minLa), dLn = Math.max(1e-6, maxLn - minLn);
-  const W = 360, H = 470, pad = 36;
-  const xy = p => [pad + ((p.lng - minLn) / dLn) * (W - pad * 2), pad + ((maxLa - p.lat) / dLa) * (H - pad * 2)];
-  const d = pts.map((p, i) => { const [x, y] = xy(p); return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`; }).join(' ');
-  const [tx, ty] = xy(tee), [gx, gy] = xy(center);
-  const label = straight ? `Referencia recta del tee al green, hoyo ${hole.hole}. No es el trazado del hoyo.` : `Trazado con los puntos provistos del hoyo ${hole.hole}`;
-  const note = straight ? `<p class="msg">Referencia recta del tee al centro del green. No es el trazado del hoyo.</p>` : '';
-  return `<div class="holecard"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}"><path d="${d}" fill="none" stroke="#0F3D2E" stroke-width="3"/><circle cx="${tx}" cy="${ty}" r="6" fill="#C8A86A"/><circle cx="${gx}" cy="${gy}" r="8" fill="#0F3D2E"/></svg></div>${note}`;
+  const padLa = Math.max((maxLa - minLa) * 0.28, 0.0011), padLn = Math.max((maxLn - minLn) * 0.28, 0.0014);
+  const south = minLa - padLa, north = maxLa + padLa, west = minLn - padLn, east = maxLn + padLn;
+  const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${west},${south},${east},${north}&bboxSR=4326&imageSR=4326&size=800,1000&format=jpg&f=image`;
+  const x = lng => ((lng - west) / (east - west)) * 100;
+  const y = lat => ((north - lat) / (north - south)) * 100;
+  const d = path.map((p, i) => `${i ? 'L' : 'M'}${x(p.lng).toFixed(2)} ${y(p.lat).toFixed(2)}`).join(' ');
+  return `<div class="hole-sat" id="hole-satellite"><img alt="Satélite del hoyo ${hole.hole}, del tee al centro del green" src="${url}"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="#F6F7F9" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/><circle cx="${x(tee.lng).toFixed(2)}" cy="${y(tee.lat).toFixed(2)}" r="1.6" fill="#C8A86A"/><circle cx="${x(center.lng).toFixed(2)}" cy="${y(center.lat).toFixed(2)}" r="1.8" fill="#0F3D2E" stroke="#F6F7F9" stroke-width="0.4"/></svg></div><p class="hole-note">Salida al centro del green. El centro no es el pin del día.</p>`;
 }
 async function loadHoleGeo(){
   const el = $('#holegeo'); if (!el) return;
   const ck = el.dataset.ck, n = +el.dataset.hole, gen = VIEW_GEN;
-  const miss = () => { const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return; box.innerHTML = '<p class="msg">No hay un trazado verificado para este hoyo.</p>'; };
+  const empty = () => { const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return; box.innerHTML = holeSatHTML(null); };
   try {
     const geo = await gpsForCourse(ck);
     if (gen !== VIEW_GEN || !$('#holegeo') || +$('#holegeo').dataset.hole !== n) return;
-    if (!geo) return miss();
+    if (!geo) return empty();
     const hole = ((geo.course || geo).holes || []).find(h => h.hole === n);
-    const svg = holeTraceSVG(hole);
     const box = $('#holegeo'); if (!box || gen !== VIEW_GEN) return;
-    box.innerHTML = svg || '<p class="msg">No hay un trazado verificado para este hoyo.</p>';
+    box.innerHTML = holeSatHTML(hole);
   } catch (e) {
     const box = $('#holegeo'); if (!box || gen !== VIEW_GEN || +box.dataset.hole !== n) return;
     box.innerHTML = errBox(e, 'el trazado');
+  }
+}
+async function loadHoleWx(){
+  const el = $('#holewx'); if (!el) return;
+  const ck = el.dataset.ck, n = +el.dataset.hole, gen = VIEW_GEN;
+  const pin = pinFor(el.dataset.club, ck) || coursePin(ck);
+  if (!pin) { el.innerHTML = `<p class="foot">${miss('weather')} No tenemos la ubicación de esta cancha para el viento.</p>`; return; }
+  try {
+    const [now, holes] = await Promise.all([
+      api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`, { timeoutMs: READ_MS }),
+      holeBearings(ck).catch(() => []),
+    ]);
+    const box = $('#holewx'); if (!box || gen !== VIEW_GEN || box.dataset.ck !== ck) return;
+    const from = now && now.from_deg != null ? now.from_deg : null;
+    const kmh = now && now.kmh != null ? now.kmh : null;
+    const h = (holes || []).find(x => +x.hole === n);
+    const play = window.GolfletRules && h ? window.GolfletRules.windPlay(n, from, h.bearing, kmh) : null;
+    const fact = kmh != null ? `${Math.round(kmh)} km/h${from != null ? `, viene del ${windFrom(from)}` : ''}` : '';
+    const rel = play && play.relative && play.relative !== 'unavailable' && play.text ? play.text : '';
+    box.innerHTML = fact ? `<p class="hole-note">Viento ahora: ${esc(fact)}${rel ? ` · ${esc(rel)}` : ''}.</p>` : `<p class="foot">${miss('weather')} No hay viento para este hoyo.</p>`;
+  } catch (e) {
+    const box = $('#holewx'); if (box && gen === VIEW_GEN) box.innerHTML = `<p class="foot">${miss('weather')}</p>`;
   }
 }
 
@@ -822,34 +865,35 @@ async function loadScorecards(){
     const d = await api('/api/scorecard-fetches');
     const rows = d.fetches || [];
     if (!rows.length) { el.innerHTML = ''; return; }
-    const when = f => [f.date ? dmy(f.date) : '', f.time || ''].filter(Boolean).join(' · ');
-    const rowText = f => f.heading === 'No presentó' ? 'El club respondió y no había tarjeta.' : (f.label || '');
+    const when = f => [f.date ? dmy(f.date) : '', f.time || '', f.course_label || ''].filter(Boolean).join(' · ');
     const lastCheck = f => f.last_attempt_at ? `Última lectura ${ago(f.last_attempt_at)}` : 'Todavía sin una lectura del club.';
-    const shown = (title, list) => title === 'No presentó' ? list.slice(0, 6) : list;
-    const block = (title, list) => {
-      const rows = shown(title, list);
-      if (!rows.length) return '';
-      const more = title === 'No presentó' && list.length > rows.length ? `<p class="foot">Hay ${list.length - rows.length} más en «No presentó». No cambia el hándicap.</p>` : '';
-      return `<div class="section"><h2>${title}</h2><span class="badge">${list.length}</span></div><div class="list">${rows.map(f => `<div class="row sc-job"><div class="body"><div class="t">${esc(f.club_name || 'Club')}</div>${f.course_label ? `<div class="s">${esc(f.course_label)}</div>` : ''}<div class="s num">${esc(when(f))}</div><div class="s">${esc(rowText(f))}</div><div class="s">${esc(lastCheck(f))}</div></div></div>`).join('')}</div>${more}`;
+    const chipOf = f => {
+      const blob = `${f.status || ''} ${f.heading || ''} ${f.label || ''}`.toLowerCase();
+      if (blob.includes('no presentó') || f.status === 'absent') return ['No presentó', 'gray'];
+      if (['error', 'needs_credentials', 'stopped'].includes(f.status) || blob.includes('sin confirmar')) return ['Error', 'red'];
+      return ['Pendiente', 'navy'];
     };
-    const headed = rows.some(f => f.heading);
-    const groups = headed ? ['Próxima', 'En curso', 'No presentó', 'Sin confirmar', 'Otras'] : ['En curso', 'Otras'];
-    const bucket = f => f.heading || (f.status === 'complete' ? 'Ya está' : ['scheduled', 'awaiting_card', 'error', 'needs_credentials', 'stopped'].includes(f.status) ? 'En curso' : 'Otras');
-    const open = rows.filter(f => bucket(f) !== 'Ya está');
+    const open = rows.filter(f => f.status !== 'complete' && !f.round_id);
     if (!open.length) { el.innerHTML = ''; return; }
-    const waiting = open.some(f => f.status !== 'complete' && !f.round_id);
-    const countLabel = open.length === 1 ? '1 búsqueda' : `${open.length} búsquedas`;
-    const detail = `<p class="stitle">${countLabel}</p>${groups.map(title => block(title, open.filter(f => bucket(f) === title))).join('')}${waiting ? caddieEmpty('Todavía no hay tarjeta', 'El club todavía no publicó la tarjeta de esta salida.') : ''}<button type="button" class="btn" id="sc-refresh">Actualizar</button><p class="foot">Acá quedan las búsquedas que todavía piden algo. Las tarjetas que ya llegaron están en Rondas. «No presentó» sale cuando el club respondió y no había tarjeta. No es una decisión de la AAG y no cambia el hándicap.</p>`;
+    const nAbsent = open.filter(f => chipOf(f)[0] === 'No presentó').length;
+    const nPending = open.filter(f => chipOf(f)[0] === 'Pendiente').length;
+    const nError = open.filter(f => chipOf(f)[0] === 'Error').length;
+    const summary = [nAbsent ? `${nAbsent} sin tarjeta` : '', nPending ? `${nPending} pendiente${nPending === 1 ? '' : 's'}` : '', nError ? `${nError} con error` : ''].filter(Boolean).join(' · ');
+    const list = open.map(f => {
+      const [name, tone] = chipOf(f);
+      const retry = name === 'Pendiente' || name === 'Error' ? `<button type="button" class="sc-retry" data-sc-retry>Buscar de nuevo</button>` : '';
+      return `<div class="sc-row"><div class="sc-row-h"><b>${esc(f.club_name || 'Club')}</b><span class="sc-chip ${tone}">${name}</span></div><div class="s">${esc(when(f))}</div><div class="s">${esc(f.label || '')}</div><div class="s">${esc(lastCheck(f))}</div>${retry}</div>`;
+    }).join('');
+    const detail = `<p class="sc-sum">${esc(summary)}</p><div class="sc-list">${list}</div>`;
     el.innerHTML = `<button type="button" class="sc-open" id="sc-open"><span>Tarjetas del club</span><b class="num">${open.length}</b><svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></button>`;
     let dlg = document.getElementById('sc-dialog');
     if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'sc-dialog'; dlg.className = 'sc-dialog'; document.body.appendChild(dlg); }
-    dlg.innerHTML = `<div class="bar"><span class="overline">Tarjetas del club</span><button type="button" class="close" id="sc-close" aria-label="Cerrar">${ICON.x}</button></div>${detail}`;
+    dlg.innerHTML = `<div class="sc-head"><b>Tarjetas del club</b><button type="button" class="close" id="sc-close" aria-label="Cerrar">${ICON.x}</button></div>${detail}`;
     const openBtn = document.getElementById('sc-open');
     if (openBtn) openBtn.onclick = () => { if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); };
     const closeBtn = document.getElementById('sc-close');
     if (closeBtn) closeBtn.onclick = () => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
-    const refreshBtn = document.getElementById('sc-refresh');
-    if (refreshBtn) refreshBtn.onclick = () => { refreshBtn.disabled = true; loadScorecards(); };
+    dlg.querySelectorAll('[data-sc-retry]').forEach(b => { b.onclick = () => { b.disabled = true; loadScorecards(); }; });
   } catch(e){
     el.innerHTML = `<div class="section"><h2>Tarjeta del club</h2></div><div class="msg err">${esc(e.message || 'No pudimos leer la búsqueda de tarjetas.')}</div>`;
   }
@@ -1746,11 +1790,11 @@ async function loadHiProfs(){
   const av = p => `<span class="hp-av">${p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : esc(compInit(p.name))}${p.verified ? '<i class="hp-v" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3.3 6.2l1.7 1.6 3.4-3.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i>' : ''}</span>`;
   try { const ps = (await api('/api/profesores')).profesores; if (!$('#hiprofs')) return; PROFS = ps;
     if (!ps.length) {
-      el.innerHTML = `<a class="hg-row hp-add" href="#/profesores/buscar" aria-label="Agregar profesor"><span class="hp-av hp-empty" aria-hidden="true">+</span><span class="hg-copy"><b>Agregar profesor</b><span>Todavía no hay uno vinculado.</span></span>${ICON.chev}</a>`;
+      el.innerHTML = `<a class="hp-mini hp-add" href="#/profesores/buscar" aria-label="Agregar profesor"><span class="hp-av hp-empty" aria-hidden="true">+</span></a>`;
     } else if (ps.length === 1) {
-      el.innerHTML = `<a class="hg-row" href="#/profesor/${encodeURIComponent(ps[0].profesor_id)}" aria-label="Tu profesor: ${esc(ps[0].name)}">${av(ps[0])}<span class="hg-copy"><b>${esc(ps[0].name)}</b><span>Profesor</span></span>${ICON.chev}</a>`;
+      el.innerHTML = `<a class="hp-mini" href="#/profesor/${encodeURIComponent(ps[0].profesor_id)}" aria-label="Tu profesor: ${esc(ps[0].name)}">${av(ps[0])}</a>`;
     } else {
-      el.innerHTML = `<a class="hg-row" href="#/profesores" aria-label="Tus profesores: ${ps.length}"><span class="hp-stack">${ps.slice(0, 3).map(av).join('')}</span><span class="hg-copy"><b>${ps.length} profesores</b><span>Tocá para verlos.</span></span>${ICON.chev}</a>`;
+      el.innerHTML = `<a class="hp-mini" href="#/profesores" aria-label="Tus profesores: ${ps.length}">${av(ps[0])}</a>`;
     }
     el.hidden = false;
   } catch(e){ el.hidden = true; }
@@ -1774,14 +1818,13 @@ function grossPlace(members){
 async function loadHiGroups(){
   const el = $('#higroups'); if (!el) return;
   try { const gs = (await api('/api/groups')).groups || []; if (!$('#higroups')) return;
-    if (!gs.length) { el.innerHTML = `<a class="hg-row hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true">+</span><span class="hg-copy"><b>Crear grupo</b><span>Compará con tus amigos.</span></span>${ICON.chev}</a>`; el.hidden = false; return; }
+    if (!gs.length) { el.innerHTML = `<a class="hp-mini hg-new" href="#/amigos/nuevo" aria-label="Crear grupo"><span class="hp-av hg-plus" aria-hidden="true">+</span></a>`; el.hidden = false; return; }
     const show = gs.slice(0, 3);
-    el.innerHTML = show.map(g => {
+    const href = gs.length === 1 ? `#/grupo/${encodeURIComponent(gs[0].id)}` : '#/amigos';
+    el.innerHTML = `<a class="hp-stack" href="${href}" aria-label="${gs.length} grupos">${show.map(g => {
       const face = g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase());
-      const n = Number(g.accepted) || 0;
-      const sub = n ? `${n} ${n === 1 ? 'jugador' : 'jugadores'}` : 'Grupo';
-      return `<a class="hg-row" href="#/grupo/${encodeURIComponent(g.id)}" data-gid="${esc(g.id)}" aria-label="Tu grupo: ${esc(g.name || 'grupo')}"><span class="hp-av">${face}</span><span class="hg-copy"><b>${esc(g.name || 'Grupo')}</b><span>${sub}</span></span><b class="hg-place" hidden></b>${ICON.chev}</a>`;
-    }).join('');
+      return `<span class="hp-av">${face}</span>`;
+    }).join('')}<span class="hg-n">${gs.length} ${gs.length === 1 ? 'grupo' : 'grupos'}</span></a>`;
     el.hidden = false;
     await Promise.all(show.map(async g => {
       try {
@@ -1797,7 +1840,9 @@ async function loadHiGroups(){
 async function loadHcpImp(){
   const a = $('#hcpimp'); if (!a) return;
   try { const { hcp_impact: h } = await api(`/api/metrics/hcp-impact?range=${RANGE}`); if (!$('#hcpimp')) return;
-    a.innerHTML = `Impacto${h.delta != null && h.estimated ? ' <small>est.</small>' : ''}<b class="num ${impCls(h)}">${impTxt(h)}</b>`;
+    const mark = a.querySelector('b');
+    if (mark) { mark.className = `num ${impCls(h)}`; mark.textContent = impTxt(h); }
+    else a.innerHTML = `Impacto<b class="num ${impCls(h)}">${impTxt(h)}</b>`;
     a.setAttribute('aria-label', h.delta == null ? 'Impacto en el hándicap: sin historia suficiente' : `Impacto en el hándicap: ${h.delta < 0 ? 'bajó' : h.delta > 0 ? 'subió' : 'sin cambio'} ${f1(Math.abs(h.delta))}${h.estimated ? ', estimado' : ''}`);
   } catch(e){ a.querySelector('b').textContent = '—'; }
 }
@@ -2027,6 +2072,7 @@ async function loadEquipo(code, edit){
     if (cur && brand && category && !brandsIn(category).includes(brand)) brandOther = true;
     el.innerHTML = `<div class="stitle">${cur ? 'Editar ' + esc(cur.label) : 'Agregar palo'}</div>
       <form class="gg-form tt-form" id="eqf" novalidate>
+        ${cur ? `<label class="tt-lab" for="eqn">Nombre</label><input id="eqn" maxlength="12" value="${esc(cur.label)}" autocomplete="off"><button type="button" class="btn ghost sm" id="eqsuggest" hidden>Usar el loft</button>` : ''}
         ${cur ? '' : `<div class="tt-lab">Tipo de palo</div><div class="seg tt-seg eq-cats" role="radiogroup" aria-label="Categoría">${Object.entries(CATL).map(([k,l]) => `<button type="button" role="radio" data-cat="${k}">${l}</button>`).join('')}</div><div id="eqtypes"></div>`}
         <div id="eqbrand"></div><div id="eqmodel"></div><div id="eqloft"></div>
         <div id="eqmsg" role="alert"></div>
@@ -2049,15 +2095,33 @@ async function loadEquipo(code, edit){
         ${modelOther || !ms.length ? `<input type="text" id="eqmo" maxlength="60" placeholder="${ms.length ? 'Escribí el modelo' : 'Modelo'}" value="${esc(model)}" aria-label="Modelo escrito a mano">` : ''}`;
       const sel = $('#eqm'); if (sel) sel.onchange = e => { modelOther = e.target.value === '__other'; model = modelOther ? '' : e.target.value; drawModel(); if (modelOther) $('#eqmo')?.focus(); };
       const mo = $('#eqmo'); if (mo) mo.oninput = () => model = mo.value; };
+    const loftHint = () => category === 'wedge' ? 'Ej.: 50' : category === 'iron' ? 'Ej.: 30' : category === 'driver' ? 'Ej.: 10,5' : 'Ej.: 15';
     const drawLoft = () => { const host = $('#eqloft'); const t = code0 && typ(code0); const show = category && category !== 'putter';
-      host.innerHTML = show ? `<label class="tt-lab" for="eql">Loft <small>(opcional, en grados)</small></label><input type="text" inputmode="decimal" id="eql" maxlength="5" placeholder="${t?.loft ? t.loft : 'Ej.: 10,5'}" value="${cur?.loft != null ? String(cur.loft).replace('.',',') : t?.loft ?? ''}">` : ''; };
+      host.innerHTML = show ? `<label class="tt-lab" for="eql">Loft <small>(opcional, en grados)</small></label><input type="text" inputmode="decimal" id="eql" maxlength="5" placeholder="${t?.loft ? String(t.loft).replace('.', ',') : loftHint()}" value="${cur?.loft != null ? String(cur.loft).replace('.',',') : t?.loft ?? ''}">` : '';
+      const suggest = $('#eqsuggest');
+      if (suggest) {
+        const showSuggest = category === 'wedge';
+        suggest.hidden = !showSuggest;
+        suggest.onclick = () => {
+          const raw = ($('#eql')?.value || '').trim().replace(',', '.');
+          const n = Number(raw);
+          if (!n) return;
+          const name = `${String(n).replace('.', ',')}°`.slice(0, 12);
+          const input = $('#eqn'); if (input) input.value = name;
+        };
+        suggest.textContent = 'Usar el loft como nombre';
+      }
+    };
     el.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { if (category !== b.dataset.cat) { category = b.dataset.cat; code0 = null; brand = ''; model = ''; brandOther = modelOther = false; } drawCats(); drawTypes(); drawBrand(); drawModel(); drawLoft(); });
     drawCats(); drawTypes(); drawBrand(); drawModel(); drawLoft();
     $('#eqf').onsubmit = async e => { e.preventDefault(); const msg = $('#eqmsg'); msg.innerHTML = '';
       const err = t => { msg.innerHTML = '<div class="msg err"></div>'; msg.firstChild.textContent = t; };
       if (!cur && !category) return err('Elegí el tipo de palo.'); if (!cur && !code0) return err('Elegí cuál ' + (category === 'putter' || category === 'driver' ? 'palo' : 'de los ' + CATL[category].toLowerCase()) + '.');
       if (brandOther && !brand.trim()) return err('Escribí la marca.');
-      const body = { brand: brand.trim() || null, model: model.trim() || null, loft: $('#eql')?.value.trim().replace(',', '.') || null, ...(cur ? {} : { code: code0 }) };
+      const named = $('#eqn')?.value.trim();
+      if (cur && named != null && !named) return err('Escribí el nombre.');
+      if (cur && named && named.length > 12) return err('El nombre entra en 12 caracteres.');
+      const body = { brand: brand.trim() || null, model: model.trim() || null, loft: $('#eql')?.value.trim().replace(',', '.') || null, ...(cur ? { label: named } : { code: code0 }) };
       const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
       try { const r = await api(cur ? `/api/my-clubs/items/${eqCode(cur)}` : '/api/my-clubs/items', { method: cur ? 'PATCH' : 'POST', body: JSON.stringify(body) });
         if (!cur) G.bag = (await api('/api/bag')).bag;
@@ -2984,7 +3048,7 @@ function holeMapSvg(h, zoom){
 async function loadHoleMap(roundId){
   const el = $('#hmap'); if (!el) return;
   let d; try { d = await api(`/api/rounds/${roundId}/shots/map`); } catch(e){ el.innerHTML = ''; return; }
-  if (!$('#hmap')) return; if (!d.holes.length) { el.innerHTML = ''; return; }
+  if (!$('#hmap')) return; if (!d?.holes?.length) { el.innerHTML = ''; return; }
   if (!d.holes.some(h => h.hole === HM.hole)) HM.hole = d.holes[0].hole;
   const draw = () => { const h = d.holes.find(x => x.hole === HM.hole), hasPutts = h.shots.some(x => x.kind === 'putt') || h.points.some(p => p.lie === 'green');
     const rows = [...h.shots.map(x => ({ n: x.order, kind: x.kind, club: x.club, dist: x.distance_m, left: x.left_to_flag_m, holed: x.holed })),
@@ -3391,7 +3455,7 @@ function bindQuick(id){
       penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0,
       lost: s.result === 'lost',
       holed: s.result === 'holed',
-      putt: /^pt$|putter/i.test(club) || s.lie === 'green',
+      putt: s.intent === 'conceded' || /^pt$|putter/i.test(club) || s.lie === 'green',
       originGreen: s.lie === 'green',
       endLie, direction,
     };
@@ -3499,9 +3563,10 @@ function wxWhy(reason){
 }
 async function loadRoundWx(id, retry){
   const el = $('#rwx'); if (!el) return;
-  let d; try { d = await api(`/api/rounds/${encodeURIComponent(id)}/weather${retry ? '?retry=1' : ''}`); } catch(e){ if ($('#rwx')) { $('#rwx').hidden = false; $('#rwx').innerHTML = `<div class="card mini"><div class="k">Clima</div>${miss('weather', wxWhy('error'))}</div>`; } return; }
+  const arm = () => { const b = $('#wxretry'); if (b) b.onclick = () => loadRoundWx(id, true); };
+  let d; try { d = await api(`/api/rounds/${encodeURIComponent(id)}/weather${retry ? '?retry=1' : ''}`); } catch(e){ if ($('#rwx')) { $('#rwx').hidden = false; $('#rwx').innerHTML = wxMiss('error'); arm(); } return; }
   if (!$('#rwx')) return; const w = d.weather;
-  if (!w) { el.hidden = false; el.innerHTML = `<div class="card mini"><div class="k">Clima</div>${miss('weather', wxWhy(d.reason))}</div>`; return; }
+  if (!w) { el.hidden = false; el.innerHTML = wxMiss(d.reason); arm(); return; }
   el.hidden = false;
   const forecast = w.kind === 'forecast' || w.source === 'open-meteo-forecast';
   el.innerHTML = `<div class="card wx-card"><div class="wx-h"><span class="wx-ic">${WX_IC[w.condition]||''}</span><div><span class="overline">${forecast ? 'Pronóstico, no es el histórico' : `Clima ${w.basis==='tee_time'?'en tu salida':'durante el día'}`}</span><b>${WX_L[w.condition]||'—'}</b></div></div>
@@ -3810,7 +3875,7 @@ function bind(p, isDetail){
   if ($('.met-entry')) loadGpsLive();
   if (p[0]==='sorteo') loadSorteo(p[1], p[2]==='bases');
   if (p[0]==='cuenta') loadGear();
-  if (p[0]==='hoyo') { loadHoleGeo(); loadHowto(); }
+  if (p[0]==='hoyo') { loadHoleGeo(); loadHoleWx(); loadHowto(); }
   if (p[0]==='estrategia') loadEstrategia(decodeURIComponent(p[1]||''));
   if (p[0]==='nivel') loadNivel((p[1]||'').split('?')[0]);
   if (p[0]==='tees') loadTees();

@@ -200,10 +200,10 @@ export { memberStats, shareMember };
 const r1 = (x: number | null) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
 const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
 
-export async function memberRounds(userId: string): Promise<{ rounds: NR[]; hi: number | null; hi_history: { date: string; hi: number }[]; clubs: string[]; courses: Map<string, { label: string; par: number | null; holes: any[] }> }> {
+export async function memberRounds(userId: string): Promise<{ rounds: NR[]; hi: number | null; hi_history: { date: string; hi: number }[]; clubs: string[]; courses: Map<string, { label: string; par: number | null; holes: any[]; club: string }> }> {
   const d: any = await buildData(userId);
-  const courses = new Map<string, { label: string; par: number | null; holes: any[] }>();
-  for (const c of d.courses || []) courses.set(c.key, { label: c.course && c.club_name ? (c.label || c.course) : c.label, par: c.par ?? null, holes: (c.holes || []).map((h: any) => ({ hole: h.hole, par: h.par, hcp: h.hcp })) });
+  const courses = new Map<string, { label: string; par: number | null; holes: any[]; club: string }>();
+  for (const c of d.courses || []) courses.set(c.key, { label: c.course && c.club_name ? (c.label || c.course) : c.label, par: c.par ?? null, holes: (c.holes || []).map((h: any) => ({ hole: h.hole, par: h.par, hcp: h.hcp })), club: String(c.club_name || "") });
   const rounds: NR[] = (d.rounds || []).filter((r: any) => r.valid_card && r.gross && countsInSharedStats(r.official)).map((r: any) => ({
     date: r.date, year: String(r.date).slice(0, 4), course_key: r.course_key, course_label: r.course_label || courses.get(r.course_key)?.label || r.course,
     nine: !!r.is_9_holes,
@@ -228,8 +228,8 @@ export async function groupCompare(groupId: string, viewerId: string, f: { year?
   const names = await publicNames(acc.map(m => m.user_id!));
   const share = await effectiveShare(groupId, acc.map(m => m.user_id!));
   const data = await Promise.all(acc.map(async m => ({ m, sh: share.get(m.user_id!)!, ...(await memberRounds(m.user_id!)) })));
-  const allYears = new Set<string>(), courseMembers = new Map<string, { label: string; members: Set<string> }>();
-  for (const d of data) if (d.sh.scores || d.sh.holes) for (const r of d.rounds) { allYears.add(r.year); const c = courseMembers.get(r.course_key) || { label: r.course_label, members: new Set() }; c.members.add(d.m.member_id); courseMembers.set(r.course_key, c); }
+  const allYears = new Set<string>(), courseMembers = new Map<string, { label: string; club: string; members: Set<string> }>();
+  for (const d of data) if (d.sh.scores || d.sh.holes) for (const r of d.rounds) { allYears.add(r.year); const known = d.courses.get(r.course_key); const c = courseMembers.get(r.course_key) || { label: r.course_label, club: known?.club || "", members: new Set() }; if (!c.club && known?.club) c.club = known.club; c.members.add(d.m.member_id); courseMembers.set(r.course_key, c); }
   const win = f.year ? { key: null as string | null, since: null, until: null, prevSince: null, prevUntil: null, min: 3 } : groupWindow(f.range);
   const since = win.since, range = win.key;
   const filt = (rs: NR[]) => rs.filter(r => (!f.year || r.year === f.year) && (f.year || inWindow(r.date, win.since, win.until)) && (!f.course || r.course_key === f.course));
@@ -274,7 +274,7 @@ export async function groupCompare(groupId: string, viewerId: string, f: { year?
       ...(isAdmin ? { link: linkInfo(group) } : {}) },
     view: mine.view, share_override: mine.share_override,
     filters: { year: f.year || null, range: f.year ? null : (range || "all"), since, until: f.year ? null : win.until, min: win.min, course: f.course || null, years: [...allYears].sort().reverse(),
-      courses: [...courseMembers.entries()].map(([key, c]) => ({ key, label: c.label, members: c.members.size, shared: c.members.size >= 2 })).sort((a, b) => b.members - a.members) },
+      courses: [...courseMembers.entries()].map(([key, c]) => ({ key, label: c.label, club: c.club || "", members: c.members.size, shared: c.members.size >= 2 })).sort((a, b) => b.members - a.members) },
     members: out, pending,
     clubs: [...clubMap.values()].filter(c => c.members.length >= 2),
     worst_holes: f.course ? worstHoles(data.filter(d => d.sh.holes).flatMap(d => filt(d.rounds))) : null,

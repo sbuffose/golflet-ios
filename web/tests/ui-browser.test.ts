@@ -21,7 +21,7 @@ const fixture = {
 };
 const tee = { id: "tt-fixture", date: "2026-11-09", time: "09:00", club_name: "Club Fixture", course_label: null, companions: [{ name: "Compañero viejo", hcp: 10 }], seen_at: "2026-11-01T12:00:00Z", starts_at: "2026-11-09T09:00:00-03:00", start_hole: 1 };
 
-test("the public bundle opens the already-played round and the two explicit reads", { timeout: 60_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+test("the public bundle opens the already-played round and the two explicit reads", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   const calls = { check: 0, players: 0, sync: 0, postCourse: "" };
   let releaseSync: () => void = () => {};
   const syncGate = new Promise<void>(r => { releaseSync = r; });

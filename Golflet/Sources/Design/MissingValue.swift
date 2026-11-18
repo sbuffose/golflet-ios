@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum MissingKind: String, Identifiable {
-    case putts, greens, fairways, weather, differential, course, club, ball, handicap, worst, gross, net
+    case putts, greens, fairways, weather, differential, course, club, ball, handicap, worst, gross, net, geo
 
     var id: String { rawValue }
 
@@ -19,6 +19,7 @@ enum MissingKind: String, Identifiable {
         case .worst: return "Peor ronda"
         case .gross: return "Gross"
         case .net: return "Neto"
+        case .geo: return "Geometría"
         }
     }
 
@@ -40,6 +41,8 @@ enum MissingKind: String, Identifiable {
             return "Sale de la matrícula del club."
         case .worst:
             return "Es la tarjeta de mayor gross del período."
+        case .geo:
+            return "Sale de un trazado verificado del tee al centro del green."
         }
     }
 
@@ -57,6 +60,7 @@ enum MissingKind: String, Identifiable {
         case .ball: return "No hay una pelota elegida."
         case .handicap: return "No hay una matrícula vinculada."
         case .worst: return "Hay una sola tarjeta, así que no hay una peor distinta."
+        case .geo: return "Este hoyo no tiene geometría verificada. No marco un punto inventado."
         }
     }
 

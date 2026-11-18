@@ -114,14 +114,14 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => el.getAttribute("aria-label")), "Histórico");
     assert.equal((await page.$$eval(".gg-rng a", els => [...new Set(els.map(e => Math.round(e.getBoundingClientRect().top)))])).length, 1);
     assert.ok(await page.$(".gg-lb img.gg-img"));
-    const leaders = await page.$$eval(".gg-leaders button", els => els.length >= 3 && els[1].getBoundingClientRect().left < window.innerWidth && Math.abs(els[1].getBoundingClientRect().top - els[0].getBoundingClientRect().top) < 2);
+    const leaders = await page.$$eval(".gg-leaders button", els => els.length >= 3 && els[1].getBoundingClientRect().top > els[0].getBoundingClientRect().bottom - 2 && els[0].getBoundingClientRect().width > window.innerWidth * 0.7);
     assert.equal(leaders, true);
     await shot("grupo-2-historico-390");
     await open("g1", "12y");
     const year = await page.evaluate(() => document.querySelector("#view")?.textContent || "");
     assert.match(year, /20 rondas este año/);
     assert.match(year, /Pocas tarjetas/);
-    assert.match(year, /Temporada 2026/);
+    assert.match(year, /Este año/);
     assert.match(year, /Tu posición · 1 · \+20 sobre Luis · 8 tarj\./);
     assert.equal(await page.$eval('.gg-rng a[aria-selected="true"]', el => (el.textContent || "").trim()), "Este año");
     await shot("grupo-2-anio-390");
@@ -158,16 +158,15 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     await board("grupos6-empate-390");
     await open("g1", "1w");
     const fit = await page.$eval(".gg-filters", el => {
-      const row = el.getBoundingClientRect();
-      const course = el.querySelector(".gg-course summary")?.getBoundingClientRect();
+      const course = el.querySelector(".gg-course-btn")?.getBoundingClientRect();
       const pills = [...el.querySelectorAll(".gg-rng a")].map(a => a.getBoundingClientRect());
       const last = pills[pills.length - 1];
       return {
-        courseInside: !!course && !!last && course.right <= row.right + 1 && course.left >= last.right - 1 && course.top >= row.top - 1 && course.bottom <= row.bottom + 1,
+        courseBelow: !!course && !!last && course.top + 1 >= Math.max(...pills.map(p => p.bottom)) && course.height >= 44,
         oneRow: new Set(pills.map(p => Math.round(p.top))).size === 1,
       };
     });
-    assert.equal(fit.courseInside, true);
+    assert.equal(fit.courseBelow, true);
     assert.equal(fit.oneRow, true);
     assert.match(await page.evaluate(() => document.querySelector("#view")?.textContent || ""), /Pocas tarjetas/);
     assert.ok(await tableClearsNav() >= 8, "la última fila queda detrás de la barra");

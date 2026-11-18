@@ -251,10 +251,10 @@ struct HomeView: View {
 
     private var handicapCard: some View {
         let snap = model.home
-        return GCard(fill: p.primary, radius: 28, padding: 20) {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 10) {
+        return GCard(fill: p.primary, radius: 28, padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
                         GOverline(text: "Handicap index", color: p.onPrimary.opacity(0.55))
                         NavigationLink(value: MetricRoute.handicap) {
                             CountUpText(value: snap.handicapIndex, format: FormatAR.one)
@@ -274,26 +274,38 @@ struct HomeView: View {
                             Text("Índice al \(FormatAR.webDay(when))")
                                 .font(GType.label)
                                 .foregroundStyle(p.onPrimary.opacity(0.7))
+                                .lineLimit(1)
                         }
                         if !snap.trendSinceLabel.isEmpty {
                             let arrow = snap.trendDelta < 0 ? "↓" : "↑"
                             Text("\(arrow) \(FormatAR.one(abs(snap.trendDelta))) \(snap.trendSinceLabel)")
                                 .font(GType.label)
                                 .foregroundStyle(p.onPrimary.opacity(0.7))
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Button { showsHcpImpact = true } label: {
-                            Text("Cambios")
-                                .font(GType.label)
-                                .foregroundStyle(p.onPrimary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(p.onPrimary.opacity(0.72), lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("home-hcp-cambios")
                     }
-                    Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 8) {
+                    .layoutPriority(1)
+                    Spacer(minLength: 4)
+                    VStack(alignment: .trailing, spacing: 0) {
+                        HomeHcpPeople(
+                            profesores: model.profesores,
+                            groups: model.groups,
+                            places: groupPlaces,
+                            onProfesor: { presentProfesor($0) },
+                            onProfesores: { showsHomeProfesores = true },
+                            onAddProfesor: { showsAgregarProfesor = true },
+                            onGroup: { model.presentGroupDetail($0.id) },
+                            onGroups: {
+                                if model.groups.count == 1, let group = model.groups.first {
+                                    model.presentGroupDetail(group.id)
+                                } else {
+                                    model.presentGroups()
+                                }
+                            },
+                            onCreate: { model.presentCreateGroup() },
+                            compact: true
+                        )
                         Button { model.showsPlay = true } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "location.fill")
@@ -304,20 +316,69 @@ struct HomeView: View {
                             }
                             .foregroundStyle(p.onPrimary)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .frame(minHeight: 36)
                             .background(p.accent)
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Jugar")
                         .accessibilityIdentifier("play-start")
+                        Button { showsHcpImpact = true } label: {
+                            Text("Cambios")
+                                .font(GFont.ui(13, weight: .regular))
+                                .underline()
+                                .foregroundStyle(p.onPrimary.opacity(0.72))
+                                .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home-hcp-cambios")
                     }
                 }
-
+                Rectangle()
+                    .fill(p.onPrimary.opacity(0.16))
+                    .frame(height: 1)
+                HStack(alignment: .top, spacing: 8) {
+                    hiStat("Tarjetas", "\(snap.cards)", .roundList(.allCards))
+                    hiStat("Mejor", snap.bestGross.map(String.init) ?? "–", .roundList(.bestGross(yearOnly: false)))
+                    hiStat("Prom.", snap.yearAverage.map { FormatAR.one($0) } ?? "–", .roundList(.average(yearOnly: false)))
+                    hiStat("Impacto", impactText, nil)
+                }
             }
         }
         .background(alignment: .topLeading) {
             GProbe(id: "handicap-card", label: "Handicap index")
+        }
+    }
+
+    private var impactText: String {
+        guard let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact else { return "–" }
+        return hcpImpactValue(impact)
+    }
+
+    private func hiStat(_ label: String, _ value: String, _ route: MetricRoute?) -> some View {
+        let stack = VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(GFont.ui(11, weight: .regular))
+                .foregroundStyle(p.onPrimary.opacity(0.62))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(value)
+                .font(GType.statM)
+                .tabular()
+                .foregroundStyle(p.onPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        return Group {
+            if let route {
+                NavigationLink(value: route) { stack }
+                    .buttonStyle(.plain)
+            } else {
+                Button { showsHcpImpact = true } label: { stack }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("metric-hcp-impact")
+            }
         }
     }
 
@@ -359,28 +420,7 @@ struct HomeView: View {
                 .accessibilityIdentifier("home-pending-invite")
                 .accessibilityLabel("Invitación pendiente, \(invite.name)")
             }
-            peopleRows
         }
-    }
-
-    private var peopleRows: some View {
-        HomeHcpPeople(
-            profesores: model.profesores,
-            groups: model.groups,
-            places: groupPlaces,
-            onProfesor: { presentProfesor($0) },
-            onProfesores: { showsHomeProfesores = true },
-            onAddProfesor: { showsAgregarProfesor = true },
-            onGroup: { model.presentGroupDetail($0.id) },
-            onGroups: {
-                if model.groups.count == 1, let group = model.groups.first {
-                    model.presentGroupDetail(group.id)
-                } else {
-                    model.presentGroups()
-                }
-            },
-            onCreate: { model.presentCreateGroup() }
-        )
     }
 
     private func loadGroupPlaces() async {
@@ -1162,10 +1202,19 @@ struct HomeHcpPeople: View {
     var onGroup: (GolfletGroup) -> Void = { _ in }
     var onGroups: () -> Void
     var onCreate: () -> Void
+    var compact: Bool = false
 
     private let face: CGFloat = 44
 
     var body: some View {
+        if compact {
+            compactStack
+        } else {
+            fullRows
+        }
+    }
+
+    private var fullRows: some View {
         VStack(alignment: .leading, spacing: 8) {
             if profesores.isEmpty {
                 addProfesor
@@ -1193,6 +1242,92 @@ struct HomeHcpPeople: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-hcp-people")
+    }
+
+    private var compactStack: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            if profesores.isEmpty {
+                compactAdd
+            } else {
+                compactProfesor
+            }
+            if groups.isEmpty {
+                compactCreate
+            } else {
+                compactGroups
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home-hcp-people")
+    }
+
+    private var compactProfesor: some View {
+        Group {
+            if profesores.count == 1, let first = profesores.first {
+                NavigationLink(value: first) { compactFace(url: first.photoURL, initials: first.initials, verified: first.verified) }
+            } else {
+                Button(action: onProfesores) { compactFace(url: profesores.first?.photoURL, initials: profesores.first?.initials ?? "P", verified: profesores.contains { $0.verified }) }
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityIdentifier("home-hcp-profesor")
+        .accessibilityLabel(profesorLabel)
+        .overlay { GProbe(id: "home-hcp-profesor", label: profesorLabel).allowsHitTesting(false) }
+    }
+
+    private var compactAdd: some View {
+        Button(action: onAddProfesor) {
+            Text("+")
+                .font(GFont.ui(16, weight: .semibold))
+                .foregroundStyle(Color(hex: HomeHcpPeopleLayout.celeste))
+                .frame(width: 28, height: 28)
+                .overlay(Circle().strokeBorder(Color(hex: HomeHcpPeopleLayout.celeste), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])))
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityIdentifier("home-hcp-add-profesor")
+        .accessibilityLabel("Agregar profesor")
+        .overlay { GProbe(id: "home-hcp-add-profesor", label: "Agregar profesor") }
+    }
+
+    private var compactGroups: some View {
+        Button(action: onGroups) {
+            HStack(spacing: -8) {
+                ForEach(Array(groups.prefix(3))) { group in
+                    HomeHcpAvatar(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 22, fill: Color.white.opacity(0.16), ink: .white, ring: Color.white.opacity(0.85), verified: false)
+                }
+                Text("\(groups.count) \(groups.count == 1 ? "grupo" : "grupos")")
+                    .font(GFont.ui(12, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.82))
+                    .lineLimit(1)
+                    .padding(.leading, 10)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityIdentifier("home-hcp-groups")
+        .accessibilityLabel("\(groups.count) grupos")
+        .overlay { GProbe(id: "home-hcp-groups", label: groups.first?.name ?? "Grupos").allowsHitTesting(false) }
+    }
+
+    private var compactCreate: some View {
+        Button(action: onCreate) {
+            Text("+")
+                .font(GFont.ui(16, weight: .semibold))
+                .foregroundStyle(Color(hex: 0xC8A86A))
+                .frame(width: 28, height: 28)
+                .overlay(Circle().stroke(Color(hex: 0xC8A86A), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityIdentifier("home-hcp-crear-grupo")
+        .accessibilityLabel("Crear grupo")
+        .overlay { GProbe(id: "home-hcp-crear-grupo", label: "Crear grupo") }
+    }
+
+    private func compactFace(url: String?, initials: String, verified: Bool) -> some View {
+        HomeHcpAvatar(url: url, initials: initials, size: 28, fill: Color.white.opacity(0.16), ink: .white, ring: Color.white, verified: verified)
     }
 
     private var profesorAvatarButton: some View {
@@ -1511,10 +1646,10 @@ struct ScorecardFetchSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(ScorecardFetchJob.searchCount(jobs.count))
-                        .font(GType.headline)
-                        .foregroundStyle(p.ink)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(scorecardSummary)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
                         .accessibilityIdentifier("scorecard-count")
                     if let note, !note.isEmpty {
                         Text(note)
@@ -1527,12 +1662,20 @@ struct ScorecardFetchSheet: View {
                     } else {
                         ForEach(jobs) { job in
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(job.statusLine)
-                                    .font(GType.overline)
-                                    .foregroundStyle(Color(hex: BrandHex.red))
-                                Text(job.clubName.isEmpty ? "Club" : job.clubName)
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
+                                HStack {
+                                    Text(job.clubName.isEmpty ? "Club" : job.clubName)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 8)
+                                    Text(job.chipTitle)
+                                        .font(GFont.ui(12, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(scorecardChipColor(job.chipTitle))
+                                        .clipShape(Capsule())
+                                }
                                 if !whenLine(job).isEmpty {
                                     Text(whenLine(job))
                                         .font(GType.label)
@@ -1544,25 +1687,23 @@ struct ScorecardFetchSheet: View {
                                 Text(job.lastCheckLine)
                                     .font(GType.label)
                                     .foregroundStyle(p.ink3)
+                                if job.canRetry {
+                                    Button(action: onRefresh) {
+                                        Text("Buscar de nuevo")
+                                            .font(GType.headline)
+                                            .underline()
+                                            .foregroundStyle(p.ink)
+                                            .frame(minHeight: 44)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier(refreshID)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
                             .accessibilityIdentifier("home-scorecard-\(job.id)")
                         }
-                        if jobs.contains(where: { !$0.hasCard }) {
-                            emptyCard
-                        }
                     }
-                    Button(action: onRefresh) {
-                        Text("Actualizar")
-                            .font(GType.headline)
-                            .foregroundStyle(Color.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 44)
-                            .background(Color(hex: BrandHex.navy))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier(refreshID)
                 }
                 .padding(20)
             }
@@ -1573,6 +1714,26 @@ struct ScorecardFetchSheet: View {
         .golfletChrome()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(sheetID)
+    }
+
+    private func scorecardChipColor(_ title: String) -> Color {
+        switch title {
+        case "No presentó": return Color(hex: 0x5C687B)
+        case "Error": return Color(hex: 0xC8102E)
+        default: return Color(hex: 0x0B2545)
+        }
+    }
+
+    private var scorecardSummary: String {
+        let absent = jobs.filter { $0.chipTitle == "No presentó" }.count
+        let pending = jobs.filter { $0.chipTitle == "Pendiente" }.count
+        let errors = jobs.filter { $0.chipTitle == "Error" }.count
+        let bits = [
+            absent > 0 ? "\(absent) sin tarjeta" : nil,
+            pending > 0 ? "\(pending) pendiente\(pending == 1 ? "" : "s")" : nil,
+            errors > 0 ? "\(errors) con error" : nil,
+        ].compactMap { $0 }
+        return bits.isEmpty ? "Sin búsquedas abiertas" : bits.joined(separator: " · ")
     }
 
     private func whenLine(_ job: ScorecardFetchJob) -> String {

@@ -68,7 +68,14 @@
         if (p[4] === 'ronda') return drawCard(el, id, await H.api(`/api/groups/${id}/members/${mid}/rounds/${encodeURIComponent(p[5] || '')}`));
         return drawProfile(el, id, await H.api(`/api/groups/${id}/members/${mid}/profile`)); }
       if (p[2] === 'miembros') return drawMembers(el, id, await H.api(`/api/groups/${id}`));
-      if (p[2] === 'vista') { const [g, v, sh] = await Promise.all([H.api(`/api/groups/${id}?range=all&course=all`), H.api(`/api/groups/${id}/view`), H.api('/api/me/sharing')]); return drawView(el, id, g, v, sh); }
+      if (p[2] === 'vista') {
+        const [v, sh] = await Promise.all([H.api(`/api/groups/${id}/view`), H.api('/api/me/sharing')]);
+        const range = qs.get('range') || v.view?.range || 'all';
+        const course = qs.get('course') || v.view?.course || '';
+        const g = await H.api(`/api/groups/${id}?range=${encodeURIComponent(range)}${course ? `&course=${encodeURIComponent(course)}` : ''}`);
+        v.view = { ...v.view, range, course: course || null };
+        return drawView(el, id, g, v, sh);
+      }
       if (p[2] === 'ajustes') return drawSettings(el, id, await H.api(`/api/groups/${id}`), qs);
       if (p[2] === 'hoyos' || p[2] === 'hoyo') {
         const c = qs.get('course'); if (!c) { el.innerHTML = '<p class="msg">Elegí una cancha.</p>'; return; }
@@ -171,9 +178,11 @@
     const yr = `<div class="seg vx-seg rng-seg gg-rng" role="tablist" aria-label="Período">${RANGES.map(([v, short, full]) => `<a role="tab" aria-selected="${v === r}" aria-label="${full}" class="${v === r ? 'on' : ''}" href="${base}${keepQs(qs, { range: v, year: null })}">${short}</a>`).join('')}${y ? `<a class="on" href="${base}${keepQs(qs, { year: null, range: 'all' })}" aria-label="${y}">${y} ✕</a>` : ''}</div>`;
     const courses = d.filters.courses || [];
     const current = courses.find(x => x.key === c);
-    const opts = [['all', 'Todas las canchas'], ...courses.map(x => [x.key, x.label])];
-    const cs = courses.length ? `<details class="gg-course"><summary>${H.esc(current ? current.label : 'Canchas')} ▾</summary><div>${opts.map(([v, l]) => `<a class="${v === (c || 'all') ? 'on' : ''}" href="${base}${keepQs(qs, { course: v })}">${H.esc(l)}</a>`).join('')}</div></details>` : '';
-    return `<div class="gg-filters">${yr}${cs}</div>`;
+    const labelOf = x => x.club ? `${x.label} · ${x.club}` : x.label;
+    const chosen = current ? labelOf(current) : 'Todas las canchas';
+    const opts = [['all', 'Todas las canchas'], ...courses.map(x => [x.key, labelOf(x)])];
+    const cs = `<button type="button" class="gg-course-btn" data-courses aria-haspopup="dialog">${H.esc(chosen)}</button><dialog class="gg-course-dlg"><div class="gg-course-h"><b>Canchas</b><button type="button" data-course-close aria-label="Cerrar">×</button></div>${opts.map(([v, l]) => `<a class="${v === (c || 'all') ? 'on' : ''}" href="${base}${keepQs(qs, { course: v })}">${H.esc(l)}</a>`).join('')}</dialog>`;
+    return `<div class="gg-filters">${yr}<div class="gg-course-row">${cs}</div></div>`;
   }
   function trendSvg(ms, link) {
     const pts = ms.flatMap(m => (m.trend || []).map(t => ({ m, ...t })).filter(t => t.avg_gross != null));
@@ -273,7 +282,7 @@
       if (range === '1m') return dt ? `${MESES[dt.getMonth()]} ${dt.getFullYear()}` : 'Este mes';
       if (range === '3q') return year ? `Trimestre ${year}` : 'Trimestre';
       if (range === '6s') return year ? `Semestre ${year}` : 'Semestre';
-      if (range === '12y' || range === 'year') return year ? `Temporada ${year}` : 'Este año';
+      if (range === '12y' || range === 'year') return 'Este año';
       if (range === '3m') return 'Últimos 3 meses';
       if (range === '6m') return 'Últimos 6 meses';
       if (range === '12m') return 'Últimos 12 meses';
@@ -340,8 +349,12 @@
       rows.sort((a, b) => (a.low ? a.v - b.v : b.v - a.v));
       const places = placesOf(rows);
       const tops = rows.filter((_, i) => places[i] === 1);
-      const who = tops.length > 1 ? `T1 · ${firstOf(tops[0].m.name)}` : firstOf(tops[0].m.name);
-      return `<button type="button" data-cat="${key}"><span>${H.esc(label)}</span><b>${H.esc(who)} ${H.esc(shown(key, tops[0]))}</b></button>`;
+      const tie = tops.length > 1;
+      const who = tie ? `T1 ${firstOf(tops[0].m.name)}` : firstOf(tops[0].m.name);
+      const gap = tie ? 'T1' : gapLine(key, rows);
+      const sample = tops[0].n;
+      const rate = ['birdies', 'pars', 'eagles'].includes(key) && tops[0].rate != null && sample ? `${H.f1(tops[0].rate)} por ronda · ${sample} ${sample === 1 ? 'ronda' : 'rondas'}` : '';
+      return `<button type="button" class="gg-lead" data-cat="${key}"><span class="k">${H.esc(label)}</span><b>${H.esc(who)}</b><b class="num">${H.esc(shown(key, tops[0]))}</b><small>${H.esc(gap || '')}${rate ? ` · ${rate}` : ''}</small></button>`;
     };
     const boardTable = key => {
       const rows = boardRows(key);
@@ -382,6 +395,13 @@
       el.querySelectorAll('.gg-stage').forEach(s => { s.hidden = s.dataset.cat !== cat; });
     };
     el.querySelectorAll('.gg-tabs button, .gg-leaders button').forEach(b => { b.onclick = () => selectCat(b.dataset.cat); });
+    const courseBtn = el.querySelector('[data-courses]');
+    const courseDlg = el.querySelector('.gg-course-dlg');
+    if (courseBtn && courseDlg) {
+      courseBtn.onclick = () => courseDlg.showModal();
+      const shut = courseDlg.querySelector('[data-course-close]');
+      if (shut) shut.onclick = () => courseDlg.close();
+    }
   }
 
   function drawMetric(el, id, d, k, qs) {
@@ -552,16 +572,26 @@
     const mineSummary = () => {
       if (!me) return '';
       const n = Number(me.cards_18 ?? me.rounds ?? 0);
-      if (n < 3) return `<section class="gg-mine"><h2>Tu resumen</h2><p>Pocas tarjetas</p><small>${n} tarjetas de 18 en este período. No armo promedios con menos de 3.</small></section>`;
+      if (n < 3) return `<section class="gg-mine"><p>Pocas tarjetas</p><small>${n} tarjetas de 18 en este período. No armo promedios con menos de 3.</small></section>`;
       const keys = ['avg_gross', 'birdies', 'pars', 'putts', 'gir', 'fir'].filter(k => !hid(me, k) && val(me, k) != null);
-      if (!keys.length) return `<section class="gg-mine"><h2>Tu resumen</h2><p>Sin números de tus tarjetas en este período.</p><small>${n} tarjetas</small></section>`;
-      return `<section class="gg-mine"><h2>Tu resumen</h2>${keys.map(k => `<div><span>${MT[k][1]}</span><b class="num">${fmt(k, val(me, k))}</b><small>${n} tarjetas</small></div>`).join('')}</section>`;
+      if (!keys.length) return `<section class="gg-mine"><p>— Sin números de tus tarjetas oficiales en este período.</p><small>${n} tarjetas</small></section>`;
+      return `<section class="gg-mine">${keys.map(k => `<div><span>${MT[k][1]}</span><b class="num">${val(me, k) == null ? '—' : fmt(k, val(me, k))}</b><small>${n} tarjetas</small></div>`).join('')}</section>`;
+    };
+    const podium = () => {
+      const rows = (d.members || []).filter(m => !hid(m, 'birdies') && val(m, 'birdies') != null).sort((a, b) => val(b, 'birdies') - val(a, 'birdies'));
+      if (!rows.length) return `<p class="gg-emptyline">— Este período no tiene tarjetas oficiales. No marco un puesto inventado.</p>`;
+      return `<div class="gg-podium" aria-label="Podio de birdies">${rows.slice(0, 3).map((m, i) => `<div class="gg-pod"><i class="num">${i + 1}</i>${photo(m, 'gg-av')}<b>${H.esc(m.name)}</b><span class="num">${fmt('birdies', val(m, 'birdies'))}</span><small>${Number(m.cards_18 ?? m.rounds ?? 0)} tarj.</small></div>`).join('')}</div>`;
     };
     const draw = () => {
-      el.innerHTML = `${bar('Mi vista', d.group.name)}${mineSummary()}<p class="gg-lede">Solo tus tarjetas compartidas. Lo de abajo cambia lo que ves vos.</p>
-      <div class="section"><h2>Período y cancha</h2></div><div class="card gg-form">
+      el.innerHTML = `${bar('Mi vista', d.group.name)}
+      <p class="gg-lede">Solo tarjetas oficiales. Una de 9 entra por hoyo, no en el promedio de golpes.</p>
+      <div class="gg-filters" aria-label="Período"><div class="seg vx-seg rng-seg gg-rng" role="tablist">${RANGES.map(([k, l]) => `<a role="tab" class="${k === (v.view.range || 'all') ? 'on' : ''}" aria-selected="${k === (v.view.range || 'all')}" href="#/grupo/${id}/vista?range=${k}${v.view.course ? `&course=${encodeURIComponent(v.view.course)}` : ''}">${l}</a>`).join('')}</div></div>
+      ${podium()}
+      ${mineSummary()}
+      <details class="gg-vista-set"><summary>Ajustes de mi vista</summary>
+      <div class="card gg-form">
         <label>Período<select id="gvr">${RANGES.map(([k, l]) => `<option value="${k}" ${k === v.view.range ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <label>Cancha<select id="gvc"><option value="">Todas las canchas</option>${d.filters.courses.map(c => `<option value="${H.esc(c.key)}" ${c.key === v.view.course ? 'selected' : ''}>${H.esc(c.label)}</option>`).join('')}</select></label></div>
+        <label>Cancha<select id="gvc"><option value="">Todas las canchas</option>${(d.filters.courses || []).map(c => `<option value="${H.esc(c.key)}" ${c.key === v.view.course ? 'selected' : ''}>${H.esc(c.club ? `${c.label} · ${c.club}` : c.label)}</option>`).join('')}</select></label></div>
       <div class="section"><h2>Secciones</h2><span class="badge">en este orden</span></div><div class="card gg-vlist" data-l="s">${list(secs, allS, k => SECTIONS.find(x => x[0] === k)[1], 's')}</div>
       <div class="section"><h2>Métricas de la tabla</h2><span class="badge">en este orden</span></div><div class="card gg-vlist" data-l="m">${list(met, allM, k => MT[k][1], 'm')}</div>
       <div class="gg-acts"><button class="btn" id="gvsave">Guardar mi vista</button><button class="btn ghost" id="gvreset">Volver a la vista original</button></div><div id="gvmsg"></div>
@@ -569,7 +599,7 @@
         <label class="check"><input type="checkbox" id="gvov" ${ov ? 'checked' : ''}><span>Compartir distinto que en mi perfil</span></label>
         <div id="gvovl" ${ov ? '' : 'hidden'}>${sh.categories.map(c => `<label class="check"><input type="checkbox" data-sc="${c.key}" ${(ov ? ov[c.key] ?? sh.prefs[c.key] : sh.prefs[c.key]) ? 'checked' : ''}><span>${H.esc(c.label)}</span></label>`).join('')}</div>
         <p class="foot">Si no lo marcás, vale <a class="link" href="#/compartir">Qué comparto</a> de tu perfil. Notas de voz, notas y estrategia nunca se comparten.</p>
-        <button class="btn ghost" id="gvovsave">Guardar</button></div>`;
+        <button class="btn ghost" id="gvovsave">Guardar</button></div></details>`;
       el.querySelectorAll('[data-up],[data-dn]').forEach(b => b.onclick = () => { const [l, k] = (b.dataset.up || b.dataset.dn).split(':'), up = !!b.dataset.up;
         const arr = l === 'm' ? [...met, ...allM.filter(x => !met.includes(x))] : [...secs, ...allS.filter(x => !secs.includes(x))]; const i = arr.indexOf(k), j = up ? i - 1 : i + 1; if (j < 0 || j >= arr.length) return;
         [arr[i], arr[j]] = [arr[j], arr[i]]; const on = new Set(l === 'm' ? met : secs); const next = arr.filter(x => on.has(x)); if (l === 'm') met = next; else secs = next; sync(); draw(); });

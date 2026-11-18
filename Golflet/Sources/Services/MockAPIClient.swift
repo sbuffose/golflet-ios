@@ -318,6 +318,11 @@ struct MockAPIClient: GolfletAPI {
     }
 
     func saveBag(_ items: [BagClub]) async throws -> [BagClub] { items }
+
+    func renameClub(code: String, label: String) async throws {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 12 else { throw GolfletError.server("El nombre entra en 12 caracteres.") }
+    }
     func saveIronSet(brand: String, model: String) async throws -> String { "Guardé \(brand) \(model)." }
 
     private var isLinked: Bool {
@@ -403,6 +408,7 @@ struct MockAPIClient: GolfletAPI {
                 return CourseHole(
                     number: number,
                     par: JSONFlex.int(from: hole["par"]) ?? 4,
+                    parRaw: hole["par_raw"] as? String,
                     handicap: JSONFlex.int(from: hole["hole_hcp"]) ?? number,
                     yards: yards
                 )

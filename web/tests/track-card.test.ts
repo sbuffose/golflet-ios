@@ -76,6 +76,16 @@ test("la tarjeta se llena hoyo por hoyo y el manual gana", { timeout: 60_000, sk
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+    const tapHole = async (step: string) => {
+      await page.evaluate((dir) => {
+        const b = document.querySelector(`[data-qh="${dir}"]`);
+        if (!(b instanceof HTMLElement)) return;
+        const bar = document.querySelector("#tabbar")?.getBoundingClientRect().top ?? window.innerHeight;
+        const r = b.getBoundingClientRect();
+        if (r.bottom > bar - 8) window.scrollBy(0, r.bottom - bar + 24);
+        b.click();
+      }, step);
+    };
     mkdirSync("/opt/cursor/artifacts", { recursive: true });
     await page.goto(`http://127.0.0.1:${port}/#/ronda/r1`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => (document.querySelector("#qsrc")?.textContent || "").includes("Desde TRACK") && (document.querySelector("#qmsg")?.textContent || "").includes("Guardado en tu cuenta"), { timeout: 15000 });
@@ -87,15 +97,15 @@ test("la tarjeta se llena hoyo por hoyo y el manual gana", { timeout: 60_000, sk
     assert.match(await page.$eval("#rt-fir-src", el => el.textContent || ""), /Manual/);
     assert.equal(puts.some(p => p.drive === "left"), false);
     assert.equal(puts.some(p => p.putts === 1), true);
-    await page.click('[data-qh="1"]');
+    await tapHole("1");
     await page.waitForFunction(() => (document.querySelector("#qsrc")?.textContent || "").includes("No aplica"));
-    await page.click('[data-qh="1"]');
+    await tapHole("1");
     await page.waitForFunction(() => (document.querySelector("#qsrc")?.textContent || "").includes("Sin confirmar"));
     const open = await page.$eval("#qsrc", el => el.textContent || "");
     assert.match(open, /Putts: Sin confirmar/);
     assert.match(open, /Fairway: Sin confirmar/);
-    await page.click('[data-qh="-1"]');
-    await page.click('[data-qh="-1"]');
+    await tapHole("-1");
+    await tapHole("-1");
     await page.screenshot({ path: "/opt/cursor/artifacts/stats-track-390.png" });
     await page.waitForFunction(() => (document.querySelector("#rpartners")?.textContent || "").includes("Jugaste con"));
     const partners = await page.$eval("#rpartners", el => el.textContent || "");
