@@ -1651,6 +1651,9 @@ struct ScorecardFetchSheet: View {
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
                         .accessibilityIdentifier("scorecard-count")
+                    if jobs.contains(where: \.canRetry) {
+                        GProbe(id: refreshID, label: "Buscar de nuevo")
+                    }
                     if let note, !note.isEmpty {
                         Text(note)
                             .font(GType.body)
@@ -1702,6 +1705,7 @@ struct ScorecardFetchSheet: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 8)
+                            .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("home-scorecard-\(job.id)")
                         }
                     }
