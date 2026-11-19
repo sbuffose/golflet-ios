@@ -845,8 +845,15 @@ enum GolfletError: LocalizedError, Equatable {
 }
 
 enum JSONFlex {
+    /// JSONSerialization boxes `true` as CFBoolean, which also bridges as `Bool`.
+    /// The numbers 0 and 1 bridge the same way, so `value is Bool` would drop hole 1.
+    private static func isCFBoolean(_ value: Any) -> Bool {
+        guard let number = value as? NSNumber else { return false }
+        return CFGetTypeID(number) == CFBooleanGetTypeID()
+    }
+
     static func double(from value: Any?) -> Double? {
-        if value is Bool { return nil }
+        guard let value, !isCFBoolean(value) else { return nil }
         if let d = value as? Double { return d }
         if let i = value as? Int { return Double(i) }
         if let n = value as? NSNumber { return n.doubleValue }
@@ -855,7 +862,7 @@ enum JSONFlex {
     }
 
     static func int(from value: Any?) -> Int? {
-        if value is Bool { return nil }
+        guard let value, !isCFBoolean(value) else { return nil }
         if let i = value as? Int { return i }
         if let n = value as? NSNumber { return n.intValue }
         if let d = value as? Double { return Int(d.rounded()) }

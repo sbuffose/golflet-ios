@@ -130,6 +130,7 @@ struct GroupsView: View {
                     Text("\(group.memberCount) \(group.memberCount == 1 ? "miembro" : "miembros") · \(group.myRole.title)")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("home-group-count-\(group.id)")
                     memberFaces(group)
                 }
                 Spacer()
