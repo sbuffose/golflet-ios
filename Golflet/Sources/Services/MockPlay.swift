@@ -199,7 +199,8 @@ extension MockAPIClient {
                 mishit: draft.mishit,
                 distanceM: nil,
                 distanceYd: nil,
-                toGreenYd: nil
+                toGreenYd: nil,
+                intent: draft.intent
             ))
         }
         Self.recomputeDistances(&existing)
