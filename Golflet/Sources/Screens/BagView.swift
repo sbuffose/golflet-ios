@@ -142,7 +142,12 @@ struct BagView: View {
         .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .onAppear(perform: restoreIron)
         .sheet(item: $gearClub) { club in
-            ClubGearSheet(club: club)
+            ClubGearSheet(club: club) {
+                gearClub = nil
+                renameDraft = club.displayName ?? club.name
+                renameError = ""
+                renaming = club
+            }
         }
         .sheet(item: $renaming) { club in
             NavigationStack {
@@ -533,6 +538,7 @@ struct BagEditSheet: View {
 
 struct ClubGearSheet: View {
     let club: BagClub
+    var onRename: () -> Void = {}
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
 
@@ -553,6 +559,9 @@ struct ClubGearSheet: View {
                     Text(club.equipmentLine)
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
+                    Button("Nombre", action: onRename)
+                        .font(GType.headline)
+                        .accessibilityIdentifier("equip-rename")
                     Text("Lo usan")
                         .font(GType.section)
                         .foregroundStyle(p.ink)
