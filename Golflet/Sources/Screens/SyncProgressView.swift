@@ -47,17 +47,18 @@ struct SyncProgressView: View {
     }
 
     private func header(_ session: SyncSession?, _ progress: SyncAPIProgress) -> some View {
-        HStack(alignment: .center, spacing: 14) {
+        let code = progress.clubCode ?? "scan"
+        return HStack(alignment: .center, spacing: 14) {
             ClubCrestView(
                 club: progress.club ?? session?.clubName,
                 logo: progress.clubLogo,
                 initials: progress.clubInitials,
                 reduceMotion: reduceMotion
             )
-            .id(progress.clubCode ?? progress.club ?? "scan")
+            .accessibilityIdentifier("sync-crest-\(code)")
+            .id(code)
             .transition(.opacity)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: progress.clubCode ?? progress.club ?? "")
-            .accessibilityIdentifier("sync-crest-\(progress.clubCode ?? "scan")")
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: code)
             VStack(alignment: .leading, spacing: 2) {
                 GOverline(text: overline(session, progress))
                 Text(session?.title ?? "Leyendo tus tarjetas")
