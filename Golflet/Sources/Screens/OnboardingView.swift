@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UserNotifications
 
 /// Matrícula is the first screen. Sync runs on its own. The ficha is shown only after it lands.
@@ -48,6 +49,9 @@ struct OnboardingView: View {
         }
         .animation(motion, value: phaseKey)
         .onAppear(perform: prime)
+        .onChange(of: phaseKey) { _, _ in
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .onChange(of: model.hasPlayerSnapshot) { _, ready in
             guard phase == .syncing, ready else { return }
             landAfterSync()
@@ -203,22 +207,24 @@ struct OnboardingView: View {
     }
 
     private var reveal: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Spacer(minLength: 4)
-            TypeLines(
-                lines: revealLines,
-                reduceMotion: reduceMotion || voiceOver,
-                ink: Color(hex: BrandHex.navy),
-                size: GType.section
-            )
-            Spacer(minLength: 16)
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                TypeLines(
+                    lines: revealLines,
+                    reduceMotion: reduceMotion || voiceOver,
+                    ink: Color(hex: BrandHex.navy),
+                    size: GType.section
+                )
+                .padding(.top, 12)
+            }
             Button {
                 beginQuestions()
             } label: {
-                pill("Seguir")
+                pill("Seguir").contentShape(Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("ob-reveal-next")
+            .padding(.top, 16)
             .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

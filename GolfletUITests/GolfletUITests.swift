@@ -1958,14 +1958,19 @@ final class GolfletUITests: XCTestCase {
         shot("onboarding-sync-medio")
         XCTAssertTrue(first(app, "ob-reveal-next").waitForExistence(timeout: 22), "La ficha no llegó")
         shot("onboarding-sync-listo")
-        let reveal = first(app, "ob-reveal-next")
-        if reveal.isHittable { reveal.tap() } else { reveal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        dismissKeyboard(app)
+        tapOnboarding(app, "ob-reveal-next")
         let deadline = Date().addingTimeInterval(25)
         while Date() < deadline, !first(app, "ob-plan-title").exists {
+            dismissKeyboard(app)
+            if first(app, "ob-reveal-next").exists {
+                tapOnboarding(app, "ob-reveal-next")
+                continue
+            }
             if tapOnboarding(app, "ob-notif-no") { continue }
             let option = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'ob-opt-'")).firstMatch
             if option.exists {
-                if option.isHittable { option.tap() } else { option.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+                if option.isHittable { option.tap() } else { option.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap() }
                 continue
             }
             if tapOnboarding(app, "ob-bag-next") { continue }
