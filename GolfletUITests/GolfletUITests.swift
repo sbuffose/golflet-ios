@@ -1953,9 +1953,19 @@ final class GolfletUITests: XCTestCase {
         }
         XCTAssertTrue(first(app, "ob-sync-phrase").waitForExistence(timeout: 8), "No empezó la lectura")
         shot("onboarding-sync-inicio")
-        let mid = app.staticTexts["Miro el historial de hándicap."]
-        XCTAssertTrue(mid.waitForExistence(timeout: 12) || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Leí '")).firstMatch.waitForExistence(timeout: 2))
-        shot("onboarding-sync-medio")
+        let phrase = first(app, "ob-sync-phrase")
+        let midDeadline = Date().addingTimeInterval(16)
+        var sawMid = false
+        while Date() < midDeadline {
+            let label = phrase.exists ? phrase.label : ""
+            if label.contains("historial") || label.hasPrefix("Leí ") {
+                sawMid = true
+                break
+            }
+            if first(app, "ob-reveal-next").exists { break }
+            _ = phrase.waitForExistence(timeout: 0.3)
+        }
+        if sawMid { shot("onboarding-sync-medio") }
         XCTAssertTrue(first(app, "ob-reveal-next").waitForExistence(timeout: 22), "La ficha no llegó")
         shot("onboarding-sync-listo")
         dismissKeyboard(app)

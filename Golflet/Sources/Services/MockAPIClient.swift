@@ -535,7 +535,8 @@ struct MockAPIClient: GolfletAPI {
             Self.sessionLock.lock()
             Self.progressByID[progressID] = step
             Self.sessionLock.unlock()
-            try? await Task.sleep(nanoseconds: pause)
+            let hold = paced && step.stage == .handicap ? pause + 1_200_000_000 : pause
+            try? await Task.sleep(nanoseconds: hold)
         }
     }
 
