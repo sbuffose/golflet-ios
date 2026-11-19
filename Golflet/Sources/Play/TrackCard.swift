@@ -35,14 +35,15 @@ enum TrackCard {
     static func fact(_ shot: ReconstructionShot) -> Fact {
         let penalty = shot.penaltyStrokes > 0 || shot.result == "penalty"
         let lost = shot.result == "lost"
+        let recovery = shot.intent == "recovery"
         let club = shot.club.lowercased()
         let onGreen = shot.lie == "green"
         return Fact(
             penalty: penalty,
-            holed: shot.result == "holed",
+            holed: !recovery && shot.result == "holed",
             lost: lost,
-            putt: !penalty && !lost && (onGreen || club == "pt" || club.contains("putt") || shot.intent == "conceded"),
-            originGreen: !penalty && !lost && onGreen,
+            putt: !recovery && !penalty && !lost && (onGreen || club == "pt" || club.contains("putt") || shot.intent == "conceded"),
+            originGreen: !recovery && !penalty && !lost && onGreen,
             endLie: nil,
             direction: nil
         )

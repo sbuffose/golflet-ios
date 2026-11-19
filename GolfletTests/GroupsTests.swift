@@ -221,6 +221,20 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(detail?.memberCount, 2)
     }
 
+    func testAcceptedCountSurvivesJSONNumbersAndAnEmptyMemberArray() throws {
+        let data = #"{"groups":[{"id":"g-scratch","name":"Scratch","accepted":1,"members":[]},{"id":"g-familia","name":"Familia","accepted":2,"faces":[{"id":"a","name":"Ana Pérez","is_owner":true},{"id":"b","name":"Luis Gómez","is_owner":false}]}]}"#.data(using: .utf8)!
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let groups = GroupsParser.groups(from: json)
+        let scratch = groups.first { $0.name == "Scratch" }
+        let familia = groups.first { $0.name == "Familia" }
+        XCTAssertEqual(scratch?.memberCount, 1)
+        XCTAssertNotEqual(scratch?.memberCount, 0)
+        XCTAssertEqual(familia?.memberCount, 2)
+        XCTAssertEqual(familia?.members.count, 2)
+        XCTAssertTrue(familia?.members.contains { $0.isOwner } == true)
+        XCTAssertEqual(familia?.members.map(\.name).sorted(), ["Ana Pérez", "Luis Gómez"])
+    }
+
     func testParsesGroupsV2JoinAndSharing() {
         XCTAssertEqual(GroupsAPIPaths.sharePrefs, "/api/me/sharing")
         XCTAssertEqual(GroupsAPIPaths.join("abc"), "/api/groups/join/abc")

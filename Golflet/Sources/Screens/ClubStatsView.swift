@@ -1,16 +1,24 @@
 import SwiftUI
 
+enum ClubShotUndo: Equatable {
+    case restore(ShotRestore)
+    case include(String)
+}
+
 struct ClubStatsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     let code: String
     @State private var detail: ClubStatsDetail?
     @State private var message: String?
+    @State private var pendingShot: ClubRecentShot?
+    @State private var undo: ClubShotUndo?
 
     var body: some View {
         let club = detail?.club
         let bag = model.bag.first { ClubCode.code(for: $0.name) == code }
         GScreen(id: "screen-club-stats") {
+            ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     header(club)
@@ -34,6 +42,12 @@ struct ClubStatsView: View {
                     }
                     rates(club)
                     recent
+                    if undo != nil {
+                        Button("Deshacer") { Task { await undoLast() } }
+                            .font(GType.headline)
+                            .foregroundStyle(p.accent)
+                            .accessibilityIdentifier("club-shot-undo")
+                    }
                     if let message {
                         Text(message)
                             .font(GType.label)
@@ -43,6 +57,17 @@ struct ClubStatsView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
                 .padding(.bottom, 28)
+            }
+            .onChange(of: pendingShot?.id) { _, id in
+                guard id != nil else { return }
+                if RuntimeFlags.isUITesting {
+                    proxy.scrollTo("shot-ask", anchor: .bottom)
+                } else {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo("shot-ask", anchor: .bottom)
+                    }
+                }
+            }
             }
         }
         .accessibilityIdentifier("screen-club-stats")
@@ -252,31 +277,134 @@ struct ClubStatsView: View {
                     .font(GType.label)
                     .foregroundStyle(p.ink3)
             } else {
-                GCard(radius: 18, padding: 14) {
-                    VStack(spacing: 10) {
-                        ForEach(Array((detail?.recent ?? []).enumerated()), id: \.element.id) { index, shot in
+                VStack(spacing: 0) {
+                    ForEach(Array((detail?.recent ?? []).enumerated()), id: \.element.id) { index, shot in
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(shot.date ?? "—")
-                                        .font(GType.label)
-                                        .foregroundStyle(p.ink3)
-                                    Text("Hoyo \(shot.hole.map(String.init) ?? "—") · \(RecapCopy.result(shot.result))")
+                                    Text("\(shot.hole.map(String.init) ?? "—") · \(shotDay(shot.date))")
                                         .font(GType.headline)
                                         .foregroundStyle(p.ink)
+                                    if let result = shot.result, !result.isEmpty {
+                                        Text(RecapCopy.result(result))
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink3)
+                                    }
                                 }
+                                .contentShape(Rectangle())
+                                .onTapGesture { openRound(shot) }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityIdentifier("club-shot-\(index)")
                                 Spacer()
                                 Text(shot.distanceYd.map { "\($0) yd" } ?? "—")
                                     .font(GType.headline)
                                     .tabular()
                                     .foregroundStyle(p.ink)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { openRound(shot) }
+                                Button("Borrar") { pendingShot = shot }
+                                    .font(GType.label)
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(p.accent)
+                                    .accessibilityIdentifier("club-shot-delete-\(index)")
                             }
-                            .accessibilityIdentifier("club-shot-\(index)")
-                            if index < (detail?.recent.count ?? 1) - 1 { Hairline() }
+                            if pendingShot?.id == shot.id {
+                                shotAsk(shot)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .contextMenu {
+                            Button("Borrar") { pendingShot = shot }
+                            Button("Excluir de las distancias") { pendingShot = shot }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func shotDay(_ raw: String?) -> String {
+        guard let raw else { return "—" }
+        let parts = raw.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, parts[1] >= 1, parts[1] <= 12 else { return raw }
+        return "\(parts[2]) \(FormatAR.webMonths[parts[1] - 1])"
+    }
+
+    private func shotAsk(_ shot: ClubRecentShot) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(ShotEditCopy.deleteLine(shotsOnHole: shot.shotsOnHole, postedStrokes: shot.postedStrokes))
+                .font(GFont.ui(13))
+                .foregroundStyle(p.ink2)
+            Text(ShotEditCopy.excludeLine)
+                .font(GFont.ui(13))
+                .foregroundStyle(p.ink2)
+            Button { Task { await commit(delete: true) } } label: {
+                Text("Borrar")
+                    .font(GType.headline)
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(hex: BrandHex.navy))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("shot-delete-confirm")
+            Button { Task { await commit(delete: false) } } label: {
+                Text("Excluir de las distancias")
+                    .font(GType.headline)
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(p.surface)
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color(hex: BrandHex.navy).opacity(0.25), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            Button { pendingShot = nil } label: {
+                Text("Cancelar")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink2)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("shot-delete-cancel")
+        }
+        .accessibilityIdentifier("shot-ask")
+        .id("shot-ask")
+    }
+
+    private func openRound(_ shot: ClubRecentShot) {
+        guard let id = shot.roundId, let round = model.rounds.first(where: { $0.roundId == id }) else { return }
+        model.presentedRound = round
+    }
+
+    private func commit(delete: Bool) async {
+        guard let shot = pendingShot else { return }
+        pendingShot = nil
+        do {
+            if delete {
+                if let restored = try await model.api.deleteShot(id: shot.id) {
+                    undo = .restore(restored)
+                }
+            } else {
+                try await model.api.excludeShot(id: shot.id, kind: "excluded")
+                undo = .include(shot.id)
+            }
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func undoLast() async {
+        let action = undo
+        undo = nil
+        switch action {
+        case .restore(let shot): try? await model.api.restoreShot(shot)
+        case .include(let id): try? await model.api.excludeShot(id: id, kind: nil)
+        case nil: break
+        }
+        await load()
     }
 
     private func load() async {

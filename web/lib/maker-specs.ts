@@ -115,7 +115,7 @@ function linesOf(row: MakerRow): { label: string; value: string }[] {
   if (row.lieDeg != null) out.push({ label: "Lie publicado", value: loftLabel(row.lieDeg) });
   if (row.lengthIn != null) out.push({ label: "Largo publicado", value: `${String(row.lengthIn).replace(".", ",")} in` });
   if (row.volumeCc != null) out.push({ label: "Volumen publicado", value: `${row.volumeCc} cc` });
-  if (row.hoselStepDeg != null) out.push({ label: "Ajuste publicado", value: `Pasos de ${loftLabel(row.hoselStepDeg)} en loft y lie. No es el loft de tu palo.` });
+  if (row.hoselStepDeg != null) out.push({ label: "Ajuste publicado", value: `Pasos de ${String(row.hoselStepDeg).replace(".", ",")}° en loft y lie. No es el loft de tu palo.` });
   for (const note of row.notes || []) out.push({ label: "Ficha", value: note });
   return out;
 }

@@ -66,6 +66,24 @@ enum FixtureBag {
         BagClub(name: "SW", carry: nil, total: nil, code: "SW"),
         BagClub(name: "Putter", carry: nil, total: nil, code: "PT"),
     ]
+
+    /// The 14-club bag used to review model photos. The hybrid, the wedges and the putter have no verified model.
+    static let modeled: [BagClub] = [
+        BagClub(name: "Driver", carry: 230, total: 245, brand: "Titleist", modelName: "GT2", code: "DR"),
+        BagClub(name: "Madera 3", carry: 210, total: 220, brand: "Titleist", modelName: "GT2", code: "3W"),
+        BagClub(name: "Híbrido", carry: 190, total: 200, brand: "Titleist", modelName: nil, code: "HY"),
+        BagClub(name: "Hierro 4", carry: 175, total: 182, brand: "Titleist", modelName: "T150", code: "4i"),
+        BagClub(name: "Hierro 5", carry: 165, total: 172, brand: "Titleist", modelName: "T150", code: "5i"),
+        BagClub(name: "Hierro 6", carry: 155, total: 164, brand: "Titleist", modelName: "T150", code: "6i"),
+        BagClub(name: "Hierro 7", carry: 150, total: 158, brand: "Titleist", modelName: "T150", code: "7i"),
+        BagClub(name: "Hierro 8", carry: 140, total: 146, brand: "Titleist", modelName: "T150", code: "8i"),
+        BagClub(name: "Hierro 9", carry: 130, total: 136, brand: "Titleist", modelName: "T150", code: "9i"),
+        BagClub(name: "PW", carry: 110, total: 115, brand: "Titleist", modelName: "T150", code: "PW"),
+        BagClub(name: "GW", carry: 100, total: 105, brand: "Titleist", modelName: nil, code: "GW"),
+        BagClub(name: "SW", carry: 85, total: 90, brand: "Titleist", modelName: nil, code: "SW"),
+        BagClub(name: "LW", carry: 70, total: 74, brand: "Titleist", modelName: nil, code: "LW"),
+        BagClub(name: "Putter", carry: nil, total: nil, brand: nil, modelName: nil, code: "PT"),
+    ]
 }
 
 @MainActor

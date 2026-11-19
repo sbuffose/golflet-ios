@@ -151,51 +151,63 @@ final class OnboardingPlanTests: XCTestCase {
     }
 
     func testSyncWaitCopyDoesNotInventFacts() {
-        let paced = OnboardingSyncCopy.lines(progress: nil, elapsedStages: 4)
-        XCTAssertEqual(paced, OnboardingSyncCopy.waiting)
-        XCTAssertFalse(paced.joined().contains(where: \.isNumber))
+        let early = OnboardingSyncCopy.frame(progress: nil)
+        XCTAssertEqual(early.phrase, "Estoy entrando a tu club.")
+        XCTAssertTrue(early.done.isEmpty)
+        XCTAssertFalse(early.phrase.contains(where: \.isNumber))
+        XCTAssertLessThan(early.fraction, 0.2)
 
-        let early = OnboardingSyncCopy.lines(progress: nil, elapsedStages: 1)
-        XCTAssertEqual(early, ["Estoy entrando a tu club."])
+        let cards = OnboardingSyncCopy.frame(progress: SyncAPIProgress(stage: .cards, done: 4, total: 12))
+        XCTAssertEqual(cards.phrase, "Leí 4 de 12.")
+        XCTAssertEqual(cards.done, [.login])
+        XCTAssertFalse(cards.done.contains(.cards))
+        XCTAssertFalse(cards.phrase.localizedCaseInsensitiveContains("hándicap index"))
+        XCTAssertGreaterThan(cards.fraction, 0.48)
+        XCTAssertLessThan(cards.fraction, 0.78)
 
-        let cards = OnboardingSyncCopy.lines(
-            progress: SyncAPIProgress(stage: .cards, done: 4, total: 12),
-            elapsedStages: 1
-        )
-        XCTAssertEqual(cards.last, "Leí 4 de 12.")
-        XCTAssertFalse(cards.joined().localizedCaseInsensitiveContains("hándicap index"))
+        let listing = OnboardingSyncCopy.frame(progress: SyncAPIProgress(stage: .list))
+        XCTAssertEqual(listing.phrase, "Busco el listado de tarjetas.")
+        XCTAssertEqual(listing.done, [.login])
+        XCTAssertFalse(listing.phrase.contains(where: \.isNumber))
 
-        let listing = OnboardingSyncCopy.lines(
-            progress: SyncAPIProgress(stage: .list),
-            elapsedStages: 2
-        )
-        XCTAssertTrue(listing.contains("Busco el listado de tarjetas."))
-        XCTAssertFalse(listing.joined().contains(where: \.isNumber))
+        let named = OnboardingSyncCopy.frame(progress: SyncAPIProgress(club: "Jockey", stage: .connect))
+        XCTAssertEqual(named.phrase, "Conectando con Jockey.")
+        XCTAssertTrue(named.done.isEmpty)
 
-        let named = OnboardingSyncCopy.lines(
-            progress: SyncAPIProgress(club: "Jockey", stage: .connect),
-            elapsedStages: 1
-        )
-        XCTAssertEqual(named.first, "Conectando con Jockey.")
+        let placeholder = OnboardingSyncCopy.frame(progress: SyncAPIProgress(club: "Golfistics App", stage: .connect))
+        XCTAssertEqual(placeholder.phrase, "Conectando con tu club.")
+        XCTAssertFalse(placeholder.phrase.localizedCaseInsensitiveContains("golfistics"))
 
-        let placeholder = OnboardingSyncCopy.lines(
-            progress: SyncAPIProgress(club: "Golfistics App", stage: .connect),
-            elapsedStages: 1
-        )
-        XCTAssertEqual(placeholder.first, "Conectando con tu club.")
-        XCTAssertFalse(placeholder.joined().localizedCaseInsensitiveContains("golfistics"))
+        let several = OnboardingSyncCopy.frame(progress: SyncAPIProgress(club: "Golfistics App", clubCount: 3, stage: .connect))
+        XCTAssertEqual(several.phrase, "Conectando con tus clubes.")
 
-        let several = OnboardingSyncCopy.lines(
-            progress: SyncAPIProgress(club: "Golfistics App", clubCount: 3, stage: .connect),
-            elapsedStages: 1
-        )
-        XCTAssertEqual(several.first, "Conectando con tus clubes.")
+        let handicap = OnboardingSyncCopy.frame(progress: SyncAPIProgress(stage: .handicap, cardsTotal: 12, stats: SyncLiveStats(rounds: 12)))
+        XCTAssertEqual(handicap.phrase, "Miro el historial de hándicap.")
+        XCTAssertEqual(handicap.done, [.login, .cards])
+        XCTAssertFalse(handicap.done.contains(.handicap))
 
-        let done = OnboardingSyncCopy.lines(
-            progress: SyncAPIProgress(stage: .done),
-            elapsedStages: 1
-        )
-        XCTAssertEqual(done.last, "Listo. Te muestro la ficha.")
+        let done = OnboardingSyncCopy.frame(progress: SyncAPIProgress(stage: .done, cardsTotal: 12))
+        XCTAssertEqual(done.phrase, "Listo. Te muestro la ficha.")
+        XCTAssertEqual(done.done, [.login, .cards, .handicap])
+        XCTAssertEqual(done.fraction, 1)
+
+        let failed = OnboardingSyncCopy.frame(progress: SyncAPIProgress(stage: .cards, done: 1, total: 4), failed: true, message: "El club no respondió.")
+        XCTAssertEqual(failed.error, "El club no respondió.")
+        XCTAssertEqual(failed.phrase, "Leí 1 de 4.")
+
+        let emptyPlan = OnboardingPlanCards.items(facts: nil, groupCount: 0)
+        XCTAssertEqual(emptyPlan.map(\.figure), ["–", "–", "–"])
+        XCTAssertEqual(emptyPlan[0].detail, "Cuando llegue el índice, vemos dónde se te escapan los golpes.")
+        XCTAssertEqual(emptyPlan[1].detail, "Cuando tengamos el club, miramos lo que más te cuesta.")
+        XCTAssertEqual(emptyPlan[2].detail, "Cuando haya un grupo, salís juntos.")
+        let filled = OnboardingPlanCards.items(facts: sampleFull(), groupCount: 2)
+        XCTAssertEqual(filled[0].figure, "3,1")
+        XCTAssertEqual(filled[0].detail, "Desde este número vemos dónde se te escapan los golpes.")
+        XCTAssertEqual(filled[1].figure, "Jockey Club Buenos Aires")
+        XCTAssertEqual(filled[1].detail, "Ahí miramos lo que más te cuesta esta semana.")
+        XCTAssertEqual(filled[2].figure, "2")
+        XCTAssertEqual(filled[2].detail, "2 grupos para salir juntos.")
+
         XCTAssertEqual(
             OnboardingPlan.routeAfterSync(signedIn: true, hasSnapshot: true, needsClub: false, authFailed: false),
             .reveal

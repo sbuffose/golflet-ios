@@ -21,7 +21,14 @@
   const CAT = k => { const t = MT[k][2]; return t === 't' ? 'score_types' : t === 'p' ? 'holes' : t === 'u' ? 'putting' : t === 'g' || t === 'r' ? 'gir_fir' : t === 'h' ? 'handicap' : 'scores'; };
   const hid = (m, k) => (m.hidden || []).includes(CAT(k));
   const NS = '<span class="gg-ns">No compartido</span>';
-  const photo = (g, cls = 'gg-av') => g.photo_url ? `<img class="${cls} gg-img" src="${H.esc(g.photo_url)}" alt="">` : `<div class="${cls}">${H.esc((g.name || '?').slice(0, 1).toUpperCase())}</div>`;
+  const photo = (g, cls = 'gg-av') => g.photo_url ? `<img class="${cls} gg-img" src="${H.esc(g.photo_url)}" alt="">` : `<div class="${cls}">${H.esc((g.initials || (g.name || '?').slice(0, 1)).toUpperCase())}</div>`;
+  const faceLine = g => {
+    const list = Array.isArray(g.faces) ? g.faces : [];
+    if (!list.length) return '';
+    const names = list.map(f => f.name).filter(Boolean);
+    const label = names.length <= 1 ? (names[0] || '') : names.length === 2 ? `${names[0]} y ${names[1]}` : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+    return `<span class="gg-faces">${list.slice(0, 4).map(photo).join('')}</span><span class="gg-names">${H.esc(label)}</span>`;
+  };
   const val = (m, k) => { const t = MT[k][2]; if (t === 'h') return m.handicap_index ?? null;
     if (t === 't') return m.types?.[k]?.total ?? null; if (t === 'p') return m.par?.[k]?.avg ?? null;
     if (t === 'u') return m.putting?.avg_putts ?? null; if (t === 'g') return m.putting?.avg_gir ?? null; if (t === 'r') return m.putting?.avg_fir ?? null; return m[k] ?? null; };
@@ -163,7 +170,7 @@
         <p class="foot">Si aceptás, los miembros ven lo que elegiste en <a class="link" href="#/compartir">Qué comparto</a>. Nunca tus audios, notas ni estrategia.</p>
         <div class="gg-acts"><button class="btn" data-acc="1">Aceptar</button><button class="btn ghost" data-acc="0">Rechazar</button></div></div>`).join('')}` : ''}
       <div class="section"><h2>Tus grupos</h2><a class="badge gold" href="#/amigos/nuevo">+ Nuevo grupo</a></div>
-      ${d.groups.length ? `<div class="card gg-list">${d.groups.map(g => `<a class="row" href="#/grupo/${g.id}">${photo(g)}<div class="gg-t"><b>${H.esc(g.name)}</b><span>${g.accepted} jugador${g.accepted === 1 ? '' : 'es'}${g.pending ? ` · ${g.pending} invitación${g.pending === 1 ? '' : 'es'} pendiente${g.pending === 1 ? '' : 's'}` : ''}${g.is_admin ? ' · sos admin' : ''}</span></div><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l6 6-6 6"/></svg></a>`).join('')}</div>`
+      ${d.groups.length ? `<div class="card gg-list">${d.groups.map(g => `<a class="row" href="#/grupo/${g.id}">${photo(g)}<div class="gg-t"><b>${H.esc(g.name)}</b><span>${g.accepted} jugador${g.accepted === 1 ? '' : 'es'}${g.pending ? ` · ${g.pending} invitación${g.pending === 1 ? '' : 'es'} pendiente${g.pending === 1 ? '' : 's'}` : ''}${g.is_admin ? ' · sos admin' : ''}</span>${faceLine(g)}</div><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l6 6-6 6"/></svg></a>`).join('')}</div>`
         : `<a class="card gg-empty" href="#/amigos/nuevo"><b>Creá tu primer grupo</b><span>Invitá a tus amigos por matrícula y compará rondas, promedios y hoyo por hoyo.</span></a>`}
       ${d.outgoing.length ? `<div class="section"><h2>Invitaciones enviadas</h2></div><div class="card gg-list">${d.outgoing.map(o => `<div class="row"><div class="gg-t"><b class="num">Matrícula ${H.esc(o.matricula)}</b><span>${H.esc(o.group_name)} · ${o.is_user ? 'esperando respuesta' : 'todavía no usa Golflet'}</span></div><button class="btn ghost sm" data-rev="${o.group_id}|${o.member_id}">Revocar</button></div>`).join('')}</div>` : ''}`;
     el.querySelectorAll('.gg-inv [data-acc]').forEach(b => b.onclick = async () => { const g = b.closest('.gg-inv').dataset.g;
