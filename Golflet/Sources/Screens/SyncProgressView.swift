@@ -18,17 +18,25 @@ struct SyncProgressView: View {
                     SyncArrivals(progress: progress)
                         .padding(.top, 14)
                     SyncLivePanel(progress: progress, reduceMotion: reduceMotion)
-                    YardageBookView(
-                        finish: session?.outcome == .succeeded,
-                        caption: YardageBookCopy.caption(stage: progress.stage, outcome: session?.outcome ?? .running),
-                        count: YardageBookCopy.count(progress, outcome: session?.outcome ?? .running),
-                        reduceMotion: reduceMotion,
-                        compact: true
-                    )
+                    ZStack {
+                        YardageBookView(
+                            finish: session?.outcome == .succeeded,
+                            caption: YardageBookCopy.caption(stage: progress.stage, outcome: session?.outcome ?? .running),
+                            count: YardageBookCopy.count(progress, outcome: session?.outcome ?? .running),
+                            reduceMotion: reduceMotion,
+                            compact: true
+                        )
+                        .accessibilityHidden(true)
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 168)
+                            .accessibilityElement()
+                            .accessibilityIdentifier("sync-yardage")
+                            .accessibilityLabel("Libro de yardas")
+                    }
                     .frame(maxWidth: .infinity)
                     .frame(height: 168)
                     .padding(.top, 16)
-                    .accessibilityIdentifier("sync-yardage")
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
