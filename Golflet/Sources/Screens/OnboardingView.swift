@@ -181,6 +181,7 @@ struct OnboardingView: View {
             .padding(.top, 12)
             .padding(.bottom, 28)
         }
+        .scrollDismissesKeyboard(.immediately)
     }
 
     private var submitDisabled: Bool {
