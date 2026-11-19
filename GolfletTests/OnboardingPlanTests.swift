@@ -196,11 +196,17 @@ final class OnboardingPlanTests: XCTestCase {
         XCTAssertEqual(failed.phrase, "Leí 1 de 4.")
 
         let emptyPlan = OnboardingPlanCards.items(facts: nil, groupCount: 0)
-        XCTAssertEqual(emptyPlan.map(\.detail), ["–", "–", "–"])
+        XCTAssertEqual(emptyPlan.map(\.figure), ["–", "–", "–"])
+        XCTAssertEqual(emptyPlan[0].detail, "Cuando llegue el índice, vemos dónde se te escapan los golpes.")
+        XCTAssertEqual(emptyPlan[1].detail, "Cuando tengamos el club, miramos lo que más te cuesta.")
+        XCTAssertEqual(emptyPlan[2].detail, "Cuando haya un grupo, salís juntos.")
         let filled = OnboardingPlanCards.items(facts: sampleFull(), groupCount: 2)
-        XCTAssertEqual(filled[0].detail, "Índice 3,1")
-        XCTAssertEqual(filled[1].detail, "Jockey Club Buenos Aires")
-        XCTAssertEqual(filled[2].detail, "2 grupos")
+        XCTAssertEqual(filled[0].figure, "3,1")
+        XCTAssertEqual(filled[0].detail, "Desde este número vemos dónde se te escapan los golpes.")
+        XCTAssertEqual(filled[1].figure, "Jockey Club Buenos Aires")
+        XCTAssertEqual(filled[1].detail, "Ahí miramos lo que más te cuesta esta semana.")
+        XCTAssertEqual(filled[2].figure, "2")
+        XCTAssertEqual(filled[2].detail, "2 grupos para salir juntos.")
 
         XCTAssertEqual(
             OnboardingPlan.routeAfterSync(signedIn: true, hasSnapshot: true, needsClub: false, authFailed: false),

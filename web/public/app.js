@@ -3232,25 +3232,45 @@ function revealCard(){
   lines.push(rounds.length ? 'Solo me faltan unos datos más' : 'Te pregunto lo justo para armar tu inicio.');
   return `<div class="rv-card" id="rvcard">${lines.map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
 }
+function planMark(name){
+  const words = String(name || '').replace(/[()·.,]/g, ' ').split(/\s+/).filter(w => w && !/^(de|del|la|las|los|el|y|club|golf)$/i.test(w));
+  const pick = (words.length ? words : String(name || '').split(/\s+/)).slice(0, 2);
+  return pick.map(w => w[0]).join('').toUpperCase() || '–';
+}
 async function showPlan(host){
-  let groups = null;
-  try { const g = await api('/api/groups'); groups = Array.isArray(g.groups) ? g.groups.length : null; } catch (_) { groups = null; }
+  let groups = null, faces = [];
+  try {
+    const g = await api('/api/groups');
+    const list = Array.isArray(g.groups) ? g.groups : null;
+    groups = list ? list.length : null;
+    const seen = new Set();
+    for (const group of list || []) {
+      for (const face of group.faces || []) {
+        if (!face || seen.has(face.id)) continue;
+        seen.add(face.id);
+        faces.push(face);
+        if (faces.length === 3) break;
+      }
+      if (faces.length === 3) break;
+    }
+  } catch (_) { groups = null; }
   const name = String(G.user?.first_name || G.user?.name || '').trim().split(/\s+/)[0] || '';
   const hi = G.player?.handicap_index ?? G.hi_history?.at(-1)?.hi;
+  const hiText = hi == null || Number.isNaN(+hi) ? '–' : (typeof f1 === 'function' ? f1(hi) : String(hi).replace('.', ','));
   const club = String(G.clubs?.[0]?.club_name || '').trim();
-  const index = hi == null || Number.isNaN(+hi) ? '–' : `Índice ${typeof f1 === 'function' ? f1(hi) : String(hi).replace('.', ',')}`;
-  const groupLine = groups == null ? '–' : (groups === 1 ? '1 grupo' : `${groups} grupos`);
+  const code = String(G.clubs?.[0]?.club_code || '');
+  const logo = { '118': '/clubs/118@2x.png', '209': '/clubs/209@2x.png' }[code] || '';
+  const friendLine = groups == null ? 'Cuando haya un grupo, salís juntos.' : groups === 0 ? 'Todavía no hay un grupo para salir juntos.' : groups === 1 ? 'Un grupo para salir juntos.' : `${groups} grupos para salir juntos.`;
+  const crest = logo ? `<img class="ob-crest" src="${esc(logo)}" alt="">` : `<span class="ob-mono">${esc(club ? planMark(club) : '–')}</span>`;
+  const people = faces.length
+    ? `<span class="ob-faces">${faces.map(face => face.photo_url ? `<img src="${esc(face.photo_url)}" alt="">` : `<span>${esc(face.initials || planMark(face.name || ''))}</span>`).join('')}</span>`
+    : `<strong class="ob-hi">${esc(groups == null ? '–' : String(groups))}</strong>`;
   const rows = [
-    ['Dónde se te escapan los golpes', index],
-    ['Lo que más te cuesta esta semana', club || '–'],
-    ['Jugá con tus amigos', groupLine],
+    ['Tu índice', hiText === '–' ? 'Cuando llegue el índice, vemos dónde se te escapan los golpes.' : 'Desde este número vemos dónde se te escapan los golpes.', `<strong class="ob-hi">${esc(hiText)}</strong>`],
+    ['Tu club', club ? 'Ahí miramos lo que más te cuesta esta semana.' : 'Cuando tengamos el club, miramos lo que más te cuesta.', crest],
+    ['Tus amigos', friendLine, people],
   ];
-  const icons = [
-    '<path d="M6 21V4M6 4h10l-2.2 3L16 10H6"/>',
-    '<circle cx="12" cy="5" r="1.7"/><path d="M10.2 20.5c.7-3 2-4.4 3.8-4.4"/><path d="M12 7.2 12 13l3.4 2.2"/>',
-    '<circle cx="9" cy="8" r="2"/><circle cx="15.2" cy="8.6" r="1.6"/><path d="M4.6 19c.6-2.3 2.1-3.5 4.4-3.5s3.8 1.2 4.4 3.5M14 16.4c1.5-.2 2.8.5 3.5 2.2"/>',
-  ];
-  host.innerHTML = `<div class="ob-plan" id="ob-plan"><img class="sx-caddie" src="/brand/caddie.png" alt=""><h1 id="ob-plan-title">${esc(name ? `${name}, armé tu inicio.` : 'Listo. Armé tu inicio.')}</h1><ol>${rows.map((row, i) => `<li id="ob-plan-card-${i + 1}"><span class="n">${i + 1}</span><div><b>${esc(row[0])}</b><small>${esc(row[1])}</small></div><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">${icons[i]}</svg></li>`).join('')}</ol><button class="btn" id="ob-done" type="button">Entrar a Golflet</button></div>`;
+  host.innerHTML = `<div class="ob-plan" id="ob-plan"><img class="sx-caddie" src="/brand/caddie.png" alt=""><h1 id="ob-plan-title">${esc(name ? `${name}, armé tu inicio.` : 'Listo. Armé tu inicio.')}</h1><ol>${rows.map((row, i) => `<li id="ob-plan-card-${i + 1}"><span class="n">${i + 1}</span><div><b>${esc(row[0])}</b><small>${esc(row[1])}</small></div>${row[2]}</li>`).join('')}</ol><button class="btn" id="ob-done" type="button">Entrar a Golflet</button></div>`;
   await new Promise(resolve => { const b = host.querySelector('#ob-done'); if (b) b.onclick = () => resolve(); else resolve(); });
 }
 async function runSync({ club, url, body, sheetEl, onFail }){

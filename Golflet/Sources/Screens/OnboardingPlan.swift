@@ -4,6 +4,7 @@ struct OnboardingFacts: Equatable {
     var name: String
     var handicap: Double?
     var clubName: String?
+    var clubCode: String? = nil
     var roundCount: Int
     var firstRound: Date?
     var roundsPerYear: Double?
@@ -66,6 +67,7 @@ enum OnboardingPlan {
             name: trimmedName,
             handicap: handicap,
             clubName: club?.isEmpty == false ? club : nil,
+            clubCode: clubs.first?.code,
             roundCount: rounds.count,
             firstRound: dated.first?.date,
             roundsPerYear: perYear,
@@ -155,28 +157,54 @@ enum OnboardingPlan {
     }
 }
 
+enum OnboardingPlanKind: String, Equatable {
+    case index, club, friends
+}
+
 struct OnboardingPlanItem: Equatable {
     var title: String
     var detail: String
-    var symbol: String
+    var figure: String
+    var kind: OnboardingPlanKind
 }
 
 enum OnboardingPlanCards {
-    /// Tres filas con un dato real o «–». No inventa índice, club ni grupos.
+    /// El subtítulo habla del título. El número, el club o los grupos van aparte y solo si existen.
     static func items(facts: OnboardingFacts?, groupCount: Int) -> [OnboardingPlanItem] {
         let index: String = {
             guard let handicap = facts?.handicap else { return "–" }
-            return "Índice \(FormatAR.one(handicap))"
+            return FormatAR.one(handicap)
         }()
         let club = facts?.clubName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let groups: String = {
-            if groupCount <= 0 { return "–" }
-            return groupCount == 1 ? "1 grupo" : "\(groupCount) grupos"
+        let friends: String = groupCount <= 0 ? "–" : "\(groupCount)"
+        let friendLine: String = {
+            if groupCount <= 0 { return "Cuando haya un grupo, salís juntos." }
+            if groupCount == 1 { return "Un grupo para salir juntos." }
+            return "\(groupCount) grupos para salir juntos."
         }()
         return [
-            OnboardingPlanItem(title: "Dónde se te escapan los golpes", detail: index, symbol: "flag.fill"),
-            OnboardingPlanItem(title: "Lo que más te cuesta esta semana", detail: club.isEmpty ? "–" : club, symbol: "figure.golf"),
-            OnboardingPlanItem(title: "Jugá con tus amigos", detail: groups, symbol: "person.2.fill")
+            OnboardingPlanItem(
+                title: "Tu índice",
+                detail: index == "–"
+                    ? "Cuando llegue el índice, vemos dónde se te escapan los golpes."
+                    : "Desde este número vemos dónde se te escapan los golpes.",
+                figure: index,
+                kind: .index
+            ),
+            OnboardingPlanItem(
+                title: "Tu club",
+                detail: club.isEmpty
+                    ? "Cuando tengamos el club, miramos lo que más te cuesta."
+                    : "Ahí miramos lo que más te cuesta esta semana.",
+                figure: club.isEmpty ? "–" : club,
+                kind: .club
+            ),
+            OnboardingPlanItem(
+                title: "Tus amigos",
+                detail: friendLine,
+                figure: friends,
+                kind: .friends
+            )
         ]
     }
 }

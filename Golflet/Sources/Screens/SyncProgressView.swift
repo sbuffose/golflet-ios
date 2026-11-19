@@ -9,30 +9,29 @@ struct SyncProgressView: View {
         let session = model.syncSession
         let progress = session?.progress ?? SyncAPIProgress(stage: .connect)
         GScreen(id: "sync-overlay") {
-            VStack(spacing: 0) {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        header(session, progress)
-                            .padding(.top, 8)
-                            .padding(.bottom, 10)
-                        SyncCompactStages(session: session, progress: progress)
-                        SyncArrivals(progress: progress)
-                            .padding(.top, 14)
-                        SyncLivePanel(progress: progress, reduceMotion: reduceMotion)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    header(session, progress)
+                        .padding(.top, 8)
+                        .padding(.bottom, 10)
+                    SyncCompactStages(session: session, progress: progress)
+                    SyncArrivals(progress: progress)
+                        .padding(.top, 14)
+                    SyncLivePanel(progress: progress, reduceMotion: reduceMotion)
+                    YardageBookView(
+                        finish: session?.outcome == .succeeded,
+                        caption: YardageBookCopy.caption(stage: progress.stage, outcome: session?.outcome ?? .running),
+                        count: YardageBookCopy.count(progress, outcome: session?.outcome ?? .running),
+                        reduceMotion: reduceMotion,
+                        compact: true
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 168)
+                    .padding(.top, 16)
+                    .accessibilityIdentifier("sync-yardage")
                 }
-                YardageBookView(
-                    finish: session?.outcome == .succeeded,
-                    caption: YardageBookCopy.caption(stage: progress.stage, outcome: session?.outcome ?? .running),
-                    count: YardageBookCopy.count(progress, outcome: session?.outcome ?? .running),
-                    reduceMotion: reduceMotion,
-                    compact: true
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 168)
-                .accessibilityIdentifier("sync-yardage")
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
             }
             .background(Color(hex: 0xF5F5F5))
         }
