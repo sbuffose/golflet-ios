@@ -1263,6 +1263,23 @@ final class GolfletUITests: XCTestCase {
         app.descendants(matching: .any)[id].firstMatch
     }
 
+    private func dismissKeyboard(_ app: XCUIApplication) {
+        guard app.keyboards.firstMatch.exists else { return }
+        for key in ["intro", "Intro", "Return", "return", "Done", "Listo"] {
+            let button = app.keyboards.buttons[key]
+            if button.exists {
+                button.tap()
+                if app.keyboards.firstMatch.waitForNonExistence(timeout: 0.6) { return }
+            }
+        }
+        let title = first(app, "ob-matricula-title")
+        if title.exists { title.tap() }
+        if app.keyboards.firstMatch.exists {
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+            start.press(forDuration: 0.01, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.28)))
+        }
+    }
+
     private func dragSheet(_ app: XCUIApplication) {
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
         start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42)))
@@ -1921,10 +1938,19 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(mat.waitForExistence(timeout: 4))
         type(mat, "94506")
         type(app.secureTextFields["ob-clave"], "clave123")
-        if app.keyboards.element.exists { app.swipeDown() }
+        dismissKeyboard(app)
         let enter = first(app, "ob-submit")
+        XCTAssertTrue(enter.waitForExistence(timeout: 4))
+        for _ in 0..<3 where !enter.isHittable {
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
+            start.press(forDuration: 0.01, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)))
+        }
         if enter.isHittable { enter.tap() } else { enter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
-        XCTAssertTrue(first(app, "ob-sync-phrase").waitForExistence(timeout: 6))
+        if !first(app, "ob-sync-phrase").waitForExistence(timeout: 4), enter.exists {
+            dismissKeyboard(app)
+            if enter.isHittable { enter.tap() } else { enter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        }
+        XCTAssertTrue(first(app, "ob-sync-phrase").waitForExistence(timeout: 8), "No empezó la lectura")
         shot("onboarding-sync-inicio")
         let mid = app.staticTexts["Miro el historial de hándicap."]
         XCTAssertTrue(mid.waitForExistence(timeout: 12) || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Leí '")).firstMatch.waitForExistence(timeout: 2))
