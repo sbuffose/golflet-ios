@@ -486,9 +486,11 @@ struct MockAPIClient: GolfletAPI {
 
     private func emitDemoProgress(progressID: String) async {
         let fast = RuntimeFlags.isUITesting
-        let pause: UInt64 = fast ? 80_000_000 : 350_000_000
+        let paced = ProcessInfo.processInfo.arguments.contains("-ui-testing-sync-pace")
+        let pause: UInt64 = paced ? 900_000_000 : (fast ? 80_000_000 : 350_000_000)
         let clubs: [(name: String, code: String, logo: String?, initials: String, listed: Int, cards: Int)] = [
-            (demoName, demoCode, "/clubs/118@2x.png", "JC", 97, 97)
+            (demoName, demoCode, "/clubs/118@2x.png", "JC", 97, 97),
+            ("Mar del Plata Golf Club", mdpCode, "/clubs/209@2x.png", "MP", 12, 12)
         ]
         var steps: [SyncAPIProgress] = [
             SyncAPIProgress(club: "Golfistics App", clubIndex: 1, clubCount: clubs.count, clubInitials: "G", stage: .connect)
@@ -556,11 +558,11 @@ struct MockAPIClient: GolfletAPI {
         course: "Colorada",
         club: "Jockey Club Buenos Aires",
         otherCourse: false,
-        gross: 79,
+        gross: 78,
         par: 72,
         holes: [
             SyncLastHole(number: 1, par: 4, strokes: 5),
-            SyncLastHole(number: 2, par: 4, strokes: 4),
+            SyncLastHole(number: 2, par: 4, strokes: 3),
             SyncLastHole(number: 3, par: 3, strokes: 3),
             SyncLastHole(number: 4, par: 4, strokes: 4),
             SyncLastHole(number: 5, par: 4, strokes: 4),

@@ -531,9 +531,43 @@ body:has(.sheet.sx-turn) .sheet-bg,body:has(.sheet.sx-leave-night) .sheet-bg{tra
 .lv-strip i{display:block;width:4px;border-radius:2px;background:var(--sx-line);transition:height .5s cubic-bezier(.2,.8,.2,1)}
 .lv-strip i.on{background:linear-gradient(#C8102E,#A88A50)}
 .lv-strip em{font-style:normal;font-size:calc(7.5px*var(--ts,1));font-weight:var(--fw600,600);color:var(--sx-ink3);line-height:1}
-/* booklet scene gets shorter when the live panel is on */
-.sx-paper.sx-v3 .sx-scene{height:min(27vh,240px);min-height:180px}
-.sx-night.sx-v3 .sx-scene{height:min(34vh,300px);min-height:220px}
+/* booklet scene sits at the bottom, under the cards, clear of the status bar */
+.sx{display:flex;flex-direction:column;min-height:100%}
+.sx-v3 .sx-body{order:1;flex:1 1 auto}
+.sx-v3 .sx-scene{order:2;flex:none;height:168px!important;min-height:140px!important;border-radius:0}
+.sx-paper.sx-v3 .sx-scene,.sx-night.sx-v3 .sx-scene{height:168px;min-height:140px}
+.sx-caddie{width:92px;height:92px;object-fit:contain;display:block;margin:0 auto 8px;border-radius:50%;background:radial-gradient(circle, rgba(11,37,69,.18), rgba(11,37,69,0) 70%)}
+.sx-phrase{margin:8px 2px 0;font-size:calc(28px*var(--tsb,1));font-weight:var(--fw600,600);letter-spacing:-.03em;line-height:1.15;color:#0B2545;text-align:left}
+.sx-phrase span{display:inline-block;margin-right:.28em;opacity:0;transform:translateY(8px);transition:opacity .18s ease-out,transform .18s ease-out}
+.sx-phrase span.on{opacity:1;transform:none}
+.sx-meter{height:3px;margin:14px 2px 0;border-radius:2px;background:rgba(11,37,69,.12);overflow:hidden}
+.sx-meter>span{display:block;height:100%;background:#0B2545;transform:scaleX(.08);transform-origin:0 50%;transition:transform .45s ease-in-out}
+.sx-checks{display:flex;flex-wrap:wrap;gap:8px 14px;margin:12px 2px 0}
+.sx-check{font-size:calc(12px*var(--ts,1));font-weight:var(--fw600,600);color:#0B2545}
+.sx-check::before{content:"";display:inline-block;width:8px;height:5px;margin-right:6px;border-left:1.6px solid #0B2545;border-bottom:1.6px solid #0B2545;transform:translateY(-1px) rotate(-45deg)}
+.sx-arrivals{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.sx-skel{height:52px;border-radius:12px;background:rgba(11,37,69,.08)}
+.sx-birds{margin:0;font-size:calc(16px*var(--ts,1));font-weight:var(--fw600,600);color:#0B2545}
+.sx-lastbird{margin:0;font-size:calc(13px*var(--ts,1));color:#3E4C62}
+.sx-cardrow{display:flex;align-items:baseline;gap:8px;padding:10px 12px;background:#fff;border-radius:12px}
+.sx-cardrow div{flex:1;min-width:0}
+.sx-cardrow span{display:block;font-size:calc(12px*var(--ts,1));color:#3E4C62}
+.sx-cardrow b{display:block;font-size:calc(16px*var(--ts,1));font-weight:var(--fw600,600);color:#0B2545;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sx-cardrow strong{font-size:calc(22px*var(--ts,1));font-weight:var(--fw600,600);color:#0B2545}
+.sx-cardrow em{font-style:normal;font-size:calc(13px*var(--ts,1));color:#3E4C62}
+.sx-v3 .sx-steps,.sx-v3 .sx-now,.sx-v3 .sx-fact{display:none}
+.sx.rm .sx-phrase span,.sx.rm .sx-meter>span{transition:none}
+.sx.rm .sx-phrase span{opacity:1;transform:none}
+.ob-plan{min-height:100%;display:flex;flex-direction:column;padding:18px 22px 24px;background:#F5F5F5;box-sizing:border-box}
+.ob-plan .sx-caddie{margin-bottom:12px}
+.ob-plan h1{margin:0;font-size:calc(28px*var(--tsb,1));font-weight:var(--fw600,600);letter-spacing:-.03em;color:#0B2545}
+.ob-plan ol{list-style:none;margin:18px 0;padding:0;display:flex;flex-direction:column;justify-content:space-evenly;gap:12px;flex:1}
+.ob-plan li{display:flex;align-items:center;gap:12px;padding:14px;background:#fff;border-radius:16px}
+.ob-plan .n{flex:none;width:32px;height:32px;border-radius:50%;background:#0B2545;color:#fff;display:grid;place-items:center;font-weight:var(--fw600,600)}
+.ob-plan li b{display:block;color:#0B2545;font-size:calc(16px*var(--ts,1))}
+.ob-plan li small{display:block;margin-top:2px;color:#3E4C62;font-size:calc(14px*var(--ts,1))}
+.ob-plan svg{margin-left:auto;flex:none;stroke:#C8102E;fill:none;stroke-width:1.8}
+.ob-plan .btn{margin-top:8px;background:#C8102E;color:#fff;border:0;border-radius:999px;padding:16px;font-weight:var(--fw600,600);width:100%}
 @media (prefers-reduced-motion: reduce){ .sx-crest .cr-scan,.sx-crest .cr-scan svg,.sx-crest.in,.lv-c.up b,.lc.flip *,.sx-v3.has-stats .lv,.sx-v3 .sx-steps li .sx-bar>span{animation:none!important} .lv-strip i{transition:none} }
 .sx-v3 .bk-cap{display:none}
 

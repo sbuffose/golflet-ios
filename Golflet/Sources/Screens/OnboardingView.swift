@@ -53,17 +53,11 @@ struct OnboardingView: View {
             landAfterSync()
         }
         .onChange(of: model.syncSession?.outcome) { _, outcome in
-            guard phase == .syncing else { return }
-            if outcome == .failed || outcome == .succeeded {
-                landAfterSync()
-            }
+            guard phase == .syncing, outcome == .succeeded else { return }
+            landAfterSync()
         }
         .onChange(of: model.needsClub != nil) { _, needed in
             guard phase == .syncing, needed else { return }
-            landAfterSync()
-        }
-        .onChange(of: model.authFailure != nil) { _, failed in
-            guard phase == .syncing, failed else { return }
             landAfterSync()
         }
     }
@@ -196,20 +190,27 @@ struct OnboardingView: View {
 
     private var syncing: some View {
         OnboardingSyncWait(
-            progress: model.syncSession?.progress,
+            frame: OnboardingSyncCopy.frame(
+                progress: model.syncSession?.progress,
+                failed: model.syncSession?.outcome == .failed || model.authFailure != nil,
+                message: model.authFailure?.message ?? model.syncSession?.errorMessage ?? model.errorMessage
+            ),
             reduceMotion: reduceMotion || voiceOver
-        )
+        ) {
+            go(.matricula)
+        }
     }
 
     private var reveal: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 22) {
+            Spacer(minLength: 4)
             TypeLines(
                 lines: revealLines,
                 reduceMotion: reduceMotion || voiceOver,
                 ink: Color(hex: BrandHex.navy),
                 size: GType.section
             )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Spacer(minLength: 16)
             Button {
                 beginQuestions()
             } label: {
@@ -217,9 +218,9 @@ struct OnboardingView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("ob-reveal-next")
-            .padding(.bottom, 12)
+            .padding(.bottom, 8)
         }
-        .padding(.top, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var revealLines: [String] {
@@ -340,7 +341,8 @@ struct OnboardingView: View {
     }
 
     private var notifications: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
+            Spacer(minLength: 4)
             TypeLines(
                 lines: ["Te aviso cuando tus amigos salgan y cuando sea hora de practicar."],
                 reduceMotion: reduceMotion || voiceOver,
@@ -350,7 +352,7 @@ struct OnboardingView: View {
             Text("Solo tu próximo tee time, tus partidos y tu plan.")
                 .font(GType.body)
                 .foregroundStyle(p.ink2)
-            Spacer()
+            Spacer(minLength: 16)
             Button {
                 draft.notifications = true
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
@@ -372,23 +374,45 @@ struct OnboardingView: View {
     }
 
     private var plan: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let items = OnboardingPlanCards.items(facts: facts, groupCount: model.groups.count)
+        return VStack(alignment: .leading, spacing: 0) {
+            caddieGlow
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
             Text(planTitle)
                 .font(GType.sheetTitle)
                 .foregroundStyle(Color(hex: BrandHex.navy))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
                 .accessibilityIdentifier("ob-plan-title")
-            VStack(alignment: .leading, spacing: 12) {
-                planRow(1, "Encontrá dónde se te escapan los golpes.")
-                planRow(2, "Practicá lo que más te cuesta esta semana.")
-                planRow(3, "Jugá con tus amigos y llevá la cuenta.")
+            Spacer(minLength: 18)
+            VStack(spacing: 12) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    planCard(index + 1, item)
+                        .modifier(RiseIn(index: index, reduceMotion: reduceMotion || voiceOver))
+                }
             }
-            Spacer()
+            Spacer(minLength: 18)
             Button(action: finish) { pill("Entrar a Golflet") }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ob-done")
-                .padding(.bottom, 12)
+                .padding(.bottom, 8)
         }
-        .padding(.top, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var caddieGlow: some View {
+        ZStack {
+            RadialGradient(
+                colors: [Color(hex: BrandHex.navy).opacity(0.16), Color(hex: BrandHex.navy).opacity(0)],
+                center: .center,
+                startRadius: 8,
+                endRadius: 92
+            )
+            .frame(width: 180, height: 140)
+            RobertoGuide(small: true)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private var planTitle: String {
@@ -398,15 +422,34 @@ struct OnboardingView: View {
         return "\(first), armé tu inicio."
     }
 
-    private func planRow(_ n: Int, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+    private func planCard(_ n: Int, _ item: OnboardingPlanItem) -> some View {
+        HStack(alignment: .center, spacing: 12) {
             Text("\(n)")
                 .font(GType.headline)
                 .foregroundStyle(Color.white)
-                .frame(width: 26, height: 26)
-                .background(Circle().fill(Color(hex: BrandHex.red)))
-            Text(text).font(GType.body).foregroundStyle(p.ink)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(Color(hex: BrandHex.navy)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(GType.headline)
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(item.detail)
+                    .font(GType.body)
+                    .foregroundStyle(p.ink2)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: item.symbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color(hex: BrandHex.red))
+                .accessibilityHidden(true)
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(p.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("ob-plan-card-\(n)")
     }
 
     private func pill(_ title: String) -> some View {
@@ -434,6 +477,9 @@ struct OnboardingView: View {
     private func submit() async {
         go(.syncing)
         await model.signInGolfistics(matricula: matricula, clave: clave, savePassword: savePassword)
+        if model.authFailure != nil || model.syncSession?.outcome == .failed {
+            return
+        }
         landAfterSync()
     }
 
@@ -581,74 +627,150 @@ struct OnboardingView: View {
     }
 }
 
-/// Espera de la matrícula. Las frases salen de a una. Si Golfistics manda
-/// etapa, esa frase reemplaza a la del mismo paso. No afirma resultados.
+/// Una frase por vez, la de la etapa real. No adelanta el texto con un reloj.
 private struct OnboardingSyncWait: View {
-    var progress: SyncAPIProgress?
+    var frame: OnboardingSyncFrame
     var reduceMotion: Bool
-    @State private var stage = 1
+    var retry: () -> Void
+    @State private var spin = false
+    @State private var bounce = false
 
     var body: some View {
-        let lines = OnboardingSyncCopy.lines(progress: progress, elapsedStages: stage)
-        VStack(alignment: .leading, spacing: 18) {
-            RobertoGuide(small: true, thinking: true)
-                .frame(maxWidth: .infinity)
-            SyncStatusLines(lines: lines, reduceMotion: reduceMotion)
-            Spacer(minLength: 0)
-        }
-        .padding(.top, 8)
-        .task(id: reduceMotion) {
-            if reduceMotion {
-                stage = OnboardingSyncCopy.waiting.count
-                return
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 8)
+            ZStack {
+                RadialGradient(
+                    colors: [Color(hex: BrandHex.navy).opacity(0.18), Color.clear],
+                    center: .center,
+                    startRadius: 10,
+                    endRadius: 88
+                )
+                .frame(width: 176, height: 150)
+                RobertoGuide(small: true, thinking: true)
+                    .offset(y: reduceMotion ? 0 : (bounce ? -5 : 4))
+                Circle()
+                    .trim(from: 0.08, to: 0.78)
+                    .stroke(Color(hex: BrandHex.navy), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [7, 6]))
+                    .frame(width: 148, height: 148)
+                    .rotationEffect(.degrees(reduceMotion ? 0 : (spin ? 360 : 0)))
             }
-            stage = 1
-            while !Task.isCancelled, stage < OnboardingSyncCopy.waiting.count {
-                try? await Task.sleep(for: .milliseconds(RuntimeFlags.isUITesting ? 220 : 1100))
-                if Task.isCancelled { return }
-                stage += 1
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 18)
+            WordPhrase(text: frame.phrase, reduceMotion: reduceMotion)
+            progressBar
+                .padding(.top, 18)
+            if !frame.done.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(frame.done, id: \.rawValue) { beat in
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color(hex: BrandHex.navy))
+                            Text(beat.title)
+                                .font(GType.label)
+                                .foregroundStyle(Color(hex: BrandHex.navy))
+                        }
+                        .accessibilityIdentifier("ob-sync-done-\(beat.rawValue)")
+                    }
+                }
+                .padding(.top, 14)
+            }
+            if let error = frame.error, !error.isEmpty {
+                Text(error)
+                    .font(GType.body)
+                    .foregroundStyle(Color(hex: BrandHex.red))
+                    .padding(.top, 16)
+                    .accessibilityIdentifier("ob-sync-error")
+                Button(action: retry) {
+                    Text("Reintentar")
+                        .font(GType.headline)
+                        .foregroundStyle(Color(hex: BrandHex.navy))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("ob-sync-retry")
+            }
+            Spacer(minLength: 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(hex: 0xF5F5F5))
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) { bounce = true }
+        }
+    }
+
+    private var progressBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color(hex: BrandHex.navy).opacity(0.12))
+                Capsule()
+                    .fill(Color(hex: BrandHex.navy))
+                    .frame(width: max(6, geo.size.width * frame.fraction))
             }
         }
+        .frame(height: 3)
+        .accessibilityIdentifier("ob-sync-bar")
+        .accessibilityValue("\(Int((frame.fraction * 100).rounded()))")
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: frame.fraction)
     }
 }
 
-private struct SyncStatusLines: View {
-    var lines: [String]
+private struct WordPhrase: View {
+    var text: String
     var reduceMotion: Bool
-    @State private var shown = 0
+    @State private var count = 0
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(Array(lines.prefix(max(shown, 0)).enumerated()), id: \.offset) { index, line in
-                let current = index == min(shown, lines.count) - 1
-                HStack(alignment: .top, spacing: 10) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(current ? Color(hex: BrandHex.red) : Color(hex: BrandHex.navy).opacity(0.28))
-                        .frame(width: 3)
-                    Text(line)
-                        .font(current ? GType.section : GType.body)
-                        .foregroundStyle(current ? Color(hex: BrandHex.navy) : Color(hex: BrandHex.navyRaised))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .accessibilityIdentifier("ob-sync-line")
-                .accessibilityLabel(line)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("ob-sync-status")
-        .onAppear { reveal(upTo: lines.count) }
-        .onChange(of: lines.count) { _, count in
-            reveal(upTo: count)
-        }
+    private var words: [String] { text.split(separator: " ").map(String.init) }
+
+    private var visibleWords: [String] {
+        if reduceMotion || RuntimeFlags.isUITesting { return words }
+        return Array(words.prefix(count))
     }
 
-    private func reveal(upTo count: Int) {
-        if reduceMotion || count <= shown {
-            shown = count
-            return
-        }
-        withAnimation(.easeOut(duration: 0.45)) { shown = count }
+    var body: some View {
+        Text(visibleWords.joined(separator: " "))
+            .font(GFont.ui(32, weight: .semibold))
+            .foregroundStyle(Color(hex: BrandHex.navy))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(count == 0 && !reduceMotion && !RuntimeFlags.isUITesting ? 0 : 1)
+            .accessibilityIdentifier("ob-sync-phrase")
+            .accessibilityLabel(text)
+            .task(id: text) {
+                let total = words.count
+                if reduceMotion || RuntimeFlags.isUITesting {
+                    count = total
+                    return
+                }
+                count = 0
+                for index in 1...max(total, 1) {
+                    try? await Task.sleep(for: .milliseconds(25))
+                    if Task.isCancelled { return }
+                    withAnimation(.easeOut(duration: 0.18)) { count = min(index, total) }
+                }
+            }
+    }
+}
+
+private struct RiseIn: ViewModifier {
+    var index: Int
+    var reduceMotion: Bool
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown || reduceMotion ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : 12)
+            .onAppear {
+                if reduceMotion || RuntimeFlags.isUITesting {
+                    shown = true
+                    return
+                }
+                withAnimation(.easeOut(duration: 0.35).delay(0.08 * Double(index))) { shown = true }
+            }
     }
 }
 

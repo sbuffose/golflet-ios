@@ -111,5 +111,31 @@ function live(root, { Clock, RM }){
   }
   return { update, setCrest, rounds: () => rounds, destroy(){ off(); } };
 }
-G.live = live; G.crestFor = crest; G.initials = initials;
+function arrivals(root){
+  const box = root.querySelector('.sx-arrivals');
+  const seen = [];
+  return function update(p){
+    if (!box) return;
+    const card = p.stats && p.stats.last_card;
+    if (card) {
+      const key = `${card.date || ''}|${card.course || ''}|${card.gross ?? ''}|${card.club || ''}`;
+      if (!seen.some(row => row.key === key)) seen.push({ key, card });
+    }
+    if (!seen.length) {
+      box.innerHTML = '<div class="sx-skel" aria-label="Cargando tarjetas"></div><div class="sx-skel" aria-label="Cargando tarjetas"></div><div class="sx-skel" aria-label="Cargando tarjetas"></div>';
+      return;
+    }
+    const birdies = p.stats && p.stats.birdies;
+    const last = seen.map(row => row.card).reverse().map(c => (c.holes || []).filter(h => h.strokes != null && h.par != null && h.strokes - h.par === -1).at(-1)).find(Boolean);
+    const bits = [];
+    if (birdies > 0) bits.push(`<p class="sx-birds">${birdies === 1 ? '1 birdie encontrado' : `${birdies} birdies encontrados`}</p>`);
+    if (last) bits.push(`<p class="sx-lastbird">Último birdie, hoyo ${last.hole}</p>`);
+    bits.push(seen.map(({ card }) => {
+      const toPar = card.gross != null && card.par != null ? sgn(card.gross - card.par) : '–';
+      return `<div class="sx-cardrow"><div><span>${esc(fdate(card.date) || '–')}</span><b>${esc(card.course || '–')}</b></div><strong>${card.gross ?? '–'}</strong><em>${toPar}</em></div>`;
+    }).join(''));
+    box.innerHTML = bits.join('');
+  };
+}
+G.live = live; G.crestFor = crest; G.initials = initials; G.arrivals = arrivals;
 })();
