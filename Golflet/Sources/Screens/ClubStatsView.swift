@@ -265,7 +265,7 @@ struct ClubStatsView: View {
                     .font(GType.label)
                     .foregroundStyle(p.ink3)
             } else {
-                List {
+                VStack(spacing: 0) {
                     ForEach(Array((detail?.recent ?? []).enumerated()), id: \.element.id) { index, shot in
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -278,35 +278,30 @@ struct ClubStatsView: View {
                                         .foregroundStyle(p.ink3)
                                 }
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture { openRound(shot) }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("club-shot-\(index)")
                             Spacer()
                             Text(shot.distanceYd.map { "\($0) yd" } ?? "—")
                                 .font(GType.headline)
                                 .tabular()
                                 .foregroundStyle(p.ink)
+                                .contentShape(Rectangle())
+                                .onTapGesture { openRound(shot) }
                             Button("Borrar") { pendingShot = shot }
                                 .font(GType.label)
+                                .buttonStyle(.plain)
                                 .foregroundStyle(p.accent)
                                 .accessibilityIdentifier("club-shot-delete-\(index)")
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture { openRound(shot) }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button("Borrar", role: .destructive) { pendingShot = shot }
-                            Button("Excluir") { pendingShot = shot }
                         }
                         .contextMenu {
                             Button("Borrar") { pendingShot = shot }
                             Button("Excluir de las distancias") { pendingShot = shot }
                         }
-                        .accessibilityIdentifier("club-shot-\(index)")
-                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
+                        .padding(.vertical, 8)
                     }
                 }
-                .listStyle(.plain)
-                .scrollDisabled(true)
-                .frame(height: CGFloat((detail?.recent.count ?? 1) * 72))
                 .confirmationDialog("Este golpe", isPresented: Binding(get: { pendingShot != nil }, set: { if !$0 { pendingShot = nil } }), titleVisibility: .visible) {
                     Button("Borrar", role: .destructive) { Task { await commit(delete: true) } }
                     Button("Excluir de las distancias") { Task { await commit(delete: false) } }

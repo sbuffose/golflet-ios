@@ -1864,6 +1864,7 @@ final class GolfletUITests: XCTestCase {
             reveal(app, "club-shot-0")
             shot("ultimos-golpes")
             let del = first(app, "club-shot-delete-0")
+            XCTAssertTrue(del.waitForExistence(timeout: 4), "Falta Borrar en el golpe")
             if del.isHittable { del.tap() } else { del.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
             XCTAssertTrue(app.buttons["Excluir de las distancias"].waitForExistence(timeout: 3))
             shot("golpe-confirmar")
