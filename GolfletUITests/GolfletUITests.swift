@@ -1263,6 +1263,14 @@ final class GolfletUITests: XCTestCase {
         app.descendants(matching: .any)[id].firstMatch
     }
 
+    @discardableResult
+    private func tapOnboarding(_ app: XCUIApplication, _ id: String) -> Bool {
+        let element = first(app, id)
+        guard element.exists else { return false }
+        if element.isHittable { element.tap() } else { element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        return true
+    }
+
     private func largest(_ app: XCUIApplication, _ id: String) -> XCUIElement {
         let matches = app.descendants(matching: .any).matching(identifier: id)
         guard matches.firstMatch.waitForExistence(timeout: 3) else { return matches.firstMatch }
@@ -1918,14 +1926,19 @@ final class GolfletUITests: XCTestCase {
         shot("onboarding-sync-medio")
         XCTAssertTrue(first(app, "ob-reveal-next").waitForExistence(timeout: 22), "La ficha no llegó")
         shot("onboarding-sync-listo")
-        first(app, "ob-reveal-next").tap()
-        for _ in 0..<8 {
-            if first(app, "ob-plan-title").exists { break }
-            if first(app, "ob-notif-no").exists { first(app, "ob-notif-no").tap(); continue }
-            let option = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'ob-opt-'")).firstMatch
-            if option.waitForExistence(timeout: 2) { option.tap(); continue }
-            if first(app, "ob-bag-next").exists { first(app, "ob-bag-next").tap(); continue }
-            break
+        let reveal = first(app, "ob-reveal-next")
+        if reveal.isHittable { reveal.tap() } else { reveal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        let deadline = Date().addingTimeInterval(25)
+        while Date() < deadline, !first(app, "ob-plan-title").exists {
+            if tapOnboarding(app, "ob-notif-no") { continue }
+            let option = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'ob-opt-'")).firstMatch
+            if option.exists {
+                if option.isHittable { option.tap() } else { option.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+                continue
+            }
+            if tapOnboarding(app, "ob-bag-next") { continue }
+            if tapOnboarding(app, "ob-i7-next") { continue }
+            _ = option.waitForExistence(timeout: 1)
         }
         XCTAssertTrue(first(app, "ob-plan-title").waitForExistence(timeout: 6), "No llegó Armé tu inicio")
         XCTAssertTrue(first(app, "ob-plan-card-1").exists)
