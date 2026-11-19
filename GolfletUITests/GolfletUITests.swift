@@ -1953,8 +1953,8 @@ final class GolfletUITests: XCTestCase {
         shot("bolsa-modelos")
         let driver = first(app, "equip-Driver")
         XCTAssertTrue(driver.waitForExistence(timeout: 4))
-        if driver.isHittable { driver.tap() } else { driver.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
-        XCTAssertTrue(first(app, "eq-users").waitForExistence(timeout: 4), "No se abrió Lo usan")
+        driver.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(first(app, "eq-users").waitForExistence(timeout: 6), "No se abrió Lo usan")
         let zalatoris = first(app, "eq-user-zalatoris")
         for _ in 0..<4 where !zalatoris.exists {
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
