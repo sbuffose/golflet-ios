@@ -385,14 +385,14 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 8)
                 .accessibilityIdentifier("ob-plan-title")
-            Spacer(minLength: 18)
-            VStack(spacing: 12) {
+            Spacer(minLength: 12)
+            VStack(spacing: 14) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     planCard(index + 1, item)
                         .modifier(RiseIn(index: index, reduceMotion: reduceMotion || voiceOver))
                 }
             }
-            Spacer(minLength: 18)
+            Spacer(minLength: 12)
             Button(action: finish) { pill("Entrar a Golflet") }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ob-done")
@@ -429,7 +429,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Color.white)
                 .frame(width: 32, height: 32)
                 .background(Circle().fill(Color(hex: BrandHex.navy)))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
                     .font(GType.headline)
                     .foregroundStyle(Color(hex: BrandHex.navy))
@@ -437,19 +437,89 @@ struct OnboardingView: View {
                 Text(item.detail)
                     .font(GType.body)
                     .foregroundStyle(p.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Image(systemName: item.symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color(hex: BrandHex.red))
-                .accessibilityHidden(true)
+            planFigure(item)
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("ob-plan-card-\(n)")
+    }
+
+    @ViewBuilder
+    private func planFigure(_ item: OnboardingPlanItem) -> some View {
+        switch item.kind {
+        case .index:
+            Text(item.figure)
+                .font(GFont.ui(32, weight: .semibold))
+                .foregroundStyle(Color(hex: BrandHex.navy))
+                .accessibilityIdentifier("ob-plan-index")
+        case .club:
+            if item.figure == "–" {
+                Text("–")
+                    .font(GFont.ui(32, weight: .semibold))
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+            } else if let url = SyncClubIdentity.logoURL(planLogo(facts?.clubCode)) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().scaledToFit()
+                    } else {
+                        planMonogram(item.figure)
+                    }
+                }
+                .frame(width: 52, height: 52)
+                .background(Color.white)
+                .clipShape(Circle())
+            } else {
+                planMonogram(item.figure)
+            }
+        case .friends:
+            let faces = planFaces
+            if faces.isEmpty {
+                Text(item.figure)
+                    .font(GFont.ui(32, weight: .semibold))
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+            } else {
+                HStack(spacing: -8) {
+                    ForEach(faces, id: \.id) { member in
+                        GroupPhotoView(url: member.photoURL, initials: member.initials, size: 32)
+                    }
+                }
+                .accessibilityIdentifier("ob-plan-faces")
+            }
+        }
+    }
+
+    private var planFaces: [GroupMember] {
+        var seen = Set<String>()
+        var out: [GroupMember] = []
+        for group in model.groups {
+            for member in group.members where seen.insert(member.id).inserted {
+                out.append(member)
+                if out.count == 3 { return out }
+            }
+        }
+        return out
+    }
+
+    private func planLogo(_ code: String?) -> String? {
+        switch code {
+        case "118": return "/clubs/118@2x.png"
+        case "209": return "/clubs/209@2x.png"
+        default: return nil
+        }
+    }
+
+    private func planMonogram(_ name: String) -> some View {
+        Text(SyncClubIdentity.initials(name: name))
+            .font(GFont.ui(16, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .frame(width: 52, height: 52)
+            .background(Circle().fill(Color(hex: BrandHex.navy)))
     }
 
     private func pill(_ title: String) -> some View {

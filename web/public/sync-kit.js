@@ -75,7 +75,7 @@ function paintFrame(root, p, reduced){
   if (el && el.dataset.t !== frame.phrase) {
     el.dataset.t = frame.phrase;
     el.setAttribute('aria-label', frame.phrase);
-    el.innerHTML = frame.phrase.split(' ').map((w, i) => `<span style="transition-delay:${i * 25}ms">${esc(w)}</span>`).join(' ');
+    el.innerHTML = frame.phrase.split(' ').map((w, i) => `<span style="transition-delay:${i * 25}ms">${esc(w)}</span>`).join('');
     const show = () => el.querySelectorAll('span').forEach(s => s.classList.add('on'));
     if (reduced) show(); else requestAnimationFrame(show);
   }

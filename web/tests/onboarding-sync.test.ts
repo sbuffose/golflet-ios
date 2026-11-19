@@ -24,7 +24,7 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
     hosts.push(req.headers.host || "");
     if (url.pathname === "/") {
       res.writeHead(200, { "content-type": "text/html" });
-      res.end(`<!doctype html><meta charset="utf-8"><meta name="golflet-sync" content="booklet"><link rel="stylesheet" href="/style.css"><style>html,body,#host{margin:0;height:100%;background:#F5F5F5}</style><div id="host"></div><script src="/sync-anim.js"></script><script src="/sync-live.js"></script><script src="/sync-kit.js"></script><script src="/sync-booklet.js"></script>`);
+      res.end(`<!doctype html><meta charset="utf-8"><meta name="golflet-sync" content="booklet"><link rel="stylesheet" href="/fonts/fonts.css"><link rel="stylesheet" href="/tokens.css"><link rel="stylesheet" href="/style.css"><style>html,body,#host{margin:0;height:100%;background:#F5F5F5}body{font-family:var(--font-ui)}</style><div id="host"></div><script src="/sync-anim.js"></script><script src="/sync-live.js"></script><script src="/sync-kit.js"></script><script src="/sync-booklet.js"></script>`);
       return;
     }
     const file = new URL(url.pathname.slice(1), ROOT);
@@ -42,7 +42,7 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
     const page = await browser.newPage();
     await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 2 });
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle0" });
-    const early = await page.evaluate(() => {
+    const early = await page.evaluate(async () => {
       const G = (window as unknown as { GolfletSync: { syncFrame: (p: unknown) => { phrase: string; done: string[]; fraction: number }; mount: (el: Element, o: unknown) => { setProgress: (p: unknown) => void } } }).GolfletSync;
       const none = G.syncFrame(null);
       const cards = G.syncFrame({ stage: "cards", done: 4, total: 12 });
@@ -50,11 +50,22 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
       const handicap = G.syncFrame({ stage: "handicap", cards_total: 12, stats: { rounds: 12 } });
       const anim = G.mount(document.querySelector("#host")!, { club: "tus clubes", style: "booklet", theme: "paper" });
       (window as unknown as { anim: typeof anim }).anim = anim;
-      const phrase = document.querySelector(".sx-phrase")?.getAttribute("aria-label") || "";
+      await (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready;
+      const phraseEl = document.querySelector(".sx-phrase")!;
+      const phrase = phraseEl.getAttribute("aria-label") || "";
+      const words = [...phraseEl.querySelectorAll("span")].map(el => el.getBoundingClientRect());
+      const wordGap = words.length > 1 ? words[1].left - words[0].right : 0;
       const skel = document.querySelectorAll(".sx-skel").length;
-      const scene = document.querySelector(".sx-scene")!.getBoundingClientRect().top;
+      const scene = document.querySelector(".sx-scene")!.getBoundingClientRect();
+      const arrivals = document.querySelector(".sx-arrivals")!.getBoundingClientRect();
       const body = document.querySelector(".sx-body")!.getBoundingClientRect().top;
-      return { none, cards, named, handicap, phrase, skel, sceneBelow: scene > body };
+      return {
+        none, cards, named, handicap, phrase, skel,
+        sceneBelow: scene.top > body,
+        band: scene.top - arrivals.bottom,
+        wordGap,
+        font: getComputedStyle(phraseEl).fontFamily,
+      };
     });
     assert.equal(early.none.phrase, "Estoy entrando a tu club.");
     assert.deepEqual(early.none.done, []);
@@ -67,6 +78,9 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
     assert.equal(early.phrase, "Conectando con tu club.");
     assert.equal(early.skel, 3);
     assert.equal(early.sceneBelow, true);
+    assert.ok(early.band < 40, `banda ${early.band}`);
+    assert.ok(early.wordGap > 2 && early.wordGap < 12, `espacio ${early.wordGap}`);
+    assert.match(early.font, /Geist/);
     await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 450)));
     await page.screenshot({ path: `${SHOTS}/web-375-onboarding-sync-inicio.png` });
 
@@ -109,15 +123,28 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
     await page.screenshot({ path: `${SHOTS}/web-375-leyendo-club.png` });
 
     await page.evaluate(() => {
-      document.querySelector("#host")!.innerHTML = `<div class="ob-plan"><img class="sx-caddie" src="/brand/caddie.png" alt=""><h1 id="ob-plan-title">Jugador, armé tu inicio.</h1><ol><li id="ob-plan-card-1"><span class="n">1</span><div><b>Dónde se te escapan los golpes</b><small>Índice 3,1</small></div></li><li id="ob-plan-card-2"><span class="n">2</span><div><b>Lo que más te cuesta esta semana</b><small>Jockey Club Buenos Aires</small></div></li><li id="ob-plan-card-3"><span class="n">3</span><div><b>Jugá con tus amigos</b><small>1 grupo</small></div></li></ol><button class="btn" id="ob-done" type="button">Entrar a Golflet</button></div>`;
+      document.querySelector("#host")!.innerHTML = `<div class="ob-plan"><img class="sx-caddie" src="/brand/caddie.png" alt=""><h1 id="ob-plan-title">Jugador, armé tu inicio.</h1><ol><li id="ob-plan-card-1"><span class="n">1</span><div><b>Tu índice</b><small>Desde este número vemos dónde se te escapan los golpes.</small></div><strong class="ob-hi">3,1</strong></li><li id="ob-plan-card-2"><span class="n">2</span><div><b>Tu club</b><small>Ahí miramos lo que más te cuesta esta semana.</small></div><img class="ob-crest" src="/clubs/118@2x.png" alt=""></li><li id="ob-plan-card-3"><span class="n">3</span><div><b>Tus amigos</b><small>Un grupo para salir juntos.</small></div><span class="ob-faces"><span>JD</span><span>AP</span></span></li></ol><button class="btn" id="ob-done" type="button">Entrar a Golflet</button></div>`;
     });
-    const plan = await page.evaluate(() => ({
-      title: document.querySelector("#ob-plan-title")?.textContent,
-      n: getComputedStyle(document.querySelector(".n")!).backgroundColor,
-      cards: document.querySelectorAll(".ob-plan li").length,
-    }));
+    const plan = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll(".ob-plan li")].map(el => el.getBoundingClientRect());
+      return {
+        title: document.querySelector("#ob-plan-title")?.textContent,
+        n: getComputedStyle(document.querySelector(".n")!).backgroundColor,
+        font: getComputedStyle(document.querySelector("#ob-plan-title")!).fontFamily,
+        cards: cards.length,
+        gap: cards[1].top - cards[0].bottom,
+        hi: document.querySelector(".ob-hi")?.textContent,
+        crest: document.querySelector(".ob-crest")?.getAttribute("src"),
+        sub: document.querySelector("#ob-plan-card-1 small")?.textContent,
+      };
+    });
     assert.equal(plan.title, "Jugador, armé tu inicio.");
     assert.equal(plan.cards, 3);
+    assert.ok(plan.gap >= 12 && plan.gap <= 16, `separación ${plan.gap}`);
+    assert.equal(plan.hi, "3,1");
+    assert.match(plan.crest || "", /118/);
+    assert.match(plan.sub || "", /dónde se te escapan/);
+    assert.match(plan.font, /Geist/);
     assert.match(plan.n, /11,\s*37,\s*69|rgb\(11,\s*37,\s*69\)/);
     await page.screenshot({ path: `${SHOTS}/web-375-arme-tu-inicio.png` });
     assert.ok(hosts.every(host => host.startsWith("127.0.0.1")));
