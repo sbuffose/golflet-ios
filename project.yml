@@ -35,6 +35,8 @@ targets:
       - path: Golflet/Resources/Fonts/Geist-SemiBold.otf
       - path: Golflet/Resources/Fixtures
         type: folder
+      - path: Golflet/Resources/ClubGear
+        type: folder
     info:
       path: Golflet/Resources/Info.plist
       properties:
