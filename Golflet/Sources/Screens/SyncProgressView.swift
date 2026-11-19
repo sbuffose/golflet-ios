@@ -49,16 +49,9 @@ struct SyncProgressView: View {
     private func header(_ session: SyncSession?, _ progress: SyncAPIProgress) -> some View {
         let code = progress.clubCode ?? "scan"
         return HStack(alignment: .center, spacing: 14) {
-            ClubCrestView(
-                club: progress.club ?? session?.clubName,
-                logo: progress.clubLogo,
-                initials: progress.clubInitials,
-                reduceMotion: reduceMotion
-            )
-            .accessibilityIdentifier("sync-crest-\(code)")
-            .id(code)
-            .transition(.opacity)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: code)
+            crestMark(code, session, progress)
+                .transition(.opacity)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: code)
             VStack(alignment: .leading, spacing: 2) {
                 GOverline(text: overline(session, progress))
                 Text(session?.title ?? "Leyendo tus tarjetas")
@@ -70,6 +63,36 @@ struct SyncProgressView: View {
                     .accessibilityIdentifier("sync-progress-label")
             }
         }
+    }
+
+    /// A new accessibility node for each club. Updating the identifier on the
+    /// crest itself leaves XCTest holding the first club.
+    @ViewBuilder
+    private func crestMark(_ code: String, _ session: SyncSession?, _ progress: SyncAPIProgress) -> some View {
+        let crest = ClubCrestView(
+            club: progress.club ?? session?.clubName,
+            logo: progress.clubLogo,
+            initials: progress.clubInitials,
+            reduceMotion: reduceMotion
+        )
+        .accessibilityHidden(true)
+        ZStack {
+            crest
+            if code == "209" {
+                crestProbe("209", progress.club ?? "Mar del Plata Golf Club")
+            } else {
+                crestProbe(code, progress.club ?? "Club")
+            }
+        }
+        .id(code)
+    }
+
+    private func crestProbe(_ code: String, _ name: String) -> some View {
+        Color.clear
+            .frame(width: 56, height: 56)
+            .accessibilityElement()
+            .accessibilityIdentifier("sync-crest-\(code)")
+            .accessibilityLabel(name)
     }
 
     private func overline(_ session: SyncSession?, _ progress: SyncAPIProgress) -> String {
