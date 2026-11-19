@@ -1896,12 +1896,13 @@ final class GolfletUITests: XCTestCase {
             shot("ultimos-golpes")
             let del = first(app, "club-shot-delete-0")
             if del.isHittable { del.tap() } else { del.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
-            XCTAssertTrue(app.buttons["Excluir de las distancias"].waitForExistence(timeout: 3))
             let excluir = app.buttons["Excluir de las distancias"]
-            for _ in 0..<3 where !excluir.isHittable {
-                let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
-                start.press(forDuration: 0.01, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42)))
+            XCTAssertTrue(excluir.waitForExistence(timeout: 3))
+            let visibleUntil = Date().addingTimeInterval(2)
+            while Date() < visibleUntil, excluir.frame.minY > app.windows.firstMatch.frame.height - 80 {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.2))
             }
+            XCTAssertLessThan(excluir.frame.minY, app.windows.firstMatch.frame.height - 48, "Excluir queda debajo de la pantalla")
             shot("golpe-confirmar")
             let cancel = app.buttons.matching(identifier: "shot-delete-cancel").firstMatch
             if cancel.waitForExistence(timeout: 2) {
@@ -1994,6 +1995,9 @@ final class GolfletUITests: XCTestCase {
         }
         XCTAssertTrue(first(app, "ob-plan-title").waitForExistence(timeout: 6), "No llegó Armé tu inicio")
         XCTAssertTrue(first(app, "ob-plan-card-1").exists)
+        let entrar = first(app, "ob-done")
+        XCTAssertTrue(entrar.waitForExistence(timeout: 4), "Falta Entrar a Golflet")
+        XCTAssertLessThan(entrar.frame.maxY, app.windows.firstMatch.frame.maxY - 8, "Entrar a Golflet queda fuera de la pantalla")
         shot("arme-tu-inicio")
 
         app.terminate()
