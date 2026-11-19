@@ -35,22 +35,77 @@ function label(k, p, club, st, cardsN){
   return st === 'done' ? 'Listo. Te muestro la ficha.' : 'Cuando entren, armo tu ficha.';
 }
 
+function detecting(name){ return !name || name === 'Golfistics App' || name === 'tu club' || name === 'tus clubes'; }
+/** One phrase for the stage that is happening now. A beat is done only after the sync has left it. */
+function syncFrame(p){
+  p = p || {};
+  const stage = p.stage || 'connect';
+  let phrase = 'Estoy entrando a tu club.';
+  if (p.stage) {
+    if (stage === 'connect') {
+      const club = (p.club || '').trim();
+      phrase = !detecting(club) ? `Conectando con ${club}.` : ((p.club_count || 0) > 1 ? 'Conectando con tus clubes.' : 'Conectando con tu club.');
+    } else if (stage === 'list') phrase = p.list_total > 0 ? `El club lista ${p.list_total} tarjetas.` : 'Busco el listado de tarjetas.';
+    else if (stage === 'cards') phrase = p.total > 0 ? `Leí ${p.done || 0} de ${p.total}.` : 'Estoy leyendo tarjetas.';
+    else if (stage === 'handicap') phrase = 'Miro el historial de hándicap.';
+    else if (stage === 'save') phrase = p.total > 0 && p.done != null ? `Guardé ${p.done} de ${p.total}.` : 'Estoy guardando lo que ya leí.';
+    else phrase = 'Listo. Te muestro la ficha.';
+  }
+  const done = [];
+  if (p.stage && stage !== 'connect') done.push('login');
+  const rounds = p.stats && p.stats.rounds;
+  const cardsSeen = (p.cards_total || 0) > 0 || (rounds || 0) > 0 || (p.done || 0) > 0;
+  const cardsFinished = stage === 'handicap' || stage === 'save' || stage === 'done' || (stage === 'cards' && p.total > 0 && (p.done || 0) >= p.total);
+  if (p.stage && cardsFinished && cardsSeen) done.push('cards');
+  if (stage === 'save' || stage === 'done') done.push('handicap');
+  let fraction = 0.08;
+  if (stage === 'connect') fraction = detecting(p.club) ? 0.08 : 0.28;
+  else if (stage === 'list') fraction = 0.42;
+  else if (stage === 'cards') fraction = p.total > 0 ? 0.48 + 0.22 * Math.min(1, (p.done || 0) / p.total) : 0.48;
+  else if (stage === 'handicap') fraction = 0.78;
+  else if (stage === 'save') fraction = 0.9;
+  else if (stage === 'done') fraction = 1;
+  if (!p.stage) fraction = 0.08;
+  return { phrase, fraction, done };
+}
+const BEAT = { login: 'Entraste', handicap: 'Hándicap', cards: 'Tarjetas' };
+function paintFrame(root, p, reduced){
+  const frame = syncFrame(p);
+  const el = root.querySelector('.sx-phrase');
+  if (el && el.dataset.t !== frame.phrase) {
+    el.dataset.t = frame.phrase;
+    el.setAttribute('aria-label', frame.phrase);
+    el.innerHTML = frame.phrase.split(' ').map((w, i) => `<span style="transition-delay:${i * 25}ms">${esc(w)}</span>`).join(' ');
+    const show = () => el.querySelectorAll('span').forEach(s => s.classList.add('on'));
+    if (reduced) show(); else requestAnimationFrame(show);
+  }
+  const bar = root.querySelector('.sx-meter > span');
+  if (bar) bar.style.transform = `scaleX(${frame.fraction})`;
+  const checks = root.querySelector('.sx-checks');
+  if (checks) checks.innerHTML = frame.done.map(k => `<span class="sx-check" data-beat="${k}">${BEAT[k]}</span>`).join('');
+}
+
 /** Shared chrome: scene host + live steps + facts. theme: 'night' | 'paper' */
 function shell(container, { club: club0, theme, title }){
   let club = club0;
   const v3 = !!G.live && LIVE();
   container.innerHTML = `<div class="sx sx-${theme}${RM() ? ' rm' : ''}${v3 ? ' sx-v3' : ''}">
-    <div class="sx-scene"></div>
     <div class="sx-body">
-      <div class="sx-head">${v3 ? '<div class="sx-crest"></div>' : ''}<div class="sx-hd"><div class="sx-over">${esc(club)}</div><div class="sx-title" aria-live="polite">${esc(title || 'Leyendo tus tarjetas')}</div></div></div>
+      <div class="sx-head">${v3 ? '<img class="sx-caddie" src="/brand/caddie.png" alt="">' : ''}${v3 ? '<div class="sx-crest"></div>' : ''}<div class="sx-hd"><div class="sx-over">${esc(club)}</div><div class="sx-title" aria-live="polite">${esc(title || 'Leyendo tus tarjetas')}</div></div></div>
+      <p class="sx-phrase" data-t=""></p>
+      <div class="sx-meter" aria-hidden="true"><span></span></div>
+      <div class="sx-checks"></div>
       ${v3 ? '<div class="sx-now"><span class="sx-now-l"></span><span class="sx-now-n num"></span></div>' : ''}
       <ol class="sx-steps">${STEPS.map(k => `<li data-s="${k}" class="todo"><span class="sx-ic"></span><span class="sx-lbl">${esc(label(k, null, club, 'todo'))}</span><span class="sx-num num"></span><span class="sx-bar"><span></span></span></li>`).join('')}</ol>
+      <div class="sx-arrivals"></div>
       ${v3 ? '<div class="lv"></div>' : ''}
       <figure class="sx-fact"><span class="sx-rule"></span><figcaption class="sx-fover">Sabías que</figcaption><blockquote></blockquote><cite></cite></figure>
-    </div></div>`;
+    </div>
+    <div class="sx-scene"></div></div>`;
   const root = container.firstElementChild;
   let cardsN = 0, done = false;
   const lv = v3 ? G.live(root, { Clock, RM }) : null;
+  const arrive = G.arrivals ? G.arrivals(root) : () => {};
   /* Golfistics App syncs several clubs in a row: the server tags progress with club / club_index / club_count */
   function setClub(p){
     if (!p.club) return;
@@ -60,7 +115,7 @@ function shell(container, { club: club0, theme, title }){
   }
   function setProgress(p){
     if (!p || done) return;
-    setClub(p); lv?.update(p);
+    setClub(p); lv?.update(p); arrive(p); paintFrame(root, p, RM());
     const cur = STEPS.indexOf(p.stage === 'done' ? 'save' : p.stage);
     if (p.stage === 'cards') cardsN = p.total || 0;
     root.querySelectorAll('.sx-steps li').forEach((li, i) => {
@@ -89,6 +144,7 @@ function shell(container, { club: club0, theme, title }){
     root, scene: root.querySelector('.sx-scene'), setProgress,
     complete(p, t){ setProgress({ ...p, stage: 'done' }); done = true; if (t) root.querySelector('.sx-title').textContent = t; },
     fail(msg){ done = true; root.classList.add('failed'); root.querySelector('.sx-title').textContent = 'No se pudo actualizar';
+      const phrase = root.querySelector('.sx-phrase'); if (phrase) { phrase.dataset.t = msg || ''; phrase.textContent = msg || 'No pude traer tus tarjetas.'; }
       const li = root.querySelector('.sx-steps li.active'); if (li){ li.className = 'err'; li.querySelector('.sx-lbl').textContent = msg; li.querySelector('.sx-num').textContent = ''; }
       if (v3){ root.querySelector('.sx-now').classList.add('err'); root.querySelector('.sx-now-l').textContent = msg; root.querySelector('.sx-now-n').textContent = ''; } },
     destroy(){ offFacts(); lv?.destroy(); },
@@ -102,5 +158,5 @@ function mount(container, opts = {}){
   return G.styles[style](container, { ...opts, club: opts.club || 'tu club' }, { shell, Clock, RM });
 }
 G.styles = G.styles || {};
-G.mount = mount; G.classic = classic; G.styleFlag = styleFlag; G.Clock = Clock; G.kit = { shell, Clock, RM };
+G.mount = mount; G.classic = classic; G.styleFlag = styleFlag; G.Clock = Clock; G.syncFrame = syncFrame; G.kit = { shell, Clock, RM };
 })();

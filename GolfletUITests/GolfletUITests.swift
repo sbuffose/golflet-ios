@@ -1818,13 +1818,17 @@ final class GolfletUITests: XCTestCase {
         if groupStack.isHittable { groupStack.tap() } else {
             groupStack.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        XCTAssertTrue(waitFor(app, "screen-home-groups", timeout: 6), "No se abrió Tus grupos")
-        XCTAssertTrue(app.staticTexts["1 integrante"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["2 integrantes"].exists)
-        XCTAssertTrue(app.staticTexts["Ana Pérez"].exists)
+        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6), "No se abrió Tus grupos")
+        let scratch = first(app, "home-group-count-g-scratch")
+        let familia = first(app, "home-group-count-g-familia")
+        XCTAssertTrue(scratch.waitForExistence(timeout: 4))
+        XCTAssertEqual(scratch.label, "1 miembro · Administrador")
+        XCTAssertEqual(familia.label, "2 miembros · Miembro")
+        XCTAssertTrue(app.staticTexts["Jugador Demo y Ana Pérez"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["0 miembros"].exists)
         XCTAssertFalse(app.staticTexts["0 integrantes"].exists)
         shot("tus-grupos")
-        dismissIfPresent(app, "close-home-groups")
+        dismissIfPresent(app, "close-grupos")
 
         let impact = first(app, "metric-hcp-impact")
         XCTAssertTrue(impact.waitForExistence(timeout: 4), "Falta Impacto")
@@ -1865,6 +1869,55 @@ final class GolfletUITests: XCTestCase {
             shot("golpe-confirmar")
             app.buttons["Cancelar"].tap()
         }
+
+        app.terminate()
+        app.launchArguments = ["-ui-testing", "-ui-testing-review", "-ui-testing-sync-pace"]
+        app.launch()
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 10))
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        let sync = app.buttons["home-sync-118"]
+        XCTAssertTrue(sync.waitForExistence(timeout: 6))
+        if sync.isHittable { sync.tap() } else { sync.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(app, "sync-overlay", timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["sync-skeleton"].waitForExistence(timeout: 3) || app.descendants(matching: .any)["sync-yardage"].waitForExistence(timeout: 2))
+        shot("leyendo-inicio")
+        XCTAssertTrue(app.descendants(matching: .any)["sync-card-row"].waitForExistence(timeout: 8), "No llegó una tarjeta")
+        shot("leyendo-tarjetas")
+        XCTAssertTrue(app.descendants(matching: .any)["sync-crest-209"].waitForExistence(timeout: 12), "El escudo no pasó al segundo club")
+        shot("leyendo-club")
+
+        app.terminate()
+        app.launchArguments = ["-ui-testing", "-ui-testing-onboarding", "-ui-testing-sync-pace", "-ui-testing-first-sync"]
+        app.launch()
+        XCTAssertTrue(waitFor(app, "screen-onboarding", timeout: 8))
+        XCTAssertTrue(first(app, "ob-skip").waitForExistence(timeout: 4))
+        shot("onboarding-matricula")
+        let mat = app.textFields["ob-matricula"]
+        XCTAssertTrue(mat.waitForExistence(timeout: 4))
+        type(mat, "94506")
+        type(app.secureTextFields["ob-clave"], "clave123")
+        if app.keyboards.element.exists { app.swipeDown() }
+        let enter = first(app, "ob-submit")
+        if enter.isHittable { enter.tap() } else { enter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(first(app, "ob-sync-phrase").waitForExistence(timeout: 6))
+        shot("onboarding-sync-inicio")
+        let mid = app.staticTexts["Miro el historial de hándicap."]
+        XCTAssertTrue(mid.waitForExistence(timeout: 12) || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Leí '")).firstMatch.waitForExistence(timeout: 2))
+        shot("onboarding-sync-medio")
+        XCTAssertTrue(first(app, "ob-reveal-next").waitForExistence(timeout: 22), "La ficha no llegó")
+        shot("onboarding-sync-listo")
+        first(app, "ob-reveal-next").tap()
+        for _ in 0..<8 {
+            if first(app, "ob-plan-title").exists { break }
+            if first(app, "ob-notif-no").exists { first(app, "ob-notif-no").tap(); continue }
+            let option = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'ob-opt-'")).firstMatch
+            if option.waitForExistence(timeout: 2) { option.tap(); continue }
+            if first(app, "ob-bag-next").exists { first(app, "ob-bag-next").tap(); continue }
+            break
+        }
+        XCTAssertTrue(first(app, "ob-plan-title").waitForExistence(timeout: 6), "No llegó Armé tu inicio")
+        XCTAssertTrue(first(app, "ob-plan-card-1").exists)
+        shot("arme-tu-inicio")
     }
 
     private func scorecardSheetOpen(_ app: XCUIApplication) -> Bool {

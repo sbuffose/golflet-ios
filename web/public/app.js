@@ -3232,6 +3232,27 @@ function revealCard(){
   lines.push(rounds.length ? 'Solo me faltan unos datos más' : 'Te pregunto lo justo para armar tu inicio.');
   return `<div class="rv-card" id="rvcard">${lines.map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
 }
+async function showPlan(host){
+  let groups = null;
+  try { const g = await api('/api/groups'); groups = Array.isArray(g.groups) ? g.groups.length : null; } catch (_) { groups = null; }
+  const name = String(G.user?.first_name || G.user?.name || '').trim().split(/\s+/)[0] || '';
+  const hi = G.player?.handicap_index ?? G.hi_history?.at(-1)?.hi;
+  const club = String(G.clubs?.[0]?.club_name || '').trim();
+  const index = hi == null || Number.isNaN(+hi) ? '–' : `Índice ${typeof f1 === 'function' ? f1(hi) : String(hi).replace('.', ',')}`;
+  const groupLine = groups == null ? '–' : (groups === 1 ? '1 grupo' : `${groups} grupos`);
+  const rows = [
+    ['Dónde se te escapan los golpes', index],
+    ['Lo que más te cuesta esta semana', club || '–'],
+    ['Jugá con tus amigos', groupLine],
+  ];
+  const icons = [
+    '<path d="M6 21V4M6 4h10l-2.2 3L16 10H6"/>',
+    '<circle cx="12" cy="5" r="1.7"/><path d="M10.2 20.5c.7-3 2-4.4 3.8-4.4"/><path d="M12 7.2 12 13l3.4 2.2"/>',
+    '<circle cx="9" cy="8" r="2"/><circle cx="15.2" cy="8.6" r="1.6"/><path d="M4.6 19c.6-2.3 2.1-3.5 4.4-3.5s3.8 1.2 4.4 3.5M14 16.4c1.5-.2 2.8.5 3.5 2.2"/>',
+  ];
+  host.innerHTML = `<div class="ob-plan" id="ob-plan"><img class="sx-caddie" src="/brand/caddie.png" alt=""><h1 id="ob-plan-title">${esc(name ? `${name}, armé tu inicio.` : 'Listo. Armé tu inicio.')}</h1><ol>${rows.map((row, i) => `<li id="ob-plan-card-${i + 1}"><span class="n">${i + 1}</span><div><b>${esc(row[0])}</b><small>${esc(row[1])}</small></div><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">${icons[i]}</svg></li>`).join('')}</ol><button class="btn" id="ob-done" type="button">Entrar a Golflet</button></div>`;
+  await new Promise(resolve => { const b = host.querySelector('#ob-done'); if (b) b.onclick = () => resolve(); else resolve(); });
+}
 async function runSync({ club, url, body, sheetEl, onFail }){
   const host = sheetEl || (() => { view.dataset.v = 'sync'; view.innerHTML = `<div class="pg"><nav class="crumbs"><span class="crumb-cur">Actualizando tarjetas</span></nav><div class="sheet inpage"><div class="ga-host"></div></div></div>`; window.scrollTo(0, 0); return view.querySelector('.ga-host'); })();
   const sheet = host.closest('.sheet');
@@ -3250,8 +3271,13 @@ async function runSync({ club, url, body, sheetEl, onFail }){
     G = { ...G, ...(await api('/api/data').catch(() => ({}))) }; derive();
     JUST_SYNCED = { total, added: r.sync.new_rounds };
     const rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (anim.leave) await anim.leave(sheet); else { sheet?.classList.add('ga-leave'); await new Promise(res => setTimeout(res, rm ? 0 : 480)); }
-    anim.destroy();
+    if (String(url).includes('first-sync')) {
+      anim.destroy();
+      await showPlan(host);
+    } else {
+      if (anim.leave) await anim.leave(sheet); else { sheet?.classList.add('ga-leave'); await new Promise(res => setTimeout(res, rm ? 0 : 480)); }
+      anim.destroy();
+    }
     if (pendingJoin() && !G.user?.pending_first_sync) { location.hash = '#/unirse/' + pendingJoin(); }   // came from a /g/<token> link
     else if (location.hash !== '#/inicio') location.hash = '#/inicio'; else render();
     toast(r.sync.new_rounds ? `${r.sync.new_rounds} tarjetas nuevas · ${total} en total` : `Al día · ${total} tarjetas`);

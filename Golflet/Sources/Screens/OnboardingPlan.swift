@@ -155,37 +155,99 @@ enum OnboardingPlan {
     }
 }
 
-/// Copy de la espera de sync. Las cuatro frases fijas dicen qué está haciendo
-/// Roberto, no qué encontró. Un número, un club o un "leí N" solo entra si
-/// `SyncAPIProgress` ya lo trajo.
-enum OnboardingSyncCopy {
-    static let waiting: [String] = [
-        "Estoy entrando a tu club.",
-        "Busco tu hándicap y tu club.",
-        "Traigo las tarjetas que el club tenga.",
-        "Cuando entren, armo tu ficha."
-    ]
+struct OnboardingPlanItem: Equatable {
+    var title: String
+    var detail: String
+    var symbol: String
+}
 
-    static func lines(progress: SyncAPIProgress?, elapsedStages: Int) -> [String] {
-        var count = min(max(elapsedStages, 1), waiting.count)
-        if let progress {
-            count = max(count, slot(for: progress.stage) + 1)
+enum OnboardingPlanCards {
+    /// Tres filas con un dato real o «–». No inventa índice, club ni grupos.
+    static func items(facts: OnboardingFacts?, groupCount: Int) -> [OnboardingPlanItem] {
+        let index: String = {
+            guard let handicap = facts?.handicap else { return "–" }
+            return "Índice \(FormatAR.one(handicap))"
+        }()
+        let club = facts?.clubName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let groups: String = {
+            if groupCount <= 0 { return "–" }
+            return groupCount == 1 ? "1 grupo" : "\(groupCount) grupos"
+        }()
+        return [
+            OnboardingPlanItem(title: "Dónde se te escapan los golpes", detail: index, symbol: "flag.fill"),
+            OnboardingPlanItem(title: "Lo que más te cuesta esta semana", detail: club.isEmpty ? "–" : club, symbol: "figure.golf"),
+            OnboardingPlanItem(title: "Jugá con tus amigos", detail: groups, symbol: "person.2.fill")
+        ]
+    }
+}
+
+enum OnboardingSyncBeat: String, CaseIterable, Equatable {
+    case login
+    case handicap
+    case cards
+
+    var title: String {
+        switch self {
+        case .login: return "Entraste"
+        case .handicap: return "Hándicap"
+        case .cards: return "Tarjetas"
         }
-        var lines = Array(waiting.prefix(count))
-        guard let progress else { return lines }
-        let index = slot(for: progress.stage)
-        guard lines.indices.contains(index) else { return lines }
-        lines[index] = liveLine(progress)
-        return lines
+    }
+}
+
+struct OnboardingSyncFrame: Equatable {
+    var phrase: String
+    var fraction: Double
+    var done: [OnboardingSyncBeat]
+    var error: String?
+}
+
+/// Una sola frase, la de la etapa que el sync está haciendo ahora.
+/// Un número o un club solo entra si `SyncAPIProgress` ya lo trajo.
+/// Una etapa no figura como hecha hasta que el sync ya pasó de ahí.
+enum OnboardingSyncCopy {
+    static func frame(progress: SyncAPIProgress?, failed: Bool = false, message: String? = nil) -> OnboardingSyncFrame {
+        let base = live(progress)
+        guard failed else { return base }
+        return OnboardingSyncFrame(
+            phrase: base.phrase,
+            fraction: base.fraction,
+            done: base.done,
+            error: message ?? progress?.error ?? "No pude traer tus tarjetas."
+        )
     }
 
-    static func slot(for stage: SyncStage) -> Int {
-        switch stage {
-        case .connect: return 0
-        case .handicap: return 1
-        case .list, .cards: return 2
-        case .save, .done: return 3
+    private static func live(_ progress: SyncAPIProgress?) -> OnboardingSyncFrame {
+        guard let progress else {
+            return OnboardingSyncFrame(phrase: "Estoy entrando a tu club.", fraction: 0.08, done: [], error: nil)
         }
+        var done: [OnboardingSyncBeat] = []
+        if progress.stage != .connect { done.append(.login) }
+        let cardsSeen = (progress.cardsTotal ?? 0) > 0 || (progress.stats?.rounds ?? 0) > 0 || (progress.done ?? 0) > 0
+        let cardsFinished = progress.stage == .handicap || progress.stage == .save || progress.stage == .done
+            || (progress.stage == .cards && (progress.total ?? 0) > 0 && (progress.done ?? 0) >= (progress.total ?? 1))
+        if cardsFinished && cardsSeen { done.append(.cards) }
+        if progress.stage == .save || progress.stage == .done { done.append(.handicap) }
+        let fraction: Double = {
+            switch progress.stage {
+            case .connect:
+                return SyncClubIdentity.isDetecting(progress.club) ? 0.08 : 0.28
+            case .list:
+                return 0.42
+            case .cards:
+                let total = progress.total ?? 0
+                guard total > 0 else { return 0.48 }
+                let ratio = min(1, Double(progress.done ?? 0) / Double(total))
+                return 0.48 + 0.22 * ratio
+            case .handicap:
+                return 0.78
+            case .save:
+                return 0.9
+            case .done:
+                return 1
+            }
+        }()
+        return OnboardingSyncFrame(phrase: liveLine(progress), fraction: fraction, done: done, error: nil)
     }
 
     static func liveLine(_ progress: SyncAPIProgress) -> String {
