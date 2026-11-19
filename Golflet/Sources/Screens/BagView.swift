@@ -607,7 +607,10 @@ struct ClubGearSheet: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
+                            .accessibilityElement(children: .combine)
                             .accessibilityIdentifier("eq-user-\(player.name.split(separator: " ").last.map(String.init)?.lowercased() ?? "player")")
+                            .accessibilityLabel("\(player.name). \(player.tour). GolfWRX WITB · \(player.whenLabel)")
+                            .accessibilityAddTraits(.isLink)
                         }
                     }
                 }
