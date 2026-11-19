@@ -12,10 +12,10 @@ struct GroupsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: "Jugás con otros")
-                        GTitle(text: "Grupos")
+                        GOverline(text: "Amigos")
+                        GTitle(text: "Amigos")
                     }
-                    Text("Compará métricas con tu grupo. Cada uno elige qué mostrar y cómo ver el ranking.")
+                    Text("Compará tus números con amigos en grupos. Solo se comparten promedios y conteos; nunca audios, notas ni estrategia.")
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
 
@@ -119,6 +119,14 @@ struct GroupsView: View {
         .accessibilityIdentifier("groups-empty")
     }
 
+    private func memberLine(_ group: GolfletGroup) -> String {
+        let noun = group.memberCount == 1 ? "jugador" : "jugadores"
+        if group.myRole == .admin {
+            return "\(group.memberCount) \(noun) · sos admin"
+        }
+        return "\(group.memberCount) \(noun)"
+    }
+
     private func groupRow(_ group: GolfletGroup) -> some View {
         GCard(radius: 18, padding: 14) {
             HStack(spacing: 12) {
@@ -127,7 +135,7 @@ struct GroupsView: View {
                     Text(group.name)
                         .font(GType.headline)
                         .foregroundStyle(p.ink)
-                    Text("\(group.memberCount) \(group.memberCount == 1 ? "miembro" : "miembros") · \(group.myRole.title)")
+                    Text(memberLine(group))
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
                         .accessibilityIdentifier("home-group-count-\(group.id)")
