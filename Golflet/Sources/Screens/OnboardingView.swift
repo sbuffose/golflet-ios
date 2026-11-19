@@ -914,7 +914,7 @@ private struct TypeLines: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.45), value: shown)
         .task(id: lines.joined(separator: "\n")) {
-            if reduceMotion {
+            if reduceMotion || RuntimeFlags.isUITesting {
                 shown = lines.count
                 return
             }
