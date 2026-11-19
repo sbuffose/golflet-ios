@@ -1984,13 +1984,13 @@ struct PlayHoleView: View {
                 club: draft.club,
                 lie: draft.lie,
                 result: draft.result,
-                intent: draft.intent,
                 direction: draft.direction,
                 length: draft.length,
                 mishit: draft.mishit,
                 distanceM: nil,
                 distanceYd: nil,
-                toGreenYd: nil
+                toGreenYd: nil,
+                intent: draft.intent
             ))
         }
         refreshLiveActivity()
