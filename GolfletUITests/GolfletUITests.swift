@@ -45,6 +45,13 @@ final class GolfletUITests: XCTestCase {
         if waitFor(app, "last-round-card", timeout: 4) {
             first(app, "last-round-card").tap()
             XCTAssertTrue(waitFor(app, "screen-ronda", timeout: 6))
+            let weather = first(app, "round-weather")
+            XCTAssertTrue(weather.waitForExistence(timeout: 4), "Falta el clima de la ronda")
+            let stats = first(app, "round-stats")
+            XCTAssertTrue(stats.waitForExistence(timeout: 2), "Faltan las estadísticas")
+            reveal(app, weather)
+            XCTAssertLessThan(weather.frame.maxY, stats.frame.minY + 4, "El clima quedó debajo de las estadísticas")
+            saveShot("04_ronda_clima")
             saveShot("04_ronda")
             saveShot("parity-ios-ronda")
             let game = first(app, "edit-game")
@@ -1800,6 +1807,64 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Pendiente"].exists, "Falta el chip Pendiente")
         XCTAssertFalse(app.staticTexts["Todavía no hay tarjeta"].exists)
         shot("reserva-tarjetas")
+
+        app.terminate()
+        app.launchArguments = ["-ui-testing", "-ui-testing-group-counts"]
+        app.launch()
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no volvió")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 10))
+        reveal(app, "home-hcp-groups")
+        let groupStack = largest(app, "home-hcp-groups")
+        if groupStack.isHittable { groupStack.tap() } else {
+            groupStack.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-home-groups", timeout: 6), "No se abrió Tus grupos")
+        XCTAssertTrue(app.staticTexts["1 integrante"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["2 integrantes"].exists)
+        XCTAssertTrue(app.staticTexts["Ana Pérez"].exists)
+        XCTAssertFalse(app.staticTexts["0 integrantes"].exists)
+        shot("tus-grupos")
+        dismissIfPresent(app, "close-home-groups")
+
+        let impact = first(app, "metric-hcp-impact")
+        XCTAssertTrue(impact.waitForExistence(timeout: 4), "Falta Impacto")
+        if impact.isHittable { impact.tap() } else {
+            impact.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-hcp-impact", timeout: 6))
+        XCTAssertTrue(first(app, "hcp-start").waitForExistence(timeout: 3))
+        XCTAssertTrue(first(app, "hcp-now").exists)
+        XCTAssertTrue(first(app, "hcp-delta").exists)
+        XCTAssertFalse(first(app, "hcp-start").staticTexts["—"].exists)
+        XCTAssertFalse(first(app, "hcp-now").staticTexts["—"].exists)
+        shot("impacto")
+        dismissIfPresent(app, "close-hcp-impact")
+
+        if waitFor(app, "last-round-card", timeout: 4) {
+            first(app, "last-round-card").tap()
+            XCTAssertTrue(waitFor(app, "round-weather", timeout: 6))
+            let card = first(app, "round-weather")
+            let roundStats = first(app, "round-stats")
+            reveal(app, card)
+            XCTAssertLessThan(card.frame.maxY, roundStats.frame.minY + 4)
+            shot("ronda-clima")
+            dismissSheet(app, closeID: "close-round", screenID: "screen-ronda")
+        }
+
+        tapTab(app, "Mi bolsa")
+        XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
+        shot("bolsa")
+        if first(app, "bag-Driver").waitForExistence(timeout: 3) {
+            first(app, "bag-Driver").tap()
+            XCTAssertTrue(waitFor(app, "club-shot-0", timeout: 6))
+            reveal(app, "club-shot-0")
+            shot("ultimos-golpes")
+            let del = first(app, "club-shot-delete-0")
+            if del.isHittable { del.tap() } else { del.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            XCTAssertTrue(app.buttons["Excluir de las distancias"].waitForExistence(timeout: 3))
+            shot("golpe-confirmar")
+            app.buttons["Cancelar"].tap()
+        }
     }
 
     private func scorecardSheetOpen(_ app: XCUIApplication) -> Bool {
