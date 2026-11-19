@@ -1897,6 +1897,11 @@ final class GolfletUITests: XCTestCase {
             let del = first(app, "club-shot-delete-0")
             if del.isHittable { del.tap() } else { del.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
             XCTAssertTrue(app.buttons["Excluir de las distancias"].waitForExistence(timeout: 3))
+            let excluir = app.buttons["Excluir de las distancias"]
+            for _ in 0..<3 where !excluir.isHittable {
+                let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
+                start.press(forDuration: 0.01, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42)))
+            }
             shot("golpe-confirmar")
             let cancel = app.buttons.matching(identifier: "shot-delete-cancel").firstMatch
             if cancel.waitForExistence(timeout: 2) {

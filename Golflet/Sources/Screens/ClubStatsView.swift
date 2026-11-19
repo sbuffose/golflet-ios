@@ -18,6 +18,7 @@ struct ClubStatsView: View {
         let club = detail?.club
         let bag = model.bag.first { ClubCode.code(for: $0.name) == code }
         GScreen(id: "screen-club-stats") {
+            ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     header(club)
@@ -56,6 +57,17 @@ struct ClubStatsView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
                 .padding(.bottom, 28)
+            }
+            .onChange(of: pendingShot?.id) { _, id in
+                guard id != nil else { return }
+                if RuntimeFlags.isUITesting {
+                    proxy.scrollTo("shot-ask", anchor: .bottom)
+                } else {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo("shot-ask", anchor: .bottom)
+                    }
+                }
+            }
             }
         }
         .accessibilityIdentifier("screen-club-stats")
@@ -358,6 +370,7 @@ struct ClubStatsView: View {
             .accessibilityIdentifier("shot-delete-cancel")
         }
         .accessibilityIdentifier("shot-ask")
+        .id("shot-ask")
     }
 
     private func openRound(_ shot: ClubRecentShot) {
