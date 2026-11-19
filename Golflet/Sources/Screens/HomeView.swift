@@ -104,7 +104,7 @@ struct HomeView: View {
                 .golfletChrome()
         }
         .sheet(isPresented: $showsHcpImpact) {
-            if let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact {
+            if let impact = homeImpact {
                 NavigationStack {
                     HcpImpactSheet(impact: impact)
                 }
@@ -350,8 +350,19 @@ struct HomeView: View {
         }
     }
 
+    /// Same endpoints as the trend line under the index. A shorter metrics range is not this number.
+    private var homeImpact: HcpImpact? {
+        if let official = OfficialSpan.impact(history: model.officialHistory, rounds: model.rounds) {
+            return official
+        }
+        if let api = model.metricsSummary?.hcpImpact, api.showsDelta {
+            return api
+        }
+        return localHcpImpact
+    }
+
     private var impactText: String {
-        guard let impact = model.metricsSummary?.hcpImpact ?? localHcpImpact else { return "–" }
+        guard let impact = homeImpact, impact.showsDelta else { return "–" }
         return hcpImpactValue(impact)
     }
 
@@ -1799,13 +1810,24 @@ struct HomeGroupsSheet: View {
                                         initials: GroupsParser.initials(group.name),
                                         size: 44
                                     )
-                                    VStack(alignment: .leading, spacing: 2) {
+                                    VStack(alignment: .leading, spacing: 4) {
                                         Text(group.name)
                                             .font(GType.headline)
                                             .foregroundStyle(p.ink)
                                         Text(group.memberCount == 1 ? "1 integrante" : "\(group.memberCount) integrantes")
                                             .font(GType.label)
                                             .foregroundStyle(p.ink2)
+                                            .accessibilityIdentifier("home-group-count-\(group.id)")
+                                        let people = group.members.filter { !$0.isPending }
+                                        if !people.isEmpty {
+                                            HStack(spacing: 8) {
+                                                MemberFaceStack(members: people, size: 28)
+                                                Text(memberNames(people))
+                                                    .font(GType.label)
+                                                    .foregroundStyle(p.ink2)
+                                                    .lineLimit(2)
+                                            }
+                                        }
                                     }
                                     Spacer()
                                     MetricChevron(color: p.ink3)

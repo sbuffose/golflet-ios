@@ -243,7 +243,12 @@ enum PlayParser {
                 distanceYd: JSONFlex.int(from: item["distance_yd"]),
                 result: item["result"] as? String,
                 direction: item["direction"] as? String,
-                mishit: JSONFlex.bool(from: item["mishit"]) ?? false
+                mishit: JSONFlex.bool(from: item["mishit"]) ?? false,
+                roundId: item["round_id"] as? String,
+                liveRoundId: item["live_round_id"] as? String,
+                shotsOnHole: JSONFlex.int(from: item["shots_on_hole"]),
+                postedStrokes: JSONFlex.int(from: item["posted_strokes"]),
+                countsForDistance: JSONFlex.bool(from: item["counts_for_distance"]) ?? true
             )
         }
         return ClubStatsDetail(club: club, recent: recent)
@@ -354,17 +359,41 @@ enum PlayParser {
 
     private static func hcpImpact(from raw: Any?) -> HcpImpact? {
         guard let blob = raw as? [String: Any] else { return nil }
-        guard let delta = JSONFlex.double(from: blob["delta"] ?? blob["change"] ?? blob["diff"]) else {
-            return nil
-        }
+        let start = indexPoint(blob["start"] ?? blob["from"] ?? blob["index_start"])
+        let now = indexPoint(blob["now"] ?? blob["to"] ?? blob["index_now"])
+        let parsed = JSONFlex.double(from: blob["delta"] ?? blob["change"] ?? blob["diff"])
+        // When both indexes are present, the change is their difference. A lone delta is kept on the model and not shown.
+        let delta = (start.value != nil && now.value != nil)
+            ? (((now.value! - start.value!) * 10).rounded() / 10)
+            : parsed
+        guard let delta else { return nil }
         return HcpImpact(
             delta: delta,
-            start: JSONFlex.double(from: blob["start"] ?? blob["from"] ?? blob["index_start"]),
-            now: JSONFlex.double(from: blob["now"] ?? blob["to"] ?? blob["index_now"]),
+            start: start.value,
+            now: now.value,
             estimated: JSONFlex.bool(from: blob["estimated"] ?? blob["is_estimated"]) ?? false,
-            counting: hcpCards(blob["counting"] ?? blob["best_8"] ?? blob["best"]),
-            dropped: hcpCards(blob["dropped"] ?? blob["not_counting"])
+            counting: hcpCards(blob["counting"] ?? blob["best_8"] ?? blob["best"] ?? blob["cards"]),
+            dropped: hcpCards(blob["dropped"] ?? blob["not_counting"]),
+            startDate: start.date,
+            nowDate: now.date,
+            series: indexSeries(blob["series"] ?? blob["history"]),
+            movers: []
         )
+    }
+
+    private static func indexPoint(_ raw: Any?) -> (value: Double?, date: Date?) {
+        if let blob = raw as? [String: Any] {
+            return (JSONFlex.double(from: blob["index"] ?? blob["hi"] ?? blob["value"]), parseDate(blob["date"]))
+        }
+        return (JSONFlex.double(from: raw), nil)
+    }
+
+    private static func indexSeries(_ raw: Any?) -> [HIPoint] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let date = parseDate(item["date"]), let value = JSONFlex.double(from: item["hi"] ?? item["index"] ?? item["value"]) else { return nil }
+            return HIPoint(date: date, handicap: value)
+        }
     }
 
     private static func hcpCards(_ raw: Any?) -> [HcpImpactCard] {
