@@ -383,54 +383,60 @@ struct OnboardingView: View {
     private var plan: some View {
         let items = OnboardingPlanCards.items(facts: facts, groupCount: model.groups.count)
         return GeometryReader { geo in
+            let compact = geo.size.height < 640
+            let gap: CGFloat = compact ? 6 : 12
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        caddieGlow
+                        caddieGlow(compact: compact)
                             .frame(maxWidth: .infinity)
-                            .padding(.top, 8)
+                            .padding(.top, compact ? 0 : 8)
                         Text(planTitle)
-                            .font(GFont.ui(32, weight: .semibold))
+                            .font(GFont.ui(compact ? 28 : 32, weight: .semibold))
                             .foregroundStyle(Color(hex: BrandHex.navy))
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 12)
+                            .padding(.top, compact ? 4 : 12)
                             .accessibilityIdentifier("ob-plan-title")
-                        Spacer(minLength: 12)
+                        Spacer(minLength: gap)
                         if items.count == 3 {
-                            planCard(1, items[0])
+                            planCard(1, items[0], compact: compact)
                                 .modifier(RiseIn(index: 0, reduceMotion: reduceMotion || voiceOver))
-                            Spacer(minLength: 10)
-                            planCard(2, items[1])
+                            Spacer(minLength: gap)
+                            planCard(2, items[1], compact: compact)
                                 .modifier(RiseIn(index: 1, reduceMotion: reduceMotion || voiceOver))
-                            Spacer(minLength: 10)
-                            planCard(3, items[2])
+                            Spacer(minLength: gap)
+                            planCard(3, items[2], compact: compact)
                                 .modifier(RiseIn(index: 2, reduceMotion: reduceMotion || voiceOver))
                         }
-                        Spacer(minLength: 12)
+                        Spacer(minLength: gap)
                     }
-                    .frame(minHeight: max(0, geo.size.height - 76), alignment: .top)
+                    .frame(minHeight: max(0, geo.size.height - 68), alignment: .top)
                 }
                 Button(action: finish) { pill("Entrar a Golflet") }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("ob-done")
-                    .padding(.top, 8)
-                    .padding(.bottom, 8)
+                    .padding(.top, compact ? 4 : 8)
+                    .padding(.bottom, compact ? 4 : 8)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var caddieGlow: some View {
+    private func caddieGlow(compact: Bool) -> some View {
         ZStack {
             RadialGradient(
                 colors: [Color(hex: BrandHex.navy).opacity(0.16), Color(hex: BrandHex.navy).opacity(0)],
                 center: .center,
                 startRadius: 8,
-                endRadius: 92
+                endRadius: compact ? 64 : 92
             )
-            .frame(width: 200, height: 168)
+            .frame(width: compact ? 150 : 200, height: compact ? 96 : 168)
             RobertoGuide(small: true)
+                .scaleEffect(compact ? 0.72 : 1)
+                .frame(height: compact ? 96 : 132)
+                .clipped()
         }
+        .frame(height: compact ? 96 : 168)
         .accessibilityElement(children: .contain)
     }
 
@@ -441,7 +447,7 @@ struct OnboardingView: View {
         return "\(first), armé tu inicio."
     }
 
-    private func planCard(_ n: Int, _ item: OnboardingPlanItem) -> some View {
+    private func planCard(_ n: Int, _ item: OnboardingPlanItem, compact: Bool) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Text("\(n)")
                 .font(GType.headline)
@@ -461,7 +467,7 @@ struct OnboardingView: View {
             Spacer(minLength: 8)
             planFigure(item)
         }
-        .padding(16)
+        .padding(compact ? 10 : 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
