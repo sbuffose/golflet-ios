@@ -129,7 +129,8 @@ enum ReconstructPayload {
             distanceM: number(row["distance_m"]),
             lie: row["lie"] as? String,
             positionLabel: text(row["position_label"]),
-            distanceLabel: text(row["distance_label"])
+            distanceLabel: text(row["distance_label"]),
+            intent: row["intent"] as? String
         )
     }
 

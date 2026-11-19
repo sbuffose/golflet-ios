@@ -278,4 +278,49 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertEqual(FixtureBag.clubs.map(\.code), ["DR", "3W", "HY", "7i", "PW", "SW", "PT"])
         XCTAssertEqual(FixtureBag.clubs.map(\.carry), [230, 210, 190, 150, 110, nil, nil])
     }
+
+    func testRecoveryShotDoesNotCloseTheHole() {
+        var state = TrackSession.State()
+        let tee = TrackPoint(lat: 1, lng: 1)
+        let flag = TrackPoint(lat: 1.01, lng: 1.01)
+        state = TrackSession.set(state, at: tee)
+        state = TrackSession.set(state, at: flag)
+        let punch = TrackPoint(lat: 1.004, lng: 1.004)
+        let marked = TrackSession.enter(state, at: punch, club: "7i", onCup: false, putting: false)
+        XCTAssertTrue(marked.recorded)
+        XCTAssertFalse(marked.holed)
+        XCTAssertEqual(marked.state.strokeCount, 1)
+        XCTAssertEqual(marked.state.ball, punch)
+        XCTAssertFalse(marked.state.marks.contains(where: \.holed))
+        var tagged = marked.state
+        tagged.marks[tagged.marks.count - 1].recovery = true
+        let next = TrackPoint(lat: 1.006, lng: 1.006)
+        let follow = TrackSession.enter(tagged, at: next, club: "PW", onCup: false)
+        XCTAssertEqual(follow.state.strokeCount, 2)
+        XCTAssertEqual(follow.state.ball, next)
+        XCTAssertFalse(follow.holed)
+        XCTAssertFalse(follow.state.marks.contains(where: \.holed))
+        let fact = TrackCard.fact(ReconstructionShot(
+            id: "recovery",
+            hole: 1,
+            club: "7i",
+            result: nil,
+            penaltyStrokes: 0,
+            lat: tee.lat,
+            lng: tee.lng,
+            endLat: punch.lat,
+            endLng: punch.lng,
+            distanceM: 40,
+            lie: "rough",
+            positionLabel: "Marcado a mano",
+            distanceLabel: "Distancia estimada",
+            intent: "recovery"
+        ))
+        XCTAssertFalse(fact.holed)
+        XCTAssertFalse(fact.putt)
+        XCTAssertFalse(fact.originGreen)
+        let card = TrackCard.derive(par: 4, shots: [fact])
+        XCTAssertEqual(card.putts.state, "unconfirmed")
+        XCTAssertNil(card.putts.value)
+    }
 }

@@ -130,11 +130,57 @@ struct GroupsView: View {
                     Text("\(group.memberCount) \(group.memberCount == 1 ? "miembro" : "miembros") · \(group.myRole.title)")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
+                        .accessibilityIdentifier("home-group-count-\(group.id)")
+                    memberFaces(group)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(p.ink3)
+            }
+        }
+    }
+}
+
+struct MemberFaceStack: View {
+    @Environment(\.palette) private var p
+    var members: [GroupMember]
+    var size: CGFloat = 26
+
+    var body: some View {
+        HStack(spacing: -8) {
+            ForEach(Array(members.prefix(4))) { member in
+                GroupPhotoView(url: member.photoURL, initials: member.initials, size: size)
+                    .overlay(Circle().stroke(p.surface, lineWidth: 2))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(memberNames(members))
+    }
+}
+
+func memberNames(_ members: [GroupMember]) -> String {
+    let names = members.map(\.name).filter { !$0.isEmpty }
+    switch names.count {
+    case 0: return ""
+    case 1: return names[0]
+    case 2: return "\(names[0]) y \(names[1])"
+    default:
+        let head = names.dropLast().joined(separator: ", ")
+        return "\(head) y \(names[names.count - 1])"
+    }
+}
+
+private func memberFaces(_ group: GolfletGroup) -> some View {
+    let people = group.members.filter { !$0.isPending }
+    return Group {
+        if !people.isEmpty {
+            HStack(spacing: 8) {
+                MemberFaceStack(members: people)
+                Text(memberNames(people))
+                    .font(GType.label)
+                    .foregroundStyle(Color.primary.opacity(0.7))
+                    .lineLimit(1)
             }
         }
     }

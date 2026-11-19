@@ -44,7 +44,6 @@ struct PlayHoleView: View {
     @State private var askDeleteShot = false
     @State private var movingShotID: String?
     @State private var recovery = false
-    @State private var conceded = false
     @State private var waterAsk = false
     @State private var droppedClientIDs: Set<String> = []
 
@@ -673,12 +672,7 @@ struct PlayHoleView: View {
                 }
                 if !holeClosed && !editingClosed {
                     markActions
-                    if conceded {
-                        Text("Hoyo cerrado. A buena cuenta un golpe y un putt, sin punto en el mapa.")
-                            .font(GType.label)
-                            .foregroundStyle(p.ink)
-                            .accessibilityIdentifier("play-conceded")
-                    } else if track.phase == .tracking { lostActions }
+                    if track.phase == .tracking { lostActions }
                 }
                 greenTools
                 if !holeClosed {
@@ -1047,14 +1041,14 @@ struct PlayHoleView: View {
                         .background(Capsule().fill(p.surface2))
                         .accessibilityIdentifier("play-undo")
                 }
-                Button("A buena") { Task { await concedePutt() } }
+                Button("A buena") { Task { await markRecovery() } }
                     .font(GType.label)
                     .foregroundStyle(p.ink)
                     .padding(.horizontal, 12)
                     .frame(minHeight: 44)
                     .background(Capsule().fill(p.surface2))
                     .accessibilityIdentifier("play-good")
-                    .accessibilityLabel("A buena, putt concedido")
+                    .accessibilityLabel("A buena, golpe de recuperación")
             }
             Button("Pelota perdida / fuera de límites") { markLost(provisional: false) }
                 .font(GType.label)
@@ -1067,35 +1061,16 @@ struct PlayHoleView: View {
         }
     }
 
-    private func concedePutt() async {
-        let draft = ShotDraft(
-            clientId: String(UUID().uuidString.prefix(32)),
-            hole: hole,
-            lat: nil,
-            lng: nil,
-            accuracyM: nil,
-            takenAt: Date(),
-            club: nil,
-            lie: nil,
-            result: "holed",
-            direction: nil,
-            length: nil,
-            mishit: false,
-            liveRoundId: liveRound.id,
-            intent: "conceded"
-        )
-        ShotQueue.enqueue(draft)
-        do {
-            let posted = try await model.api.postShots(liveRoundId: liveRound.id, drafts: [draft])
-            ShotQueue.remove(clientIds: [draft.clientId])
-            shots = posted.filter { shot in
-                guard let client = shot.clientId else { return true }
-                return !droppedClientIDs.contains(client)
-            }
-            conceded = true
-        } catch {
-            message = "Sin red. El golpe quedó en cola."
+    private func markRecovery() async {
+        let point = TrackPoint(lat: cursor.lat, lng: cursor.lng)
+        let outcome = TrackSession.enter(track, at: point, club: chosenClub, onCup: false, putting: false)
+        guard outcome.recorded else { return }
+        var state = outcome.state
+        if let last = state.marks.indices.last {
+            state.marks[last].recovery = true
         }
+        track = state
+        await hit(holed: false, penalty: false, intent: "recovery")
     }
 
     private func confirmEnter() async {
@@ -1389,6 +1364,16 @@ struct PlayHoleView: View {
                                     .font(GType.headline)
                                     .foregroundStyle(p.ink)
                                     .frame(width: 36, alignment: .leading)
+                                if shot.intent == "recovery" {
+                                    Text("A buena")
+                                        .font(GFont.ui(9, weight: .bold))
+                                        .foregroundStyle(Color.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(p.accent)
+                                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                                        .accessibilityIdentifier("play-recovery-tag")
+                                }
                                 Text(shot.lie.map { RecapCopy.lie($0) } ?? "—")
                                     .font(GType.label)
                                     .foregroundStyle(p.ink2)
@@ -2004,7 +1989,8 @@ struct PlayHoleView: View {
                 mishit: draft.mishit,
                 distanceM: nil,
                 distanceYd: nil,
-                toGreenYd: nil
+                toGreenYd: nil,
+                intent: draft.intent
             ))
         }
         refreshLiveActivity()
