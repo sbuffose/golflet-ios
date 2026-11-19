@@ -305,7 +305,8 @@ struct ClubStatsView: View {
                 .confirmationDialog("Este golpe", isPresented: Binding(get: { pendingShot != nil }, set: { if !$0 { pendingShot = nil } }), titleVisibility: .visible) {
                     Button("Borrar", role: .destructive) { Task { await commit(delete: true) } }
                     Button("Excluir de las distancias") { Task { await commit(delete: false) } }
-                    Button("Cancelar", role: .cancel) { pendingShot = nil }
+                    Button("Cancelar") { pendingShot = nil }
+                        .accessibilityIdentifier("shot-delete-cancel")
                 } message: {
                     Text(confirmCopy)
                 }
