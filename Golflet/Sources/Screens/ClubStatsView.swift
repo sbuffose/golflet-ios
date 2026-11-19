@@ -18,6 +18,7 @@ struct ClubStatsView: View {
         let club = detail?.club
         let bag = model.bag.first { ClubCode.code(for: $0.name) == code }
         GScreen(id: "screen-club-stats") {
+            ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     header(club)
@@ -56,6 +57,17 @@ struct ClubStatsView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
                 .padding(.bottom, 28)
+            }
+            .onChange(of: pendingShot?.id) { _, id in
+                guard id != nil else { return }
+                if RuntimeFlags.isUITesting {
+                    proxy.scrollTo("shot-ask", anchor: .bottom)
+                } else {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo("shot-ask", anchor: .bottom)
+                    }
+                }
+            }
             }
         }
         .accessibilityIdentifier("screen-club-stats")
@@ -265,54 +277,47 @@ struct ClubStatsView: View {
                     .font(GType.label)
                     .foregroundStyle(p.ink3)
             } else {
-                List {
+                VStack(spacing: 0) {
                     ForEach(Array((detail?.recent ?? []).enumerated()), id: \.element.id) { index, shot in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(shot.hole.map(String.init) ?? "—") · \(shotDay(shot.date))")
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                if let result = shot.result, !result.isEmpty {
-                                    Text(RecapCopy.result(result))
-                                        .font(GType.label)
-                                        .foregroundStyle(p.ink3)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(shot.hole.map(String.init) ?? "—") · \(shotDay(shot.date))")
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    if let result = shot.result, !result.isEmpty {
+                                        Text(RecapCopy.result(result))
+                                            .font(GType.label)
+                                            .foregroundStyle(p.ink3)
+                                    }
                                 }
+                                .contentShape(Rectangle())
+                                .onTapGesture { openRound(shot) }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityIdentifier("club-shot-\(index)")
+                                Spacer()
+                                Text(shot.distanceYd.map { "\($0) yd" } ?? "—")
+                                    .font(GType.headline)
+                                    .tabular()
+                                    .foregroundStyle(p.ink)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { openRound(shot) }
+                                Button("Borrar") { pendingShot = shot }
+                                    .font(GType.label)
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(p.accent)
+                                    .accessibilityIdentifier("club-shot-delete-\(index)")
                             }
-                            Spacer()
-                            Text(shot.distanceYd.map { "\($0) yd" } ?? "—")
-                                .font(GType.headline)
-                                .tabular()
-                                .foregroundStyle(p.ink)
-                            Button("Borrar") { pendingShot = shot }
-                                .font(GType.label)
-                                .foregroundStyle(p.accent)
-                                .accessibilityIdentifier("club-shot-delete-\(index)")
+                            if pendingShot?.id == shot.id {
+                                shotAsk(shot)
+                            }
                         }
-                        .contentShape(Rectangle())
-                        .onTapGesture { openRound(shot) }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button("Borrar", role: .destructive) { pendingShot = shot }
-                            Button("Excluir") { pendingShot = shot }
-                        }
+                        .padding(.vertical, 8)
                         .contextMenu {
                             Button("Borrar") { pendingShot = shot }
                             Button("Excluir de las distancias") { pendingShot = shot }
                         }
-                        .accessibilityIdentifier("club-shot-\(index)")
-                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
                     }
-                }
-                .listStyle(.plain)
-                .scrollDisabled(true)
-                .frame(height: CGFloat((detail?.recent.count ?? 1) * 72))
-                .confirmationDialog("Este golpe", isPresented: Binding(get: { pendingShot != nil }, set: { if !$0 { pendingShot = nil } }), titleVisibility: .visible) {
-                    Button("Borrar", role: .destructive) { Task { await commit(delete: true) } }
-                    Button("Excluir de las distancias") { Task { await commit(delete: false) } }
-                    Button("Cancelar", role: .cancel) { pendingShot = nil }
-                } message: {
-                    Text(confirmCopy)
                 }
             }
         }
@@ -325,9 +330,47 @@ struct ClubStatsView: View {
         return "\(parts[2]) \(FormatAR.webMonths[parts[1] - 1])"
     }
 
-    private var confirmCopy: String {
-        guard let shot = pendingShot else { return "" }
-        return ShotEditCopy.deleteLine(shotsOnHole: shot.shotsOnHole, postedStrokes: shot.postedStrokes) + "\n" + ShotEditCopy.excludeLine
+    private func shotAsk(_ shot: ClubRecentShot) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(ShotEditCopy.deleteLine(shotsOnHole: shot.shotsOnHole, postedStrokes: shot.postedStrokes))
+                .font(GFont.ui(13))
+                .foregroundStyle(p.ink2)
+            Text(ShotEditCopy.excludeLine)
+                .font(GFont.ui(13))
+                .foregroundStyle(p.ink2)
+            Button { Task { await commit(delete: true) } } label: {
+                Text("Borrar")
+                    .font(GType.headline)
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(hex: BrandHex.navy))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("shot-delete-confirm")
+            Button { Task { await commit(delete: false) } } label: {
+                Text("Excluir de las distancias")
+                    .font(GType.headline)
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(p.surface)
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color(hex: BrandHex.navy).opacity(0.25), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            Button { pendingShot = nil } label: {
+                Text("Cancelar")
+                    .font(GType.headline)
+                    .foregroundStyle(p.ink2)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("shot-delete-cancel")
+        }
+        .accessibilityIdentifier("shot-ask")
+        .id("shot-ask")
     }
 
     private func openRound(_ shot: ClubRecentShot) {

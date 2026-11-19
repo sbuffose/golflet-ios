@@ -133,6 +133,11 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
         font: getComputedStyle(document.querySelector("#ob-plan-title")!).fontFamily,
         cards: cards.length,
         gap: cards[1].top - cards[0].bottom,
+        gap2: cards[2].top - cards[1].bottom,
+        tall: Math.max(...cards.map(card => card.height)),
+        buttonBottom: document.querySelector("#ob-done")!.getBoundingClientRect().bottom,
+        viewH: window.innerHeight,
+        caddie: document.querySelector(".sx-caddie")!.getBoundingClientRect().height,
         hi: document.querySelector(".ob-hi")?.textContent,
         crest: document.querySelector(".ob-crest")?.getAttribute("src"),
         sub: document.querySelector("#ob-plan-card-1 small")?.textContent,
@@ -140,7 +145,11 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
     });
     assert.equal(plan.title, "Jugador, armé tu inicio.");
     assert.equal(plan.cards, 3);
-    assert.ok(plan.gap >= 12 && plan.gap <= 16, `separación ${plan.gap}`);
+    assert.ok(plan.tall < 140, `la tarjeta mide ${plan.tall}`);
+    assert.ok(Math.abs(plan.gap - plan.gap2) < 8, `las tarjetas no quedan parejas ${plan.gap}/${plan.gap2}`);
+    assert.ok(plan.gap > 24, `separación ${plan.gap}`);
+    assert.ok(plan.viewH - plan.buttonBottom < 28, `el botón queda a ${plan.viewH - plan.buttonBottom} del borde`);
+    assert.ok(plan.caddie >= 120, `el caddie mide ${plan.caddie}`);
     assert.equal(plan.hi, "3,1");
     assert.match(plan.crest || "", /118/);
     assert.match(plan.sub || "", /dónde se te escapan/);

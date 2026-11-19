@@ -19,10 +19,16 @@ test("the closed hole can be edited and the satellite note is gone", () => {
   assert.match(track, /Editar hoyo/);
   assert.match(track, /id="play-shot-editor"/);
   assert.doesNotMatch(track, /Satélite real/);
-  assert.match(sw, /golflet-v135/);
+  assert.match(sw, /golflet-v139/);
   const groups = readFileSync(new URL("../public/groups.js", import.meta.url), "utf8");
   assert.match(groups, /x\.v === rows\[i - 1\]\.v/);
   assert.match(groups, /Pocas tarjetas/);
   const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /#B4553F|#75AADB|#2E7D4F/i);
+  assert.match(css, /\.ob-plan li\{[^}]*flex:0 0 auto/);
+  assert.doesNotMatch(css, /\.ob-plan li\{[^}]*min-height/);
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /GolfWRX WITB/);
+  assert.match(app, /id="eq-spec"/);
+  assert.match(app, /id="eq-shots"/);
 });

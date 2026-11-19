@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UserNotifications
 
 /// Matrícula is the first screen. Sync runs on its own. The ficha is shown only after it lands.
@@ -48,6 +49,9 @@ struct OnboardingView: View {
         }
         .animation(motion, value: phaseKey)
         .onAppear(perform: prime)
+        .onChange(of: phaseKey) { _, _ in
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .onChange(of: model.hasPlayerSnapshot) { _, ready in
             guard phase == .syncing, ready else { return }
             landAfterSync()
@@ -181,6 +185,7 @@ struct OnboardingView: View {
             .padding(.top, 12)
             .padding(.bottom, 28)
         }
+        .scrollDismissesKeyboard(.immediately)
     }
 
     private var submitDisabled: Bool {
@@ -202,22 +207,24 @@ struct OnboardingView: View {
     }
 
     private var reveal: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Spacer(minLength: 4)
-            TypeLines(
-                lines: revealLines,
-                reduceMotion: reduceMotion || voiceOver,
-                ink: Color(hex: BrandHex.navy),
-                size: GType.section
-            )
-            Spacer(minLength: 16)
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                TypeLines(
+                    lines: revealLines,
+                    reduceMotion: reduceMotion || voiceOver,
+                    ink: Color(hex: BrandHex.navy),
+                    size: GType.section
+                )
+                .padding(.top, 12)
+            }
             Button {
                 beginQuestions()
             } label: {
-                pill("Seguir")
+                pill("Seguir").contentShape(Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("ob-reveal-next")
+            .padding(.top, 16)
             .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -375,43 +382,61 @@ struct OnboardingView: View {
 
     private var plan: some View {
         let items = OnboardingPlanCards.items(facts: facts, groupCount: model.groups.count)
-        return VStack(alignment: .leading, spacing: 0) {
-            caddieGlow
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
-            Text(planTitle)
-                .font(GType.sheetTitle)
-                .foregroundStyle(Color(hex: BrandHex.navy))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
-                .accessibilityIdentifier("ob-plan-title")
-            Spacer(minLength: 12)
-            VStack(spacing: 14) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    planCard(index + 1, item)
-                        .modifier(RiseIn(index: index, reduceMotion: reduceMotion || voiceOver))
+        return GeometryReader { geo in
+            let compact = geo.size.height < 640
+            let gap: CGFloat = compact ? 6 : 12
+            VStack(alignment: .leading, spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        caddieGlow(compact: compact)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, compact ? 0 : 8)
+                        Text(planTitle)
+                            .font(GFont.ui(compact ? 28 : 32, weight: .semibold))
+                            .foregroundStyle(Color(hex: BrandHex.navy))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, compact ? 4 : 12)
+                            .accessibilityIdentifier("ob-plan-title")
+                        Spacer(minLength: gap)
+                        if items.count == 3 {
+                            planCard(1, items[0], compact: compact)
+                                .modifier(RiseIn(index: 0, reduceMotion: reduceMotion || voiceOver))
+                            Spacer(minLength: gap)
+                            planCard(2, items[1], compact: compact)
+                                .modifier(RiseIn(index: 1, reduceMotion: reduceMotion || voiceOver))
+                            Spacer(minLength: gap)
+                            planCard(3, items[2], compact: compact)
+                                .modifier(RiseIn(index: 2, reduceMotion: reduceMotion || voiceOver))
+                        }
+                        Spacer(minLength: gap)
+                    }
+                    .frame(minHeight: max(0, geo.size.height - 68), alignment: .top)
                 }
+                Button(action: finish) { pill("Entrar a Golflet") }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("ob-done")
+                    .padding(.top, compact ? 4 : 8)
+                    .padding(.bottom, compact ? 4 : 8)
             }
-            Spacer(minLength: 12)
-            Button(action: finish) { pill("Entrar a Golflet") }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("ob-done")
-                .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var caddieGlow: some View {
+    private func caddieGlow(compact: Bool) -> some View {
         ZStack {
             RadialGradient(
                 colors: [Color(hex: BrandHex.navy).opacity(0.16), Color(hex: BrandHex.navy).opacity(0)],
                 center: .center,
                 startRadius: 8,
-                endRadius: 92
+                endRadius: compact ? 64 : 92
             )
-            .frame(width: 180, height: 140)
+            .frame(width: compact ? 150 : 200, height: compact ? 96 : 168)
             RobertoGuide(small: true)
+                .scaleEffect(compact ? 0.72 : 1)
+                .frame(height: compact ? 96 : 132)
+                .clipped()
         }
+        .frame(height: compact ? 96 : 168)
         .accessibilityElement(children: .contain)
     }
 
@@ -422,7 +447,7 @@ struct OnboardingView: View {
         return "\(first), armé tu inicio."
     }
 
-    private func planCard(_ n: Int, _ item: OnboardingPlanItem) -> some View {
+    private func planCard(_ n: Int, _ item: OnboardingPlanItem, compact: Bool) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Text("\(n)")
                 .font(GType.headline)
@@ -442,7 +467,7 @@ struct OnboardingView: View {
             Spacer(minLength: 8)
             planFigure(item)
         }
-        .padding(16)
+        .padding(compact ? 10 : 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(p.surface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -454,28 +479,40 @@ struct OnboardingView: View {
     private func planFigure(_ item: OnboardingPlanItem) -> some View {
         switch item.kind {
         case .index:
-            Text(item.figure)
-                .font(GFont.ui(32, weight: .semibold))
-                .foregroundStyle(Color(hex: BrandHex.navy))
-                .accessibilityIdentifier("ob-plan-index")
-        case .club:
-            if item.figure == "–" {
-                Text("–")
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(item.figure)
                     .font(GFont.ui(32, weight: .semibold))
                     .foregroundStyle(Color(hex: BrandHex.navy))
-            } else if let url = SyncClubIdentity.logoURL(planLogo(facts?.clubCode)) {
-                AsyncImage(url: url) { phase in
-                    if case .success(let image) = phase {
-                        image.resizable().scaledToFit()
-                    } else {
-                        planMonogram(item.figure)
+                    .accessibilityIdentifier("ob-plan-index")
+                planSpark
+            }
+        case .club:
+            VStack(alignment: .trailing, spacing: 4) {
+                if item.figure == "–" {
+                    Text("–")
+                        .font(GFont.ui(32, weight: .semibold))
+                        .foregroundStyle(Color(hex: BrandHex.navy))
+                } else if let url = SyncClubIdentity.logoURL(planLogo(facts?.clubCode)) {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().scaledToFit()
+                        } else {
+                            planMonogram(item.figure)
+                        }
                     }
+                    .frame(width: 52, height: 52)
+                    .background(Color.white)
+                    .clipShape(Circle())
+                } else {
+                    planMonogram(item.figure)
                 }
-                .frame(width: 52, height: 52)
-                .background(Color.white)
-                .clipShape(Circle())
-            } else {
-                planMonogram(item.figure)
+                if item.figure != "–" {
+                    Text(item.figure)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 96, alignment: .trailing)
+                }
             }
         case .friends:
             let faces = planFaces
@@ -484,13 +521,47 @@ struct OnboardingView: View {
                     .font(GFont.ui(32, weight: .semibold))
                     .foregroundStyle(Color(hex: BrandHex.navy))
             } else {
-                HStack(spacing: -8) {
-                    ForEach(faces, id: \.id) { member in
-                        GroupPhotoView(url: member.photoURL, initials: member.initials, size: 32)
+                let names = faces.compactMap { $0.name.split(separator: " ").first.map(String.init) }.filter { !$0.isEmpty }
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: -8) {
+                        ForEach(faces, id: \.id) { member in
+                            GroupPhotoView(url: member.photoURL, initials: member.initials, size: 32)
+                        }
+                    }
+                    .accessibilityIdentifier("ob-plan-faces")
+                    if !names.isEmpty {
+                        Text(names.joined(separator: " · "))
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .multilineTextAlignment(.trailing)
                     }
                 }
-                .accessibilityIdentifier("ob-plan-faces")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var planSpark: some View {
+        let ys = model.officialHistory.map(\.handicap).filter(\.isFinite)
+        if ys.count >= 2 {
+            let width: CGFloat = 76
+            let height: CGFloat = 28
+            let pad: CGFloat = 2
+            let low = ys.min() ?? 0
+            let high = ys.max() ?? 0
+            let span = (high - low) == 0 ? 1 : (high - low)
+            Canvas { context, _ in
+                var path = Path()
+                for (index, value) in ys.enumerated() {
+                    let x = pad + CGFloat(index) * (width - pad * 2) / CGFloat(ys.count - 1)
+                    let y = pad + CGFloat(high - value) * (height - pad * 2) / CGFloat(span)
+                    let point = CGPoint(x: x, y: y)
+                    if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                }
+                context.stroke(path, with: .color(Color(hex: BrandHex.navy)), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+            }
+            .frame(width: width, height: height)
+            .accessibilityHidden(true)
         }
     }
 
@@ -864,7 +935,7 @@ private struct TypeLines: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.45), value: shown)
         .task(id: lines.joined(separator: "\n")) {
-            if reduceMotion {
+            if reduceMotion || RuntimeFlags.isUITesting {
                 shown = lines.count
                 return
             }

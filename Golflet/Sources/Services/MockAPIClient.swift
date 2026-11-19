@@ -180,7 +180,7 @@ struct MockAPIClient: GolfletAPI {
             courses: courses,
             tees: tees,
             holeStats: stats,
-            bag: FixtureBag.clubs,
+            bag: ProcessInfo.processInfo.arguments.contains("-ui-testing-bag-models") ? FixtureBag.modeled : FixtureBag.clubs,
             hiHistory: Self.handicapHistory(rounds),
             teeTimes: linked ? (try? await teeTimes()) ?? [] : [],
             profesores: linked ? (try? await profesores()) ?? [] : []
@@ -535,7 +535,8 @@ struct MockAPIClient: GolfletAPI {
             Self.sessionLock.lock()
             Self.progressByID[progressID] = step
             Self.sessionLock.unlock()
-            try? await Task.sleep(nanoseconds: pause)
+            let hold = paced && step.stage == .handicap ? pause + 1_200_000_000 : pause
+            try? await Task.sleep(nanoseconds: hold)
         }
     }
 

@@ -11,32 +11,13 @@ struct HcpImpactSheet: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 6) {
-                        GOverline(text: impact.estimated ? "Estimado" : "Oficial")
-                        GTitle(text: "Impacto de handicap")
+                        GOverline(text: "Handicap Index")
+                        GTitle(text: "Impacto en el hándicap")
                     }
-                    HStack(spacing: 12) {
-                        indexCard("Índice al inicio", impact.start, impact.startDate, "hcp-start")
-                        indexCard("Ahora", impact.now, impact.nowDate, "hcp-now")
-                    }
-                    if impact.showsDelta {
-                        GCard(radius: 18, padding: 16) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(impact.delta <= 0 ? "Bajó" : "Subió")
-                                    .font(GType.label)
-                                    .foregroundStyle(p.ink2)
-                                Text("\(impact.delta < 0 ? "↓" : "↑") \(FormatAR.one(abs(impact.delta)))")
-                                    .font(GType.statM)
-                                    .tabular()
-                                    .foregroundStyle(impact.delta <= 0 ? p.positive : p.negative)
-                                if let since = impact.startDate {
-                                    Text("Desde \(FormatAR.webMonthYear(since)). El mismo tramo que Inicio.")
-                                        .font(GType.label)
-                                        .foregroundStyle(p.ink3)
-                                }
-                            }
-                        }
-                        .accessibilityIdentifier("hcp-delta")
-                    }
+                    impactHero(impact)
+                    Text(impactFoot(impact))
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
                     if impact.series.count > 1 {
                         chart(impact.series)
                     }
@@ -64,25 +45,61 @@ struct HcpImpactSheet: View {
         .safeAreaInset(edge: .top) { closeBar(dismiss: dismiss, id: "close-hcp-impact") }
     }
 
-    private func indexCard(_ title: String, _ value: Double?, _ date: Date?, _ id: String) -> some View {
-        GCard(radius: 18, padding: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(GType.label)
-                    .foregroundStyle(p.ink2)
-                Text(value.map(FormatAR.one) ?? "—")
-                    .font(GType.statM)
-                    .tabular()
-                    .foregroundStyle(p.ink)
-                if let date {
-                    Text(FormatAR.webDay(date))
-                        .font(GType.label)
-                        .foregroundStyle(p.ink3)
+    private func impactHero(_ impact: HcpImpact) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            heroColumn("Primer registro", impact.start, impact.startDate, "hcp-start", trailing: false)
+            if impact.showsDelta {
+                VStack(spacing: 2) {
+                    Text("\(impact.delta < 0 ? "↓" : impact.delta > 0 ? "↑" : "")\(FormatAR.one(abs(impact.delta)))")
+                        .font(GFont.ui(20, weight: .bold))
+                        .tabular()
+                        .foregroundStyle(Color(hex: impact.delta <= 0 ? 0xA8D5BA : 0xEBA593))
+                    Text(impact.delta < 0 ? "bajó" : impact.delta > 0 ? "subió" : "igual")
+                        .font(GFont.ui(12))
+                        .foregroundStyle(Color.white.opacity(0.75))
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("hcp-delta")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            heroColumn("Ahora", impact.now, impact.nowDate, "hcp-now", trailing: true)
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity)
+        .background(Color(hex: BrandHex.navy))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func heroColumn(_ title: String, _ value: Double?, _ date: Date?, _ id: String, trailing: Bool) -> some View {
+        VStack(alignment: trailing ? .trailing : .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(GFont.ui(12, weight: .semibold))
+                .foregroundStyle(Color(hex: BrandHex.red))
+            Text(value.map(FormatAR.one) ?? "—")
+                .font(GFont.ui(36, weight: .semibold))
+                .tabular()
+                .foregroundStyle(Color(hex: 0xF6F7F9))
+            Text(date.map(FormatAR.webDay) ?? "")
+                .font(GFont.ui(12))
+                .foregroundStyle(Color.white.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity, alignment: trailing ? .trailing : .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(id)
+    }
+
+    private func impactFoot(_ impact: HcpImpact) -> String {
+        let source = impact.estimated
+            ? "Estimado: mejores 8 de las últimas 20 con los diferenciales que calcula Golflet."
+            : "Índice oficial que publica tu club."
+        if let since = impact.startDate {
+            return "\(source) Es el mismo tramo que el número de Inicio. Desde \(FormatAR.webMonthYear(since))."
+        }
+        return source
     }
 
     private func chart(_ series: [HIPoint]) -> some View {
