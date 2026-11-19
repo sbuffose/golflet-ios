@@ -385,14 +385,13 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 8)
                 .accessibilityIdentifier("ob-plan-title")
-            Spacer(minLength: 12)
             VStack(spacing: 14) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     planCard(index + 1, item)
                         .modifier(RiseIn(index: index, reduceMotion: reduceMotion || voiceOver))
                 }
             }
-            Spacer(minLength: 12)
+            .padding(.top, 16)
             Button(action: finish) { pill("Entrar a Golflet") }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ob-done")
@@ -454,28 +453,40 @@ struct OnboardingView: View {
     private func planFigure(_ item: OnboardingPlanItem) -> some View {
         switch item.kind {
         case .index:
-            Text(item.figure)
-                .font(GFont.ui(32, weight: .semibold))
-                .foregroundStyle(Color(hex: BrandHex.navy))
-                .accessibilityIdentifier("ob-plan-index")
-        case .club:
-            if item.figure == "–" {
-                Text("–")
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(item.figure)
                     .font(GFont.ui(32, weight: .semibold))
                     .foregroundStyle(Color(hex: BrandHex.navy))
-            } else if let url = SyncClubIdentity.logoURL(planLogo(facts?.clubCode)) {
-                AsyncImage(url: url) { phase in
-                    if case .success(let image) = phase {
-                        image.resizable().scaledToFit()
-                    } else {
-                        planMonogram(item.figure)
+                    .accessibilityIdentifier("ob-plan-index")
+                planSpark
+            }
+        case .club:
+            VStack(alignment: .trailing, spacing: 4) {
+                if item.figure == "–" {
+                    Text("–")
+                        .font(GFont.ui(32, weight: .semibold))
+                        .foregroundStyle(Color(hex: BrandHex.navy))
+                } else if let url = SyncClubIdentity.logoURL(planLogo(facts?.clubCode)) {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().scaledToFit()
+                        } else {
+                            planMonogram(item.figure)
+                        }
                     }
+                    .frame(width: 52, height: 52)
+                    .background(Color.white)
+                    .clipShape(Circle())
+                } else {
+                    planMonogram(item.figure)
                 }
-                .frame(width: 52, height: 52)
-                .background(Color.white)
-                .clipShape(Circle())
-            } else {
-                planMonogram(item.figure)
+                if item.figure != "–" {
+                    Text(item.figure)
+                        .font(GType.label)
+                        .foregroundStyle(p.ink2)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 96, alignment: .trailing)
+                }
             }
         case .friends:
             let faces = planFaces
@@ -484,13 +495,47 @@ struct OnboardingView: View {
                     .font(GFont.ui(32, weight: .semibold))
                     .foregroundStyle(Color(hex: BrandHex.navy))
             } else {
-                HStack(spacing: -8) {
-                    ForEach(faces, id: \.id) { member in
-                        GroupPhotoView(url: member.photoURL, initials: member.initials, size: 32)
+                let names = faces.compactMap { $0.name.split(separator: " ").first.map(String.init) }.filter { !$0.isEmpty }
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: -8) {
+                        ForEach(faces, id: \.id) { member in
+                            GroupPhotoView(url: member.photoURL, initials: member.initials, size: 32)
+                        }
+                    }
+                    .accessibilityIdentifier("ob-plan-faces")
+                    if !names.isEmpty {
+                        Text(names.joined(separator: " · "))
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .multilineTextAlignment(.trailing)
                     }
                 }
-                .accessibilityIdentifier("ob-plan-faces")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var planSpark: some View {
+        let ys = model.officialHistory.map(\.handicap).filter(\.isFinite)
+        if ys.count >= 2 {
+            let width: CGFloat = 76
+            let height: CGFloat = 28
+            let pad: CGFloat = 2
+            let low = ys.min() ?? 0
+            let high = ys.max() ?? 0
+            let span = (high - low) == 0 ? 1 : (high - low)
+            Canvas { context, _ in
+                var path = Path()
+                for (index, value) in ys.enumerated() {
+                    let x = pad + CGFloat(index) * (width - pad * 2) / CGFloat(ys.count - 1)
+                    let y = pad + CGFloat(high - value) * (height - pad * 2) / CGFloat(span)
+                    let point = CGPoint(x: x, y: y)
+                    if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                }
+                context.stroke(path, with: .color(Color(hex: BrandHex.navy)), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+            }
+            .frame(width: width, height: height)
+            .accessibilityHidden(true)
         }
     }
 

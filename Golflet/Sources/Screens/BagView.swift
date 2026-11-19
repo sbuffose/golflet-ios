@@ -562,6 +562,22 @@ struct ClubGearSheet: View {
                     Button("Nombre", action: onRename)
                         .font(GType.headline)
                         .accessibilityIdentifier("equip-rename")
+                    Text("Distancias")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Carry").font(GType.label).foregroundStyle(p.ink3)
+                            Text(club.carry.map(String.init) ?? "–").font(GType.sheetTitle).foregroundStyle(p.ink)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Total").font(GType.label).foregroundStyle(p.ink3)
+                            Text(club.total.map(String.init) ?? "–").font(GType.sheetTitle).foregroundStyle(p.ink)
+                        }
+                    }
+                    Text("Carry y total son los de tu bolsa, en yardas.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
                     Text("Lo usan")
                         .font(GType.section)
                         .foregroundStyle(p.ink)
@@ -576,15 +592,20 @@ struct ClubGearSheet: View {
                             .foregroundStyle(p.ink2)
                     } else {
                         ForEach(users) { player in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(player.name)
-                                    .font(GType.headline)
-                                    .foregroundStyle(p.ink)
-                                Text("\(player.tour) · \(player.whenLabel)")
-                                    .font(GType.label)
-                                    .foregroundStyle(p.ink3)
-                                Link(player.sourceURL.host ?? "Fuente", destination: player.sourceURL)
-                                    .font(GType.label)
+                            Link(destination: player.sourceURL) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(player.name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    Text(player.tour)
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink3)
+                                    Text("GolfWRX WITB · \(player.whenLabel)")
+                                        .font(GType.label)
+                                        .foregroundStyle(Color(hex: BrandHex.navy))
+                                        .underline()
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .accessibilityIdentifier("eq-user-\(player.name.split(separator: " ").last.map(String.init)?.lowercased() ?? "player")")
                         }
