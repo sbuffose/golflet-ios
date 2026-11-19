@@ -1867,7 +1867,12 @@ final class GolfletUITests: XCTestCase {
             if del.isHittable { del.tap() } else { del.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
             XCTAssertTrue(app.buttons["Excluir de las distancias"].waitForExistence(timeout: 3))
             shot("golpe-confirmar")
-            app.buttons["Cancelar"].tap()
+            let cancel = app.buttons["shot-delete-cancel"]
+            if cancel.waitForExistence(timeout: 2) {
+                if cancel.isHittable { cancel.tap() } else { cancel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            } else {
+                app.buttons["Cancelar"].tap()
+            }
         }
 
         app.terminate()
