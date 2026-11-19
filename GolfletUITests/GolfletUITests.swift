@@ -1918,6 +1918,19 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(first(app, "ob-plan-title").waitForExistence(timeout: 6), "No llegó Armé tu inicio")
         XCTAssertTrue(first(app, "ob-plan-card-1").exists)
         shot("arme-tu-inicio")
+
+        app.terminate()
+        app.launchArguments = ["-ui-testing", "-ui-testing-review", "-ui-testing-bag-models"]
+        app.launch()
+        XCTAssertTrue(waitFor(app, "screen-inicio", timeout: 10))
+        tapTab(app, "Mi bolsa")
+        XCTAssertTrue(waitFor(app, "screen-bolsa", timeout: 6))
+        shot("bolsa-modelos")
+        let driver = first(app, "equip-Driver")
+        XCTAssertTrue(driver.waitForExistence(timeout: 4))
+        if driver.isHittable { driver.tap() } else { driver.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(first(app, "eq-user-zalatoris").waitForExistence(timeout: 4))
+        shot("bolsa-driver")
     }
 
     private func scorecardSheetOpen(_ app: XCUIApplication) -> Bool {

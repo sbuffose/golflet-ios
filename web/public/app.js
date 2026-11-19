@@ -91,6 +91,7 @@ const MISS = {
   course: { k: 'Cancha', source: 'Sale de la cancha que elegís.', why: 'Todavía no hay una cancha elegida.', action: 'Elegir cancha', go: '#/jugar' },
   club: { k: 'Palo', source: 'Sale de tu bolsa.', why: 'La bolsa está vacía.', action: 'Agregar palo', go: '#/equipo/nuevo' },
   ball: { k: 'Pelota', source: 'La cargás vos en la cuenta.', why: 'No hay una pelota elegida.', action: 'Elegir pelota', go: '#/pelota' },
+  players: { k: 'Lo usan', source: 'Es un WITB público, con fecha, de PGA Tour, Titleist o GolfWRX.', why: 'No tenemos un jugador de tour verificado con este mismo modelo.', action: '', go: '' },
   handicap: { k: 'Hándicap', source: 'Sale de la matrícula del club.', why: 'No hay una matrícula vinculada.', action: 'Vincular matrícula', go: '#/vincular' },
   worst: { k: 'Peor ronda', source: 'Es la tarjeta de mayor gross del período.', why: 'Hay una sola tarjeta, así que no hay una peor distinta.', action: '', go: '' },
   geo: { k: 'Geometría', source: 'Sale de un trazado verificado del tee al centro del green.', why: 'Este hoyo no tiene geometría verificada. No marco un punto inventado.', action: '', go: '' },
@@ -1936,6 +1937,22 @@ let BCAT = null;
 const bagCat = async () => BCAT || (BCAT = await api('/api/my-clubs/catalog'));
 const CATL = { driver:'Driver', fairway:'Maderas', hybrid:'Híbridos', iron:'Hierros', wedge:'Wedges', putter:'Putter' };
 const eqLine = c => c.brand ? `${esc(c.brand)}${c.model?' · '+esc(c.model):''}` : '<span class="eq-none">Sin marca ni modelo</span>';
+const eqGear = (brand, model, category) => {
+  const g = window.GolfletGear;
+  if (!g) return { thumb: { src: '/clubs/silhouettes/iron.svg', alt: 'Silueta', kind: 'silhouette' }, users: [] };
+  return { thumb: g.thumb(brand, model, category), users: g.users(brand, model, category) };
+};
+const eqThumb = (club, category) => {
+  const gear = eqGear(club.brand, club.model, category).thumb;
+  return `<img class="eq-thumb" src="${esc(gear.src)}" alt="" data-kind="${gear.kind}">`;
+};
+const eqUsers = (brand, model, category) => {
+  const users = eqGear(brand, model, category).users;
+  const rows = users.length
+    ? users.map(u => `<a class="eq-player" id="eq-user-${esc(u.id)}" href="${esc(u.sourceUrl)}"><b>${esc(u.name)}</b><span>${esc(u.tour)} · ${esc(u.whenLabel)}</span></a>`).join('')
+    : `<p class="eq-player" id="eq-users-empty">${miss('players')}</p>`;
+  return `<div class="eq-use" id="eq-users"><div class="section"><h2>Lo usan</h2></div>${rows}</div>`;
+};
 const eqCode = c => encodeURIComponent(c.code);
 async function loadEquipList(){
   const el = $('#equip'); if (!el) return;
@@ -1947,7 +1964,7 @@ async function loadEquipList(){
     const done = clubs.filter(c => c.brand).length, nm = x => String(x || '').trim().toLowerCase();
     const bagOf = c => { const ks = [typ(c.code)?.bag, c.label, c.code].filter(Boolean).map(nm); return (G.bag || []).find(b => ks.includes(nm(b.club))); };
     el.innerHTML = `<p class="foot" style="margin:0 0 10px">${clubs.length} palos · ${done ? `${done} con marca y modelo` : 'cargá marca y modelo de cada uno'}.</p>
-      <div class="list">${[...Object.keys(CATL), 'otros'].filter(k => groups[k]).map(k => groups[k].map(c => { const b = bagOf(c), i = b ? G.bag.indexOf(b) : -1; return `<div class="row eq-row${c.enabled===false?' eq-off':''}"><a class="eq-a" href="#/equipo/${eqCode(c)}"><span class="eq-code num">${esc(c.code)}</span><div class="body"><div class="t">${esc(wedgeFace(c))}</div><div class="s">${eqLine(c)}${c.enabled===false?' · oculto al marcar golpes':''}</div></div></a>${(isPutterName(c.code) || isPutterName(c.label) || typ(c.code)?.category === 'putter') ? '<span class="eq-yd">Sin yardas</span>' : `<label class="eq-yd" title="Carry en yardas"><input class="num" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" maxlength="3" data-eqc="${esc(c.code)}" value="${b?.carry ?? ''}" placeholder="—" aria-label="Carry de ${esc(c.label)} en yardas"><span>yd</span></label>`}<a class="eq-ch" href="#/equipo/${eqCode(c)}" tabindex="-1" aria-hidden="true">${ICON.chev}</a></div>`; }).join('')).join('')}</div>`;
+      <div class="list">${[...Object.keys(CATL), 'otros'].filter(k => groups[k]).map(k => groups[k].map(c => { const b = bagOf(c), i = b ? G.bag.indexOf(b) : -1; return `<div class="row eq-row${c.enabled===false?' eq-off':''}"><a class="eq-a" href="#/equipo/${eqCode(c)}">${eqThumb(c, typ(c.code)?.category)}<div class="body"><div class="t">${esc(wedgeFace(c))}</div><div class="s">${eqLine(c)}${c.enabled===false?' · oculto al marcar golpes':''}</div></div></a>${(isPutterName(c.code) || isPutterName(c.label) || typ(c.code)?.category === 'putter') ? '<span class="eq-yd">Sin yardas</span>' : `<label class="eq-yd" title="Carry en yardas"><input class="num" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" maxlength="3" data-eqc="${esc(c.code)}" value="${b?.carry ?? ''}" placeholder="—" aria-label="Carry de ${esc(c.label)} en yardas"><span>yd</span></label>`}<a class="eq-ch" href="#/equipo/${eqCode(c)}" tabindex="-1" aria-hidden="true">${ICON.chev}</a></div>`; }).join('')).join('')}</div>`;
     /* t223u: the carry right on the row (the planner reads it from Mi bolsa: total if you typed one, else carry). Save on blur / Enter, no detail screen. */
     el.querySelectorAll('input[data-eqc]').forEach(inp => {
       inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } };
@@ -2085,9 +2102,11 @@ async function loadEquipo(code, edit){
     const typ = c => cat.types.find(t => t.code.toLowerCase() === c.toLowerCase());
     if (cur && !edit){
       const t = typ(cur.code), bl = t ? t.bag : cur.label, row = bl && (G.bag||[]).find(b => b.club === bl);
-      el.innerHTML = `<div class="eq-hero"><div class="overline">${esc(CATL[t?.category] || 'Palo')}</div><div class="eq-name">${esc(cur.label)}</div>
+      const gear = eqGear(cur.brand, cur.model, t?.category);
+      el.innerHTML = `<div class="eq-hero"><img class="eq-hero-photo" id="eq-photo" src="${esc(gear.thumb.src)}" alt="" data-kind="${gear.thumb.kind}"><div class="overline">${esc(CATL[t?.category] || 'Palo')}</div><div class="eq-name">${esc(cur.label)}</div>
           <div class="eq-bm">${cur.brand ? `<b>${esc(cur.brand)}</b>${cur.model ? `<span>${esc(cur.model)}</span>` : '<span>Modelo sin cargar</span>'}` : '<span>Sin marca ni modelo</span>'}</div>
           <div class="eq-tags">${cur.loft?`<span>Loft <b class="num">${String(cur.loft).replace('.',',')}°</b></span>`:''}<span>Código <b>${esc(cur.code)}</b></span>${cur.model_custom?'<span>Modelo escrito a mano</span>':''}</div></div>
+        ${eqUsers(cur.brand, cur.model, t?.category)}
         ${row ? `<div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div><div class="grid3"><div class="card mini stat"><div class="k">Carry</div><div class="v num">${row.carry ?? '—'}</div></div><div class="card mini stat"><div class="k">Total</div><div class="v num">${row.total ?? '—'}</div></div><a class="card mini stat vx-tap" href="#/palo/${eqCode(cur)}"><div class="k">Con GPS</div><div class="v" style="font-size:calc(15px*var(--ts,1))">Ver golpes ›</div></a></div>` : ''}
         <div class="tt-acts"><a class="btn" href="#/equipo/${eqCode(cur)}/editar">Editar marca y modelo</a><button type="button" class="btn ghost danger" id="eqdel">Sacar de la bolsa</button></div>
         <p class="foot">${cur.enabled===false?'Oculto en la lista de palos al marcar golpes. ':''}Al sacarlo, también se va su fila de distancias. Los golpes con GPS que ya marcaste con este palo se conservan.</p>`;
