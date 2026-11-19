@@ -1263,6 +1263,11 @@ final class GolfletUITests: XCTestCase {
         app.descendants(matching: .any)[id].firstMatch
     }
 
+    private func dragSheet(_ app: XCUIApplication) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42)))
+    }
+
     @discardableResult
     private func tapOnboarding(_ app: XCUIApplication, _ id: String) -> Bool {
         let element = first(app, id)
@@ -1954,12 +1959,12 @@ final class GolfletUITests: XCTestCase {
         let driver = first(app, "equip-Driver")
         XCTAssertTrue(driver.waitForExistence(timeout: 4))
         driver.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        XCTAssertTrue(first(app, "eq-users").waitForExistence(timeout: 6), "No se abrió Lo usan")
+        XCTAssertTrue(first(app, "equip-sheet").waitForExistence(timeout: 6), "No se abrió la ficha")
+        let users = first(app, "eq-users")
+        for _ in 0..<4 where !users.exists { dragSheet(app) }
+        XCTAssertTrue(users.waitForExistence(timeout: 2), "No se abrió Lo usan")
         let zalatoris = first(app, "eq-user-zalatoris")
-        for _ in 0..<4 where !zalatoris.exists {
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
-            start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42)))
-        }
+        for _ in 0..<4 where !zalatoris.exists { dragSheet(app) }
         XCTAssertTrue(zalatoris.waitForExistence(timeout: 2), "Falta Zalatoris en Lo usan")
         shot("bolsa-driver")
     }

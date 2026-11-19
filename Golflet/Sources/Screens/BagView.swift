@@ -261,6 +261,7 @@ struct BagView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(club.face), \(club.equipmentLine)")
@@ -547,6 +548,7 @@ struct ClubGearSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    GProbe(id: "equip-sheet", label: club.face)
                     ClubThumb(brand: club.brand, model: club.modelName, face: face)
                         .frame(width: 120, height: 120)
                         .background(Color(hex: 0xF4F6F8))
