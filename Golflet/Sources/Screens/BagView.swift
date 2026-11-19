@@ -261,11 +261,10 @@ struct BagView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(club.face), \(club.equipmentLine)")
-                .accessibilityIdentifier("equip-\(club.name)")
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(club.face), \(club.equipmentLine)")
+        .accessibilityIdentifier("equip-\(club.name)")
     }
 
     private func saveName(_ club: BagClub) async {
