@@ -711,21 +711,22 @@
           if (landed && prevKnown && hav(prevKnown, landed) > 3) prevKnown = landed;
         }
         const lost = s.result === 'lost';
-        const conceded = s.intent === 'conceded';
-        return { id: s.id, club: conceded ? 'A buena' : (penalty ? 'Penalidad' : (lost ? 'Perdida' : (clubLabel(s.club) || s.club))), yards: conceded || lost || penalty || !(label.text && label.kind !== 'penalty') ? '' : label.text, unknown: !conceded && !lost && !penalty && label.kind === 'missing', n: i + 1, sacada: s.intent === 'recovery' };
+        const recovery = s.intent === 'recovery';
+        return { id: s.id, club: penalty ? 'Penalidad' : (lost ? 'Perdida' : (clubLabel(s.club) || s.club || '—')), yards: lost || penalty || !(label.text && label.kind !== 'penalty') ? '' : label.text, unknown: !lost && !penalty && label.kind === 'missing', n: i + 1, abuenatag: recovery };
       });
       const railSource = savedRail.length ? savedRail : S.track.marks.filter(m => m.countsStroke).map((m, i) => {
         const prev = playingPoint(S.track.marks.slice(0, S.track.marks.indexOf(m)));
         const meters = prev ? hav(prev, { lat: m.lat, lng: m.lng }) : null;
         const putt = !m.penalty && !m.lost && (m.putt || /putt/i.test(String(m.club || '')));
-        return { id: m.id, club: m.lost ? 'Perdida' : m.penalty ? 'Penalidad +1' : (putt ? `Putt ${i + 1}` : (clubLabel(m.club) || m.club)), yards: m.penalty || m.lost ? '' : (putt && meters != null ? `${fmtM(meters)} m` : (meters == null ? '' : `${yd(meters)} yd`)), unknown: !m.penalty && !m.lost && !R().knownPoint(m.lat, m.lng), n: m.n || i + 1, sacada: !!m.recovery };
+        return { id: m.id, club: m.lost ? 'Perdida' : m.penalty ? 'Penalidad +1' : (putt && !m.recovery ? `Putt ${i + 1}` : (clubLabel(m.club) || m.club || '—')), yards: m.penalty || m.lost ? '' : (putt && !m.recovery && meters != null ? `${fmtM(meters)} m` : (meters == null ? '' : `${yd(meters)} yd`)), unknown: !m.penalty && !m.lost && !R().knownPoint(m.lat, m.lng), n: m.n || i + 1, abuenatag: !!m.recovery };
       });
       const railOpen = S.railHole === S.hole && !!S.railOpen;
       const railMany = railSource.length > 3;
       const railKeep = railMany && !railOpen ? new Set(railSource.slice(-3).map(s => s.n)) : null;
       const railMore = railMany ? `<button type="button" class="tk-shot tk-more" id="play-shots-more">${railOpen ? 'Menos' : `+${railSource.length - 3}`}</button>` : '';
-      const railBtn = s => `<button type="button" class="tk-shot" id="play-shot-${s.n}" data-shot="${s.n}"${railKeep && !railKeep.has(s.n) ? ' hidden' : ''}>${s.n}. ${esc(s.club || '—')}${s.sacada ? ' · Sacada' : ''}${s.yards ? ` · ${esc(s.yards)}` : s.unknown ? ' · Sin ubicación' : ''}</button>`;
-      const rail = retro && railSource.length ? `<div class="tk-shots-rail" id="rc-shots" aria-label="Golpes">${railMore}${railSource.map(railBtn).join('')}</div>` : (!retro ? `<div class="tk-shots-rail" aria-label="Golpes">${marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? 'Drop' : m.penalty ? 'P' : m.holed ? 'Hoyo' : (m.club ? esc(clubLabel(m.club)) : (i + 1))}</span>`).join('')}</div>` : '');
+      const abuenatag = s => s.abuenatag ? '<span class="tk-abuena">A buena</span>' : '';
+      const railBtn = s => `<button type="button" class="tk-shot" id="play-shot-${s.n}" data-shot="${s.n}"${railKeep && !railKeep.has(s.n) ? ' hidden' : ''}>${s.n}. ${esc(s.club || '—')}${abuenatag(s)}${s.yards ? ` · ${esc(s.yards)}` : s.unknown ? ' · Sin ubicación' : ''}</button>`;
+      const rail = retro && railSource.length ? `<div class="tk-shots-rail" id="rc-shots" aria-label="Golpes">${railMore}${railSource.map(railBtn).join('')}</div>` : (!retro ? `<div class="tk-shots-rail" aria-label="Golpes">${marks.map((m, i) => `<span id="play-shot-${i}">${m.drop ? 'Drop' : m.penalty ? 'P' : m.holed ? 'Hoyo' : (m.club ? esc(clubLabel(m.club)) : (i + 1))}${m.recovery ? '<span class="tk-abuena">A buena</span>' : ''}</span>`).join('')}</div>` : '');
       let saveBtn = '';
       if (retro && savedRows.length && R().trackHoleSummary) {
         const facts = savedRows.map(s => {
@@ -733,7 +734,8 @@
           const start = R().knownPoint(s.lat, s.lng);
           const penalty = s.result === 'penalty' || Number(s.penalty_strokes) > 0;
           const flown = start && end ? hav(start, end) : null;
-          return { penalty, holed: s.result === 'holed' || s.intent === 'conceded', putt: s.intent === 'conceded', originGreen: !penalty && s.intent !== 'conceded' && s.lie === 'green' && (flown == null || flown <= 50), endLie: penalty || s.intent === 'conceded' ? null : (lieAt(end) || null) };
+          const recovery = s.intent === 'recovery';
+          return { penalty, holed: !recovery && (s.result === 'holed' || s.intent === 'conceded'), putt: !recovery && s.intent === 'conceded', originGreen: !recovery && !penalty && s.intent !== 'conceded' && s.lie === 'green' && (flown == null || flown <= 50), endLie: recovery || penalty || s.intent === 'conceded' ? null : (lieAt(end) || null) };
         });
         const sum = R().trackHoleSummary(par || null, facts);
         S.derived = { putts: sum.putts, gir: sum.gir, fir: sum.fir };
@@ -804,7 +806,7 @@
             <div class="tk-rounds">
               ${marking && S.track.marks.length ? `<button type="button" class="tk-round" id="play-undo" aria-label="Deshacer"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8.5 7.5H4.5V3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 8.2A8 8 0 1 1 6.4 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>` : ''}
               ${(marking || (!retro && phase === 'tracking')) ? `<div class="tk-penwrap"><button type="button" class="tk-round tk-pen" id="play-penalty" aria-haspopup="menu" aria-expanded="false" aria-controls="play-pen-menu" aria-label="Penalidad">P+1</button><div class="tk-penmenu" id="play-pen-menu" role="menu" hidden><button type="button" id="play-pen-stroke" role="menuitem">Penalidad +1</button>${marking ? '<button type="button" id="play-lost" role="menuitem">Pelota perdida / fuera de límites</button><button type="button" id="play-lost-prov" role="menuitem">Pelota perdida · jugué la provisional</button>' : ''}</div></div>` : ''}
-              ${(marking || (!retro && phase === 'tracking')) && !S.done ? `<button type="button" class="tk-round" id="play-good" aria-label="A buena, putt concedido">A buena</button>` : ''}
+              ${(marking || (!retro && phase === 'tracking')) && !S.done ? `<button type="button" class="tk-round" id="play-good" aria-label="A buena, golpe de recuperación">A buena</button>` : ''}
               ${!retro && phase === 'relief' ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
               ${retro && (phase === 'relief') ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
               ${marking && !hasGreenPoly() && !originOnGreen() ? `<button type="button" class="tk-ghost tk-side" id="play-lie">En el green</button>` : ''}
@@ -1048,6 +1050,7 @@
       const body = { client_id: cid(), hole: S.hole, lat: land.lat, lng: land.lng, accuracy_m: S.acc };
       if (result) body.result = result;
       if (club && result !== 'penalty') body.club = String(club).slice(0, 8);
+      if (S.recovery) body.intent = 'recovery';
       const lie = lieAt(land);
       if (lie && ['tee', 'fairway', 'rough', 'bunker', 'green'].includes(lie)) body.lie = lie;
       const r = await api(`/api/live-rounds/${encodeURIComponent(S.id)}/shots`, { method: 'POST', body: JSON.stringify(body) });
@@ -1055,22 +1058,45 @@
       const rows = (S.shots || []).filter(s => s.hole === S.hole);
       return rows[rows.length - 1]?.id || null;
     };
-    const concedePutt = async () => {
-      if (S.done) return;
-      if (retro && typeof H.onSave === 'function') {
-        const shots = await H.onSave({ hole: S.hole, from: null, land: null, result: 'holed', club: '', penalty: false, lie: null, intent: 'conceded', distance_m: null, distance_kind: null });
-        if (!S.alive || shots == null) return;
-        if (Array.isArray(shots)) S.saved = shots;
-        S.done = true;
-        S.msg = 'Hoyo cerrado. A buena cuenta un golpe y un putt, sin punto en el mapa.';
+    const markRecovery = async () => {
+      if (!S.alive || S.busy || S.live?.ended_at || S.done) return;
+      const here = fromCenter();
+      if (!here || !Number.isFinite(here.lat)) { S.msg = 'No hay un punto para marcar.'; render(); return; }
+      const phase = S.track.phase;
+      if (phase !== 'tracking') return;
+      const from = S.track.ball || S.track.tee;
+      const club = clubNow();
+      const out = R().trackEnter(S.track, here, club || null, false, false);
+      if (!out.recorded) return;
+      const marked = {
+        ...out.state,
+        marks: out.state.marks.map((m, i, arr) => i === arr.length - 1 ? { ...m, recovery: true } : m),
+      };
+      S.busy = true;
+      S.recovery = true;
+      try {
+        const id = await postShot(here, null, from, club);
+        if (!S.alive || id === false) return;
+        S.track = marked;
+        S.done = false;
+        S.msg = '';
+        S.frame = 'play';
+        S.panned = false;
+        S.adjusted = false;
+        syncClubToOrigin();
+        const frame = targetFrame();
+        S.busy = false;
         render();
-        return;
+        if (frame) await moveCam(frame);
+      } catch (e) {
+        if (!S.alive) return;
+        S.msg = e.message || 'No se pudo marcar.';
+        S.busy = false;
+        render();
+      } finally {
+        S.recovery = false;
+        if (S.alive) S.busy = false;
       }
-      const r = await api(`/api/live-rounds/${encodeURIComponent(S.id)}/shots`, { method: 'POST', body: JSON.stringify({ client_id: cid(), hole: S.hole, result: 'holed', intent: 'conceded' }) });
-      S.shots = r.shots || S.shots;
-      S.done = (S.shots || []).some(s => s.hole === S.hole && (s.result === 'holed' || s.intent === 'conceded'));
-      if (S.done) S.msg = 'Hoyo cerrado. A buena cuenta un golpe y un putt, sin punto en el mapa.';
-      render();
     };
 
     const targetFrame = () => {
@@ -1380,7 +1406,7 @@
         render();
       };
       const goodBtn = el.querySelector('#play-good');
-      if (goodBtn) goodBtn.onclick = () => { concedePutt(); };
+      if (goodBtn) goodBtn.onclick = () => { markRecovery(); };
       const postLost = async provisional => {
         const here = fromCenter();
         const from = S.track.ball || S.track.tee;

@@ -92,6 +92,7 @@ struct Shot: Hashable, Sendable, Identifiable {
     var distanceM: Int?
     var distanceYd: Int?
     var toGreenYd: Int?
+    var intent: String? = nil
 }
 
 struct ShotDraft: Hashable, Sendable {

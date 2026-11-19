@@ -7,7 +7,7 @@ import { isPutter } from "./shots-calc";
 
 export const YD = 1 / 0.9144;
 export type LL = { lat: number; lng: number };
-export type GmShot = { id?: string; live_round_id: string; hole: number; shot_number: number; lat: number; lng: number; club: string | null; lie: string | null; result: string | null; direction: string | null };
+export type GmShot = { id?: string; live_round_id: string; hole: number; shot_number: number; lat: number; lng: number; club: string | null; lie: string | null; result: string | null; direction: string | null; intent?: string | null };
 export type FlagSource = "club" | "player_marked" | "day_pin" | "green_center";
 export type GmHole = { live_round_id: string; hole: number; putts: number | null; pin: LL | null; pin_source?: Exclude<FlagSource, "green_center">; own_pin?: boolean };
 export type GmRound = { id: string; date: string; course_label: string; pars: Record<number, number>; greens: Record<number, LL> };
@@ -19,7 +19,7 @@ export const FAIRWAY_BAND_YD = 15;           // reference band drawn on the disp
 const PEN: Record<string, number> = { ob: 1, water: 1, penalty: 1 };
 const MISS_RESULTS = new Set(["rough", "bunker", "water", "ob", "penalty", "other"]);
 
-export const isPuttShot = (s: Pick<GmShot, "club" | "lie">) => isPutter(s.club) || s.lie === "green";
+export const isPuttShot = (s: Pick<GmShot, "club" | "lie"> & { intent?: string | null }) => s.intent !== "recovery" && (isPutter(s.club) || s.lie === "green");
 const r1 = (x: number) => Math.round(x * 10) / 10, r0 = (x: number) => Math.round(x);
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : null);
 const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
@@ -69,7 +69,7 @@ export function gameMetrics(rounds: GmRound[], shots: GmShot[], holes: GmHole[])
       gir_miss: girMiss, first_putt_yd: fp && flag ? r1(distYd(fp, flag)) : null, flag_source: flag ? flagSrc : null });
     // Tee shot (par 4/5): direction tap > result fairway > next lie fairway; lateral measured vs the tee→green-center line.
     const t = full[0];
-    if (t && t.shot_number === 1 && par != null && par >= 4) {
+    if (t && t.intent !== "recovery" && t.shot_number === 1 && par != null && par >= 4) {
       const next = ss.find(s => s.shot_number > t.shot_number) || null;
       let outcome: Drive["outcome"] = null, how: string | null = null;
       if (t.direction === "center" || t.direction === "left" || t.direction === "right") { outcome = t.direction === "center" ? "fairway" : t.direction; how = "direction"; }
@@ -80,6 +80,7 @@ export function gameMetrics(rounds: GmRound[], shots: GmShot[], holes: GmHole[])
     }
     // Approaches: any full shot that starts 30–150 yd from the flag.
     if (flag) for (const s of full) {
+      if (s.intent === "recovery") continue;
       const d = distYd(s, flag), b = bucketOf(d); if (!b) continue;
       const next = ss.find(x => x.shot_number > s.shot_number) || null;
       const end: LL | null = next ? next : s.result === "holed" || (putts === 0 && s === full[full.length - 1]) ? flag : null;

@@ -18,7 +18,7 @@ const ar = (x: number) => String(x).replace(".", ",");
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : null);
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const PEN = { ob: 1, water: 1, penalty: 1 } as Record<string, number>;
-export const isPutt = (s: ShotIn) => isPutter(s.club) || s.lie === "green";
+export const isPutt = (s: ShotIn) => s.intent !== "recovery" && (isPutter(s.club) || s.lie === "green");
 
 /** One row per GPS-logged hole that reached the green (≥1 putt). Strokes = shots + 1 per OB/water/penalty. */
 export function gpsHoles(shots: ShotIn[], lives: LiveIn[]): GpsHole[] {

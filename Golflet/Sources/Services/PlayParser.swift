@@ -66,7 +66,8 @@ enum PlayParser {
             mishit: JSONFlex.bool(from: blob["mishit"]) ?? false,
             distanceM: JSONFlex.int(from: blob["distance_m"]),
             distanceYd: JSONFlex.int(from: blob["distance_yd"]),
-            toGreenYd: JSONFlex.int(from: blob["to_green_yd"])
+            toGreenYd: JSONFlex.int(from: blob["to_green_yd"]),
+            intent: blob["intent"] as? String
         )
     }
 

@@ -3455,8 +3455,8 @@ function bindQuick(id){
       penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0,
       lost: s.result === 'lost',
       holed: s.result === 'holed',
-      putt: s.intent === 'conceded' || /^pt$|putter/i.test(club) || s.lie === 'green',
-      originGreen: s.lie === 'green',
+      putt: s.intent !== 'recovery' && (s.intent === 'conceded' || /^pt$|putter/i.test(club) || s.lie === 'green'),
+      originGreen: s.intent !== 'recovery' && s.lie === 'green',
       endLie, direction,
     };
   };
