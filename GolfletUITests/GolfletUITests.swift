@@ -1818,13 +1818,17 @@ final class GolfletUITests: XCTestCase {
         if groupStack.isHittable { groupStack.tap() } else {
             groupStack.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        XCTAssertTrue(waitFor(app, "screen-home-groups", timeout: 6), "No se abrió Tus grupos")
-        XCTAssertTrue(app.staticTexts["1 integrante"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["2 integrantes"].exists)
-        XCTAssertTrue(app.staticTexts["Ana Pérez"].exists)
+        XCTAssertTrue(waitFor(app, "screen-grupos", timeout: 6), "No se abrió Tus grupos")
+        let scratch = first(app, "home-group-count-g-scratch")
+        let familia = first(app, "home-group-count-g-familia")
+        XCTAssertTrue(scratch.waitForExistence(timeout: 4))
+        XCTAssertEqual(scratch.label, "1 miembro · Administrador")
+        XCTAssertEqual(familia.label, "2 miembros · Miembro")
+        XCTAssertTrue(app.staticTexts["Jugador Demo y Ana Pérez"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["0 miembros"].exists)
         XCTAssertFalse(app.staticTexts["0 integrantes"].exists)
         shot("tus-grupos")
-        dismissIfPresent(app, "close-home-groups")
+        dismissIfPresent(app, "close-grupos")
 
         let impact = first(app, "metric-hcp-impact")
         XCTAssertTrue(impact.waitForExistence(timeout: 4), "Falta Impacto")
