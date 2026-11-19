@@ -352,7 +352,7 @@ extension MockAPIClient {
 
     private static var hiddenShots: Set<String> = []
     private static var excludedShots: Set<String> = []
-    private static var removedShots: [String: (String, Shot)] = []
+    private static var removedShots: [String: (String, Shot)] = [:]
 
     func clubStats(code: String) async throws -> ClubStatsDetail {
         var detail = Self.rawClub(code)
