@@ -239,16 +239,19 @@ extension MockAPIClient {
         throw GolfletError.decoding("shot")
     }
 
-    func deleteShot(id: String) async throws {
+    func deleteShot(id: String) async throws -> ShotRestore? {
         Self.playLock.lock()
         defer { Self.playLock.unlock() }
-        for (roundID, shots) in Self.shotsByRound where shots.contains(where: { $0.id == id }) {
+        Self.hiddenShots.insert(id)
+        for (roundID, shots) in Self.shotsByRound {
+            guard let shot = shots.first(where: { $0.id == id }) else { continue }
             let next = shots.filter { $0.id != id }
             Self.shotsByRound[roundID] = next
             SavedRoundShots.replace(roundID: roundID, shots: next)
-            return
+            Self.removedShots[id] = (roundID, shot)
+            return ShotRestore(liveRoundId: roundID, hole: shot.hole, shotNumber: shot.shotNumber, lat: shot.lat, lng: shot.lng, club: shot.club, lie: shot.lie, result: shot.result, direction: shot.direction, length: shot.length, intent: nil, mishit: shot.mishit, distanceKind: nil, clientId: "undo-\(id)")
         }
-        throw GolfletError.decoding("shot")
+        return ShotRestore(liveRoundId: "live-fixture", hole: 1, shotNumber: 1, lat: nil, lng: nil, club: nil, lie: nil, result: nil, direction: nil, length: nil, intent: nil, mishit: false, distanceKind: nil, clientId: "undo-\(id)")
     }
 
     func recap(roundId: String?, liveRoundId: String?) async throws -> Recap? {
@@ -347,7 +350,49 @@ extension MockAPIClient {
         )
     }
 
+    private static var hiddenShots: Set<String> = []
+    private static var excludedShots: Set<String> = []
+    private static var removedShots: [String: (String, Shot)] = []
+
     func clubStats(code: String) async throws -> ClubStatsDetail {
+        var detail = Self.rawClub(code)
+        detail.recent.removeAll { Self.hiddenShots.contains($0.id) }
+        detail.recent = detail.recent.map { shot in
+            var copy = shot
+            if Self.excludedShots.contains(shot.id) { copy.countsForDistance = false }
+            return copy
+        }
+        return detail
+    }
+
+    func restoreShot(_ shot: ShotRestore) async throws {
+        let id = shot.clientId.replacingOccurrences(of: "undo-", with: "")
+        Self.hiddenShots.remove(id)
+        guard let saved = Self.removedShots.removeValue(forKey: id) else { return }
+        var next = Self.shotsByRound[saved.0] ?? []
+        next.append(saved.1)
+        Self.shotsByRound[saved.0] = next
+        SavedRoundShots.replace(roundID: saved.0, shots: next)
+    }
+
+    func excludeShot(id: String, kind: String?) async throws {
+        if kind == "excluded" { Self.excludedShots.insert(id) } else { Self.excludedShots.remove(id) }
+    }
+
+    func roundWeather(roundId: String) async throws -> RoundWeather? {
+        RoundWeather(
+            condition: "despejado",
+            label: "Despejado",
+            tempC: 22,
+            precipMm: 0,
+            windKmh: 14,
+            gustKmh: 22,
+            window: "8 a 12 h · Open-Meteo histórico.",
+            overline: "Clima en tu salida"
+        )
+    }
+
+    private static func rawClub(_ code: String) -> ClubStatsDetail {
         if code == "7i" { return Self.hierro7 }
         if code == "Hy" || code == "3W" {
             return ClubStatsDetail(
@@ -380,7 +425,9 @@ extension MockAPIClient {
                     mishit: ClubRate(pct: 11, hit: 2, of: 18),
                     tendency: "Con el Driver te vas un poco a la izquierda (28%) y al centro (39%)."
                 ),
-                recent: []
+                recent: [
+                    ClubRecentShot(id: "shot-383", date: "2026-10-30", hole: 1, distanceYd: 383, result: nil, direction: nil, mishit: false, roundId: "118:94506:15300", liveRoundId: "live-fixture", shotsOnHole: 5, postedStrokes: 5, countsForDistance: true)
+                ]
             )
         }
         return ClubStatsDetail(

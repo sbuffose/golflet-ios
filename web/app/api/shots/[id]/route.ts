@@ -32,6 +32,11 @@ export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   if ("shot_number" in b) { const n = Number(b.shot_number); if (!Number.isInteger(n) || n < 1 || n > 20) throw new HttpError(400, "Golpe inválido"); set("shot_number", n); }
   if ("lat" in b || "lng" in b) { const p = validLatLng(b.lat, b.lng); if (!p) throw new HttpError(400, "Posición inválida"); set("lat", p.lat); set("lng", p.lng); }
   if ("accuracy_m" in b) set("accuracy_m", b.accuracy_m == null ? null : Math.max(0, Math.min(5000, Number(b.accuracy_m) || 0)));
+  if ("distance_kind" in b) {
+    const kind = b.distance_kind == null || b.distance_kind === "" ? null : String(b.distance_kind);
+    if (kind != null && !["measured", "manual", "estimated", "excluded"].includes(kind)) throw new HttpError(400, "distance_kind inválido");
+    set("distance_kind", kind);
+  }
   if (sets.length) await q(`update shot set ${sets.join(", ")}, updated_at=now() where id=$1`, vals);
   const l = await ownLive(user.id, s.live_round_id);
   const shots = await shotsWithDistances(l);
@@ -39,6 +44,6 @@ export const PATCH = handle(async (req: Request, ctx: Ctx) => {
 });
 export const DELETE = handle(async (req: Request, ctx: Ctx) => {
   const user = await requireUser(req); const { id } = await ctx.params; const s = await own(user.id, id);
-  await q(`delete from shot where id=$1`, [id]);
-  return json({ ok: true, shots: await shotsWithDistances(await ownLive(user.id, s.live_round_id)) });
+  const [gone] = await q(`delete from shot where id=$1 returning id, live_round_id, hole, shot_number, lat, lng, accuracy_m, club, lie, result, direction, length, intent, mishit, distance_kind`, [id]);
+  return json({ ok: true, shot: gone, shots: await shotsWithDistances(await ownLive(user.id, s.live_round_id)) });
 });

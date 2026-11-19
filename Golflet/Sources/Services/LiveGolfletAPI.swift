@@ -238,10 +238,6 @@ struct LiveGolfletAPI: GolfletAPI {
         return shot
     }
 
-    func deleteShot(id: String) async throws {
-        _ = try await request("DELETE", "/api/shots/\(id)")
-    }
-
     func recap(roundId: String?, liveRoundId: String?) async throws -> Recap? {
         var query: [String] = []
         if let roundId { query.append("round_id=\(roundId)") }
@@ -277,9 +273,69 @@ struct LiveGolfletAPI: GolfletAPI {
     }
 
     func clubStats(code: String) async throws -> ClubStatsDetail {
-        let json = try await request("GET", "/api/club-stats/\(code)")
+        let encoded = code.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? code
+        let json = try await request("GET", "/api/club-stats/\(encoded)")
         guard let detail = PlayParser.clubDetail(json) else { throw GolfletError.decoding("club-stats") }
         return detail
+    }
+
+    func roundWeather(roundId: String) async throws -> RoundWeather? {
+        let encoded = roundId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? roundId
+        let json = try await request("GET", "/api/rounds/\(encoded)/weather")
+        guard let weather = json["weather"] as? [String: Any] else { return nil }
+        let condition = weather["condition"] as? String ?? ""
+        let labels = ["despejado": "Despejado", "nublado": "Nublado", "lluvia": "Lluvia", "tormenta": "Tormenta"]
+        let window = weather["window"] as? [Any] ?? []
+        let start = window.first.map { "\($0)" } ?? ""
+        let end = window.dropFirst().first.map { "\($0)" } ?? ""
+        let forecast = (weather["kind"] as? String) == "forecast" || (weather["source"] as? String) == "open-meteo-forecast"
+        let basis = weather["basis"] as? String
+        return RoundWeather(
+            condition: condition,
+            label: labels[condition] ?? "—",
+            tempC: JSONFlex.double(from: weather["temp_c"]),
+            precipMm: JSONFlex.double(from: weather["precip_mm"]),
+            windKmh: JSONFlex.double(from: weather["wind_kmh"]),
+            gustKmh: JSONFlex.double(from: weather["gust_kmh"]),
+            window: forecast ? "\(start) a \(end) h · Open-Meteo pronóstico. No entra en Clima y juego." : "\(start) a \(end) h · Open-Meteo histórico.",
+            overline: forecast ? "Pronóstico, no es el histórico" : (basis == "tee_time" ? "Clima en tu salida" : "Clima durante el día")
+        )
+    }
+
+    func deleteShot(id: String) async throws -> ShotRestore? {
+        let json = try await request("DELETE", "/api/shots/\(id)")
+        guard let shot = json["shot"] as? [String: Any], let live = shot["live_round_id"] as? String else { return nil }
+        return ShotRestore(
+            liveRoundId: live,
+            hole: JSONFlex.int(from: shot["hole"]) ?? 1,
+            shotNumber: JSONFlex.int(from: shot["shot_number"]),
+            lat: JSONFlex.double(from: shot["lat"]),
+            lng: JSONFlex.double(from: shot["lng"]),
+            club: shot["club"] as? String,
+            lie: shot["lie"] as? String,
+            result: shot["result"] as? String,
+            direction: shot["direction"] as? String,
+            length: shot["length"] as? String,
+            intent: shot["intent"] as? String,
+            mishit: JSONFlex.bool(from: shot["mishit"]) ?? false,
+            distanceKind: shot["distance_kind"] as? String,
+            clientId: "undo-\(id)"
+        )
+    }
+
+    func restoreShot(_ shot: ShotRestore) async throws {
+        var body: [String: Any] = ["hole": shot.hole, "client_id": shot.clientId, "mishit": shot.mishit]
+        if let shotNumber = shot.shotNumber { body["shot_number"] = shotNumber }
+        if let lat = shot.lat { body["lat"] = lat }
+        if let lng = shot.lng { body["lng"] = lng }
+        for (key, value) in ["club": shot.club, "lie": shot.lie, "result": shot.result, "direction": shot.direction, "length": shot.length, "intent": shot.intent] {
+            if let value { body[key] = value }
+        }
+        _ = try await request("POST", "/api/live-rounds/\(shot.liveRoundId)/shots", body: body)
+    }
+
+    func excludeShot(id: String, kind: String?) async throws {
+        _ = try await request("PATCH", "/api/shots/\(id)", body: ["distance_kind": kind ?? NSNull()])
     }
 
     func metricDrilldown(metric: String, scope: String, year: Int, course: String, sort: String, order: String, range: String) async throws -> MetricDrilldown? {

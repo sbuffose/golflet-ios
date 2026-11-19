@@ -284,6 +284,39 @@ struct ClubRecentShot: Hashable, Sendable, Identifiable {
     var result: String?
     var direction: String?
     var mishit: Bool
+    var roundId: String? = nil
+    var liveRoundId: String? = nil
+    var shotsOnHole: Int? = nil
+    var postedStrokes: Int? = nil
+    var countsForDistance: Bool = true
+}
+
+struct ShotRestore: Hashable, Sendable {
+    var liveRoundId: String
+    var hole: Int
+    var shotNumber: Int?
+    var lat: Double?
+    var lng: Double?
+    var club: String?
+    var lie: String?
+    var result: String?
+    var direction: String?
+    var length: String?
+    var intent: String?
+    var mishit: Bool
+    var distanceKind: String?
+    var clientId: String
+}
+
+struct RoundWeather: Hashable, Sendable {
+    var condition: String
+    var label: String
+    var tempC: Double?
+    var precipMm: Double?
+    var windKmh: Double?
+    var gustKmh: Double?
+    var window: String
+    var overline: String
 }
 
 struct ClubStatsDetail: Hashable, Sendable {
@@ -386,6 +419,17 @@ struct HcpImpactCard: Hashable, Sendable, Identifiable {
     var differential: Double?
     var course: String?
     var counting: Bool
+    var roundId: String? = nil
+    var impact: Double? = nil
+}
+
+struct HcpMover: Hashable, Sendable, Identifiable {
+    var id: String
+    var roundId: String
+    var date: Date
+    var course: String
+    var differential: Double
+    var impact: Double
 }
 
 struct HcpImpact: Hashable, Sendable {
@@ -395,6 +439,13 @@ struct HcpImpact: Hashable, Sendable {
     var estimated: Bool
     var counting: [HcpImpactCard]
     var dropped: [HcpImpactCard]
+    var startDate: Date? = nil
+    var nowDate: Date? = nil
+    var series: [HIPoint] = []
+    var movers: [HcpMover] = []
+    var unidentified: Bool = false
+    /// A delta with no endpoints is the bug: the number existed and the indexes did not.
+    var showsDelta: Bool { start != nil && now != nil }
 }
 
 struct MetricsSummary: Hashable, Sendable {

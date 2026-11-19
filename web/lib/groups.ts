@@ -89,6 +89,27 @@ export async function memberProfilePhoto(groupId: string, viewerId: string, memb
 export const photoUrl = (g: { id: string; has_photo?: boolean; photo_updated_at?: string | null }) =>
   g.has_photo ? `/api/groups/${g.id}/photo?v=${g.photo_updated_at ? new Date(g.photo_updated_at).getTime() : 0}` : null;
 
+export type GroupFace = { id: string; name: string; initials: string; photo_url: string | null; is_owner: boolean };
+export function faceInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.slice(0, 2).map(part => part[0]?.toUpperCase() || "");
+  return letters.join("") || "?";
+}
+/** Accepted members, owner included. Photo only when that person shares the profile and has one. */
+export function shapeGroupFaces(rows: { member_id: string; user_id: string | null; role: string; name: string; photo: boolean; shareProfile: boolean }[], groupId: string, ownerId: string | null): GroupFace[] {
+  return rows.map(row => {
+    const name = row.name || "Jugador";
+    const showPhoto = !!row.user_id && row.photo && row.shareProfile;
+    return {
+      id: row.member_id,
+      name,
+      initials: faceInitials(name),
+      photo_url: showPhoto ? `/api/groups/${groupId}/members/${row.member_id}/photo` : null,
+      is_owner: !!ownerId && row.user_id === ownerId,
+    };
+  });
+}
+
 export async function listGroups(userId: string) {
   await linkPendingInvites(userId);
   const rows = await q(`select g.id, g.name, g.owner_id, m.status, m.id member_id, m.invited_by, m.role, g.photo_updated_at, (g.photo is not null) has_photo,
@@ -96,12 +117,41 @@ export async function listGroups(userId: string) {
       (select count(*)::int from cmp_member x where x.group_id=g.id and x.status='invited') pending
     from cmp_member m join cmp_group g on g.id=m.group_id where m.user_id=$1 and m.status in ('accepted','invited') order by g.created_at desc`, [userId]);
   const names = await publicNames([...new Set(rows.map((r: any) => r.invited_by).filter(Boolean))] as string[]);
-  const groups = rows.filter((r: any) => r.status === "accepted").map((r: any) => ({ id: r.id, name: r.name, is_admin: r.role === "admin", is_owner: r.role === "admin", accepted: r.accepted, pending: r.pending, photo_url: photoUrl(r) }));
+  const acceptedRows = rows.filter((r: any) => r.status === "accepted");
+  const faces = await listFaces(acceptedRows.map((r: any) => ({ id: r.id, owner_id: r.owner_id }))).catch(() => new Map<string, GroupFace[]>());
+  const groups = acceptedRows.map((r: any) => ({ id: r.id, name: r.name, is_admin: r.role === "admin", is_owner: r.role === "admin", accepted: r.accepted, pending: r.pending, photo_url: photoUrl(r), faces: faces.get(r.id) || [] }));
   const invitations = rows.filter((r: any) => r.status === "invited").map((r: any) => ({ group_id: r.id, member_id: r.member_id, name: r.name, invited_by: names.get(r.invited_by) || "Un jugador", members: r.accepted, photo_url: photoUrl(r) }));
   const outgoing = await q(`select m.id member_id, m.group_id, g.name group_name, m.matricula, m.invited_at, (m.user_id is not null) is_user
     from cmp_member m join cmp_group g on g.id=m.group_id
     where m.status='invited' and exists (select 1 from cmp_member a where a.group_id=g.id and a.user_id=$1 and a.status='accepted' and a.role='admin') order by m.invited_at desc`, [userId]);
   return { groups, invitations, outgoing };
+}
+
+async function listFaces(groups: { id: string; owner_id: string | null }[]): Promise<Map<string, GroupFace[]>> {
+  const out = new Map<string, GroupFace[]>();
+  const ids = [...new Set(groups.map(g => g.id))];
+  if (!ids.length) return out;
+  const members = await q(`select group_id, id member_id, user_id, role from cmp_member where group_id = any($1::uuid[]) and status='accepted' order by invited_at`, [ids]);
+  const userIds = [...new Set(members.map((m: any) => m.user_id).filter(Boolean))] as string[];
+  const names = await publicNames(userIds);
+  let pics = new Set<string>();
+  try { const { profilePhotos } = await import("./profile-photo"); pics = await profilePhotos(userIds); } catch { pics = new Set(); }
+  const owners = new Map(groups.map(g => [g.id, g.owner_id]));
+  for (const id of ids) {
+    const mine = members.filter((m: any) => m.group_id === id);
+    const uids = mine.map((m: any) => m.user_id).filter(Boolean) as string[];
+    let share = new Map<string, Share>();
+    try { share = await effectiveShare(id, uids); } catch { share = new Map(); }
+    out.set(id, shapeGroupFaces(mine.map((m: any) => ({
+      member_id: m.member_id,
+      user_id: m.user_id,
+      role: m.role,
+      name: (m.user_id && names.get(m.user_id)) || "Jugador",
+      photo: !!(m.user_id && pics.has(m.user_id)),
+      shareProfile: m.user_id ? share.get(m.user_id)?.profile !== false : false,
+    })), id, owners.get(id) ?? null));
+  }
+  return out;
 }
 
 /** Group, owner and ledger commit together. Invites run after that commit and do not create a second group on retry. */

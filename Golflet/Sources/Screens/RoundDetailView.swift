@@ -34,6 +34,7 @@ struct RoundDetailView: View {
     @State private var visit = RoundVisit()
     @State private var noteSaver = QuickNoteSaver()
     @State private var noteAt = ""
+    @State private var weather: RoundWeather?
     @FocusState private var statFocus: StatField?
 
     private enum StatField: Hashable { case putts, gir, fir }
@@ -47,6 +48,7 @@ struct RoundDetailView: View {
                     scoreHero
                     if round.isOtherCourse || round.holes.isEmpty {
                         otherCourseNotice
+                        roundWeatherCard
                     } else {
                         GCard(radius: 16, padding: 14) {
                             scorecard
@@ -56,6 +58,7 @@ struct RoundDetailView: View {
                                 .font(GType.label)
                                 .foregroundStyle(p.ink3)
                         }
+                        roundWeatherCard
                         gameStats
                     }
                     notes
@@ -67,6 +70,9 @@ struct RoundDetailView: View {
             }
         }
         .accessibilityIdentifier("screen-ronda")
+        .task(id: round.roundId) {
+            weather = try? await model.api.roundWeather(roundId: round.roundId)
+        }
         .sheet(isPresented: $showsRecap) {
             NavigationStack {
                 RecapView(roundId: round.roundId)
@@ -348,11 +354,58 @@ struct RoundDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    private var roundWeatherCard: some View {
+        Group {
+            if let weather {
+                GCard(radius: 18, padding: 16) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                GOverline(text: weather.overline)
+                                Text(weather.label)
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            weatherFact("Temperatura", weather.tempC.map { "\(FormatAR.one($0))°" } ?? "—")
+                            weatherFact("Lluvia", weather.precipMm.map { "\(FormatAR.one($0)) mm" } ?? "—")
+                            weatherFact("Viento", weather.windKmh.map { "\(Int($0.rounded())) km/h" } ?? "—")
+                            weatherFact("Ráfagas", weather.gustKmh.map { "\(Int($0.rounded())) km/h" } ?? "—")
+                        }
+                        Text(weather.window)
+                            .font(GType.label)
+                            .foregroundStyle(p.ink3)
+                            .accessibilityIdentifier("round-weather-source")
+                    }
+                }
+                .accessibilityIdentifier("round-weather")
+            }
+        }
+    }
+
+    private func weatherFact(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(value)
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var gameStats: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
                 CaddieMark(height: 36)
                 Text("Estadísticas de la ronda")
+                    .accessibilityIdentifier("round-stats")
                     .font(GType.section)
                     .foregroundStyle(p.ink)
                 Spacer()

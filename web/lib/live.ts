@@ -58,7 +58,7 @@ export async function greensFor(clubCode: string | null, vmCourse: string | null
   const g: Greens = {}; for (const h of r?.holes || []) g[h.hole] = { center: h.center, front: h.front, back: h.back };
   return g;
 }
-export const SHOT_COLS = `s.id, s.client_id, s.hole, s.shot_number, s.lat, s.lng, s.accuracy_m, s.taken_at, s.club, s.lie, s.result, s.direction, s.length, s.mishit, s.intent, s.source`;
+export const SHOT_COLS = `s.id, s.client_id, s.hole, s.shot_number, s.lat, s.lng, s.accuracy_m, s.taken_at, s.club, s.lie, s.result, s.direction, s.length, s.mishit, s.intent, s.source, s.distance_kind`;
 export async function shotsWithDistances(live: any) {
   const rows = await q<ShotIn>(`select ${SHOT_COLS} from shot s where s.live_round_id=$1 and ${gpsShotSql("s")} order by s.hole, s.shot_number, s.taken_at`, [live.id]);
   return computeDistances(rows, await greensFor(live.club_code, live.vm_course));

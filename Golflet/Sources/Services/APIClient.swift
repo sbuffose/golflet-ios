@@ -30,7 +30,9 @@ protocol GolfletAPI: Sendable {
     func patchLiveRound(id: String, body: [String: Any]) async throws -> LiveRound
     func postShots(liveRoundId: String, drafts: [ShotDraft]) async throws -> [Shot]
     func patchShot(id: String, body: [String: Any]) async throws -> Shot
-    func deleteShot(id: String) async throws
+    func deleteShot(id: String) async throws -> ShotRestore?
+    func restoreShot(_ shot: ShotRestore) async throws
+    func excludeShot(id: String, kind: String?) async throws
     func recap(roundId: String?, liveRoundId: String?) async throws -> Recap?
     func uploadRecap(audio: Data, roundId: String?, liveRoundId: String?, draft: RecapDraft?) async throws -> Recap
     func typedRecap(roundId: String?, liveRoundId: String?, draft: RecapDraft) async throws -> Recap
@@ -99,6 +101,7 @@ protocol GolfletAPI: Sendable {
     func deleteReconstructionShot(liveRoundId: String, shotId: String) async throws
     func courseCenters(courseId: String) async throws -> [Int: ReconstructionPoint]
     func courseMap(club: String, course: String) async throws -> [String: Any]
+    func roundWeather(roundId: String) async throws -> RoundWeather?
 }
 
 extension GolfletAPI {

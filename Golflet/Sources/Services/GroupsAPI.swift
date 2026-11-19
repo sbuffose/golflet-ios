@@ -92,13 +92,20 @@ enum GroupsParser {
         let name = string(blob["name"] ?? blob["title"])
         guard !id.isEmpty, !name.isEmpty else { return nil }
         let memberBlob = (blob["members"] as? [String: Any]) ?? (item["members"] as? [String: Any])
-        let memberSource = blob["member_list"] ?? item["member_list"] ?? memberBlob?["list"] ?? memberBlob?["items"] ?? blob["members"] ?? item["members"]
+        let memberSource = blob["member_list"] ?? item["member_list"] ?? memberBlob?["list"] ?? memberBlob?["items"] ?? blob["faces"] ?? item["faces"] ?? blob["members"] ?? item["members"]
         let members = members(from: memberSource)
-        // The list payload has no member array. `accepted` is the integer count. A boolean is not a count, and a real member array still wins.
-        let reportedCount = JSONFlex.int(from: blob["member_count"] ?? blob["members_count"] ?? blob["integrantes"] ?? item["member_count"] ?? memberBlob?["count"] ?? memberBlob?["total"])
-            ?? ((memberSource as? [Any]) == nil
-                ? (JSONFlex.int(from: blob["accepted"] ?? item["accepted"]) ?? JSONFlex.int(from: memberSource))
-                : nil)
+        // `accepted` is the integer count of accepted members, owner included. A boolean is not a count.
+        // An empty `members` array is not a list: the integer still wins. JSON numbers arrive as NSNumber.
+        let explicitCount = JSONFlex.int(from: blob["member_count"] ?? blob["members_count"] ?? blob["integrantes"] ?? item["member_count"] ?? memberBlob?["count"] ?? memberBlob?["total"])
+        let acceptedCount = JSONFlex.int(from: blob["accepted"] ?? item["accepted"])
+        let reportedCount: Int? = {
+            if let explicitCount { return explicitCount }
+            if members.isEmpty {
+                return acceptedCount ?? ((memberSource as? [Any]) == nil ? JSONFlex.int(from: memberSource) : nil)
+            }
+            if let acceptedCount, acceptedCount > members.count { return acceptedCount }
+            return nil
+        }()
         let isAdmin = JSONFlex.bool(from: blob["is_admin"] ?? item["is_admin"]) ?? false
         let owner = member(from: blob["owner"])
             ?? members.first(where: \.isOwner)
