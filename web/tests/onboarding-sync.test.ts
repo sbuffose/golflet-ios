@@ -133,6 +133,7 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
         font: getComputedStyle(document.querySelector("#ob-plan-title")!).fontFamily,
         cards: cards.length,
         gap: cards[1].top - cards[0].bottom,
+        tall: Math.max(...cards.map(card => card.height)),
         hi: document.querySelector(".ob-hi")?.textContent,
         crest: document.querySelector(".ob-crest")?.getAttribute("src"),
         sub: document.querySelector("#ob-plan-card-1 small")?.textContent,
@@ -141,6 +142,7 @@ test("la espera dice una sola frase y el dibujo queda abajo", { timeout: 60_000,
     assert.equal(plan.title, "Jugador, armé tu inicio.");
     assert.equal(plan.cards, 3);
     assert.ok(plan.gap >= 12 && plan.gap <= 16, `separación ${plan.gap}`);
+    assert.ok(plan.tall < 140, `la tarjeta mide ${plan.tall}`);
     assert.equal(plan.hi, "3,1");
     assert.match(plan.crest || "", /118/);
     assert.match(plan.sub || "", /dónde se te escapan/);

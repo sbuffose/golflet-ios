@@ -1949,9 +1949,19 @@ const eqThumb = (club, category) => {
 const eqUsers = (brand, model, category) => {
   const users = eqGear(brand, model, category).users;
   const rows = users.length
-    ? users.map(u => `<a class="eq-player" id="eq-user-${esc(u.id)}" href="${esc(u.sourceUrl)}"><b>${esc(u.name)}</b><span>${esc(u.tour)} · ${esc(u.whenLabel)}</span></a>`).join('')
+    ? users.map(u => `<a class="eq-player" id="eq-user-${esc(u.id)}" href="${esc(u.sourceUrl)}"><b>${esc(u.name)}</b><span>${esc(u.tour)}</span><span class="eq-src">GolfWRX WITB · ${esc(u.whenLabel)}</span></a>`).join('')
     : `<p class="eq-player" id="eq-users-empty">${miss('players')}</p>`;
   return `<div class="eq-use" id="eq-users"><div class="section"><h2>Lo usan</h2></div>${rows}</div>`;
+};
+const eqDash = v => v == null || v === '' ? '–' : esc(String(v));
+const eqDist = (cur, row, shots) => `<div class="section" id="eq-dist"><h2>Distancias</h2><span class="badge">yardas</span></div>
+  <div class="grid3 eq-dist"><div class="card mini stat"><div class="k">Carry</div><div class="v num" id="eq-carry">${eqDash(row?.carry)}</div></div><div class="card mini stat"><div class="k">Total</div><div class="v num" id="eq-total">${eqDash(row?.total)}</div></div><div class="card mini stat"><div class="k">Golpes</div><div class="v num" id="eq-shots">${shots == null ? '–' : esc(String(shots))}</div><div class="d">con GPS</div></div></div>
+  <p class="foot">Carry y total son los de tu bolsa. Los golpes son los medidos con GPS. <a href="#/palo/${eqCode(cur)}">Ver los golpes</a></p>`;
+const eqFicha = spec => {
+  if (!spec || spec.status !== 'match') return `<div class="section" id="eq-spec"><h2>Ficha</h2></div><p class="foot" id="eq-spec-empty">${esc(spec?.message || 'No tenemos una ficha oficial de este modelo.')}</p>`;
+  const lines = (spec.lines || []).map(line => `<div class="eq-spec-row"><span>${esc(line.label)}</span><b>${esc(line.value)}</b></div>`).join('');
+  const link = spec.sourceUrl ? `<a class="eq-src" id="eq-spec-src" href="${esc(spec.sourceUrl)}">${esc(spec.sourceTitle || 'Ficha')}${spec.checked ? ` · ${esc(spec.checked)}` : ''}</a>` : '';
+  return `<div class="section" id="eq-spec"><h2>Ficha</h2></div><div class="card eq-spec">${lines}${link}</div>`;
 };
 const eqCode = c => encodeURIComponent(c.code);
 async function loadEquipList(){
@@ -2101,13 +2111,29 @@ async function loadEquipo(code, edit){
     if (code !== 'nuevo' && !cur) { el.innerHTML = `<div class="msg err">Ese palo no está en tu bolsa.</div><a class="btn ghost" href="#/bolsa" style="margin-top:12px">Volver a Mi bolsa</a>`; return; }
     const typ = c => cat.types.find(t => t.code.toLowerCase() === c.toLowerCase());
     if (cur && !edit){
-      const t = typ(cur.code), bl = t ? t.bag : cur.label, row = bl && (G.bag||[]).find(b => b.club === bl);
+      const t = typ(cur.code), nm = x => String(x || '').trim().toLowerCase();
+      const keys = [t?.bag, cur.label, cur.code].filter(Boolean).map(nm);
+      const row = (G.bag || []).find(b => keys.includes(nm(b.club)));
       const gear = eqGear(cur.brand, cur.model, t?.category);
+      let shots = null, carry = row?.carry ?? null, total = row?.total ?? null;
+      try { const stats = await api(`/api/club-stats/${eqCode(cur)}`); if (stats?.club && Number.isFinite(+stats.club.shots)) shots = +stats.club.shots; } catch (_) {}
+      try {
+        const d = await api('/api/bag/distances');
+        const hit = (d.clubs || []).find(x => [x.club, x.code].some(v => keys.includes(nm(v))));
+        if (hit) {
+          if (carry == null) carry = hit.carry_yd;
+          if (total == null) total = hit.total_yd;
+          if (shots == null && hit.gps && Number.isFinite(+hit.gps.n)) shots = +hit.gps.n;
+        }
+      } catch (_) {}
+      let spec = null;
+      try { spec = await api('/api/my-clubs/spec?' + new URLSearchParams({ brand: cur.brand || '', model: cur.model || '', category: t?.category || '' })); } catch (_) {}
       el.innerHTML = `<div class="eq-hero"><img class="eq-hero-photo" id="eq-photo" src="${esc(gear.thumb.src)}" alt="" data-kind="${gear.thumb.kind}"><div class="overline">${esc(CATL[t?.category] || 'Palo')}</div><div class="eq-name">${esc(cur.label)}</div>
           <div class="eq-bm">${cur.brand ? `<b>${esc(cur.brand)}</b>${cur.model ? `<span>${esc(cur.model)}</span>` : '<span>Modelo sin cargar</span>'}` : '<span>Sin marca ni modelo</span>'}</div>
           <div class="eq-tags">${cur.loft?`<span>Loft <b class="num">${String(cur.loft).replace('.',',')}°</b></span>`:''}<span>Código <b>${esc(cur.code)}</b></span>${cur.model_custom?'<span>Modelo escrito a mano</span>':''}</div></div>
+        ${eqDist(cur, { carry, total }, shots)}
+        ${eqFicha(spec)}
         ${eqUsers(cur.brand, cur.model, t?.category)}
-        ${row ? `<div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div><div class="grid3"><div class="card mini stat"><div class="k">Carry</div><div class="v num">${row.carry ?? '—'}</div></div><div class="card mini stat"><div class="k">Total</div><div class="v num">${row.total ?? '—'}</div></div><a class="card mini stat vx-tap" href="#/palo/${eqCode(cur)}"><div class="k">Con GPS</div><div class="v" style="font-size:calc(15px*var(--ts,1))">Ver golpes ›</div></a></div>` : ''}
         <div class="tt-acts"><a class="btn" href="#/equipo/${eqCode(cur)}/editar">Editar marca y modelo</a><button type="button" class="btn ghost danger" id="eqdel">Sacar de la bolsa</button></div>
         <p class="foot">${cur.enabled===false?'Oculto en la lista de palos al marcar golpes. ':''}Al sacarlo, también se va su fila de distancias. Los golpes con GPS que ya marcaste con este palo se conservan.</p>`;
       $('#eqdel').onclick = async e => { if (!(await askInline(e.currentTarget, `¿Sacar ${cur.label} de tu bolsa?`, 'Sí, sacarlo'))) return;
@@ -3251,6 +3277,18 @@ function revealCard(){
   lines.push(rounds.length ? 'Solo me faltan unos datos más' : 'Te pregunto lo justo para armar tu inicio.');
   return `<div class="rv-card" id="rvcard">${lines.map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
 }
+function planSpark(history){
+  const ys = (Array.isArray(history) ? history : []).map(p => +p.hi).filter(n => Number.isFinite(n));
+  if (ys.length < 2) return '';
+  const w = 76, h = 28, pad = 2, min = Math.min(...ys), max = Math.max(...ys), span = (max - min) || 1;
+  const d = ys.map((v, i) => {
+    const x = pad + i * (w - pad * 2) / (ys.length - 1);
+    const y = pad + (max - v) * (h - pad * 2) / span;
+    return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg class="ob-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="#0B2545" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function planFirst(name){ return String(name || '').trim().split(/\s+/)[0] || ''; }
 function planMark(name){
   const words = String(name || '').replace(/[()·.,]/g, ' ').split(/\s+/).filter(w => w && !/^(de|del|la|las|los|el|y|club|golf)$/i.test(w));
   const pick = (words.length ? words : String(name || '').split(/\s+/)).slice(0, 2);
@@ -3281,12 +3319,13 @@ async function showPlan(host){
   const logo = { '118': '/clubs/118@2x.png', '209': '/clubs/209@2x.png' }[code] || '';
   const friendLine = groups == null ? 'Cuando haya un grupo, salís juntos.' : groups === 0 ? 'Todavía no hay un grupo para salir juntos.' : groups === 1 ? 'Un grupo para salir juntos.' : `${groups} grupos para salir juntos.`;
   const crest = logo ? `<img class="ob-crest" src="${esc(logo)}" alt="">` : `<span class="ob-mono">${esc(club ? planMark(club) : '–')}</span>`;
-  const people = faces.length
-    ? `<span class="ob-faces">${faces.map(face => face.photo_url ? `<img src="${esc(face.photo_url)}" alt="">` : `<span>${esc(face.initials || planMark(face.name || ''))}</span>`).join('')}</span>`
-    : `<strong class="ob-hi">${esc(groups == null ? '–' : String(groups))}</strong>`;
+  const names = faces.map(face => planFirst(face.name)).filter(Boolean);
+  const people = `<span class="ob-fig">${faces.length
+    ? `<span class="ob-faces">${faces.map(face => face.photo_url ? `<img src="${esc(face.photo_url)}" alt="">` : `<span>${esc(face.initials || planMark(face.name || ''))}</span>`).join('')}</span>${names.length ? `<span class="ob-names">${esc(names.join(' · '))}</span>` : ''}`
+    : `<strong class="ob-hi">${esc(groups == null ? '–' : String(groups))}</strong>`}</span>`;
   const rows = [
-    ['Tu índice', hiText === '–' ? 'Cuando llegue el índice, vemos dónde se te escapan los golpes.' : 'Desde este número vemos dónde se te escapan los golpes.', `<strong class="ob-hi">${esc(hiText)}</strong>`],
-    ['Tu club', club ? 'Ahí miramos lo que más te cuesta esta semana.' : 'Cuando tengamos el club, miramos lo que más te cuesta.', crest],
+    ['Tu índice', hiText === '–' ? 'Cuando llegue el índice, vemos dónde se te escapan los golpes.' : 'Desde este número vemos dónde se te escapan los golpes.', `<span class="ob-fig"><strong class="ob-hi">${esc(hiText)}</strong>${planSpark(G.hi_history)}</span>`],
+    ['Tu club', club ? 'Ahí miramos lo que más te cuesta esta semana.' : 'Cuando tengamos el club, miramos lo que más te cuesta.', `<span class="ob-fig">${crest}${club ? `<span class="ob-clubname">${esc(club)}</span>` : ''}</span>`],
     ['Tus amigos', friendLine, people],
   ];
   host.innerHTML = `<div class="ob-plan" id="ob-plan"><img class="sx-caddie" src="/brand/caddie.png" alt=""><h1 id="ob-plan-title">${esc(name ? `${name}, armé tu inicio.` : 'Listo. Armé tu inicio.')}</h1><ol>${rows.map((row, i) => `<li id="ob-plan-card-${i + 1}"><span class="n">${i + 1}</span><div><b>${esc(row[0])}</b><small>${esc(row[1])}</small></div>${row[2]}</li>`).join('')}</ol><button class="btn" id="ob-done" type="button">Entrar a Golflet</button></div>`;
