@@ -33,8 +33,8 @@ test("la lista de grupos muestra el conteo aceptado y la otra cancha usa el cat�
       });
       if (url.pathname === "/api/groups") return json({
         groups: [
-          { id: "g-scratch", name: "Scratch", is_admin: true, accepted: 1, pending: 0, photo_url: null },
-          { id: "g-familia", name: "Familia", is_admin: false, accepted: 2, pending: 0, photo_url: null },
+          { id: "g-scratch", name: "Scratch", is_admin: true, accepted: 1, pending: 0, photo_url: null, faces: [{ id: "m1", name: "Ana Pérez", initials: "AP", photo_url: null, is_owner: true }] },
+          { id: "g-familia", name: "Familia", is_admin: false, accepted: 2, pending: 0, photo_url: null, faces: [{ id: "m1", name: "Ana Pérez", initials: "AP", photo_url: null, is_owner: true }, { id: "m2", name: "Luis Gómez", initials: "LG", photo_url: null, is_owner: false }] },
         ],
         invitations: [],
         outgoing: [],
@@ -74,6 +74,8 @@ test("la lista de grupos muestra el conteo aceptado y la otra cancha usa el cat�
     assert.match(groups, /Familia/);
     assert.match(groups, /1 jugador/);
     assert.match(groups, /2 jugadores/);
+    assert.match(groups, /Ana Pérez/);
+    assert.match(groups, /Luis Gómez/);
     assert.equal(groups.includes("0 jugador"), false);
     assert.equal(groups.includes("0 integrantes"), false);
     if (saveShots) await page.screenshot({ path: `${SHOTS}/web-375-tus-grupos.png`, fullPage: true });

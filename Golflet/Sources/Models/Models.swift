@@ -846,14 +846,18 @@ enum GolfletError: LocalizedError, Equatable {
 
 enum JSONFlex {
     static func double(from value: Any?) -> Double? {
+        if value is Bool { return nil }
         if let d = value as? Double { return d }
         if let i = value as? Int { return Double(i) }
+        if let n = value as? NSNumber { return n.doubleValue }
         if let s = value as? String { return Double(s.replacingOccurrences(of: ",", with: ".")) }
         return nil
     }
 
     static func int(from value: Any?) -> Int? {
+        if value is Bool { return nil }
         if let i = value as? Int { return i }
+        if let n = value as? NSNumber { return n.intValue }
         if let d = value as? Double { return Int(d.rounded()) }
         if let s = value as? String { return Int(s) }
         return nil
