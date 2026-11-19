@@ -382,32 +382,40 @@ struct OnboardingView: View {
 
     private var plan: some View {
         let items = OnboardingPlanCards.items(facts: facts, groupCount: model.groups.count)
-        return VStack(alignment: .leading, spacing: 0) {
-            caddieGlow
-                .frame(maxWidth: .infinity)
-                .padding(.top, 8)
-            Text(planTitle)
-                .font(GFont.ui(32, weight: .semibold))
-                .foregroundStyle(Color(hex: BrandHex.navy))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 12)
-                .accessibilityIdentifier("ob-plan-title")
-            Spacer(minLength: 18)
-            if items.count == 3 {
-                planCard(1, items[0])
-                    .modifier(RiseIn(index: 0, reduceMotion: reduceMotion || voiceOver))
-                Spacer(minLength: 14)
-                planCard(2, items[1])
-                    .modifier(RiseIn(index: 1, reduceMotion: reduceMotion || voiceOver))
-                Spacer(minLength: 14)
-                planCard(3, items[2])
-                    .modifier(RiseIn(index: 2, reduceMotion: reduceMotion || voiceOver))
+        return GeometryReader { geo in
+            VStack(alignment: .leading, spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        caddieGlow
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 8)
+                        Text(planTitle)
+                            .font(GFont.ui(32, weight: .semibold))
+                            .foregroundStyle(Color(hex: BrandHex.navy))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 12)
+                            .accessibilityIdentifier("ob-plan-title")
+                        Spacer(minLength: 12)
+                        if items.count == 3 {
+                            planCard(1, items[0])
+                                .modifier(RiseIn(index: 0, reduceMotion: reduceMotion || voiceOver))
+                            Spacer(minLength: 10)
+                            planCard(2, items[1])
+                                .modifier(RiseIn(index: 1, reduceMotion: reduceMotion || voiceOver))
+                            Spacer(minLength: 10)
+                            planCard(3, items[2])
+                                .modifier(RiseIn(index: 2, reduceMotion: reduceMotion || voiceOver))
+                        }
+                        Spacer(minLength: 12)
+                    }
+                    .frame(minHeight: max(0, geo.size.height - 76), alignment: .top)
+                }
+                Button(action: finish) { pill("Entrar a Golflet") }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("ob-done")
+                    .padding(.top, 8)
+                    .padding(.bottom, 8)
             }
-            Spacer(minLength: 18)
-            Button(action: finish) { pill("Entrar a Golflet") }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("ob-done")
-                .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
