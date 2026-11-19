@@ -378,20 +378,25 @@ struct OnboardingView: View {
         return VStack(alignment: .leading, spacing: 0) {
             caddieGlow
                 .frame(maxWidth: .infinity)
-                .padding(.top, 4)
+                .padding(.top, 8)
             Text(planTitle)
-                .font(GType.sheetTitle)
+                .font(GFont.ui(32, weight: .semibold))
                 .foregroundStyle(Color(hex: BrandHex.navy))
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
+                .padding(.top, 12)
                 .accessibilityIdentifier("ob-plan-title")
-            VStack(spacing: 14) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    planCard(index + 1, item)
-                        .modifier(RiseIn(index: index, reduceMotion: reduceMotion || voiceOver))
-                }
+            Spacer(minLength: 18)
+            if items.count == 3 {
+                planCard(1, items[0])
+                    .modifier(RiseIn(index: 0, reduceMotion: reduceMotion || voiceOver))
+                Spacer(minLength: 14)
+                planCard(2, items[1])
+                    .modifier(RiseIn(index: 1, reduceMotion: reduceMotion || voiceOver))
+                Spacer(minLength: 14)
+                planCard(3, items[2])
+                    .modifier(RiseIn(index: 2, reduceMotion: reduceMotion || voiceOver))
             }
-            .padding(.top, 16)
+            Spacer(minLength: 18)
             Button(action: finish) { pill("Entrar a Golflet") }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ob-done")
@@ -408,7 +413,7 @@ struct OnboardingView: View {
                 startRadius: 8,
                 endRadius: 92
             )
-            .frame(width: 180, height: 140)
+            .frame(width: 200, height: 168)
             RobertoGuide(small: true)
         }
         .accessibilityElement(children: .contain)
