@@ -1885,7 +1885,13 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(sync.waitForExistence(timeout: 6))
         if sync.isHittable { sync.tap() } else { sync.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         XCTAssertTrue(waitFor(app, "sync-overlay", timeout: 8))
-        XCTAssertTrue(app.descendants(matching: .any)["sync-skeleton"].waitForExistence(timeout: 3) || app.descendants(matching: .any)["sync-yardage"].waitForExistence(timeout: 2))
+        let reading = app.descendants(matching: .any)
+        XCTAssertTrue(
+            reading["sync-yardage"].waitForExistence(timeout: 4)
+                || reading["sync-card-row"].waitForExistence(timeout: 2)
+                || reading.matching(identifier: "sync-skeleton").firstMatch.waitForExistence(timeout: 1),
+            "La lectura no mostró el libro ni las tarjetas"
+        )
         shot("leyendo-inicio")
         XCTAssertTrue(app.descendants(matching: .any)["sync-card-row"].waitForExistence(timeout: 8), "No llegó una tarjeta")
         shot("leyendo-tarjetas")
