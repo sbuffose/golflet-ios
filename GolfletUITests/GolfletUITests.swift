@@ -1998,7 +1998,6 @@ final class GolfletUITests: XCTestCase {
         let entrar = first(app, "ob-done")
         XCTAssertTrue(entrar.waitForExistence(timeout: 4), "Falta Entrar a Golflet")
         shot("arme-tu-inicio")
-        let window = app.windows.firstMatch
         XCTAssertGreaterThan(entrar.frame.height, 40, "Entrar a Golflet no tiene alto")
         XCTAssertLessThanOrEqual(entrar.frame.maxY, window.frame.maxY + 1, "Entrar a Golflet queda fuera de la pantalla")
         XCTAssertLessThan(entrar.frame.minY, window.frame.maxY - 44, "Entrar a Golflet queda fuera de la pantalla")
