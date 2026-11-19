@@ -41,7 +41,6 @@ struct RootView: View {
                 SyncProgressView()
                     .golfletChrome()
                     .environment(model)
-                    .ignoresSafeArea()
                     .transition(.identity)
             }
         }

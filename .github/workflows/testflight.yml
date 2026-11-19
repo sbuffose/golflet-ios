@@ -185,7 +185,7 @@ jobs:
   ui-tests:
     needs: build
     runs-on: macos-15
-    timeout-minutes: 80
+    timeout-minutes: 100
 
     steps:
       - name: Checkout repository

@@ -250,9 +250,20 @@ struct ReconstructView: View {
                 .disabled(busy)
             ForEach(shots) { shot in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Hoyo \(shot.hole) · \(shot.club.isEmpty ? "sin palo" : shot.club)")
-                        .font(GType.headline)
-                        .foregroundStyle(p.ink)
+                    HStack(spacing: 6) {
+                        Text("Hoyo \(shot.hole) · \(shot.club.isEmpty ? "sin palo" : shot.club)")
+                            .font(GType.headline)
+                            .foregroundStyle(p.ink)
+                        if shot.intent == "recovery" {
+                            Text("A buena")
+                                .font(GFont.ui(9, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(p.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        }
+                    }
                     Text("\(shot.positionLabel). \(shot.distanceLabel)\(shot.distanceM.map { " · \(Int($0.rounded())) m" } ?? "")\(shot.penaltyStrokes > 0 ? " · \(shot.penaltyStrokes) pena\(shot.penaltyStrokes == 1 ? "" : "s")" : "")")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)

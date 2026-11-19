@@ -53,8 +53,10 @@ async function api(path, opt = {}){
 const errText = (e, what) => (e && e.timeout) ? e.message : (e && e.status && e.status < 500 && e.message) ? e.message : `No pudimos cargar ${what || 'esta sección'}. Probá de nuevo en un rato.`;
 const errBox = (e, what) => `<div class="msg err">${esc(errText(e, what))} <button type="button" class="btn ghost sm" data-retry>Reintentar</button></div>`;
 document.addEventListener('click', ev => { if (ev.target.closest && ev.target.closest('[data-retry]')) { ev.preventDefault(); if (!G) { location.reload(); return; } render(true); } });
-function toast(t, kind){ let el = $('#toast'); if(!el){ el=document.createElement('div'); el.id='toast'; document.body.appendChild(el); }
-  el.className = 'toast '+(kind||''); el.textContent = t; el.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(()=>el.style.opacity=0, 3800); }
+function toast(t, kind, undo){ let el = $('#toast'); if(!el){ el=document.createElement('div'); el.id='toast'; document.body.appendChild(el); }
+  el.className = 'toast '+(kind||'')+(undo ? ' has-undo' : ''); el.replaceChildren(); el.append(document.createTextNode(t));
+  if (undo) { const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Deshacer'; b.onclick = () => { clearTimeout(toast.t); el.style.opacity = 0; undo(); }; el.append(b); }
+  el.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(()=>el.style.opacity=0, undo ? 5000 : 3800); }
 const ago = d => { if(!d) return 'nunca'; const s=(Date.now()-new Date(d))/1000; if(s<90) return 'recién'; if(s<3600) return `hace ${Math.round(s/60)} min`; if(s<86400) return `hace ${Math.round(s/3600)} h`; const n=Math.round(s/86400); return n===1?'ayer':`hace ${n} días`; };
 
 /* ---------- state ---------- */
@@ -89,6 +91,7 @@ const MISS = {
   course: { k: 'Cancha', source: 'Sale de la cancha que elegís.', why: 'Todavía no hay una cancha elegida.', action: 'Elegir cancha', go: '#/jugar' },
   club: { k: 'Palo', source: 'Sale de tu bolsa.', why: 'La bolsa está vacía.', action: 'Agregar palo', go: '#/equipo/nuevo' },
   ball: { k: 'Pelota', source: 'La cargás vos en la cuenta.', why: 'No hay una pelota elegida.', action: 'Elegir pelota', go: '#/pelota' },
+  players: { k: 'Lo usan', source: 'Es un WITB público, con fecha, de PGA Tour, Titleist o GolfWRX.', why: 'No tenemos un jugador de tour verificado con este mismo modelo.', action: '', go: '' },
   handicap: { k: 'Hándicap', source: 'Sale de la matrícula del club.', why: 'No hay una matrícula vinculada.', action: 'Vincular matrícula', go: '#/vincular' },
   worst: { k: 'Peor ronda', source: 'Es la tarjeta de mayor gross del período.', why: 'Hay una sola tarjeta, así que no hay una peor distinta.', action: '', go: '' },
   geo: { k: 'Geometría', source: 'Sale de un trazado verificado del tee al centro del green.', why: 'Este hoyo no tiene geometría verificada. No marco un punto inventado.', action: '', go: '' },
@@ -219,7 +222,7 @@ function heroMeta(){
     <a href="#/rondas"><div>Tarjetas</div><b class="num">${cards}</b></a>
     <a href="#/rondas"><div>Mejor</div><b class="num">${best == null ? '–' : best}</b></a>
     <a href="${rlink('gross')}"><div>Prom.</div><b class="num">${avg == null ? '–' : f1(avg)}</b></a>
-    <a id="hcpimp" href="#/cambios"><div>Impacto</div><b class="num">–</b></a>
+    <a id="hcpimp" href="#/impacto"><div>Impacto</div><b class="num">${homeImpactMark()}</b></a>
   </div>`;
 }
 function heroActions(play){
@@ -446,6 +449,7 @@ function sRonda(id){
     ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
   <div id="hmap"></div>
+  <div id="rwx" hidden></div>
   <div class="section"><h2>Estadísticas de la ronda</h2>${has?'<span class="badge" id="gamebadge">Cargado</span>':''}</div>
   <div class="rstats3" id="rstats3"><div><span>Putts</span><b class="num" id="rt-putts">${r.putts==null?miss('putts'):r.putts}</b><small id="rt-putts-src">${r.putts==null?'':'Manual'}</small></div><div><span>Greens</span><b class="num" id="rt-gir">${r.gir==null?miss('greens'):r.gir}</b><small id="rt-gir-src">${r.gir==null?'':'Manual'}</small></div><div><span>Fairways</span><b class="num" id="rt-fir">${r.fir==null?miss('fairways'):r.fir}</b><small id="rt-fir-src">${r.fir==null?'':'Manual'}</small></div></div>
   <button type="button" class="btn ghost" id="load-round-stats">Cargar putts, greens y fairways</button>
@@ -457,8 +461,7 @@ function sRonda(id){
   </div>
   <div class="saved" id="saved" style="margin:8px 4px 0">${r.notes_at?'<img class="cad xs" src="/brand/caddie.png" alt="">':''}${ICON.pencil}<span>${r.notes_at?'Guardado en tu cuenta · '+ago(r.notes_at):'Se guarda en tu cuenta'}</span></div>
   ${recapBox(r.round_id)}
-  ${r.gps_shots?`<div class="section"><h2>Golpes con GPS</h2><span class="badge">${r.gps_shots}</span></div><div id="rshots"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>`:''}
-  <div id="rwx" hidden></div>`;
+  ${r.gps_shots?`<div class="section"><h2>Golpes con GPS</h2><span class="badge">${r.gps_shots}</span></div><div id="rshots"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div>`:''}`;
 }
 function sDif(id){
   const r = rounds.find(x => x.round_id === id);
@@ -1782,6 +1785,22 @@ async function loadBagSources(){
 }
 /* ---------- IMPACTO EN EL HÁNDICAP (por período; /api/metrics/hcp-impact) ---------- */
 const sgn1 = v => v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + f1(Math.abs(v));
+function homeIndexSpan(){
+  const hi = offHist();
+  if (hi.length < 2) return null;
+  const start = hi[0], now = hi[hi.length - 1];
+  return { start, now, delta: Math.round((now.hi - start.hi) * 10) / 10 };
+}
+function homeImpactMark(){
+  const span = homeIndexSpan();
+  if (!span) return '–';
+  const d = span.delta;
+  return `${d < 0 ? '↓' : d > 0 ? '↑' : ''}${f1(Math.abs(d))}`;
+}
+const withEndpoints = h => {
+  if (!h || h.start == null || h.start.index == null || h.now == null || h.now.index == null) return { ...h, delta: null };
+  return { ...h, delta: Math.round((+h.now.index - +h.start.index) * 10) / 10 };
+};
 const impTxt = h => h?.delta == null ? '—' : `${h.delta < 0 ? '↓' : h.delta > 0 ? '↑' : ''}${f1(Math.abs(h.delta))}`;
 const impCls = h => h?.delta == null ? '' : h.delta < 0 ? 'dn' : h.delta > 0 ? 'up' : 'flat';
 /* t125u: linked profesores on the Inicio HI card (max 3 + N; tap → profesor page, or Tu cuenta › Profesores if several) */
@@ -1839,27 +1858,41 @@ async function loadHiGroups(){
 }
 async function loadHcpImp(){
   const a = $('#hcpimp'); if (!a) return;
-  try { const { hcp_impact: h } = await api(`/api/metrics/hcp-impact?range=${RANGE}`); if (!$('#hcpimp')) return;
+  const span = homeIndexSpan();
+  if (span) {
+    const h = { delta: span.delta };
     const mark = a.querySelector('b');
     if (mark) { mark.className = `num ${impCls(h)}`; mark.textContent = impTxt(h); }
-    else a.innerHTML = `Impacto<b class="num ${impCls(h)}">${impTxt(h)}</b>`;
-    a.setAttribute('aria-label', h.delta == null ? 'Impacto en el hándicap: sin historia suficiente' : `Impacto en el hándicap: ${h.delta < 0 ? 'bajó' : h.delta > 0 ? 'subió' : 'sin cambio'} ${f1(Math.abs(h.delta))}${h.estimated ? ', estimado' : ''}`);
-  } catch(e){ a.querySelector('b').textContent = '—'; }
+    a.setAttribute('aria-label', `Impacto en el hándicap: ${span.delta < 0 ? 'bajó' : span.delta > 0 ? 'subió' : 'sin cambio'} ${f1(Math.abs(span.delta))} desde ${dmy(span.start.date)}`);
+    return;
+  }
+  try { const { hcp_impact: raw } = await api('/api/metrics/hcp-impact?range=all'); if (!$('#hcpimp')) return;
+    const h = withEndpoints(raw);
+    const mark = a.querySelector('b');
+    if (mark) { mark.className = `num ${impCls(h)}`; mark.textContent = impTxt(h); }
+    a.setAttribute('aria-label', h.delta == null ? 'Impacto en el hándicap: sin historia suficiente' : `Impacto en el hándicap: ${h.delta < 0 ? 'bajó' : h.delta > 0 ? 'subió' : 'sin cambio'} ${f1(Math.abs(h.delta))}`);
+  } catch(e){ const mark = a.querySelector('b'); if (mark) mark.textContent = '—'; }
 }
 function sImpacto(){ return `<div class="bar"><span class="overline">Handicap Index</span></div><div id="impacto"><div style="padding:60px 0;text-align:center"><span class="spin"></span></div></div>`; }
 async function loadImpacto(){
   const el = $('#impacto'); if (!el) return;
-  const qs = new URLSearchParams(location.hash.split('?')[1] || ''), rg = RKEYS.includes(qs.get('range')) ? qs.get('range') : RANGE;
-  if (rg !== RANGE) setRange(rg);
+  const qs = new URLSearchParams(location.hash.split('?')[1] || ''), rg = RKEYS.includes(qs.get('range')) ? qs.get('range') : 'all';
   try {
-    const { hcp_impact: h } = await api(`/api/metrics/hcp-impact?range=${rg}`); if (!$('#impacto')) return;
-    const dt = d => d ? dmy(d) : '—', est = h.estimated && h.delta != null;
+    const { hcp_impact: raw } = await api(`/api/metrics/hcp-impact?range=${rg}`); if (!$('#impacto')) return;
+    const h = withEndpoints(raw);
+    const dt = d => d ? dmy(d) : '—';
     const chip = c => c.entered_best8 == null ? '<span class="hi-chip">Sin 20 tarjetas</span>' : c.entered_best8 ? '<span class="hi-chip in">Entró en las 8</span>' : '<span class="hi-chip">No entró</span>';
+    const verified = (h.cards || []).filter(c => c.entered_best8 === true && c.vs_prev != null);
+    const movers = verified.slice().sort((a, b) => Math.abs(b.vs_prev) - Math.abs(a.vs_prev)).slice(0, 5);
+    const moverHtml = movers.length ? `<div class="section"><h2>Las que más lo movieron</h2></div><div class="card">${movers.map(c => `<a class="row hi-row" href="#/ronda/${esc(c.round_id)}">${dateBlock(c.date)}<div class="body"><div class="t">${esc(c.course_label || 'Ronda')}</div><div class="s">Diferencial ${f1(c.differential)} · impacto ${sgn1(c.vs_prev)}</div></div>${ICON.chev}</a>`).join('')}</div>` : ((h.cards || []).some(c => c.entered_best8 == null) ? '<p class="foot">No puedo identificar la tarjeta.</p>' : '');
+    const chart = rg === 'all' ? (hcpEvo(null, 'desde el primer registro') || '') : (hcpEvo(h.since, rlabel(rg)) || '');
     el.innerHTML = `<div class="stitle">Impacto en el hándicap</div>${rangeSeg(h.cards_in_range, 'irange')}
       <div class="hi-hero"><div class="hi-col"><span>${h.since && !h.start_is_first_record ? 'Al empezar' : 'Primer registro'}</span><b class="num">${h.start ? f1(h.start.index) : '—'}</b><small>${h.start ? dt(h.start.date) : 'Sin historia suficiente'}</small></div>
         <div class="hi-arrow ${impCls(h)}"><b class="num">${impTxt(h)}</b><small>${h.delta == null ? '' : h.delta < 0 ? 'bajó' : h.delta > 0 ? 'subió' : 'igual'}</small></div>
         <div class="hi-col"><span>Ahora</span><b class="num">${h.now ? f1(h.now.index) : '—'}</b><small>${h.now ? dt(h.now.date) : ''}</small></div></div>
-      <p class="foot">${h.source === 'official' ? 'Índice oficial que publica tu club.' : h.source === 'estimated' ? 'Estimado: mejores 8 de las últimas 20 con los diferenciales que calcula Golflet. El oficial no cubre el inicio del período.' : 'Hacen falta 20 tarjetas con diferencial (o el índice oficial al inicio del período) para medir el cambio.'}</p>
+      <p class="foot">${h.source === 'official' ? 'Índice oficial que publica tu club.' : h.source === 'estimated' ? 'Estimado: mejores 8 de las últimas 20 con los diferenciales que calcula Golflet. El oficial no cubre el inicio del período.' : 'Hacen falta 20 tarjetas con diferencial (o el índice oficial al inicio del período) para medir el cambio.'}${rg === 'all' ? ' Es el mismo tramo que el número de Inicio.' : ''}</p>
+      ${chart}
+      ${moverHtml}
       <div class="grid4 hi-stats">
         <div class="card mini stat"><div class="k">Tarjetas</div><div class="v num">${h.cards_in_range}</div></div>
         <div class="card mini stat"><div class="k">Entraron en las 8</div><div class="v num">${h.entered_best8 ?? '—'}</div><div class="d">${h.entered_avg_differential != null ? 'dif. prom. ' + f1(h.entered_avg_differential) : ''}</div></div>
@@ -1904,6 +1937,32 @@ let BCAT = null;
 const bagCat = async () => BCAT || (BCAT = await api('/api/my-clubs/catalog'));
 const CATL = { driver:'Driver', fairway:'Maderas', hybrid:'Híbridos', iron:'Hierros', wedge:'Wedges', putter:'Putter' };
 const eqLine = c => c.brand ? `${esc(c.brand)}${c.model?' · '+esc(c.model):''}` : '<span class="eq-none">Sin marca ni modelo</span>';
+const eqGear = (brand, model, category) => {
+  const g = window.GolfletGear;
+  if (!g) return { thumb: { src: '/clubs/silhouettes/iron.svg', alt: 'Silueta', kind: 'silhouette' }, users: [] };
+  return { thumb: g.thumb(brand, model, category), users: g.users(brand, model, category) };
+};
+const eqThumb = (club, category) => {
+  const gear = eqGear(club.brand, club.model, category).thumb;
+  return `<img class="eq-thumb" src="${esc(gear.src)}" alt="" data-kind="${gear.kind}">`;
+};
+const eqUsers = (brand, model, category) => {
+  const users = eqGear(brand, model, category).users;
+  const rows = users.length
+    ? users.map(u => `<a class="eq-player" id="eq-user-${esc(u.id)}" href="${esc(u.sourceUrl)}"><b>${esc(u.name)}</b><span>${esc(u.tour)}</span><span class="eq-src">GolfWRX WITB · ${esc(u.whenLabel)}</span></a>`).join('')
+    : `<p class="eq-player" id="eq-users-empty">${miss('players')}</p>`;
+  return `<div class="eq-use" id="eq-users"><div class="section"><h2>Lo usan</h2></div>${rows}</div>`;
+};
+const eqDash = v => v == null || v === '' ? '–' : esc(String(v));
+const eqDist = (cur, row, shots) => `<div class="section" id="eq-dist"><h2>Distancias</h2><span class="badge">yardas</span></div>
+  <div class="grid3 eq-dist"><div class="card mini stat"><div class="k">Carry</div><div class="v num" id="eq-carry">${eqDash(row?.carry)}</div></div><div class="card mini stat"><div class="k">Total</div><div class="v num" id="eq-total">${eqDash(row?.total)}</div></div><div class="card mini stat"><div class="k">Golpes</div><div class="v num" id="eq-shots">${shots == null ? '–' : esc(String(shots))}</div><div class="d">con GPS</div></div></div>
+  <p class="foot">Carry y total son los de tu bolsa. Los golpes son los medidos con GPS. <a href="#/palo/${eqCode(cur)}">Ver los golpes</a></p>`;
+const eqFicha = spec => {
+  if (!spec || spec.status !== 'match') return `<div class="section" id="eq-spec"><h2>Ficha</h2></div><p class="foot" id="eq-spec-empty">${esc(spec?.message || 'No tenemos una ficha oficial de este modelo.')}</p>`;
+  const lines = (spec.lines || []).map(line => `<div class="eq-spec-row"><span>${esc(line.label)}</span><b>${esc(line.value)}</b></div>`).join('');
+  const link = spec.sourceUrl ? `<a class="eq-src" id="eq-spec-src" href="${esc(spec.sourceUrl)}">${esc(spec.sourceTitle || 'Ficha')}${spec.checked ? ` · ${esc(spec.checked)}` : ''}</a>` : '';
+  return `<div class="section" id="eq-spec"><h2>Ficha</h2></div><div class="card eq-spec">${lines}${link}</div>`;
+};
 const eqCode = c => encodeURIComponent(c.code);
 async function loadEquipList(){
   const el = $('#equip'); if (!el) return;
@@ -1915,7 +1974,7 @@ async function loadEquipList(){
     const done = clubs.filter(c => c.brand).length, nm = x => String(x || '').trim().toLowerCase();
     const bagOf = c => { const ks = [typ(c.code)?.bag, c.label, c.code].filter(Boolean).map(nm); return (G.bag || []).find(b => ks.includes(nm(b.club))); };
     el.innerHTML = `<p class="foot" style="margin:0 0 10px">${clubs.length} palos · ${done ? `${done} con marca y modelo` : 'cargá marca y modelo de cada uno'}.</p>
-      <div class="list">${[...Object.keys(CATL), 'otros'].filter(k => groups[k]).map(k => groups[k].map(c => { const b = bagOf(c), i = b ? G.bag.indexOf(b) : -1; return `<div class="row eq-row${c.enabled===false?' eq-off':''}"><a class="eq-a" href="#/equipo/${eqCode(c)}"><span class="eq-code num">${esc(c.code)}</span><div class="body"><div class="t">${esc(wedgeFace(c))}</div><div class="s">${eqLine(c)}${c.enabled===false?' · oculto al marcar golpes':''}</div></div></a>${(isPutterName(c.code) || isPutterName(c.label) || typ(c.code)?.category === 'putter') ? '<span class="eq-yd">Sin yardas</span>' : `<label class="eq-yd" title="Carry en yardas"><input class="num" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" maxlength="3" data-eqc="${esc(c.code)}" value="${b?.carry ?? ''}" placeholder="—" aria-label="Carry de ${esc(c.label)} en yardas"><span>yd</span></label>`}<a class="eq-ch" href="#/equipo/${eqCode(c)}" tabindex="-1" aria-hidden="true">${ICON.chev}</a></div>`; }).join('')).join('')}</div>`;
+      <div class="list">${[...Object.keys(CATL), 'otros'].filter(k => groups[k]).map(k => groups[k].map(c => { const b = bagOf(c), i = b ? G.bag.indexOf(b) : -1; return `<div class="row eq-row${c.enabled===false?' eq-off':''}"><a class="eq-a" href="#/equipo/${eqCode(c)}">${eqThumb(c, typ(c.code)?.category)}<div class="body"><div class="t">${esc(wedgeFace(c))}</div><div class="s">${eqLine(c)}${c.enabled===false?' · oculto al marcar golpes':''}</div></div></a>${(isPutterName(c.code) || isPutterName(c.label) || typ(c.code)?.category === 'putter') ? '<span class="eq-yd">Sin yardas</span>' : `<label class="eq-yd" title="Carry en yardas"><input class="num" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" maxlength="3" data-eqc="${esc(c.code)}" value="${b?.carry ?? ''}" placeholder="—" aria-label="Carry de ${esc(c.label)} en yardas"><span>yd</span></label>`}<a class="eq-ch" href="#/equipo/${eqCode(c)}" tabindex="-1" aria-hidden="true">${ICON.chev}</a></div>`; }).join('')).join('')}</div>`;
     /* t223u: the carry right on the row (the planner reads it from Mi bolsa: total if you typed one, else carry). Save on blur / Enter, no detail screen. */
     el.querySelectorAll('input[data-eqc]').forEach(inp => {
       inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } };
@@ -2052,11 +2111,29 @@ async function loadEquipo(code, edit){
     if (code !== 'nuevo' && !cur) { el.innerHTML = `<div class="msg err">Ese palo no está en tu bolsa.</div><a class="btn ghost" href="#/bolsa" style="margin-top:12px">Volver a Mi bolsa</a>`; return; }
     const typ = c => cat.types.find(t => t.code.toLowerCase() === c.toLowerCase());
     if (cur && !edit){
-      const t = typ(cur.code), bl = t ? t.bag : cur.label, row = bl && (G.bag||[]).find(b => b.club === bl);
-      el.innerHTML = `<div class="eq-hero"><div class="overline">${esc(CATL[t?.category] || 'Palo')}</div><div class="eq-name">${esc(cur.label)}</div>
+      const t = typ(cur.code), nm = x => String(x || '').trim().toLowerCase();
+      const keys = [t?.bag, cur.label, cur.code].filter(Boolean).map(nm);
+      const row = (G.bag || []).find(b => keys.includes(nm(b.club)));
+      const gear = eqGear(cur.brand, cur.model, t?.category);
+      let shots = null, carry = row?.carry ?? null, total = row?.total ?? null;
+      try { const stats = await api(`/api/club-stats/${eqCode(cur)}`); if (stats?.club && Number.isFinite(+stats.club.shots)) shots = +stats.club.shots; } catch (_) {}
+      try {
+        const d = await api('/api/bag/distances');
+        const hit = (d.clubs || []).find(x => [x.club, x.code].some(v => keys.includes(nm(v))));
+        if (hit) {
+          if (carry == null) carry = hit.carry_yd;
+          if (total == null) total = hit.total_yd;
+          if (shots == null && hit.gps && Number.isFinite(+hit.gps.n)) shots = +hit.gps.n;
+        }
+      } catch (_) {}
+      let spec = null;
+      try { spec = await api('/api/my-clubs/spec?' + new URLSearchParams({ brand: cur.brand || '', model: cur.model || '', category: t?.category || '' })); } catch (_) {}
+      el.innerHTML = `<div class="eq-hero"><img class="eq-hero-photo" id="eq-photo" src="${esc(gear.thumb.src)}" alt="" data-kind="${gear.thumb.kind}"><div class="overline">${esc(CATL[t?.category] || 'Palo')}</div><div class="eq-name">${esc(cur.label)}</div>
           <div class="eq-bm">${cur.brand ? `<b>${esc(cur.brand)}</b>${cur.model ? `<span>${esc(cur.model)}</span>` : '<span>Modelo sin cargar</span>'}` : '<span>Sin marca ni modelo</span>'}</div>
           <div class="eq-tags">${cur.loft?`<span>Loft <b class="num">${String(cur.loft).replace('.',',')}°</b></span>`:''}<span>Código <b>${esc(cur.code)}</b></span>${cur.model_custom?'<span>Modelo escrito a mano</span>':''}</div></div>
-        ${row ? `<div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div><div class="grid3"><div class="card mini stat"><div class="k">Carry</div><div class="v num">${row.carry ?? '—'}</div></div><div class="card mini stat"><div class="k">Total</div><div class="v num">${row.total ?? '—'}</div></div><a class="card mini stat vx-tap" href="#/palo/${eqCode(cur)}"><div class="k">Con GPS</div><div class="v" style="font-size:calc(15px*var(--ts,1))">Ver golpes ›</div></a></div>` : ''}
+        ${eqDist(cur, { carry, total }, shots)}
+        ${eqFicha(spec)}
+        ${eqUsers(cur.brand, cur.model, t?.category)}
         <div class="tt-acts"><a class="btn" href="#/equipo/${eqCode(cur)}/editar">Editar marca y modelo</a><button type="button" class="btn ghost danger" id="eqdel">Sacar de la bolsa</button></div>
         <p class="foot">${cur.enabled===false?'Oculto en la lista de palos al marcar golpes. ':''}Al sacarlo, también se va su fila de distancias. Los golpes con GPS que ya marcaste con este palo se conservan.</p>`;
       $('#eqdel').onclick = async e => { if (!(await askInline(e.currentTarget, `¿Sacar ${cur.label} de tu bolsa?`, 'Sí, sacarlo'))) return;
@@ -3049,6 +3126,8 @@ async function loadHoleMap(roundId){
   const el = $('#hmap'); if (!el) return;
   let d; try { d = await api(`/api/rounds/${roundId}/shots/map`); } catch(e){ el.innerHTML = ''; return; }
   if (!$('#hmap')) return; if (!d?.holes?.length) { el.innerHTML = ''; return; }
+  if (window.GL_HOLE && d.holes.some(h => h.hole === window.GL_HOLE)) HM.hole = window.GL_HOLE;
+  window.GL_HOLE = null;
   if (!d.holes.some(h => h.hole === HM.hole)) HM.hole = d.holes[0].hole;
   const draw = () => { const h = d.holes.find(x => x.hole === HM.hole), hasPutts = h.shots.some(x => x.kind === 'putt') || h.points.some(p => p.lie === 'green');
     const rows = [...h.shots.map(x => ({ n: x.order, kind: x.kind, club: x.club, dist: x.distance_m, left: x.left_to_flag_m, holed: x.holed })),
@@ -3114,10 +3193,61 @@ async function loadPalo(code, focus){
     <div class="section"><h2>Largo al green</h2><span class="badge">${c.length_on_approach.n} approaches</span></div><div class="card">${split3([c.length_on_approach.short,c.length_on_approach.on,c.length_on_approach.long],['corto','justo','largo'],['s-l','s-c','s-r'])}</div>
     <div class="grid3" style="gap:8px;margin-top:14px">${tile('Greens', c.greens_hit?c.greens_hit.pct+'%':null, c.greens_hit?`${c.greens_hit.hit} de ${c.greens_hit.of}`:'en approaches')}${tile('Fairways', c.fairways_hit?c.fairways_hit.pct+'%':null, c.fairways_hit?`${c.fairways_hit.hit} de ${c.fairways_hit.of}`:'salidas con madera')}${tile('Pegado feo', c.mishit.pct!=null?c.mishit.pct+'%':null, `${c.mishit.count} de ${c.mishit.of}`)}</div>
     ${lm?`<div class="section"><h2>Launch monitor</h2><span class="badge gold">${esc(lm.sources.join(', '))}</span></div><div class="card"><div class="vx-lm"><span>Carry mediano</span><b class="num">${lm.carry?.median_yd ?? '—'} yd</b></div><div class="vx-lm"><span>Rango</span><b class="num">${lm.carry?`${lm.carry.range_yd[0]}–${lm.carry.range_yd[1]} yd`:'—'}</b></div>${lm.side?`<div class="vx-lm"><span>Izq. / centro / der.</span><b class="num">${lm.side.left}% · ${lm.side.center}% · ${lm.side.right}%</b></div>`:''}</div>`:''}
-    <div class="section" id="f-tiros"><h2>Últimos golpes</h2></div>${d.recent_shots.length?`<div class="card vx-shots">${d.recent_shots.map(s=>`<div class="vx-shot"><span class="vx-n num">${s.hole}</span><span class="vx-club num">${dmy(s.date).replace(/ \d{4}$/,'')}</span><span class="vx-meta">${[s.lie&&LIE[s.lie], s.result&&RES[s.result]].filter(Boolean).join(' → ')||'&nbsp;'}${quickTags(s)}</span><b class="num">${s.distance_yd!=null?s.distance_yd+' yd':'—'}</b></div>`).join('')}</div>`:'<div class="msg">Sin golpes con este filtro.</div>'}
+    <div class="section" id="f-tiros"><h2>Últimos golpes</h2></div>${d.recent_shots.length?`<div class="card vx-shots">${d.recent_shots.map(s=>`<div class="vx-shot" data-shot="${esc(s.id)}"><a class="vx-open" href="${s.round_id ? '#/ronda/'+esc(s.round_id) : '#/gps/'+esc(s.live_round_id)}" data-hole="${s.hole||''}"><span class="vx-n num">${s.hole}</span><span class="vx-club num">${dmy(s.date).replace(/ \d{4}$/,'')}</span><span class="vx-meta">${[s.lie&&LIE[s.lie], s.result&&RES[s.result]].filter(Boolean).join(' → ')||'&nbsp;'}${quickTags(s)}</span><b class="num">${s.distance_yd!=null?s.distance_yd+' yd':'—'}</b></a><button type="button" class="vx-del" aria-label="Borrar o excluir este golpe">Borrar</button></div>`).join('')}</div>`:'<div class="msg">Sin golpes con este filtro.</div>'}
     <p class="foot">Distancias GPS entre golpes consecutivos, sin putts ni penalidades, recortando valores atípicos. Dirección y largo salen de lo que marcás después de cada golpe.</p>`;
   el.querySelectorAll('[data-pq]').forEach(b => b.onclick = () => { const [k, v] = b.dataset.pq.split('='); PQ[k] = decodeURIComponent(v); loadPalo(code); });
+  bindShotRows(el, d.recent_shots || [], () => loadPalo(code));
   const fe = focus && $('#f-' + focus); if (fe) { fe.scrollIntoView({ behavior: 'smooth', block: 'center' }); fe.classList.add('ttflash'); setTimeout(() => fe.classList.remove('ttflash'), 1800); }
+}
+function shotDeleteLine(s){
+  const n = s.shots_on_hole;
+  if (n == null || n < 1) return 'El golpe sale de la ronda. Las distancias de este palo se recalculan.';
+  const next = n - 1;
+  if (s.posted_strokes != null) return `La tarjeta del club sigue en ${s.posted_strokes}. Los golpes marcados pasan de ${n} a ${next}, así que dejan de coincidir con ese score. Las distancias de este palo se recalculan.`;
+  return `El hoyo pasa de ${n} a ${next} golpes. Las distancias de este palo se recalculan.`;
+}
+function bindShotRows(el, shots, reload){
+  el.querySelectorAll('.vx-open').forEach(a => a.addEventListener('click', () => { const h = Number(a.dataset.hole); if (h) window.GL_HOLE = h; }));
+  el.querySelectorAll('.vx-shot').forEach(row => {
+    const shot = shots.find(s => s.id === row.dataset.shot); if (!shot) return;
+    const ask = () => openShotEdit(row, shot, reload);
+    const btn = row.querySelector('.vx-del'); if (btn) btn.onclick = e => { e.preventDefault(); e.stopPropagation(); ask(); };
+    row.oncontextmenu = e => { e.preventDefault(); ask(); };
+  });
+}
+function openShotEdit(row, shot, reload){
+  if (row.querySelector('.vx-ask')) return;
+  const box = document.createElement('div');
+  box.className = 'vx-ask';
+  box.innerHTML = `<p></p><p></p><div class="gg-acts"><button type="button" class="btn" data-del>Borrar</button><button type="button" class="btn ghost" data-ex>Excluir de las distancias</button><button type="button" class="btn ghost" data-no>Cancelar</button></div>`;
+  box.querySelector('p').textContent = shotDeleteLine(shot);
+  box.querySelectorAll('p')[1].textContent = 'El golpe sigue en el hoyo y en el score. Deja de contar en las distancias de este palo.';
+  row.append(box);
+  box.querySelector('[data-no]').onclick = () => box.remove();
+  box.querySelector('[data-del]').onclick = async () => {
+    box.querySelectorAll('button').forEach(b => b.disabled = true);
+    try {
+      const r = await api(`/api/shots/${encodeURIComponent(shot.id)}`, { method: 'DELETE' });
+      const gone = r.shot;
+      toast('Golpe borrado', '', async () => {
+        if (!gone?.live_round_id) return;
+        try { await api(`/api/live-rounds/${encodeURIComponent(gone.live_round_id)}/shots`, { method: 'POST', body: JSON.stringify({ hole: gone.hole, shot_number: gone.shot_number, lat: gone.lat, lng: gone.lng, club: gone.club, lie: gone.lie, result: gone.result, direction: gone.direction, length: gone.length, intent: gone.intent, mishit: gone.mishit, client_id: 'undo-' + gone.id }) }); reload(); }
+        catch (err) { toast(err.message || 'No se pudo deshacer', 'err'); }
+      });
+      reload();
+    } catch (err) { toast(err.message || 'No se pudo borrar', 'err'); box.querySelectorAll('button').forEach(b => b.disabled = false); }
+  };
+  box.querySelector('[data-ex]').onclick = async () => {
+    box.querySelectorAll('button').forEach(b => b.disabled = true);
+    try {
+      await api(`/api/shots/${encodeURIComponent(shot.id)}`, { method: 'PATCH', body: JSON.stringify({ distance_kind: 'excluded' }) });
+      toast('Fuera de las distancias', '', async () => {
+        try { await api(`/api/shots/${encodeURIComponent(shot.id)}`, { method: 'PATCH', body: JSON.stringify({ distance_kind: shot.distance_kind || null }) }); reload(); }
+        catch (err) { toast(err.message || 'No se pudo deshacer', 'err'); }
+      });
+      reload();
+    } catch (err) { toast(err.message || 'No se pudo excluir', 'err'); box.querySelectorAll('button').forEach(b => b.disabled = false); }
+  };
 }
 
 /* ---------- actions ---------- */
@@ -3147,6 +3277,60 @@ function revealCard(){
   lines.push(rounds.length ? 'Solo me faltan unos datos más' : 'Te pregunto lo justo para armar tu inicio.');
   return `<div class="rv-card" id="rvcard">${lines.map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
 }
+function planSpark(history){
+  const ys = (Array.isArray(history) ? history : []).map(p => +p.hi).filter(n => Number.isFinite(n));
+  if (ys.length < 2) return '';
+  const w = 76, h = 28, pad = 2, min = Math.min(...ys), max = Math.max(...ys), span = (max - min) || 1;
+  const d = ys.map((v, i) => {
+    const x = pad + i * (w - pad * 2) / (ys.length - 1);
+    const y = pad + (max - v) * (h - pad * 2) / span;
+    return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg class="ob-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="#0B2545" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function planFirst(name){ return String(name || '').trim().split(/\s+/)[0] || ''; }
+function planMark(name){
+  const words = String(name || '').replace(/[()·.,]/g, ' ').split(/\s+/).filter(w => w && !/^(de|del|la|las|los|el|y|club|golf)$/i.test(w));
+  const pick = (words.length ? words : String(name || '').split(/\s+/)).slice(0, 2);
+  return pick.map(w => w[0]).join('').toUpperCase() || '–';
+}
+async function showPlan(host){
+  let groups = null, faces = [];
+  try {
+    const g = await api('/api/groups');
+    const list = Array.isArray(g.groups) ? g.groups : null;
+    groups = list ? list.length : null;
+    const seen = new Set();
+    for (const group of list || []) {
+      for (const face of group.faces || []) {
+        if (!face || seen.has(face.id)) continue;
+        seen.add(face.id);
+        faces.push(face);
+        if (faces.length === 3) break;
+      }
+      if (faces.length === 3) break;
+    }
+  } catch (_) { groups = null; }
+  const name = String(G.user?.first_name || G.user?.name || '').trim().split(/\s+/)[0] || '';
+  const hi = G.player?.handicap_index ?? G.hi_history?.at(-1)?.hi;
+  const hiText = hi == null || Number.isNaN(+hi) ? '–' : (typeof f1 === 'function' ? f1(hi) : String(hi).replace('.', ','));
+  const club = String(G.clubs?.[0]?.club_name || '').trim();
+  const code = String(G.clubs?.[0]?.club_code || '');
+  const logo = { '118': '/clubs/118@2x.png', '209': '/clubs/209@2x.png' }[code] || '';
+  const friendLine = groups == null ? 'Cuando haya un grupo, salís juntos.' : groups === 0 ? 'Todavía no hay un grupo para salir juntos.' : groups === 1 ? 'Un grupo para salir juntos.' : `${groups} grupos para salir juntos.`;
+  const crest = logo ? `<img class="ob-crest" src="${esc(logo)}" alt="">` : `<span class="ob-mono">${esc(club ? planMark(club) : '–')}</span>`;
+  const names = faces.map(face => planFirst(face.name)).filter(Boolean);
+  const people = `<span class="ob-fig">${faces.length
+    ? `<span class="ob-faces">${faces.map(face => face.photo_url ? `<img src="${esc(face.photo_url)}" alt="">` : `<span>${esc(face.initials || planMark(face.name || ''))}</span>`).join('')}</span>${names.length ? `<span class="ob-names">${esc(names.join(' · '))}</span>` : ''}`
+    : `<strong class="ob-hi">${esc(groups == null ? '–' : String(groups))}</strong>`}</span>`;
+  const rows = [
+    ['Tu índice', hiText === '–' ? 'Cuando llegue el índice, vemos dónde se te escapan los golpes.' : 'Desde este número vemos dónde se te escapan los golpes.', `<span class="ob-fig"><strong class="ob-hi">${esc(hiText)}</strong>${planSpark(G.hi_history)}</span>`],
+    ['Tu club', club ? 'Ahí miramos lo que más te cuesta esta semana.' : 'Cuando tengamos el club, miramos lo que más te cuesta.', `<span class="ob-fig">${crest}${club ? `<span class="ob-clubname">${esc(club)}</span>` : ''}</span>`],
+    ['Tus amigos', friendLine, people],
+  ];
+  host.innerHTML = `<div class="ob-plan" id="ob-plan"><img class="sx-caddie" src="/brand/caddie.png" alt=""><h1 id="ob-plan-title">${esc(name ? `${name}, armé tu inicio.` : 'Listo. Armé tu inicio.')}</h1><ol>${rows.map((row, i) => `<li id="ob-plan-card-${i + 1}"><span class="n">${i + 1}</span><div><b>${esc(row[0])}</b><small>${esc(row[1])}</small></div>${row[2]}</li>`).join('')}</ol><button class="btn" id="ob-done" type="button">Entrar a Golflet</button></div>`;
+  await new Promise(resolve => { const b = host.querySelector('#ob-done'); if (b) b.onclick = () => resolve(); else resolve(); });
+}
 async function runSync({ club, url, body, sheetEl, onFail }){
   const host = sheetEl || (() => { view.dataset.v = 'sync'; view.innerHTML = `<div class="pg"><nav class="crumbs"><span class="crumb-cur">Actualizando tarjetas</span></nav><div class="sheet inpage"><div class="ga-host"></div></div></div>`; window.scrollTo(0, 0); return view.querySelector('.ga-host'); })();
   const sheet = host.closest('.sheet');
@@ -3165,8 +3349,13 @@ async function runSync({ club, url, body, sheetEl, onFail }){
     G = { ...G, ...(await api('/api/data').catch(() => ({}))) }; derive();
     JUST_SYNCED = { total, added: r.sync.new_rounds };
     const rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (anim.leave) await anim.leave(sheet); else { sheet?.classList.add('ga-leave'); await new Promise(res => setTimeout(res, rm ? 0 : 480)); }
-    anim.destroy();
+    if (String(url).includes('first-sync')) {
+      anim.destroy();
+      await showPlan(host);
+    } else {
+      if (anim.leave) await anim.leave(sheet); else { sheet?.classList.add('ga-leave'); await new Promise(res => setTimeout(res, rm ? 0 : 480)); }
+      anim.destroy();
+    }
     if (pendingJoin() && !G.user?.pending_first_sync) { location.hash = '#/unirse/' + pendingJoin(); }   // came from a /g/<token> link
     else if (location.hash !== '#/inicio') location.hash = '#/inicio'; else render();
     toast(r.sync.new_rounds ? `${r.sync.new_rounds} tarjetas nuevas · ${total} en total` : `Al día · ${total} tarjetas`);
@@ -3455,8 +3644,8 @@ function bindQuick(id){
       penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0,
       lost: s.result === 'lost',
       holed: s.result === 'holed',
-      putt: s.intent === 'conceded' || /^pt$|putter/i.test(club) || s.lie === 'green',
-      originGreen: s.lie === 'green',
+      putt: s.intent !== 'recovery' && (s.intent === 'conceded' || /^pt$|putter/i.test(club) || s.lie === 'green'),
+      originGreen: s.intent !== 'recovery' && s.lie === 'green',
       endLie, direction,
     };
   };

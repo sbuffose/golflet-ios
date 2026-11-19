@@ -9,6 +9,7 @@ struct BagView: View {
     @State private var ironStatus = ""
     @State private var savingIron = false
     @State private var renaming: BagClub?
+    @State private var gearClub: BagClub?
     @State private var renameDraft = ""
     @State private var renameError = ""
     private let ironCatalog = [
@@ -140,6 +141,14 @@ struct BagView: View {
         .metricDestinations()
         .safeAreaInset(edge: .top) { if showsBack { MetricBackBar() } }
         .onAppear(perform: restoreIron)
+        .sheet(item: $gearClub) { club in
+            ClubGearSheet(club: club) {
+                gearClub = nil
+                renameDraft = club.displayName ?? club.name
+                renameError = ""
+                renaming = club
+            }
+        }
         .sheet(item: $renaming) { club in
             NavigationStack {
                 VStack(alignment: .leading, spacing: 12) {
@@ -198,16 +207,6 @@ struct BagView: View {
         return 4
     }
 
-    private func equipmentCode(_ name: String) -> String {
-        let club = name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
-        if club == "driver" { return "DR" }
-        if club.hasPrefix("madera"), let face = club.split(separator: " ").last { return "\(face)W".uppercased() }
-        if club.contains("hibrido") { return "HY" }
-        if club.hasPrefix("hierro"), let face = name.split(separator: " ").last { return "\(face)i" }
-        if isPutter(name) { return "PT" }
-        return name
-    }
-
     private var equipmentFoot: String {
         let branded = model.bag.filter { !($0.brand ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
         if branded == 0 {
@@ -234,16 +233,12 @@ struct BagView: View {
 
     private func equipmentRow(_ club: BagClub) -> some View {
         Button {
-            renameDraft = club.face
-            renameError = ""
-            renaming = club
+            gearClub = club
         } label: {
         HStack(spacing: 0) {
-                    Text(club.code ?? equipmentCode(club.name))
-                        .font(GFont.ui(13, weight: .bold))
-                        .foregroundStyle(p.primary)
-                        .frame(width: 40, height: 40)
-                        .background(Color(hex: 0xF1EDE3))
+                    ClubThumb(brand: club.brand, model: club.modelName, face: ClubGear.face(club.name))
+                        .frame(width: 44, height: 44)
+                        .background(Color(hex: 0xF4F6F8))
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     VStack(alignment: .leading, spacing: 3) {
                         Text(club.face)
@@ -266,11 +261,11 @@ struct BagView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(club.face), \(club.equipmentLine)")
-                .accessibilityIdentifier("equip-\(club.name)")
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(club.face), \(club.equipmentLine)")
+        .accessibilityIdentifier("equip-\(club.name)")
     }
 
     private func saveName(_ club: BagClub) async {
@@ -537,6 +532,101 @@ struct BagEditSheet: View {
         .onAppear {
             carry = club.carry.map(String.init) ?? ""
             total = club.total.map(String.init) ?? ""
+        }
+    }
+}
+
+struct ClubGearSheet: View {
+    let club: BagClub
+    var onRename: () -> Void = {}
+    @Environment(\.palette) private var p
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let face = ClubGear.face(club.name)
+        let users = ClubGear.users(brand: club.brand, model: club.modelName, face: face)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    GProbe(id: "equip-sheet", label: club.face)
+                    ClubThumb(brand: club.brand, model: club.modelName, face: face)
+                        .frame(width: 120, height: 120)
+                        .background(Color(hex: 0xF4F6F8))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .accessibilityIdentifier("equip-photo")
+                    Text(club.face)
+                        .font(GType.sheetTitle)
+                        .foregroundStyle(p.ink)
+                    Text(club.equipmentLine)
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                    Button("Nombre", action: onRename)
+                        .font(GType.headline)
+                        .accessibilityIdentifier("equip-rename")
+                    Text("Distancias")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Carry").font(GType.label).foregroundStyle(p.ink3)
+                            Text(club.carry.map(String.init) ?? "–").font(GType.sheetTitle).foregroundStyle(p.ink)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Total").font(GType.label).foregroundStyle(p.ink3)
+                            Text(club.total.map(String.init) ?? "–").font(GType.sheetTitle).foregroundStyle(p.ink)
+                        }
+                    }
+                    Text("Carry y total son los de tu bolsa, en yardas.")
+                        .font(GType.body)
+                        .foregroundStyle(p.ink2)
+                    Text("Lo usan")
+                        .font(GType.section)
+                        .foregroundStyle(p.ink)
+                        .accessibilityIdentifier("eq-users")
+                    if users.isEmpty {
+                        Text("–")
+                            .font(GType.sheetTitle)
+                            .foregroundStyle(p.ink)
+                            .accessibilityIdentifier("eq-users-empty")
+                        Text("No tenemos un jugador de tour verificado con este mismo modelo.")
+                            .font(GType.body)
+                            .foregroundStyle(p.ink2)
+                    } else {
+                        ForEach(users) { player in
+                            Link(destination: player.sourceURL) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(player.name)
+                                        .font(GType.headline)
+                                        .foregroundStyle(p.ink)
+                                    Text(player.tour)
+                                        .font(GType.label)
+                                        .foregroundStyle(p.ink3)
+                                    Text("GolfWRX WITB · \(player.whenLabel)")
+                                        .font(GType.label)
+                                        .foregroundStyle(Color(hex: BrandHex.navy))
+                                        .underline()
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("eq-user-\(player.name.split(separator: " ").last.map(String.init)?.lowercased() ?? "player")")
+                            .accessibilityLabel("\(player.name). \(player.tour). GolfWRX WITB · \(player.whenLabel)")
+                            .accessibilityAddTraits(.isLink)
+                        }
+                    }
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(p.bg)
+            .navigationTitle("Mi bolsa")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") { dismiss() }
+                        .accessibilityIdentifier("equip-gear-close")
+                }
+            }
         }
     }
 }

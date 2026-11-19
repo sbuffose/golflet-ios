@@ -238,6 +238,31 @@ final class LivePayloadMapperTests: XCTestCase {
         XCTAssertEqual(summary.hcpImpact?.counting.count, 1)
         XCTAssertEqual(summary.hcpImpact?.dropped.count, 1)
         XCTAssertEqual(summary.courseGroups.first?.title, "Jockey Club")
+        XCTAssertTrue(summary.hcpImpact?.showsDelta == true)
+    }
+
+    func testHandicapImpactReadsIndexObjectsAndHidesADeltaWithoutThem() {
+        let summary = PlayParser.metricsSummary([
+            "hcp_impact": [
+                "delta": -6.2,
+                "start": ["index": 15.3, "date": "2023-10-05"],
+                "now": ["index": 8.4, "date": "2026-11-05"],
+                "estimated": false
+            ]
+        ])
+        XCTAssertEqual(summary.hcpImpact?.start ?? 0, 15.3, accuracy: 0.01)
+        XCTAssertEqual(summary.hcpImpact?.now ?? 0, 8.4, accuracy: 0.01)
+        XCTAssertEqual(summary.hcpImpact?.delta ?? 0, -6.9, accuracy: 0.01)
+        XCTAssertNotNil(summary.hcpImpact?.startDate)
+        XCTAssertTrue(summary.hcpImpact?.showsDelta == true)
+
+        let bare = PlayParser.metricsSummary([
+            "hcp_impact": ["delta": -6.2, "estimated": false]
+        ])
+        XCTAssertEqual(bare.hcpImpact?.delta ?? 0, -6.2, accuracy: 0.01)
+        XCTAssertNil(bare.hcpImpact?.start)
+        XCTAssertNil(bare.hcpImpact?.now)
+        XCTAssertTrue(bare.hcpImpact?.showsDelta == false)
     }
 
     func testParsesHandicapHistoryFields() {

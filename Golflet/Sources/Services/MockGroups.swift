@@ -16,6 +16,9 @@ extension MockAPIClient {
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-no-groups") {
             return []
         }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-group-counts") {
+            seedCountFixtures()
+        }
         return mutate { store, me in
             store.groups.filter { $0.members.contains { $0.id == me } }
         }
@@ -371,6 +374,19 @@ extension MockAPIClient {
             guard group.members.first(where: { $0.id == me })?.role == .admin else {
                 throw GolfletError.server("Solo un admin puede hacer eso.")
             }
+        }
+    }
+
+    /// Fixture groups with the production shape: one accepted member and two, owner included.
+    private func seedCountFixtures() {
+        mutate { store, me in
+            guard !store.groups.contains(where: { $0.id == "g-scratch" }) else { return }
+            let owner = store.groups.first?.members.first { $0.id == me }
+                ?? GroupMember(id: me, name: MockGroupStore.meName, initials: MockGroupStore.meInitials, photoURL: nil, role: .admin, isOwner: true)
+            let ana = GroupMember(id: MockGroupStore.anaID, name: "Ana Pérez", initials: "AP", photoURL: nil, role: .member, isOwner: false)
+            let scratch = GolfletGroup(id: "g-scratch", name: "Scratch", photoURL: nil, owner: owner, members: [owner], myRole: .admin, invite: nil, reportedMemberCount: 1)
+            let familia = GolfletGroup(id: "g-familia", name: "Familia", photoURL: nil, owner: owner, members: [owner, ana], myRole: .member, invite: nil, reportedMemberCount: 2)
+            store.groups.append(contentsOf: [scratch, familia])
         }
     }
 
