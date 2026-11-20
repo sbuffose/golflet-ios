@@ -1656,6 +1656,93 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    func testCaptureGolpesHoyo() {
+        let placed = XCUIApplication()
+        openGolpes(placed, arguments: ["-ui-testing", "-ui-testing-strokes"])
+        XCTAssertTrue(waitFor(placed, "golpes-hoyo-ok"), "Falta la leyenda por S.I.")
+        let width = Int(placed.windows.firstMatch.frame.width.rounded())
+        pinTop(placed, "golpes-hoyo")
+        saveShot("ios-\(width)-golpes-hoyo")
+        assertEqualHoleColumns(placed)
+        XCTAssertEqual(
+            first(placed, "golpes-hoyo-totales").label,
+            "Vos: 0 · Joaquín L.: 3 · Augusto L.: 3 · Mateo R.: 6"
+        )
+        XCTAssertEqual(first(placed, "golpes-celda-c:0-1").label, "vacío")
+        XCTAssertEqual(first(placed, "golpes-celda-c:0-2").label, "1 golpe")
+        XCTAssertEqual(first(placed, "golpes-celda-c:0-3").label, "vacío")
+        XCTAssertEqual(first(placed, "golpes-celda-c:0-4").label, "1 golpe")
+        XCTAssertEqual(first(placed, "golpes-celda-c:0-17").label, "1 golpe")
+        XCTAssertFalse(placed.staticTexts["Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo."].exists)
+        placed.terminate()
+
+        let empty = XCUIApplication()
+        openGolpes(empty, arguments: ["-ui-testing", "-ui-testing-strokes-empty"])
+        XCTAssertTrue(waitFor(empty, "golpes-hoyo-warn"), "Falta el aviso sin S.I.")
+        XCTAssertTrue(empty.staticTexts["Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo."].exists)
+        let emptyWidth = Int(empty.windows.firstMatch.frame.width.rounded())
+        pinTop(empty, "golpes-hoyo")
+        saveShot("ios-\(emptyWidth)-golpes-sin-si")
+        assertEqualHoleColumns(empty)
+        XCTAssertEqual(
+            first(empty, "golpes-hoyo-totales").label,
+            "Vos: 0 · Joaquín L.: 3 · Augusto L.: 3 · Mateo R.: 6"
+        )
+        XCTAssertEqual(empty.buttons.matching(identifier: "missing-holeStrokes").count, 0)
+        XCTAssertGreaterThan(empty.buttons.matching(identifier: "missing-strokeIndex").count, 0)
+        for hole in 1...18 {
+            XCTAssertEqual(first(empty, "golpes-celda-c:0-\(hole)").label, "vacío", "El hoyo \(hole) no quedó vacío")
+        }
+        empty.terminate()
+
+        let ask = XCUIApplication()
+        openGolpes(ask, arguments: ["-ui-testing", "-ui-testing-strokes-ask"])
+        XCTAssertTrue(waitFor(ask, "cancha-pregunta"), "Falta la pregunta de cancha")
+        XCTAssertTrue(ask.staticTexts["¿En qué cancha juegan?"].exists)
+        XCTAssertTrue(ask.buttons["cancha-opcion-Azul"].exists)
+        XCTAssertTrue(ask.buttons["cancha-opcion-Colorada"].exists)
+        let askWidth = Int(ask.windows.firstMatch.frame.width.rounded())
+        pinTop(ask, "cancha-pregunta")
+        saveShot("ios-\(askWidth)-cancha-pregunta")
+        ask.buttons["cancha-opcion-Azul"].tap()
+        XCTAssertTrue(waitFor(ask, "golpes-hoyo-ok"), "Azul no cargó el S.I.")
+        pinTop(ask, "golpes-hoyo")
+        saveShot("ios-\(askWidth)-cancha-azul")
+        XCTAssertEqual(first(ask, "golpes-celda-c:0-2").label, "1 golpe")
+        XCTAssertEqual(first(ask, "golpes-celda-c:0-4").label, "1 golpe")
+        XCTAssertFalse(ask.staticTexts["¿En qué cancha juegan?"].exists)
+    }
+
+    private func openGolpes(_ app: XCUIApplication, arguments: [String]) {
+        app.launchArguments = arguments
+        app.launch()
+        XCTAssertTrue(waitFor(app, "screen-inicio"), "Inicio no apareció")
+        XCTAssertTrue(waitFor(app, "home-ready", timeout: 15), "Bootstrap del mock no terminó")
+        tapTab(app, "Jugar")
+        XCTAssertTrue(waitFor(app, "screen-tee-prep", timeout: 8), "No se abrió la reserva")
+        reveal(app, "armar-partido")
+        let button = first(app, "armar-partido")
+        if button.isHittable {
+            button.tap()
+        } else {
+            button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "golpes-hoyo", timeout: 8), "Falta Golpes por hoyo")
+    }
+
+    private func assertEqualHoleColumns(_ app: XCUIApplication) {
+        let widths = (1...18).map { hole -> CGFloat in
+            let element = first(app, "golpes-col-\(hole)")
+            XCTAssertTrue(element.waitForExistence(timeout: 4), "Falta la columna del hoyo \(hole)")
+            return element.frame.width
+        }
+        let minW = widths.min() ?? 0
+        let maxW = widths.max() ?? 0
+        let dump = widths.map { String(format: "%.1f", $0) }.joined(separator: " ")
+        XCTAssertGreaterThan(minW, 12, "Columna angosta: \(dump)")
+        XCTAssertLessThan(maxW - minW, 1, "Columnas desparejas: \(dump)")
+    }
+
     func testCaptureReviewScreens() {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing", "-ui-testing-greeting", "Sebastián", "-ui-testing-review"]

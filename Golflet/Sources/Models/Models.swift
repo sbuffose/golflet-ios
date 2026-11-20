@@ -184,6 +184,8 @@ struct CourseHole: Identifiable, Hashable, Sendable {
     var parRaw: String? = nil
     var handicap: Int
     var yards: [String: Int]
+    /// False when the official card did not include a stroke index. The hole number is not a stroke index.
+    var handicapKnown: Bool = true
 
     var parCaption: String {
         let parts = (parRaw ?? "").split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -620,6 +622,8 @@ struct TeeTime: Identifiable, Hashable, Sendable {
     var windFrom: String? = nil
     var tempC: Int? = nil
     var rainMm: Double? = nil
+    /// Tournament title from the club. A single color square can name the course when the booking itself does not.
+    var eventName: String = ""
 
     var chipWhen: String { FormatAR.teeChip(startsAt) }
 

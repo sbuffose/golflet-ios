@@ -25,19 +25,30 @@ var GolfletMatchCore = (() => {
     DEFAULT_ALLOWANCE: () => DEFAULT_ALLOWANCE,
     HOLES: () => HOLES,
     aggregate: () => aggregate,
+    bookingCourseName: () => bookingCourseName,
+    cardFromHoles: () => cardFromHoles,
+    courseChoices: () => courseChoices,
+    courseFromMarker: () => courseFromMarker,
     courseHandicap: () => courseHandicap,
+    courseLabelHits: () => courseLabelHits,
     evaluate: () => evaluate,
     holeStrokes: () => holeStrokes,
     marksOf: () => marksOf,
     matchPlay: () => matchPlay,
     myOutcome: () => myOutcome,
     normName: () => normName,
+    pickOfficialCard: () => pickOfficialCard,
     playOrder: () => playOrder,
     playerKey: () => playerKey,
     playingHcp: () => playingHcp,
+    resolveOfficialCard: () => resolveOfficialCard,
     roundHalfUp: () => roundHalfUp,
+    scorecardHoles: () => scorecardHoles,
+    shortName: () => shortName,
     siOrder: () => siOrder,
     statusText: () => statusText,
+    strokeHoles: () => strokeHoles,
+    strokesPlaced: () => strokesPlaced,
     strokesReceived: () => strokesReceived,
     teeOf: () => teeOf
   });
@@ -53,24 +64,136 @@ var GolfletMatchCore = (() => {
     const low = Math.min(...hcps);
     return hcps.map((h) => roundHalfUp((h - low) * allowance / 100));
   }
+  function strokeHoles(si) {
+    const known = [];
+    for (let i = 0; i < HOLES; i++) {
+      const v = si[i];
+      if (v == null) continue;
+      if (!Number.isInteger(v) || v < 1 || v > 18) return null;
+      known.push(i);
+    }
+    if (known.length !== 18 && known.length !== 9) return null;
+    if (new Set(known.map((i) => si[i])).size !== known.length) return null;
+    return known;
+  }
+  var strokesPlaced = (si) => strokeHoles(si) != null;
   function siOrder(si) {
-    const idx = Array.from({ length: HOLES }, (_, i) => i);
-    return idx.sort((a, b) => {
-      const x = si[a], y = si[b];
-      if (x != null && y != null) return x - y || a - b;
-      if (x != null) return -1;
-      if (y != null) return 1;
-      return a - b;
-    });
+    const holes = strokeHoles(si);
+    if (!holes) return [];
+    return holes.slice().sort((a, b) => si[a] - si[b] || a - b);
   }
   function holeStrokes(s, si) {
     const out = new Array(HOLES).fill(0);
     if (!(s > 0)) return out;
-    const base = Math.floor(s / HOLES), extra = s % HOLES, ord = siOrder(si);
+    const ord = siOrder(si);
+    if (!ord.length) return out;
+    const n = ord.length, base = Math.floor(s / n), extra = s % n;
     ord.forEach((h, r) => {
       out[h] = base + (r < extra ? 1 : 0);
     });
     return out;
+  }
+  function cardFromHoles(holes) {
+    const si = Array(HOLES).fill(null), pars = Array(HOLES).fill(null);
+    for (const h of holes || []) {
+      const n = Number(h?.hole);
+      if (!Number.isInteger(n) || n < 1 || n > HOLES) continue;
+      const p = Number(h.par);
+      if (Number.isInteger(p) && p >= 3 && p <= 6) pars[n - 1] = p;
+      const v = Number(h.hcp);
+      if (Number.isInteger(v) && v >= 1 && v <= 18) si[n - 1] = v;
+    }
+    return { si, pars };
+  }
+  function pickOfficialCard(sources) {
+    const cards = (sources.length ? sources : [{}]).map((s) => cardFromHoles(s.holes));
+    const chosen = cards.find((c) => strokesPlaced(c.si)) || cards.find((c) => c.pars.some((p) => p != null)) || cards[0];
+    return { ...chosen, placed: strokesPlaced(chosen.si) };
+  }
+  var foldMark = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  var escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  var MARK_COLOR = { "\u{1F7E5}": /COLORAD|ROJ/, "\u{1F7E6}": /AZUL/, "\u{1F7E9}": /VERDE/, "\u{1F7E8}": /AMARILL/, "\u2B1B": /NEGR/, "\u2B1C": /BLANC/ };
+  function courseFromMarker(event, courses) {
+    const title = String(event || "").trim();
+    const list = courses.map((c) => c.trim()).filter(Boolean);
+    if (!title || !list.length) return null;
+    const upper = foldMark(title);
+    const words = (name) => foldMark(name).split(/\s+/).filter((w) => w.length >= 4 && w !== "CANCHA");
+    const byName = list.filter((c) => words(c).some((w) => new RegExp(`\\b${escRe(w.slice(0, 4))}`).test(upper)));
+    if (byName.length === 1) return byName[0];
+    const colors = [...new Set(title.match(/🟥|🟦|🟩|🟨|⬛|⬜/gu) || [])];
+    if (colors.length !== 1) return null;
+    const re = MARK_COLOR[colors[0]];
+    const hit = re ? list.filter((c) => re.test(foldMark(c))) : [];
+    return hit.length === 1 ? hit[0] : null;
+  }
+  function bookingCourseName(t, courses) {
+    const label = String(t.course_label || "").trim();
+    const list = [...new Set(courses.map((c) => c.trim()).filter(Boolean))];
+    if (label) {
+      const hit = list.filter((c) => courseLabelHits(c, label) || normName(c) === normName(label));
+      return hit.length === 1 ? hit[0] : null;
+    }
+    return courseFromMarker(t.event_name, list);
+  }
+  function scorecardHoles(rounds, courseName) {
+    const want = normName(courseName || "");
+    if (!want) return [];
+    for (const r of rounds || []) {
+      if (r.official === false || normName(String(r.course || "")) !== want || !Array.isArray(r.holes)) continue;
+      const holes = [];
+      for (const h of r.holes) {
+        if (!Array.isArray(h) || h.length < 2) continue;
+        const hole = Number(h[0]);
+        if (Number.isInteger(hole)) holes.push({ hole, par: Number(h[1]) });
+      }
+      if (holes.some((h) => {
+        const p = Number(h.par);
+        return Number.isInteger(p) && p >= 3 && p <= 6;
+      })) return holes;
+    }
+    return [];
+  }
+  function courseChoices(resolved, options) {
+    if (resolved) return null;
+    const list = [...new Set(options.map((s) => s.trim()).filter(Boolean))];
+    return list.length > 1 ? list : null;
+  }
+  function resolveOfficialCard(t, directoryHoles, courses, rounds, catalog) {
+    const names = [...new Set([...catalog || [], ...(courses || []).map((c) => String(c.name || c.course || ""))].map((s) => s.trim()).filter(Boolean))];
+    const course = bookingCourseName(t, names);
+    const extra = course ? (courses || []).filter((c) => courseLabelHits(String(c.name || c.course || ""), course)).map((c) => ({ holes: (c.holes || []).map((h) => ({ hole: h.hole, par: h.par, hcp: h.hcp ?? h.hole_hcp })) })) : [];
+    const picked = pickOfficialCard([{ holes: directoryHoles }, ...extra, { holes: scorecardHoles(rounds, course) }]);
+    return { ...picked, course };
+  }
+  function courseLabelHits(courseName, label) {
+    const a = normName(courseName), b = normName(label);
+    if (!a || a.length < 3 || !b) return false;
+    if (b === a) return true;
+    const words = a.split(" ");
+    if (words.length === 1) return b.split(" ").includes(a);
+    return b.startsWith(`${a} `) || b.endsWith(` ${a}`) || b.includes(` ${a} `);
+  }
+  function shortName(name, peers, me = false) {
+    if (me) return "Vos";
+    const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "";
+    if (parts.length === 1) return parts[0];
+    const same = (a, b) => a.localeCompare(b, "es", { sensitivity: "accent" }) === 0;
+    const lists = (peers.length ? peers : [name]).map((p) => String(p || "").trim().split(/\s+/).filter(Boolean));
+    const firstShared = lists.filter((t) => t[0] && same(t[0], parts[0])).length > 1;
+    if (firstShared) {
+      let given = parts[parts.length - 1];
+      for (let i = 1; i < parts.length; i++) {
+        const tok = parts[i];
+        if (lists.filter((t) => t[i] && same(t[i], tok)).length < 2) {
+          given = tok;
+          break;
+        }
+      }
+      return `${given} ${parts[0][0].toLocaleUpperCase("es")}.`;
+    }
+    return `${parts[0]} ${parts[parts.length - 1][0].toLocaleUpperCase("es")}.`;
   }
   function courseHandicap(index, t) {
     if (index == null || !t || !(Number(t.slope) > 0) || !Number.isFinite(Number(t.course_rating)) || !(Number(t.par) > 0)) return null;
@@ -142,6 +265,7 @@ var GolfletMatchCore = (() => {
       const s = hcpMode ? strokesReceived(hs2, al) : hs2.map(() => 0);
       return Object.fromEntries(ids2.map((id, k) => [id, s[k]]));
     };
+    const placed = strokesPlaced(def.si);
     const hsOf = (st) => Object.fromEntries(Object.entries(st).map(([id, s]) => [id, holeStrokes(s, def.si)]));
     const name = (id) => P.find((p) => p.id === id)?.name || id, start = def.start_hole || 1;
     if (def.modality === "metralleta") {
@@ -171,13 +295,13 @@ var GolfletMatchCore = (() => {
       }
       table.sort((x, y) => y.won - x.won || y.holes_up - x.holes_up || x.lost - y.lost || x.name.localeCompare(y.name, "es"));
       const finished = pairs.length > 0 && pairs.every((p) => p.state.finished);
-      return { modality: "metralleta", strokes: strokes2, hole_strokes: hsOf(strokes2), sides: ids2.map((i) => [i]), main: null, pairs, table, finished, summary: finished ? `Gan\xF3 ${table[0]?.name ?? ""}` : `${pairs.filter((p) => p.state.finished).length}/${pairs.length} partidos terminados`, playing };
+      return { modality: "metralleta", strokes: strokes2, hole_strokes: hsOf(strokes2), strokes_placed: placed, sides: ids2.map((i) => [i]), main: null, pairs, table, finished, summary: finished ? `Gan\xF3 ${table[0]?.name ?? ""}` : `${pairs.filter((p) => p.state.finished).length}/${pairs.length} partidos terminados`, playing };
     }
     const sides = def.modality === "single" ? [[P[0]?.id], [P[1]?.id]].map((s) => s.filter(Boolean)) : def.sides || [];
     const ids = sides.flat(), strokes = strokesOf(ids), hs = hsOf(strokes), main = matchPlay(sides[0] || [], sides[1] || [], scores, hs, start, marksOf(scores).conc || [], DONE);
     const sideName = (k) => (sides[k] || []).map(name).join(" / ");
     const lead = main.up > 0 ? sideName(0) : main.up < 0 ? sideName(1) : "";
-    return { modality: def.modality, strokes, hole_strokes: hs, sides, main, pairs: [], table: [], finished: main.finished, summary: main.up === 0 ? main.text : `${lead} ${main.text}`, playing };
+    return { modality: def.modality, strokes, hole_strokes: hs, strokes_placed: placed, sides, main, pairs: [], table: [], finished: main.finished, summary: main.up === 0 ? main.text : `${lead} ${main.text}`, playing };
   }
   function normName(s) {
     return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-zñ0-9 ]+/g, " ").replace(/\s+/g, " ").trim();

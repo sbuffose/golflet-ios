@@ -139,6 +139,18 @@ struct TeeTimePrepView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     companionsBlock
+                    NavigationLink {
+                        MatchSetupView(booking: shown)
+                    } label: {
+                        Text("Armar partido")
+                            .font(GType.headline)
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(p.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("armar-partido")
                     playingHandicap
                     VStack(alignment: .leading, spacing: 6) {
                         Text(shown.chipWhen)

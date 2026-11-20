@@ -1,5 +1,6 @@
 /** Pure validation/formatting for tee times (no DB). Times are local to Argentina (UTC-3, no DST). */
 import { HttpError } from "./http-error";
+import { applyHolesOverride } from "./course-override";
 
 export const MAX_COMPANIONS = 7, MAX_UPCOMING = 100;
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -30,6 +31,18 @@ export function parseTeeInput(b: any, prev?: TeeInput | null, now = new Date()):
   const rawT = "tee" in b ? b.tee : prev?.tee ?? null;
   const tee = rawT == null || String(rawT).trim() === "" ? null : String(rawT).replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 30);
   return { date, time, club_key, course_id: cid ?? null, companions, tee };
+}
+
+/** Par and S.I. from a synced course row. An empty tee list does not drop the holes. Admin corrections (holes_override) win over the synced card. */
+export function courseCardFromRow(row: { club_id?: unknown; name?: unknown; par?: unknown; tees?: unknown; holes?: unknown; holes_override?: unknown } | null) {
+  if (!row) return null;
+  const holes = applyHolesOverride((row.holes as any[]) || [], row.holes_override as any).map((h: any) => ({ hole: h.hole, hcp: h.hcp ?? null, par: h.par ?? null }));
+  const tees = row.tees && typeof row.tees === "object" && !Array.isArray(row.tees) ? row.tees as Record<string, any> : {};
+  const hasTee = Object.keys(tees).length > 0;
+  const hasCard = holes.some((h: any) => { const p = Number(h.par), v = Number(h.hcp); return (Number.isInteger(p) && p >= 3) || (Number.isInteger(v) && v >= 1 && v <= 18); });
+  if (!hasTee && !hasCard) return null;
+  const par = Number(row.par);
+  return { golflet_course_key: `${row.club_id}:${row.name}`, par: Number.isFinite(par) ? par : null, tees: hasTee ? tees : {} as Record<string, TeeData>, holes };
 }
 
 /** WHS: course handicap = HI × slope/113 + (course rating − par); playing handicap = round(CH × 0.95) (individual stroke play).

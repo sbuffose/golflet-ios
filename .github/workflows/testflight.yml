@@ -379,6 +379,67 @@ jobs:
             ${{ runner.temp }}/ui_test_summary.txt
           retention-days: 14
 
+  golpes-hoyo-capture:
+    runs-on: macos-15
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Capture golpes por hoyo on iPhone SE
+        run: |
+          set -euo pipefail
+          RUNTIME=$(xcrun simctl list runtimes iOS | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | tail -1)
+          DEVICE_ID=""
+          for name in "iPhone SE (3rd generation)" "iPhone SE (2nd generation)"; do
+            if DEVICE_ID=$(xcrun simctl create "Golflet golpes" "$name" "$RUNTIME" 2>/dev/null); then
+              echo "Simulator $name $DEVICE_ID"
+              break
+            fi
+          done
+          test -n "$DEVICE_ID"
+          xcrun simctl boot "$DEVICE_ID"
+          sleep 4
+          xcrun simctl spawn "$DEVICE_ID" defaults write -g AppleLanguages -array "es-AR" "es" "en" || true
+          xcrun simctl spawn "$DEVICE_ID" defaults write -g AppleLocale -string "es_AR" || true
+          mkdir -p /tmp/golflet-screenshots
+          xcodebuild test \
+            -project Golflet.xcodeproj \
+            -scheme Golflet \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -only-testing:GolfletUITests/GolfletUITests/testCaptureGolpesHoyo \
+            -derivedDataPath "$RUNNER_TEMP/GolpesBuild" \
+            -resultBundlePath "$RUNNER_TEMP/golpes.xcresult" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO
+          xcrun simctl shutdown "$DEVICE_ID" || true
+          ls -la /tmp/golflet-screenshots
+          test -f /tmp/golflet-screenshots/ios-375-golpes-hoyo.png
+          test -f /tmp/golflet-screenshots/ios-375-golpes-sin-si.png
+          test -f /tmp/golflet-screenshots/ios-375-cancha-pregunta.png
+          test -f /tmp/golflet-screenshots/ios-375-cancha-azul.png
+
+      - name: Upload 375 captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golpes-hoyo-375
+          path: /tmp/golflet-screenshots/ios-375-*.png
+          if-no-files-found: warn
+          retention-days: 14
+
   release-gate:
     needs: [build, unit-tests, ui-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

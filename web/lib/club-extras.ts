@@ -5,7 +5,7 @@
 import { partnerKey } from "./private-metrics-core";
 import { q } from "./db";
 import { Golfistics, GolfisticsError } from "./golfistics";
-import { parseBookings, parseCompanions, parseEvents, verifiedCourse, inferDate, parseCalcForm, parseCalcResult, CALC_MODALITIES } from "./club-pages";
+import { parseBookings, parseCompanions, parseEvents, readBookingCourse, inferDate, parseCalcForm, parseCalcResult, CALC_MODALITIES } from "./club-pages";
 import { titleCase } from "./course-names";
 import { nowAR } from "./tee-times-core";
 
@@ -84,8 +84,8 @@ export async function syncBookings(userId: string, acc: { id: string; club_id: n
     const ev = events.get(r.torneo_id), date = ev?.date ?? inferDate(r.weekday, r.day, today);
     if (!date) continue;
     placed++;
-    const cf = eventsOk ? verifiedCourse({ venue: ev?.venue ?? null }, courses) : { course: null, how: null as null };
-    const known = (await q(`select companions from tee_time where user_id=$1 and club_account_id=$2 and external_id=$3 and gone_at is null`, [userId, acc.id, `${r.torneo_id}@${r.time}`]))[0];
+    const cf = eventsOk ? readBookingCourse({ venue: ev?.venue ?? null, event: ev?.event ?? null }, courses) : { course: null, how: null as null };
+    const known = (await q(`select companions, course_how from tee_time where user_id=$1 and club_account_id=$2 and external_id=$3 and gone_at is null`, [userId, acc.id, `${r.torneo_id}@${r.time}`]))[0];
     const stored = known && Array.isArray(known.companions) ? known.companions as { name: string; hcp: number | null }[] : null;
     let parsed: { recognized: boolean; players: { name: string; hcp: number | null }[] } | null = null;
     if (!(o.light && stored)) {
@@ -98,7 +98,8 @@ export async function syncBookings(userId: string, acc: { id: string; club_id: n
     if (line.read) compOk++; else if (!o.light || !stored) compFail++;
     const companions = line.companions;
     const ext = `${r.torneo_id}@${r.time}`; keep.push(ext);
-    await writeBookingLine(dbRun, [userId, date, r.time, dir.club_key, await courseDir(dir.club_key, acc.club_id, cf.course), dir.club_name, cf.course, JSON.stringify(companions), acc.id, ext, r.start_hole, ev?.modality ?? null, ev?.event ?? null, cf.how, companions.map(c => partnerKey(c.name)).filter(Boolean), line.keepPlayers, !eventsOk]);
+    const keepPlayerCourse = !cf.course && known?.course_how === "jugador";
+    await writeBookingLine(dbRun, [userId, date, r.time, dir.club_key, await courseDir(dir.club_key, acc.club_id, cf.course), dir.club_name, cf.course, JSON.stringify(companions), acc.id, ext, r.start_hole, ev?.modality ?? null, ev?.event ?? null, cf.how, companions.map(c => partnerKey(c.name)).filter(Boolean), line.keepPlayers, !eventsOk || keepPlayerCourse]);
   }
   const nt = nowAR().time;   // only bookings still in the future count as cancelled (past ones simply leave the club page once played)
   await q(`update tee_time set gone_at=now() where club_account_id=$1 and source='club' and gone_at is null and (date > $2::date or (date = $2::date and time > $4)) and not (external_id = any($3::text[]))`, [acc.id, today, keep, nt]);

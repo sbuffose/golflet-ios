@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum MissingKind: String, Identifiable {
-    case putts, greens, fairways, weather, differential, course, club, ball, handicap, worst, gross, net, geo
+    case putts, greens, fairways, weather, differential, course, club, ball, handicap, worst, gross, net, geo, strokeIndex, holePar, holeStrokes
 
     var id: String { rawValue }
 
@@ -20,6 +20,9 @@ enum MissingKind: String, Identifiable {
         case .gross: return "Gross"
         case .net: return "Neto"
         case .geo: return "Geometría"
+        case .strokeIndex: return "S.I."
+        case .holePar: return "Par"
+        case .holeStrokes: return "Golpes"
         }
     }
 
@@ -43,6 +46,10 @@ enum MissingKind: String, Identifiable {
             return "Es la tarjeta de mayor gross del período."
         case .geo:
             return "Sale de un trazado verificado del tee al centro del green."
+        case .strokeIndex, .holePar:
+            return "Sale de la tarjeta oficial de la cancha y la salida."
+        case .holeStrokes:
+            return "Se ubican en los hoyos de menor S.I. de la tarjeta oficial."
         }
     }
 
@@ -61,6 +68,9 @@ enum MissingKind: String, Identifiable {
         case .handicap: return "No hay una matrícula vinculada."
         case .worst: return "Hay una sola tarjeta, así que no hay una peor distinta."
         case .geo: return "Este hoyo no tiene geometría verificada. No marco un punto inventado."
+        case .strokeIndex: return "Esta cancha no tiene el índice de hoyo (S.I.) cargado. Sin ese número no se puede ubicar el golpe recibido. Cuando el club lo publique en la tarjeta, los golpes se ubican solos: no los inventamos ni los ponemos del hoyo 1 en adelante."
+        case .holePar: return "Este hoyo no tiene el par en la tarjeta oficial."
+        case .holeStrokes: return "Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo."
         }
     }
 
@@ -80,14 +90,15 @@ struct MissingMark: View {
     @Environment(\.palette) private var p
     var kind: MissingKind
     var action: (() -> Void)?
+    var compact: Bool = false
     @State private var open = false
 
     var body: some View {
         Button { open = true } label: {
             Text("–")
-                .font(GType.headline)
+                .font(compact ? GType.label : GType.headline)
                 .foregroundStyle(p.ink)
-                .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                .frame(minWidth: compact ? 18 : 44, minHeight: compact ? 28 : 44, alignment: compact ? .center : .leading)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
