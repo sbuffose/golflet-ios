@@ -95,6 +95,9 @@ const MISS = {
   handicap: { k: 'Hándicap', source: 'Sale de la matrícula del club.', why: 'No hay una matrícula vinculada.', action: 'Vincular matrícula', go: '#/vincular' },
   worst: { k: 'Peor ronda', source: 'Es la tarjeta de mayor gross del período.', why: 'Hay una sola tarjeta, así que no hay una peor distinta.', action: '', go: '' },
   geo: { k: 'Geometría', source: 'Sale de un trazado verificado del tee al centro del green.', why: 'Este hoyo no tiene geometría verificada. No marco un punto inventado.', action: '', go: '' },
+  si: { k: 'S.I.', source: 'Sale de la tarjeta oficial de la cancha y la salida.', why: 'Esta cancha no tiene el índice de hoyo (S.I.) cargado. Sin ese número no se puede ubicar el golpe recibido. Cuando el club lo publique en la tarjeta, los golpes se ubican solos: no los inventamos ni los ponemos del hoyo 1 en adelante.', action: '', go: '' },
+  par: { k: 'Par', source: 'Sale de la tarjeta oficial de la cancha y la salida.', why: 'Este hoyo no tiene el par en la tarjeta oficial.', action: '', go: '' },
+  strokes: { k: 'Golpes', source: 'Se ubican en los hoyos de menor S.I. de la tarjeta oficial.', why: 'Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo.', action: '', go: '' },
 };
 function miss(kind, why){
   const extra = why ? ` data-why="${esc(why)}"` : '';

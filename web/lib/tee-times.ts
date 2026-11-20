@@ -2,7 +2,7 @@
 import { q } from "./db";
 import { HttpError } from "./http-error";
 import { titleCase, commonPrefix } from "./course-names";
-import { nowAR, teeHandicaps } from "./tee-times-core";
+import { courseCardFromRow, nowAR, teeHandicaps } from "./tee-times-core";
 import { modalityKey, CALC_MODALITIES, MODALITY_LABEL } from "./club-pages";
 import { buildData } from "./data";
 
@@ -27,22 +27,24 @@ export async function teeDirectory(userId: string) {
       courses: cs.length > 1 ? cs.map((x: any) => ({ id: x.id, label: titleCase(x.name.trim().split(/\s+/).slice(pre.length).join(" ") || x.name), holes: x.holes })) : [] };
   }).filter(Boolean).sort((a: any, b: any) => Number(b.mine) - Number(a.mine) || a.club_name.localeCompare(b.club_name, "es"));
 }
-/** Tee data (slope, rating, par, stroke index) for a directory club/course, from the Golflet course synced from the club's cards. Null when we don't have it. */
+/** Tee data (slope, rating, par, stroke index) for a directory club/course, from the Golflet course synced from the club's cards. Null when we don't have it.
+ *  Par and S.I. still come back when the row has a card but no tee ratings: an empty tee list must not drop the holes. */
+export { courseCardFromRow };
 export async function courseTeeData(clubKey: string, courseId: number | null) {
   let row: any = null;
   if (courseId != null) { const [d] = await q(`select golflet_club_id, golflet_course_name from ar_course_directory where id=$1 and club_key=$2`, [courseId, clubKey]);
-    if (d?.golflet_club_id && d.golflet_course_name) [row] = await q(`select club_id, name, par, tees, holes from course where club_id=$1 and lower(name)=lower($2)`, [d.golflet_club_id, d.golflet_course_name]); }
+    if (d?.golflet_club_id && d.golflet_course_name) [row] = await q(`select club_id, name, par, tees, holes, holes_override from course where club_id=$1 and lower(name)=lower($2)`, [d.golflet_club_id, d.golflet_course_name]); }
   else { const [c] = await q(`select golflet_club_id from ar_club_directory where key=$1`, [clubKey]);
-    if (c?.golflet_club_id) { const cs = await q(`select club_id, name, par, tees, holes from course where club_id=$1`, [c.golflet_club_id]); if (cs.length === 1) row = cs[0]; } }
-  if (!row || !row.tees || !Object.keys(row.tees).length) return null;
-  return { golflet_course_key: `${row.club_id}:${row.name}`, par: row.par ?? null, tees: row.tees as Record<string, any>, holes: (row.holes || []).map((h: any) => ({ hole: h.hole, hcp: h.hcp, par: h.par ?? null })) };
+    if (c?.golflet_club_id) { const cs = await q(`select club_id, name, par, tees, holes, holes_override from course where club_id=$1`, [c.golflet_club_id]); if (cs.length === 1) row = cs[0]; } }
+  return courseCardFromRow(row);
 }
 export async function playerHI(userId: string) { const D: any = await buildData(userId); const v = D.player?.handicap_index ?? (D.hi_history || []).at(-1)?.hi ?? null; return v == null ? null : Number(v); }
 export async function teeOptions(userId: string, clubKey: string, courseId: number | null, selected?: string | null) {
   const [td, hi] = await Promise.all([courseTeeData(clubKey, courseId), playerHI(userId)]);
-  return { hi, golflet_course_key: td?.golflet_course_key ?? null, par: td?.par ?? null, data_source: td ? "Slope y course rating de las tarjetas del club" : null,
-    tees: td ? teeHandicaps(hi, td.par, td.tees, td.holes, selected) : [],
-    note: td ? (hi == null ? "Sin Hándicap Index no podemos calcular el hándicap de cancha." : null) : "No tenemos slope ni course rating de esta cancha: elegí la salida a mano." };
+  const rated = !!td && Object.keys(td.tees || {}).length > 0;
+  return { hi, golflet_course_key: td?.golflet_course_key ?? null, par: td?.par ?? null, data_source: rated ? "Slope y course rating de las tarjetas del club" : null,
+    tees: rated && td ? teeHandicaps(hi, td.par, td.tees, td.holes, selected) : [],
+    note: rated ? (hi == null ? "Sin Hándicap Index no podemos calcular el hándicap de cancha." : null) : "No tenemos slope ni course rating de esta cancha: elegí la salida a mano." };
 }
 export async function listTeeTimes(userId: string, scope: string, limit: number) {
   const n = nowAR();

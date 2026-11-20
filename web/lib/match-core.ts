@@ -3,7 +3,8 @@
  *
  *  Strokes: the lowest handicap of the match plays at zero; everyone else receives (HCP − lowest) × allowance %, rounded half up
  *  (0,5 → 1). Fourball: lowest of the four. Mano a mano: lowest of the two. Metralleta: per pair (the lower of the two at zero).
- *  Gross: no strokes. Strokes go to the holes by stroke index (S.I. 1 first); more than 18 → a second round from S.I. 1.
+ *  Gross: no strokes. Strokes go to the holes by stroke index (lowest S.I. first). More than the holes in play → a second round from the lowest S.I.
+ *  A card without a complete S.I. (18 distinct, or 9 distinct on a 9-hole card) places nothing: never hole 1, 2, 3… by default.
  *  Scores: gross per hole; null = not entered; 0 = X «no terminó» (never a score, never strokes). t266u: a hole is decided from the scores
  *  entered — it counts once every player of that match is entered (score or X) OR the hole was closed (`_m.done[h]`, set when he moves on).
  *  Best net of each side among players WITH a score; a side with none loses to a side with one; nobody with a score → halved («nadie terminó»).
@@ -29,17 +30,80 @@ export function strokesReceived(hcps: number[], allowance: number): number[] {
   if (!hcps.length) return []; const low = Math.min(...hcps);
   return hcps.map(h => roundHalfUp(((h - low) * allowance) / 100));
 }
-/** Holes in stroke-index order (S.I. 1 first; holes without S.I. after, by number). */
-export function siOrder(si: (number | null)[]): number[] {
-  const idx = Array.from({ length: HOLES }, (_, i) => i);
-  return idx.sort((a, b) => { const x = si[a], y = si[b]; if (x != null && y != null) return x - y || a - b; if (x != null) return -1; if (y != null) return 1; return a - b; });
+export type HoleCard = { hole: number; par?: number | null; hcp?: number | null };
+
+/** Indexes (0 = hole 1) that have a usable S.I. Null unless the card is complete: 18 distinct values, or exactly 9 (the rest empty) for a 9-hole course. A broken or missing index is not a license to use hole order. */
+export function strokeHoles(si: (number | null)[]): number[] | null {
+  const known: number[] = [];
+  for (let i = 0; i < HOLES; i++) {
+    const v = si[i];
+    if (v == null) continue;
+    if (!Number.isInteger(v) || v < 1 || v > 18) return null;
+    known.push(i);
+  }
+  if (known.length !== 18 && known.length !== 9) return null;
+  if (new Set(known.map(i => si[i])).size !== known.length) return null;
+  return known;
 }
-/** Strokes per hole (index 0 = hole 1) for a player who receives `s` strokes. */
+export const strokesPlaced = (si: (number | null)[]) => strokeHoles(si) != null;
+/** Holes that receive strokes, lowest S.I. first. Empty when the card has no complete S.I. */
+export function siOrder(si: (number | null)[]): number[] {
+  const holes = strokeHoles(si);
+  if (!holes) return [];
+  return holes.slice().sort((a, b) => (si[a] as number) - (si[b] as number) || a - b);
+}
+/** Strokes per hole (index 0 = hole 1) for a player who receives `s` strokes. All zeros when the S.I. is not loaded. */
 export function holeStrokes(s: number, si: (number | null)[]): number[] {
   const out = new Array(HOLES).fill(0); if (!(s > 0)) return out;
-  const base = Math.floor(s / HOLES), extra = s % HOLES, ord = siOrder(si);
+  const ord = siOrder(si); if (!ord.length) return out;
+  const n = ord.length, base = Math.floor(s / n), extra = s % n;
   ord.forEach((h, r) => { out[h] = base + (r < extra ? 1 : 0); });
   return out;
+}
+/** Par (3–6) and S.I. (1–18) copied off an official card. Missing cells stay null; nothing is filled in. */
+export function cardFromHoles(holes: HoleCard[] | null | undefined): { si: (number | null)[]; pars: (number | null)[] } {
+  const si: (number | null)[] = Array(HOLES).fill(null), pars: (number | null)[] = Array(HOLES).fill(null);
+  for (const h of holes || []) {
+    const n = Number(h?.hole);
+    if (!Number.isInteger(n) || n < 1 || n > HOLES) continue;
+    const p = Number(h.par); if (Number.isInteger(p) && p >= 3 && p <= 6) pars[n - 1] = p;
+    const v = Number(h.hcp); if (Number.isInteger(v) && v >= 1 && v <= 18) si[n - 1] = v;
+  }
+  return { si, pars };
+}
+/** First source that can place strokes, else the first that has a par, else an empty card. */
+export function pickOfficialCard(sources: { holes?: HoleCard[] | null }[]): { si: (number | null)[]; pars: (number | null)[]; placed: boolean } {
+  const cards = (sources.length ? sources : [{}]).map(s => cardFromHoles(s.holes));
+  const chosen = cards.find(c => strokesPlaced(c.si)) || cards.find(c => c.pars.some(p => p != null)) || cards[0];
+  return { ...chosen, placed: strokesPlaced(chosen.si) };
+}
+/** True when the booking label names this course (the course name is its own word). */
+export function courseLabelHits(courseName: string, label: string): boolean {
+  const a = normName(courseName), b = normName(label);
+  if (!a || a.length < 3 || !b) return false;
+  if (b === a) return true;
+  const words = a.split(" ");
+  if (words.length === 1) return b.split(" ").includes(a);
+  return b.startsWith(`${a} `) || b.endsWith(` ${a}`) || b.includes(` ${a} `);
+}
+/** «Joaquín L.» Given name + surname initial. When the list leads with a shared surname («Lavalle Joaquín» / «Lavalle Augusto»), the given name is the first token that is not shared. «Vos» for the account owner. */
+export function shortName(name: string, peers: string[], me = false): string {
+  if (me) return "Vos";
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  if (parts.length === 1) return parts[0];
+  const same = (a: string, b: string) => a.localeCompare(b, "es", { sensitivity: "accent" }) === 0;
+  const lists = (peers.length ? peers : [name]).map(p => String(p || "").trim().split(/\s+/).filter(Boolean));
+  const firstShared = lists.filter(t => t[0] && same(t[0], parts[0])).length > 1;
+  if (firstShared) {
+    let given = parts[parts.length - 1];
+    for (let i = 1; i < parts.length; i++) {
+      const tok = parts[i];
+      if (lists.filter(t => t[i] && same(t[i], tok)).length < 2) { given = tok; break; }
+    }
+    return `${given} ${parts[0][0].toLocaleUpperCase("es")}.`;
+  }
+  return `${parts[0]} ${parts[parts.length - 1][0].toLocaleUpperCase("es")}.`;
 }
 /** WHS Course Handicap (rounded, .5 up). Null when the tee lacks slope, rating or par — never invented. */
 export function courseHandicap(index: number | null, t: TeeInfo | null | undefined): number | null {
@@ -89,7 +153,7 @@ export function matchPlay(A: string[], B: string[], scores: Scores, strokes: Rec
 }
 export type PairRes = { a: string; b: string; strokes: Record<string, number>; state: MatchState };
 export type TableRow = { id: string; name: string; won: number; tied: number; lost: number; holes_up: number; open: number };
-export type Evaluation = { modality: Modality; strokes: Record<string, number>; hole_strokes: Record<string, number[]>; sides: string[][]; main: MatchState | null; pairs: PairRes[]; table: TableRow[]; finished: boolean; summary: string; playing?: Record<string, PlayingHcp> };
+export type Evaluation = { modality: Modality; strokes: Record<string, number>; hole_strokes: Record<string, number[]>; strokes_placed: boolean; sides: string[][]; main: MatchState | null; pairs: PairRes[]; table: TableRow[]; finished: boolean; summary: string; playing?: Record<string, PlayingHcp> };
 
 /** Everything the screens need: strokes, dots per hole, the live state, and (metralleta) every pair + the table. */
 export function evaluate(def: MatchDef, scores: Scores): Evaluation {
@@ -98,6 +162,7 @@ export function evaluate(def: MatchDef, scores: Scores): Evaluation {
   const playing = Object.fromEntries(P.map(p => [p.id, playingHcp(def, p)])) as Record<string, PlayingHcp>;
   const baseOf = (id: string) => { const p = P.find(x => x.id === id); return p ? playingHcp(def, p).base ?? 0 : 0; };
   const strokesOf = (ids: string[]) => { const hs = ids.map(baseOf); const s = hcpMode ? strokesReceived(hs, al) : hs.map(() => 0); return Object.fromEntries(ids.map((id, k) => [id, s[k]])) as Record<string, number>; };
+  const placed = strokesPlaced(def.si);
   const hsOf = (st: Record<string, number>) => Object.fromEntries(Object.entries(st).map(([id, s]) => [id, holeStrokes(s, def.si)])) as Record<string, number[]>;
   const name = (id: string) => P.find(p => p.id === id)?.name || id, start = def.start_hole || 1;
   if (def.modality === "metralleta") {
@@ -109,13 +174,13 @@ export function evaluate(def: MatchDef, scores: Scores): Evaluation {
       if (!s.finished) { ra.open++; rb.open++; } else if (s.result === "H") { ra.tied++; rb.tied++; } else if (s.result === "A") { ra.won++; rb.lost++; } else { rb.won++; ra.lost++; } }
     table.sort((x, y) => y.won - x.won || y.holes_up - x.holes_up || x.lost - y.lost || x.name.localeCompare(y.name, "es"));
     const finished = pairs.length > 0 && pairs.every(p => p.state.finished);
-    return { modality: "metralleta", strokes, hole_strokes: hsOf(strokes), sides: ids.map(i => [i]), main: null, pairs, table, finished, summary: finished ? `Ganó ${table[0]?.name ?? ""}` : `${pairs.filter(p => p.state.finished).length}/${pairs.length} partidos terminados`, playing };
+    return { modality: "metralleta", strokes, hole_strokes: hsOf(strokes), strokes_placed: placed, sides: ids.map(i => [i]), main: null, pairs, table, finished, summary: finished ? `Ganó ${table[0]?.name ?? ""}` : `${pairs.filter(p => p.state.finished).length}/${pairs.length} partidos terminados`, playing };
   }
   const sides = def.modality === "single" ? [[P[0]?.id], [P[1]?.id]].map(s => s.filter(Boolean) as string[]) : (def.sides || []);
   const ids = sides.flat(), strokes = strokesOf(ids), hs = hsOf(strokes), main = matchPlay(sides[0] || [], sides[1] || [], scores, hs, start, marksOf(scores).conc || [], DONE);
   const sideName = (k: number) => (sides[k] || []).map(name).join(" / ");
   const lead = main.up > 0 ? sideName(0) : main.up < 0 ? sideName(1) : "";
-  return { modality: def.modality, strokes, hole_strokes: hs, sides, main, pairs: [], table: [], finished: main.finished, summary: main.up === 0 ? main.text : `${lead} ${main.text}`, playing };
+  return { modality: def.modality, strokes, hole_strokes: hs, strokes_placed: placed, sides, main, pairs: [], table: [], finished: main.finished, summary: main.up === 0 ? main.text : `${lead} ${main.text}`, playing };
 }
 
 /** Stable player key across matches: the club player id when we have it, else the normalised name. «me» for the account owner. */
