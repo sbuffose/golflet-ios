@@ -171,10 +171,39 @@ struct MatchSetupView: View {
         .accessibilityIdentifier("armar-jugadores")
     }
 
+    /// Par of the libreta only when all 18 holes have one. Never a guessed 72.
+    private var coursePar: Int? {
+        let known = card.pars.compactMap { $0 }
+        guard known.count == 18 else { return nil }
+        return known.reduce(0, +)
+    }
+
+    /// Slope and rating of the tee this course name points at. No tee → the index, same as the web.
+    private var courseTee: TeeRating? {
+        guard let course else { return nil }
+        let tees = model.tees.filter {
+            $0.clubCode.caseInsensitiveCompare(course.clubCode) == .orderedSame
+                && $0.course.caseInsensitiveCompare(course.name) == .orderedSame
+                && $0.slope > 0 && $0.courseRating > 0
+                && ($0.gender == nil || $0.gender == "C" || $0.gender == "Caballeros")
+        }
+        guard let want = MatchStrokes.teeName(forCourse: course.name) else { return tees.first }
+        return tees.first { $0.tee.caseInsensitiveCompare(want) == .orderedSame } ?? tees.first
+    }
+
+    /// Course handicap of the chosen course, or the index when that course has no slope and rating.
+    private var playingBases: [Double] {
+        let indexes = players.map { $0.handicap ?? 0 }
+        guard let tee = courseTee, let par = coursePar else { return indexes }
+        return indexes.map { index in
+            Double(MatchStrokes.courseHandicap(index: index, slope: Double(tee.slope), rating: tee.courseRating, par: par) ?? Int(index.rounded()))
+        }
+    }
+
     private var strokeRows: [GolpesPorHoyoGrid.Row] {
         guard ready else { return [] }
         let names = players.map(\.name)
-        let received = MatchStrokes.strokesReceived(players.map { $0.handicap ?? 0 }, allowance: 100)
+        let received = MatchStrokes.strokesReceived(playingBases, allowance: MatchStrokes.defaultAllowance(players: players.count))
         let placed = MatchStrokes.placed(card.si)
         return players.enumerated().map { index, player in
             let count = received[index]

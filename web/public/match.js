@@ -71,7 +71,7 @@
     let base = null; if (tee) base = await H.api(`/api/matches/setup?tee=${encodeURIComponent(tee)}`).catch(() => null);
     if (!live('gm')) return;
     const S = LS.get(DK, null) || { players: base?.players?.map(p => ({ id: p.id, name: p.name, hcp: p.hcp, me: !!p.me, tee: p.tee ?? null, gender: p.gender || 'C' })) || [{ id: 'me', name: 'Yo', hcp: null, me: true }], modality: null, scoring: 'hcp', allowance: null, sides: null, opp: null };
-    const TEES = base?.tees || [], TN = [...new Set(TEES.map(t => t.tee))], GEN = (base?.genders || []).includes('D');
+    let TEES = base?.tees || [], TN = [...new Set(TEES.map(t => t.tee))], GEN = (base?.genders || []).includes('D');
     S.players.forEach(p => { if (p.tee === undefined) p.tee = base?.default_tee ?? null; if (!p.gender) p.gender = 'C'; });
     if (!S.modality) S.modality = S.players.length === 4 ? 'fourball' : S.players.length === 2 ? 'single' : S.players.length >= 3 ? 'metralleta' : 'single';
     let si = base?.si || Array(18).fill(null); const start = base?.tee_time?.start_hole || 1;
@@ -122,7 +122,12 @@
       bind();
     };
     const bind = () => {
-      el.querySelectorAll('[data-course]').forEach(b => b.onclick = async () => { b.disabled = true; try { base = await H.api(`/api/matches/setup?tee=${encodeURIComponent(tee)}`, { method: 'POST', body: JSON.stringify({ course: b.dataset.course }) }); si = base?.si || si; if (!live('gm')) return; err = ''; render(); } catch (ex) { err = ex?.message || 'No se pudo guardar la cancha'; render(); } });
+      el.querySelectorAll('[data-course]').forEach(b => b.onclick = async () => { b.disabled = true; try {
+        base = await H.api(`/api/matches/setup?tee=${encodeURIComponent(tee)}`, { method: 'POST', body: JSON.stringify({ course: b.dataset.course }) });
+        TEES = base?.tees || []; TN = [...new Set(TEES.map(t => t.tee))]; GEN = (base?.genders || []).includes('D'); si = base?.si || si;
+        S.players.forEach(p => { if (!(p.tee && TN.includes(p.tee))) p.tee = base?.default_tee ?? null; });
+        if (!live('gm')) return; err = ''; render();
+      } catch (ex) { err = ex?.message || 'No se pudo guardar la cancha'; render(); } });
       el.querySelectorAll('[data-hcp]').forEach(i => i.onchange = () => { const v = i.value.trim().replace(',', '.'); const p = S.players[+i.dataset.hcp]; p.hcp = v === '' ? null : isFinite(+v) && +v >= -10 && +v <= 54 ? Math.round(+v * 10) / 10 : p.hcp; render(); });
       el.querySelectorAll('[data-tee]').forEach(i => i.onchange = () => { S.players[+i.dataset.tee].tee = i.value || null; render(); });
       el.querySelectorAll('[data-gen]').forEach(b => b.onclick = () => { S.players[+b.dataset.gen].gender = b.dataset.g; render(); });

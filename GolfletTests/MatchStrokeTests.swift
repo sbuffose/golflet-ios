@@ -54,6 +54,23 @@ final class MatchStrokeTests: XCTestCase {
         XCTAssertEqual(MatchStrokes.shortName("Mateo Ruiz", peers: surnameFirst, me: true), "Vos")
     }
 
+    func testFourballStrokesFollowTheChosenCourseTee() {
+        let indexes = [3.1, 6.1, 7.1, 10.1]
+        let azul = indexes.map { MatchStrokes.courseHandicap(index: $0, slope: 123, rating: 70.2, par: 72)! }
+        let colorada = indexes.map { MatchStrokes.courseHandicap(index: $0, slope: 122, rating: 71.1, par: 72)! }
+        XCTAssertEqual(azul, [2, 5, 6, 9])
+        XCTAssertEqual(colorada, [2, 6, 7, 10])
+        XCTAssertEqual(MatchStrokes.strokesReceived(azul.map(Double.init), allowance: 85), [0, 3, 3, 6])
+        XCTAssertEqual(MatchStrokes.strokesReceived(colorada.map(Double.init), allowance: 85), [0, 3, 4, 7])
+        XCTAssertNotEqual(
+            MatchStrokes.strokesReceived(azul.map(Double.init), allowance: 85),
+            MatchStrokes.strokesReceived(colorada.map(Double.init), allowance: 85)
+        )
+        XCTAssertEqual(MatchStrokes.teeName(forCourse: "Azul"), "azul")
+        XCTAssertEqual(MatchStrokes.teeName(forCourse: "Colorada"), "rojo")
+        XCTAssertEqual(MatchStrokes.defaultAllowance(players: 4), 85)
+    }
+
     func testBlueSquareNamesAzulWhenTheBookingHasNoCourse() {
         XCTAssertEqual(MatchStrokes.courseFromMarker("Copa del club 18hmp Dom 🟦", courses: ["Azul", "Colorada"]), "Azul")
         XCTAssertEqual(MatchStrokes.courseFromMarker("Programa COLO 🟥", courses: ["Azul", "Colorada"]), "Colorada")

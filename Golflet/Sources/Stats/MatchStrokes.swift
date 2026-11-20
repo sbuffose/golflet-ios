@@ -15,6 +15,25 @@ enum MatchStrokes {
         return handicaps.map { roundHalfUp(($0 - low) * allowance / 100) }
     }
 
+    /// Four players open as fourball (85%). Two, or any other count, open at 100%.
+    static func defaultAllowance(players: Int) -> Double { players == 4 ? 85 : 100 }
+
+    /// WHS course handicap, rounded half up. Nil when slope, rating or par is missing.
+    static func courseHandicap(index: Double, slope: Double, rating: Double, par: Int) -> Int? {
+        guard slope > 0, rating.isFinite, par > 0 else { return nil }
+        return roundHalfUp(index * slope / 113 + (rating - Double(par)))
+    }
+
+    /// The tee the course name points at: Azul → azul, Colorada → rojo.
+    static func teeName(forCourse course: String) -> String? {
+        let folded = course.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es")).lowercased()
+        let colors = ["colorada": "rojo", "roja": "rojo", "azul": "azul", "negra": "negro", "blanca": "blanco", "amarilla": "amarillo", "verde": "verde"]
+        for word in folded.split(whereSeparator: { $0 == " " }) {
+            if let tee = colors[String(word)] { return tee }
+        }
+        return nil
+    }
+
     /// Indexes (0 = hole 1) with a usable S.I. Nil unless there are 18 distinct values, or exactly 9 and the rest empty.
     static func strokeHoles(_ si: [Int?]) -> [Int]? {
         var known: [Int] = []
