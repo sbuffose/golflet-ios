@@ -17,17 +17,21 @@
   /* t264u/t265u: index → playing handicap per player, and the strokes grid (two 9-hole blocks: Hoyo / Par / S.I. + one row per player). */
   const phTxt = (def, p) => { const ph = MC().playingHcp(def, p); if (ph.source === 'course') return `Índice ${f1(ph.index)} → juega <b class="num">${ph.course_handicap}</b> · ${e(ph.tee)}`;
     if (ph.source === 'index') return `Índice <b class="num">${f1(ph.index)}</b>${ph.note ? ` <span class="gm-warn2">${e(ph.note)}</span>` : ''}`; return '<span class="gm-warn2">sin hándicap</span>'; };
+  const dash = kind => typeof miss === 'function' ? miss(kind) : `<button type="button" class="miss" data-miss="${kind}" aria-label="Sin dato">–</button>`;
   function gridHtml(def, E, short, cur) {
     if (!E || def.scoring !== 'hcp') return '';
     const ids = def.players.map(p => p.id), hs = E.hole_strokes, pars = def.pars || [], si = def.si || [];
+    const placed = E.strokes_placed === true;
     const ts = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ts')) || 1, BK = innerWidth * 1 / ts < 330 ? 6 : 9;   // t264u: 6-hole blocks when narrow / big text
+    const cell = (h, html) => `<td${h === cur ? ' class="cur"' : ''}>${html}</td>`;
     const block = (a) => { const hh = Array.from({ length: BK }, (_, k) => a + k);
       const tdc = h => h === cur ? ' class="cur"' : '';
       return `<table class="gm-gt num"><thead><tr><th scope="row">Hoyo</th>${hh.map(h => `<th${tdc(h)}>${h + 1}</th>`).join('')}</tr></thead><tbody>
-        <tr class="gm-gm"><th scope="row">Par</th>${hh.map(h => `<td${tdc(h)}>${pars[h] ?? '–'}</td>`).join('')}</tr>
-        <tr class="gm-gm"><th scope="row">S.I.</th>${hh.map(h => `<td${tdc(h)}>${si[h] ?? '–'}</td>`).join('')}</tr>
-        ${ids.map(i => `<tr><th scope="row">${e(short(i))} <small>${E.strokes[i] || 0}</small></th>${hh.map(h => { const v = hs[i]?.[h] || 0; return `<td${tdc(h)}>${v ? `<span class="gm-gd" aria-label="${v} ${v === 1 ? 'golpe' : 'golpes'}">${'●'.repeat(Math.min(v, 3))}</span>` : ''}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`; };
-    return `<div class="card gm-grid" aria-label="Golpes por hoyo"><div class="gm-gh"><b>Golpes por hoyo</b><small>● = 1 golpe · por S.I.${def.modality === 'metralleta' ? ' · contra el más bajo (en cada par, la diferencia)' : ''}</small></div>${Array.from({ length: 18 / BK }, (_, k) => block(k * BK)).join('')}
+        <tr class="gm-gm"><th scope="row">Par</th>${hh.map(h => cell(h, pars[h] != null ? pars[h] : dash('par'))).join('')}</tr>
+        <tr class="gm-gm"><th scope="row">S.I.</th>${hh.map(h => cell(h, si[h] != null ? si[h] : dash('si'))).join('')}</tr>
+        ${ids.map(i => `<tr><th scope="row">${e(short(i))} <small>${E.strokes[i] || 0}</small></th>${hh.map(h => { const recv = E.strokes[i] || 0; if (!placed && recv > 0) return cell(h, dash('strokes')); const v = hs[i]?.[h] || 0; return cell(h, v ? `<span class="gm-gd" aria-label="${v} ${v === 1 ? 'golpe' : 'golpes'}">${'●'.repeat(Math.min(v, 3))}</span>` : ''); }).join('')}</tr>`).join('')}</tbody></table>`; };
+    const warn = placed ? '' : '<p class="foot gm-warn">Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo.</p>';
+    return `<div class="card gm-grid" aria-label="Golpes por hoyo"><div class="gm-gh"><b>Golpes por hoyo</b><small>● = 1 golpe · por S.I.${def.modality === 'metralleta' ? ' · contra el más bajo (en cada par, la diferencia)' : ''}</small></div>${Array.from({ length: 18 / BK }, (_, k) => block(k * BK)).join('')}${warn}
       <p class="foot gm-gtot">${ids.map(i => `${e(short(i))}: ${E.strokes[i] || 0}`).join(' · ')}</p></div>`;
   }
 
@@ -76,6 +80,7 @@
     const defOf = () => { const sel = S.modality === 'single' ? [S.players.find(p => p.me) || S.players[0], S.players.find(p => p.id === S.opp) || S.players.find(p => !p.me)].filter(Boolean) : S.players;
       return { modality: S.modality, scoring: S.scoring, allowance: al(), players: sel.map(p => ({ id: p.id, name: p.name, hcp: p.hcp == null || p.hcp === '' ? null : +p.hcp, ...(p.manual ? { manual: true } : {}), ...(TEES.length && p.tee ? { tee: p.tee, gender: p.gender || 'C' } : {}) })), ...(S.modality === 'fourball' ? { sides: S.sides } : {}), si, start_hole: start, ...(TEES.length ? { tees: TEES } : {}), ...(base?.pars ? { pars: base.pars } : {}) }; };
     const nm = id => S.players.find(p => p.id === id)?.name || id;
+    const short = id => { const p = S.players.find(x => x.id === id); return MC().shortName(p?.name || nm(id), S.players.map(x => x.name), !!p?.me); };
     const render = () => {
       LS.set(DK, S);
       const n = S.players.length, can = { fourball: n === 4, single: n >= 2, metralleta: n >= 3 && n <= 8 };
@@ -84,7 +89,6 @@
       if (S.modality === 'single' && (!S.opp || !S.players.some(p => p.id === S.opp && !p.me))) S.opp = S.players.find(p => !p.me)?.id || null;
       const def = defOf(), missing = S.scoring === 'hcp' && def.players.some(p => p.hcp == null || !isFinite(p.hcp));
       const E = !missing && def.players.length >= 2 && (S.modality !== 'fourball' || okSides()) ? MC().evaluate(def, {}) : null;
-      const dots = id => { const hs = E?.hole_strokes?.[id]; if (!hs || !hs.some(Boolean)) return ''; return `<span class="gm-dots num" aria-label="Golpes en los hoyos ${hs.map((v, i) => v ? `${i + 1}${v > 1 ? ` (${v})` : ''}` : null).filter(Boolean).join(', ')}">${hs.map((v, i) => v ? `<i>${i + 1}${'•'.repeat(v)}</i>` : '').join('')}</span>`; };
       const recv = id => E ? (E.strokes[id] ?? 0) : null;
       el.innerHTML = `<div class="gm-hd"><h1>Armar partido</h1>${base?.tee_time ? `<p class="foot">${e(base.tee_time.course_label)} · ${e(base.tee_time.date.split('-').reverse().slice(0, 2).join('/'))} ${e(base.tee_time.time)}${start === 10 ? ' · sale del 10' : ''}</p>` : ''}</div>
         <div class="section"><h2>Jugadores</h2><span class="foot">HCP = índice de la reserva${TEES.length ? ' · salida = de dónde sale' : ''}</span></div>
@@ -103,10 +107,10 @@
         ${S.scoring === 'hcp' ? `<div class="card gm-al"><div class="gm-alr"><span>Porcentaje del hándicap</span><div class="gm-step"><button type="button" data-al="-5" aria-label="Bajar 5%">−</button><input type="text" inputmode="numeric" id="gmal" value="${al()}" aria-label="Porcentaje"><span>%</span><button type="button" data-al="5" aria-label="Subir 5%">+</button></div></div>
           <p class="foot">Por defecto ${MC().DEFAULT_ALLOWANCE[S.modality]}% (${S.modality === 'fourball' ? 'fourball' : 'match individual'}). El más bajo ${S.modality === 'metralleta' ? 'de cada par ' : ''}juega en cero; los demás reciben (su HCP − el más bajo) × ${al()}%, redondeado (0,5 sube a 1). Los golpes van por el S.I. de cada hoyo.</p>
           <p class="foot">${TEES.length ? `Base: hándicap de cancha de cada uno según su salida (WHS: índice × slope/113 + course rating − par, redondeado). Salida inicial: ${e(base.tee_source || '—')}.` : 'Base: el índice (no tenemos slope ni course rating de esta cancha).'}</p>
-          ${base?.si_source ? '' : '<p class="foot gm-warn">No tenemos el índice (S.I.) de los hoyos de esta cancha: los golpes se dan del hoyo 1 en adelante.</p>'}
+          ${base?.si_source ? '' : '<p class="foot gm-warn">Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo. Tocá un «–» para ver por qué falta y qué hacer.</p>'}
           ${missing ? '<p class="msg err">Con hándicap, todos necesitan su HCP: completalo arriba o jugá gross.</p>' : ''}
-          ${E && S.modality === 'metralleta' ? `<div class="gm-mx"><small>Golpes por par</small>${E.pairs.map(pr => { const g = pr.strokes[pr.a] ? pr.a : pr.b, v = pr.strokes[g]; return `<div class="gm-mxr"><span>${e(nm(pr.a))} vs ${e(nm(pr.b))}</span><b class="num">${v ? `${e(nm(g).split(' ')[0])} recibe ${v}` : 'parejos'}</b></div>`; }).join('')}</div>` : ''}</div>` : ''}
-        ${S.scoring === 'hcp' && E && S.modality !== 'metralleta' ? gridHtml(def, E, i => { const s0 = nm(i).split(' '); return S.players.find(p => p.id === i)?.me ? 'Vos' : s0.length > 1 ? `${s0[0]} ${s0[1][0]}.` : s0[0]; }, -1) : S.scoring === 'hcp' && E ? gridHtml(def, E, i => S.players.find(p => p.id === i)?.me ? 'Vos' : nm(i).split(' ')[0], -1) : ''}
+          ${E && S.modality === 'metralleta' ? `<div class="gm-mx"><small>Golpes por par</small>${E.pairs.map(pr => { const g = pr.strokes[pr.a] ? pr.a : pr.b, v = pr.strokes[g]; return `<div class="gm-mxr"><span>${e(nm(pr.a))} vs ${e(nm(pr.b))}</span><b class="num">${v ? `${e(short(g))} recibe ${v}` : 'parejos'}</b></div>`; }).join('')}</div>` : ''}</div>` : ''}
+        ${S.scoring === 'hcp' && E ? gridHtml(def, E, short, -1) : ''}
         ${err ? `<p class="msg err">${e(err)}</p>` : ''}
         <button type="button" class="btn gm-go" id="gmgo"${E ? '' : ' disabled'}>Empezar partido</button>
         <p class="foot">El partido queda en tu cuenta, privado. No cuenta para tus tarjetas ni tu hándicap. No se manda nada al club.</p>`;
@@ -144,7 +148,7 @@
     let m = LS.get(MK(id), null);
     if (!pending(id)) { const r = await H.api(`/api/matches/${encodeURIComponent(id)}`).catch(err => { if (!m) throw err; return null; }); if (r) { m = r; LS.set(MK(id), r); } }
     if (!opt.embed && !live('gm')) return; if (opt.embed && !el.isConnected) return; if (!m) throw new Error('Partido no encontrado');
-    const def = m.def, ids = def.players.map(p => p.id), nm = i => def.players.find(p => p.id === i)?.name || i, short = i => { const s = nm(i).split(' '); return i === 'me' ? 'Vos' : s.length > 1 ? `${s[0]} ${s[1][0]}.` : s[0]; };
+    const def = m.def, ids = def.players.map(p => p.id), nm = i => def.players.find(p => p.id === i)?.name || i, short = i => MC().shortName(nm(i), def.players.map(p => p.name), i === 'me');
     const order = MC().playOrder(def.start_hole || 1);
     const MK2 = () => { const x = m.scores._m = m.scores._m || {}; x.conc = Array.isArray(x.conc) ? x.conc : Array(18).fill(null); return x; };
     const concOf = h => { const c = m.scores._m?.conc?.[h]; return c === 0 || c === 1 ? c : null; };
@@ -162,8 +166,8 @@
       const hr = E.main?.holes.find(x => x.hole === cur + 1);
       const holeRes = E.main ? (hr ? `<p class="gm-hr">${hr.w === 'H' ? 'Hoyo empatado' : `Hoyo para ${e(side(hr.w === 'A' ? 0 : 1))}`}${hr.dado ? ' <span class="gm-dt">· hoyo dado</span>' : hr.a != null && hr.b != null ? ` <span class="num">(${hr.a} vs ${hr.b} neto)</span>` : hr.a == null && hr.b == null ? ' · nadie terminó' : ` <span class="num">(${hr.a != null ? `${hr.a} neto` : 'no terminó'} vs ${hr.b != null ? `${hr.b} neto` : 'no terminó'})</span>`}</p>` : '') : '';
       const partHint = !ro() && concOf(cur) == null && anyIn(cur) && !holeDone(cur) ? '<p class="foot gm-pth">Podés seguir sin anotarle a todos: al pasar de hoyo se cierra con los scores cargados.</p>' : '';
-      const recvNow = def.scoring === 'hcp' ? ids.filter(i => (hs[i]?.[cur] || 0) > 0) : [];
-      const holeStk = def.scoring !== 'hcp' ? '' : `<p class="gm-hk">${recvNow.length ? recvNow.map(i => `<b>${e(short(i))}</b> recibe ${hs[i][cur]} ${hs[i][cur] === 1 ? 'golpe' : 'golpes'}`).join(' · ') + ' en este hoyo' : 'Nadie recibe golpe en este hoyo'}${si ? ` <span class="num">(S.I. ${si})</span>` : ''}${def.modality === 'metralleta' ? ' · contra el más bajo' : ''}</p>`;
+      const recvNow = def.scoring === 'hcp' && E.strokes_placed ? ids.filter(i => (hs[i]?.[cur] || 0) > 0) : [];
+      const holeStk = def.scoring !== 'hcp' ? '' : !E.strokes_placed ? '<p class="gm-hk">Sin el S.I. no se puede decir quién recibe en este hoyo.</p>' : `<p class="gm-hk">${recvNow.length ? recvNow.map(i => `<b>${e(short(i))}</b> recibe ${hs[i][cur]} ${hs[i][cur] === 1 ? 'golpe' : 'golpes'}`).join(' · ') + ' en este hoyo' : 'Nadie recibe golpe en este hoyo'}${si ? ` <span class="num">(S.I. ${si})</span>` : ''}${def.modality === 'metralleta' ? ' · contra el más bajo' : ''}</p>`;
       const cc = concOf(cur), concRow = E.main && !ro() ? `<div class="gm-hd2"><span>Hoyo dado</span>${[0, 1].map(k => `<button type="button" data-conc="${k}" class="${cc === k ? 'on' : ''}" aria-pressed="${cc === k}">Gana ${e(side(k))}</button>`).join('')}</div>` : '';
       const strip = `<div class="gm-hs" role="group" aria-label="Hoyo">${order.map(h => { const done = holeDone(h), part = !done && anyIn(h), w = E.main?.holes.find(x => x.hole === h + 1)?.w; return `<button type="button" data-h="${h}" class="num${h === cur ? ' on' : ''}${done ? ' ok' : ''}${part ? ' pt' : ''}${w === 'A' ? ' wa' : w === 'B' ? ' wb' : ''}" aria-label="Hoyo ${h + 1}${done ? ', cargado' : ''}">${h + 1}</button>`; }).join('')}</div>`;
       const rows = ids.map(i => { const v = m.scores[i]?.[cur], st = hs[i]?.[cur] || 0, net = v ? v - st : null;
@@ -275,5 +279,5 @@
     el.addEventListener('touchmove', ev => { if (y0 == null) return; const dy = ev.touches[0].clientY - y0; el.style.transform = dy > 0 ? `translateY(${dy}px)` : ''; }, { passive: true });
     el.addEventListener('touchend', ev => { if (y0 == null) return; const dy = (ev.changedTouches[0]?.clientY ?? y0) - y0; y0 = null; el.style.transform = ''; if (dy > 90) closeSheet(false); });
   }
-  window.GolfletMatch = { init: h => { H = h; flush(); }, page, load, label, parent, statusShort, openSheet, closeSheet: () => closeSheet(false), sheetOpen: () => !!SHEET, current: () => { const c = LS.get(CUR, null); return c && c.date === todayAR() ? c.id : null; } };
+  window.GolfletMatch = { init: h => { H = h; flush(); }, page, load, label, parent, statusShort, openSheet, closeSheet: () => closeSheet(false), sheetOpen: () => !!SHEET, gridHtml, current: () => { const c = LS.get(CUR, null); return c && c.date === todayAR() ? c.id : null; } };
 })();

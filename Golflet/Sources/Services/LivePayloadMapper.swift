@@ -383,12 +383,14 @@ enum LivePayloadMapper {
                         if let y = JSONFlex.int(from: value) { yards[key.uppercased()] = y }
                     }
                 }
+                let known = JSONFlex.int(from: hole["hcp"] ?? hole["hole_hcp"])
                 return CourseHole(
                     number: number,
                     par: JSONFlex.int(from: hole["par"]) ?? 4,
                     parRaw: hole["par_raw"] as? String,
-                    handicap: JSONFlex.int(from: hole["hcp"] ?? hole["hole_hcp"]) ?? number,
-                    yards: yards
+                    handicap: known ?? number,
+                    yards: yards,
+                    handicapKnown: known.map { (1...18).contains($0) } ?? false
                 )
             }
             courses.append(Course(clubCode: clubCode, clubName: clubName, name: name, holes: holes))

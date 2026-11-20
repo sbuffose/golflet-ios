@@ -184,6 +184,8 @@ struct CourseHole: Identifiable, Hashable, Sendable {
     var parRaw: String? = nil
     var handicap: Int
     var yards: [String: Int]
+    /// False when the official card did not include a stroke index. The hole number is not a stroke index.
+    var handicapKnown: Bool = true
 
     var parCaption: String {
         let parts = (parRaw ?? "").split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }

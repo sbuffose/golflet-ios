@@ -1,5 +1,5 @@
 /** Admin corrections on top of the synced course card (pure). Sync rewrites course.holes; course.holes_override survives it. */
-import { HttpError } from "./http";
+import { HttpError } from "./http-error";
 import type { LatLng } from "./geo";
 
 export type HoleFix = { par?: number; hcp?: number; yards?: Record<string, number> };
