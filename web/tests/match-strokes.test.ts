@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { bookingCourseName, cardFromHoles, courseFromMarker, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced } from "../lib/match-core";
+import { bookingCourseName, cardFromHoles, courseChoices, courseFromMarker, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced } from "../lib/match-core";
 import { courseCardFromRow } from "../lib/tee-times-core";
 
 /** Official card already shipped as a fixture (course holes only, no player). */
@@ -141,6 +141,17 @@ test("an official scorecard of the same course fills par and never a stroke inde
   const other = resolveOfficialCard({ course_label: null, event_name: "Dom 🟦" }, null, [], [{ course: "Colorada", official: true, holes: [[1, 3, 4]] }], ["Azul", "Colorada"]);
   assert.equal(other.course, "Azul");
   assert.ok(other.pars.every(v => v == null));
+});
+
+test("the course question appears only when the club has two libretas and the booking names neither", () => {
+  assert.deepEqual(courseChoices(null, ["Azul", "Colorada"]), ["Azul", "Colorada"]);
+  assert.equal(courseChoices("Azul", ["Azul", "Colorada"]), null);
+  assert.equal(courseChoices(null, ["Azul"]), null);
+  assert.equal(courseFromMarker("Copa sin marca", ["Azul", "Colorada"]), null);
+  const js = readFileSync(new URL("../public/match.js", import.meta.url), "utf8");
+  assert.match(js, /¿En qué cancha juegan\?/);
+  assert.match(js, /id="cancha-pregunta"/);
+  assert.match(js, /method: 'POST'/);
 });
 
 test("the match screen no longer deals strokes from hole 1", () => {

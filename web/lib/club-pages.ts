@@ -48,8 +48,7 @@ export function parseEvents(html: string) {
 
 const foldCourse = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
-/** The course is the one the reservation source names exactly (the venue or an explicit course cell).
- *  The tournament title is not a course: no 4-letter prefix and no color square. */
+/** The course is the one the reservation source names exactly (the venue or an explicit course cell). */
 export function verifiedCourse(source: { venue?: string | null; course?: string | null }, courses: string[]): { course: string | null; how: "fuente" | null } {
   const want = new Map(courses.map(c => c.trim()).filter(Boolean).map(c => [foldCourse(c), c]));
   for (const raw of [source.course, source.venue]) {
@@ -59,9 +58,30 @@ export function verifiedCourse(source: { venue?: string | null; course?: string 
   return { course: null, how: null };
 }
 
-/** Kept for callers that still pass the tournament title. It does not infer a course from that title. */
-export function courseFromEvent(_event: string | null | undefined, _courses: string[]): { course: null; how: null } {
-  return { course: null, how: null };
+const MARK_COLOR: Record<string, RegExp> = { "🟥": /colorad|roj/, "🟦": /azul/, "🟩": /verde/, "🟨": /amarill/, "⬛": /negr/, "⬜": /blanc/ };
+
+/** The club prints the course in the tournament title: the name (or its first four letters, «COLO») or one color square.
+ *  Two colors, or two courses that match, stay empty. Nothing here invents a stroke index. */
+export function courseFromEvent(event: string | null | undefined, courses: string[]): { course: string | null; how: "nombre" | "color" | null } {
+  const title = String(event || "").trim();
+  const list = courses.map(c => c.trim()).filter(Boolean);
+  if (!title || !list.length) return { course: null, how: null };
+  const upper = foldCourse(title).toUpperCase();
+  const words = (name: string) => foldCourse(name).toUpperCase().split(/\s+/).filter(w => w.length >= 4 && w !== "CANCHA");
+  const byName = list.filter(c => words(c).some(w => new RegExp(`\\b${w.slice(0, 4).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(upper)));
+  if (byName.length === 1) return { course: byName[0], how: "nombre" };
+  const colors = [...new Set(title.match(/🟥|🟦|🟩|🟨|⬛|⬜/gu) || [])];
+  if (colors.length !== 1) return { course: null, how: null };
+  const re = MARK_COLOR[colors[0]];
+  const hit = re ? list.filter(c => re.test(foldCourse(c))) : [];
+  return hit.length === 1 ? { course: hit[0], how: "color" } : { course: null, how: null };
+}
+
+/** Venue wins when it is the course. Otherwise the title's single marker. */
+export function readBookingCourse(source: { venue?: string | null; course?: string | null; event?: string | null }, courses: string[]): { course: string | null; how: "fuente" | "nombre" | "color" | null } {
+  const named = verifiedCourse(source, courses);
+  if (named.course) return named;
+  return courseFromEvent(source.event, courses);
 }
 
 /** Event date when the events page doesn't list it: the next date (from `today`, up to ~70 days) with that weekday + day of month. */

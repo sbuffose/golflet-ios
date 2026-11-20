@@ -27,6 +27,7 @@ var GolfletMatchCore = (() => {
     aggregate: () => aggregate,
     bookingCourseName: () => bookingCourseName,
     cardFromHoles: () => cardFromHoles,
+    courseChoices: () => courseChoices,
     courseFromMarker: () => courseFromMarker,
     courseHandicap: () => courseHandicap,
     courseLabelHits: () => courseLabelHits,
@@ -152,6 +153,11 @@ var GolfletMatchCore = (() => {
       })) return holes;
     }
     return [];
+  }
+  function courseChoices(resolved, options) {
+    if (resolved) return null;
+    const list = [...new Set(options.map((s) => s.trim()).filter(Boolean))];
+    return list.length > 1 ? list : null;
   }
   function resolveOfficialCard(t, directoryHoles, courses, rounds, catalog) {
     const names = [...new Set([...catalog || [], ...(courses || []).map((c) => String(c.name || c.course || ""))].map((s) => s.trim()).filter(Boolean))];

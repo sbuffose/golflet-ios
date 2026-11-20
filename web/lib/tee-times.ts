@@ -46,10 +46,25 @@ export async function courseTeeData(clubKey: string, courseId: number | null, co
 }
 /** Course names of the Golflet club linked to this directory key. Empty when the club is unknown. */
 export async function clubCourseNames(clubKey: string): Promise<string[]> {
+  const cards = await clubCourseCards(clubKey);
+  return cards.map(c => c.name);
+}
+/** Libretas of the club: a course row that already has par or S.I. No invented holes. */
+export async function clubCourseCards(clubKey: string): Promise<{ name: string; holes: { hole: number; par: number | null; hcp: number | null }[] }[]> {
   const [c] = await q(`select golflet_club_id from ar_club_directory where key=$1`, [clubKey]);
   if (!c?.golflet_club_id) return [];
-  const cs = await q(`select name from course where club_id=$1 order by name`, [c.golflet_club_id]);
-  return cs.map((r: any) => String(r.name || "")).filter(Boolean);
+  const cs = await q(`select club_id, name, par, tees, holes, holes_override from course where club_id=$1 order by name`, [c.golflet_club_id]);
+  const out: { name: string; holes: { hole: number; par: number | null; hcp: number | null }[] }[] = [];
+  for (const row of cs) {
+    const card = courseCardFromRow(row);
+    if (!card?.holes?.some((h: any) => { const p = Number(h.par), v = Number(h.hcp); return (Number.isInteger(p) && p >= 3) || (Number.isInteger(v) && v >= 1 && v <= 18); })) continue;
+    out.push({ name: String(row.name), holes: card.holes });
+  }
+  return out;
+}
+export async function courseDirectoryId(clubKey: string, courseName: string): Promise<number | null> {
+  const [r] = await q(`select id from ar_course_directory where club_key=$1 and lower(golflet_course_name)=lower($2) limit 1`, [clubKey, courseName]);
+  return r?.id == null ? null : Number(r.id);
 }
 export async function playerHI(userId: string) { const D: any = await buildData(userId); const v = D.player?.handicap_index ?? (D.hi_history || []).at(-1)?.hi ?? null; return v == null ? null : Number(v); }
 export async function teeOptions(userId: string, clubKey: string, courseId: number | null, selected?: string | null) {

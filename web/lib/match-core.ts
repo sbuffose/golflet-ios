@@ -128,6 +128,13 @@ export function scorecardHoles(rounds: { course?: string | null; official?: bool
   return [];
 }
 
+/** Ask only when the booking still has no course and the club has more than one libreta. One libreta is not a question. */
+export function courseChoices(resolved: string | null, options: string[]): string[] | null {
+  if (resolved) return null;
+  const list = [...new Set(options.map(s => s.trim()).filter(Boolean))];
+  return list.length > 1 ? list : null;
+}
+
 /** Directory card, then the player's course list for that same course, then par from an official scorecard. Never a made-up S.I. */
 export function resolveOfficialCard(
   t: { course_label?: string | null; event_name?: string | null },

@@ -12,6 +12,11 @@ extension LiveGolfletAPI {
         TeeTimesParser.list(from: try await request("GET", TeeTimesAPIPaths.list))
     }
 
+    func chooseBookingCourse(id: String, course: String) async throws {
+        let tee = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
+        _ = try await request("POST", "/api/matches/setup?tee=\(tee)", body: ["course": course])
+    }
+
     func refreshBookings() async throws -> ReservationRefresh {
         parseRefresh(try await request("POST", "/api/tee-times/check?limit=50", body: [:], timeout: 60))
     }
@@ -114,6 +119,9 @@ extension MockAPIClient {
         comps.second = 0
         let first = cal.date(from: comps) ?? base
         let second = first.addingTimeInterval(7 * 24 * 3600)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-strokes-ask") {
+            return [Self.strokeFixture(at: first, emptyCard: false, ask: true)]
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-strokes-empty") {
             return [Self.strokeFixture(at: first, emptyCard: true)]
         }
@@ -143,15 +151,16 @@ extension MockAPIClient {
     }
 
     /// Fixture flight for the stroke-index screen. Handicaps sit above the demo HI (3.1) so the received strokes are 3, 4 and 7.
-    private static func strokeFixture(at start: Date, emptyCard: Bool) -> TeeTime {
+    private static func strokeFixture(at start: Date, emptyCard: Bool, ask: Bool = false) -> TeeTime {
         TeeTime(
-            id: emptyCard ? "tt-golpes-vacio" : "tt-golpes-azul",
+            id: ask ? "tt-golpes-pregunta" : (emptyCard ? "tt-golpes-vacio" : "tt-golpes-azul"),
             startsAt: start,
-            clubName: emptyCard ? "Club sin tarjeta" : "Jockey Club Buenos Aires",
-            clubCode: emptyCard ? "000" : "118",
-            course: emptyCard ? "Sin tarjeta" : "Azul",
+            clubName: emptyCard && !ask ? "Club sin tarjeta" : "Jockey Club Buenos Aires",
+            clubCode: emptyCard && !ask ? "000" : "118",
+            course: ask ? "" : (emptyCard ? "Sin tarjeta" : "Azul"),
             companions: ["Lavalle Joaquín", "Lavalle Augusto", "Mateo Ruiz"],
-            companionHandicaps: ["Lavalle Joaquín": 6.1, "Lavalle Augusto": 7.1, "Mateo Ruiz": 10.1]
+            companionHandicaps: ["Lavalle Joaquín": 6.1, "Lavalle Augusto": 7.1, "Mateo Ruiz": 10.1],
+            eventName: ask ? "Copa sin marca" : ""
         )
     }
 }

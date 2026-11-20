@@ -13,11 +13,36 @@ struct MatchSetupView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     let booking: TeeTime
+    @State private var pickedCourse: String? = nil
+
+    private var sameClub: [Course] {
+        let code = booking.clubCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !code.isEmpty {
+            let byCode = model.courses.filter { $0.clubCode.caseInsensitiveCompare(code) == .orderedSame }
+            if !byCode.isEmpty { return byCode }
+        }
+        let club = booking.clubName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return model.courses.filter { $0.clubName.caseInsensitiveCompare(club) == .orderedSame }
+    }
 
     private var clubCourses: [Course] {
-        let club = booking.clubName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let same = model.courses.filter { $0.clubName.caseInsensitiveCompare(club) == .orderedSame }
+        let same = sameClub
         return same.isEmpty ? model.courses : same
+    }
+
+    /// A libreta is a course of this club that already has par or S.I.
+    private var libretaChoices: [Course] {
+        sameClub.filter { course in
+            course.holes.contains { $0.handicapKnown || (3...6).contains($0.par) }
+        }
+    }
+
+    private var rememberedCourse: String? {
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-strokes-ask") { return pickedCourse }
+        if let pickedCourse, !pickedCourse.isEmpty { return pickedCourse }
+        let forBooking = UserDefaults.standard.string(forKey: "golflet.tee-course.\(booking.id)")
+        if let forBooking, !forBooking.isEmpty { return forBooking }
+        return UserDefaults.standard.string(forKey: "golflet.club-course.\(booking.clubName)")
     }
 
     private var resolvedCourseName: String? {
@@ -25,7 +50,15 @@ struct MatchSetupView: View {
         if !named.isEmpty, let hit = clubCourses.first(where: { $0.name.caseInsensitiveCompare(named) == .orderedSame }) {
             return hit.name
         }
-        return MatchStrokes.courseFromMarker(booking.eventName, courses: clubCourses.map(\.name))
+        if let mark = MatchStrokes.courseFromMarker(booking.eventName, courses: clubCourses.map(\.name)) {
+            return mark
+        }
+        guard let memory = rememberedCourse else { return nil }
+        return libretaChoices.first { $0.name.caseInsensitiveCompare(memory) == .orderedSame }?.name
+    }
+
+    private var needsCourseQuestion: Bool {
+        resolvedCourseName == nil && libretaChoices.count > 1
     }
 
     private var course: Course? {
@@ -68,6 +101,9 @@ struct MatchSetupView: View {
                     Text(courseTitle)
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
+                    if needsCourseQuestion {
+                        courseQuestion
+                    }
                     playerList
                     GolpesPorHoyoGrid(
                         pars: card.pars,
@@ -81,6 +117,30 @@ struct MatchSetupView: View {
         }
         .accessibilityIdentifier("screen-armar-partido")
         .safeAreaInset(edge: .top) { MetricBackBar() }
+    }
+
+    private var courseQuestion: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("¿En qué cancha juegan?")
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+                .accessibilityIdentifier("cancha-pregunta")
+            HStack(spacing: 8) {
+                ForEach(libretaChoices, id: \.name) { course in
+                    Button(course.name) { selectCourse(course.name) }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color(hex: 0x0B2545))
+                        .accessibilityIdentifier("cancha-opcion-\(course.name)")
+                }
+            }
+        }
+    }
+
+    private func selectCourse(_ name: String) {
+        pickedCourse = name
+        UserDefaults.standard.set(name, forKey: "golflet.tee-course.\(booking.id)")
+        UserDefaults.standard.set(name, forKey: "golflet.club-course.\(booking.clubName)")
+        Task { try? await model.api.chooseBookingCourse(id: booking.id, course: name) }
     }
 
     private var playerList: some View {
