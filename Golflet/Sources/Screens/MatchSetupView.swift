@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MatchSetupPlayer: Identifiable, Equatable {
     var id: String
@@ -125,15 +126,6 @@ struct GolpesPorHoyoGrid: View {
 
     private var placed: Bool { MatchStrokes.placed(si) }
 
-    @State private var tableWidth: CGFloat = 0
-
-    /// Same width for every hole, like the web grid (`table-layout: fixed`). Content width must not stretch a column.
-    private var columnWidth: CGFloat {
-        let inner = max(0, tableWidth - 16)
-        guard inner > labelWidth else { return 24 }
-        return (inner - labelWidth) / 9
-    }
-
     private let labelWidth: CGFloat = 78
 
     var body: some View {
@@ -155,43 +147,15 @@ struct GolpesPorHoyoGrid: View {
                     .accessibilityIdentifier("golpes-hoyo-totales")
             }
         }
-        .background {
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { tableWidth = geo.size.width }
-                    .onChange(of: geo.size.width) { _, newValue in tableWidth = newValue }
-            }
-        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("golpes-hoyo")
     }
 
     private func block(from start: Int) -> some View {
         let holes = Array(start..<min(start + 9, 18))
-        return VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                columnLabel("Hoyo", light: true)
-                ForEach(holes, id: \.self) { hole in
-                    Text("\(hole + 1)")
-                        .font(GType.label)
-                        .foregroundStyle(Color.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .modifier(HoleColumn(width: columnWidth, identifier: "golpes-col-\(hole + 1)"))
-                }
-            }
-            .background(Color(hex: 0x0B2545))
-            valueRow("Par", holes: holes, kind: .holePar) { pars.indices.contains($0) ? pars[$0] : nil }
-            valueRow("S.I.", holes: holes, kind: .strokeIndex) { si.indices.contains($0) ? si[$0] : nil }
-            ForEach(rows) { row in
-                HStack(spacing: 0) {
-                    columnLabel("\(row.label) \(row.received)", light: false)
-                        .accessibilityIdentifier("golpes-fila-\(row.id)")
-                    ForEach(holes, id: \.self) { hole in
-                        strokeCell(row: row, hole: hole)
-                            .modifier(HoleColumn(width: columnWidth, identifier: "golpes-celda-\(row.id)-\(hole + 1)"))
-                    }
-                }
+        return EqualHoleColumns(columns: holes.count, labelWidth: labelWidth) {
+            ForEach(cells(holes)) { cell in
+                cellView(cell)
             }
         }
         .padding(8)
@@ -199,73 +163,172 @@ struct GolpesPorHoyoGrid: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private func columnLabel(_ text: String, light: Bool) -> some View {
-        Text(text)
-            .font(GType.label)
-            .foregroundStyle(light ? Color.white : p.ink)
-            .lineLimit(1)
-            .minimumScaleFactor(0.65)
-            .frame(width: labelWidth, height: 28, alignment: .leading)
-    }
-
-    private func valueRow(_ title: String, holes: [Int], kind: MissingKind, value: @escaping (Int) -> Int?) -> some View {
-        HStack(spacing: 0) {
-            Text(title)
-                .font(GType.label)
-                .foregroundStyle(p.ink2)
-                .lineLimit(1)
-                .frame(width: labelWidth, height: 28, alignment: .leading)
-            ForEach(holes, id: \.self) { hole in
-                Group {
-                    if let number = value(hole) {
-                        Text("\(number)")
-                            .font(GType.label)
-                            .foregroundStyle(p.ink2)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                    } else {
-                        MissingMark(kind: kind, compact: true)
-                    }
-                }
-                .modifier(HoleColumn(width: columnWidth, identifier: nil))
+    private func cells(_ holes: [Int]) -> [HoleCell] {
+        var cells: [HoleCell] = []
+        let tag = holes.first ?? 0
+        cells.append(HoleCell(id: "\(tag)-h", kind: .title("Hoyo", light: true, identifier: nil)))
+        for hole in holes {
+            cells.append(HoleCell(id: "\(tag)-n-\(hole)", kind: .header(hole + 1)))
+        }
+        cells.append(HoleCell(id: "\(tag)-par", kind: .title("Par", light: false, identifier: nil)))
+        for hole in holes {
+            cells.append(HoleCell(id: "\(tag)-par-\(hole)", kind: value(pars, hole: hole, missing: .holePar)))
+        }
+        cells.append(HoleCell(id: "\(tag)-si", kind: .title("S.I.", light: false, identifier: nil)))
+        for hole in holes {
+            cells.append(HoleCell(id: "\(tag)-si-\(hole)", kind: value(si, hole: hole, missing: .strokeIndex)))
+        }
+        for row in rows {
+            cells.append(HoleCell(id: "\(tag)-p-\(row.id)", kind: .title("\(row.label) \(row.received)", light: false, identifier: "golpes-fila-\(row.id)")))
+            for hole in holes {
+                let count = hole < row.dots.count ? row.dots[hole] : 0
+                let mark = row.placed && count > 0 ? String(repeating: "●", count: min(count, 3)) : ""
+                let voice = mark.isEmpty ? "vacío" : "\(count) \(count == 1 ? "golpe" : "golpes")"
+                cells.append(HoleCell(
+                    id: "\(tag)-s-\(row.id)-\(hole)",
+                    kind: .stroke(mark, voice: voice, identifier: "golpes-celda-\(row.id)-\(hole + 1)")
+                ))
             }
         }
+        return cells
+    }
+
+    private func value(_ source: [Int?], hole: Int, missing: MissingKind) -> HoleCell.Kind {
+        if source.indices.contains(hole), let number = source[hole] {
+            return .number(number)
+        }
+        return .missing(missing)
     }
 
     @ViewBuilder
-    private func strokeCell(row: Row, hole: Int) -> some View {
-        let count = hole < row.dots.count ? row.dots[hole] : 0
-        if row.placed, count > 0 {
-            Text(String(repeating: "●", count: min(count, 3)))
-                .font(.system(size: 9))
-                .foregroundStyle(Color(hex: 0x0B2545))
-                .accessibilityLabel("\(count) \(count == 1 ? "golpe" : "golpes")")
-        } else {
-            Text(" ")
-                .font(GType.label)
-                .accessibilityLabel("vacío")
+    private func cellView(_ cell: HoleCell) -> some View {
+        switch cell.kind {
+        case .title(let text, let light, let identifier):
+            filled(text, color: light ? .white : p.ink, fill: light ? Color(hex: 0x0B2545) : .clear, align: .leading, identifier: identifier, voice: text)
+        case .header(let number):
+            filled("\(number)", color: .white, fill: Color(hex: 0x0B2545), align: .center, identifier: "golpes-col-\(number)", voice: "\(number)")
+        case .number(let number):
+            filled("\(number)", color: p.ink2, fill: .clear, align: .center, identifier: nil, voice: "\(number)")
+        case .missing(let kind):
+            Color.clear
+                .overlay { MissingMark(kind: kind, compact: true) }
+                .accessibilityElement(children: .contain)
+        case .stroke(let mark, let voice, let identifier):
+            filled(mark, color: Color(hex: 0x0B2545), fill: .clear, align: .center, identifier: identifier, voice: voice, dot: true)
         }
+    }
+
+    private func filled(_ text: String, color: Color, fill: Color, align: Alignment, identifier: String?, voice: String, dot: Bool = false) -> some View {
+        ColumnSlot(identifier: identifier, label: voice)
+            .background(fill)
+            .overlay(alignment: align) {
+                Text(text.isEmpty ? " " : text)
+                    .font(dot ? .system(size: 9) : GType.label)
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.leading, align == .leading ? 2 : 0)
+                    .accessibilityHidden(true)
+            }
     }
 }
 
-/// Fixed hole column. The width is assigned; the cell cannot grow with a two-digit S.I.
-private struct HoleColumn: ViewModifier {
-    var width: CGFloat
-    var identifier: String?
+private struct HoleCell: Identifiable {
+    enum Kind {
+        case title(String, light: Bool, identifier: String?)
+        case header(Int)
+        case number(Int)
+        case missing(MissingKind)
+        case stroke(String, voice: String, identifier: String)
+    }
 
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let identifier {
-            content
-                .lineLimit(1)
-                .frame(width: width, height: 28)
-                .fixedSize(horizontal: true, vertical: false)
-                .accessibilityIdentifier(identifier)
-        } else {
-            content
-                .lineLimit(1)
-                .frame(width: width, height: 28)
-                .fixedSize(horizontal: true, vertical: false)
+    var id: String
+    var kind: Kind
+}
+
+/// Equal hole slots. A two-digit S.I. cannot widen its column.
+private struct EqualHoleColumns: Layout {
+    var columns: Int
+    var labelWidth: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+        let width = proposal.width ?? (labelWidth + CGFloat(columns) * 24)
+        let height = rowsHeight(width: width, subviews: subviews)
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+        let column = columnWidth(total: bounds.width)
+        let step = columns + 1
+        let rowCount = subviews.count / max(step, 1)
+        var y = bounds.minY
+        for row in 0..<rowCount {
+            let height = rowHeight(row, width: column, subviews: subviews)
+            var x = bounds.minX
+            for columnIndex in 0..<step {
+                let index = row * step + columnIndex
+                guard subviews.indices.contains(index) else { continue }
+                let width = columnIndex == 0 ? labelWidth : column
+                subviews[index].place(
+                    at: CGPoint(x: x + width / 2, y: y + height / 2),
+                    anchor: .center,
+                    proposal: ProposedViewSize(width: width, height: height)
+                )
+                x += width
+            }
+            y += height
         }
+    }
+
+    private func columnWidth(total: CGFloat) -> CGFloat {
+        guard columns > 0 else { return 0 }
+        return max(0, (total - labelWidth) / CGFloat(columns))
+    }
+
+    private func rowsHeight(width: CGFloat, subviews: Subviews) -> CGFloat {
+        let step = columns + 1
+        let rowCount = subviews.count / max(step, 1)
+        let column = columnWidth(total: width)
+        return (0..<rowCount).reduce(0) { $0 + rowHeight($1, width: column, subviews: subviews) }
+    }
+
+    private func rowHeight(_ row: Int, width: CGFloat, subviews: Subviews) -> CGFloat {
+        let step = columns + 1
+        var height: CGFloat = 28
+        for columnIndex in 0..<step {
+            let index = row * step + columnIndex
+            guard subviews.indices.contains(index) else { continue }
+            let slot = columnIndex == 0 ? labelWidth : width
+            height = max(height, subviews[index].sizeThatFits(.init(width: slot, height: nil)).height)
+        }
+        return height
+    }
+}
+
+/// Fills the slot the layout proposes, so the measured column is the slot and not the glyph.
+private struct ColumnSlot: UIViewRepresentable {
+    var identifier: String?
+    var label: String
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isAccessibilityElement = true
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        apply(view)
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        apply(view)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 28, height: proposal.height ?? 28)
+    }
+
+    private func apply(_ view: UIView) {
+        view.accessibilityIdentifier = identifier
+        view.accessibilityLabel = label
     }
 }
