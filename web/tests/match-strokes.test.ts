@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { cardFromHoles, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, shortName, strokesPlaced } from "../lib/match-core";
+import { bookingCourseName, cardFromHoles, courseFromMarker, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced } from "../lib/match-core";
 import { courseCardFromRow } from "../lib/tee-times-core";
 
 /** Official card already shipped as a fixture (course holes only, no player). */
@@ -104,6 +104,43 @@ test("a course row without tee ratings still exposes par and S.I., and an overri
   assert.equal(row!.holes[0].hcp, 5);
   assert.equal(row!.holes[1].hcp, 9);
   assert.equal(courseCardFromRow({ club_id: 1, name: "Vacía", tees: {}, holes: [] }), null);
+});
+
+test("a booking without a course uses one color square, then the official card of that course", () => {
+  const courses = ["Azul", "Colorada"];
+  assert.equal(courseFromMarker("Copa del club 18hmp Dom 🟦", courses), "Azul");
+  assert.equal(courseFromMarker("Programa COLO 🟥", courses), "Colorada");
+  assert.equal(courseFromMarker("Copa 🟥🟦", courses), null);
+  assert.equal(courseFromMarker("Copa sin marca", courses), null);
+  assert.equal(bookingCourseName({ course_label: null, event_name: "Copa del club 🟦" }, courses), "Azul");
+  assert.equal(bookingCourseName({ course_label: "Jockey Club Argentino", event_name: "Copa del club 🟦" }, courses), null);
+  const resolved = resolveOfficialCard(
+    { course_label: null, event_name: "Copa del club 🟦" },
+    null,
+    [{ course: "Azul", holes: azul.holes.map(h => ({ hole: h.hole, par: h.par, hcp: h.hole_hcp })) }, { course: "Colorada", holes: [{ hole: 1, par: 4, hcp: 7 }] }],
+  );
+  assert.equal(resolved.course, "Azul");
+  assert.equal(resolved.placed, true);
+  assert.equal(resolved.si[1], 1);
+  assert.equal(resolved.pars[0], 5);
+  const both = resolveOfficialCard({ course_label: null, event_name: "Copa 🟥🟦" }, null, [{ course: "Azul", holes: azul.holes }], [{ course: "Azul", official: true, holes: [[1, 5, 1]] }]);
+  assert.equal(both.course, null);
+  assert.equal(both.placed, false);
+  assert.ok(both.si.every(v => v == null));
+  assert.ok(both.pars.every(v => v == null));
+});
+
+test("an official scorecard of the same course fills par and never a stroke index", () => {
+  const holes = scorecardHoles([{ course: "Azul", official: true, holes: [[1, 5, 1], [2, 4, 9]] }, { course: "Colorada", official: true, holes: [[1, 3, 4]] }], "Azul");
+  assert.deepEqual(holes, [{ hole: 1, par: 5 }, { hole: 2, par: 4 }]);
+  const cardOnly = resolveOfficialCard({ course_label: "Azul" }, null, [], [{ course: "Azul", official: true, holes: [[1, 5, 1]] }], ["Azul", "Colorada"]);
+  assert.equal(cardOnly.course, "Azul");
+  assert.equal(cardOnly.placed, false);
+  assert.equal(cardOnly.pars[0], 5);
+  assert.ok(cardOnly.si.every(v => v == null));
+  const other = resolveOfficialCard({ course_label: null, event_name: "Dom 🟦" }, null, [], [{ course: "Colorada", official: true, holes: [[1, 3, 4]] }], ["Azul", "Colorada"]);
+  assert.equal(other.course, "Azul");
+  assert.ok(other.pars.every(v => v == null));
 });
 
 test("the match screen no longer deals strokes from hole 1", () => {

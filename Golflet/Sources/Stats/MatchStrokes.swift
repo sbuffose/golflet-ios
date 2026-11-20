@@ -64,6 +64,45 @@ enum MatchStrokes {
 
     private static var holesCount: Int { holes }
 
+    /// Course named by the event, only when one course matches. A name or its first four letters wins;
+    /// otherwise one color square. Two squares or two courses return nil. This never invents a stroke index.
+    static func courseFromMarker(_ event: String, courses: [String]) -> String? {
+        let title = event.trimmingCharacters(in: .whitespacesAndNewlines)
+        let list = courses.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !title.isEmpty, !list.isEmpty else { return nil }
+        let upper = fold(title)
+        let byName = list.filter { course in
+            markerWords(course).contains { word in
+                let prefix = String(word.prefix(4))
+                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: prefix))"
+                return upper.range(of: pattern, options: .regularExpression) != nil
+            }
+        }
+        if byName.count == 1 { return byName[0] }
+        let squares = ["🟥", "🟦", "🟩", "🟨", "⬛", "⬜"].filter { title.contains($0) }
+        guard squares.count == 1, let square = squares.first else { return nil }
+        let pattern: String
+        switch square {
+        case "🟥": pattern = "COLORAD|ROJ"
+        case "🟦": pattern = "AZUL"
+        case "🟩": pattern = "VERDE"
+        case "🟨": pattern = "AMARILL"
+        case "⬛": pattern = "NEGR"
+        case "⬜": pattern = "BLANC"
+        default: return nil
+        }
+        let hit = list.filter { fold($0).range(of: pattern, options: .regularExpression) != nil }
+        return hit.count == 1 ? hit[0] : nil
+    }
+
+    private static func fold(_ text: String) -> String {
+        text.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).uppercased()
+    }
+
+    private static func markerWords(_ name: String) -> [String] {
+        fold(name).split { $0.isWhitespace }.map(String.init).filter { $0.count >= 4 && $0 != "CANCHA" }
+    }
+
     /// «Joaquín L.» Given name plus the surname initial. A list that leads with a shared surname uses the first token that is not shared.
     static func shortName(_ name: String, peers: [String], me: Bool = false) -> String {
         if me { return "Vos" }

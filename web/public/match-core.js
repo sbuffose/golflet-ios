@@ -25,7 +25,9 @@ var GolfletMatchCore = (() => {
     DEFAULT_ALLOWANCE: () => DEFAULT_ALLOWANCE,
     HOLES: () => HOLES,
     aggregate: () => aggregate,
+    bookingCourseName: () => bookingCourseName,
     cardFromHoles: () => cardFromHoles,
+    courseFromMarker: () => courseFromMarker,
     courseHandicap: () => courseHandicap,
     courseLabelHits: () => courseLabelHits,
     evaluate: () => evaluate,
@@ -38,7 +40,9 @@ var GolfletMatchCore = (() => {
     playOrder: () => playOrder,
     playerKey: () => playerKey,
     playingHcp: () => playingHcp,
+    resolveOfficialCard: () => resolveOfficialCard,
     roundHalfUp: () => roundHalfUp,
+    scorecardHoles: () => scorecardHoles,
     shortName: () => shortName,
     siOrder: () => siOrder,
     statusText: () => statusText,
@@ -104,6 +108,57 @@ var GolfletMatchCore = (() => {
     const cards = (sources.length ? sources : [{}]).map((s) => cardFromHoles(s.holes));
     const chosen = cards.find((c) => strokesPlaced(c.si)) || cards.find((c) => c.pars.some((p) => p != null)) || cards[0];
     return { ...chosen, placed: strokesPlaced(chosen.si) };
+  }
+  var foldMark = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  var escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  var MARK_COLOR = { "\u{1F7E5}": /COLORAD|ROJ/, "\u{1F7E6}": /AZUL/, "\u{1F7E9}": /VERDE/, "\u{1F7E8}": /AMARILL/, "\u2B1B": /NEGR/, "\u2B1C": /BLANC/ };
+  function courseFromMarker(event, courses) {
+    const title = String(event || "").trim();
+    const list = courses.map((c) => c.trim()).filter(Boolean);
+    if (!title || !list.length) return null;
+    const upper = foldMark(title);
+    const words = (name) => foldMark(name).split(/\s+/).filter((w) => w.length >= 4 && w !== "CANCHA");
+    const byName = list.filter((c) => words(c).some((w) => new RegExp(`\\b${escRe(w.slice(0, 4))}`).test(upper)));
+    if (byName.length === 1) return byName[0];
+    const colors = [...new Set(title.match(/🟥|🟦|🟩|🟨|⬛|⬜/gu) || [])];
+    if (colors.length !== 1) return null;
+    const re = MARK_COLOR[colors[0]];
+    const hit = re ? list.filter((c) => re.test(foldMark(c))) : [];
+    return hit.length === 1 ? hit[0] : null;
+  }
+  function bookingCourseName(t, courses) {
+    const label = String(t.course_label || "").trim();
+    const list = [...new Set(courses.map((c) => c.trim()).filter(Boolean))];
+    if (label) {
+      const hit = list.filter((c) => courseLabelHits(c, label) || normName(c) === normName(label));
+      return hit.length === 1 ? hit[0] : null;
+    }
+    return courseFromMarker(t.event_name, list);
+  }
+  function scorecardHoles(rounds, courseName) {
+    const want = normName(courseName || "");
+    if (!want) return [];
+    for (const r of rounds || []) {
+      if (r.official === false || normName(String(r.course || "")) !== want || !Array.isArray(r.holes)) continue;
+      const holes = [];
+      for (const h of r.holes) {
+        if (!Array.isArray(h) || h.length < 2) continue;
+        const hole = Number(h[0]);
+        if (Number.isInteger(hole)) holes.push({ hole, par: Number(h[1]) });
+      }
+      if (holes.some((h) => {
+        const p = Number(h.par);
+        return Number.isInteger(p) && p >= 3 && p <= 6;
+      })) return holes;
+    }
+    return [];
+  }
+  function resolveOfficialCard(t, directoryHoles, courses, rounds, catalog) {
+    const names = [...new Set([...catalog || [], ...(courses || []).map((c) => String(c.name || c.course || ""))].map((s) => s.trim()).filter(Boolean))];
+    const course = bookingCourseName(t, names);
+    const extra = course ? (courses || []).filter((c) => courseLabelHits(String(c.name || c.course || ""), course)).map((c) => ({ holes: (c.holes || []).map((h) => ({ hole: h.hole, par: h.par, hcp: h.hcp ?? h.hole_hcp })) })) : [];
+    const picked = pickOfficialCard([{ holes: directoryHoles }, ...extra, { holes: scorecardHoles(rounds, course) }]);
+    return { ...picked, course };
   }
   function courseLabelHits(courseName, label) {
     const a = normName(courseName), b = normName(label);

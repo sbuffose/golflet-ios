@@ -1,8 +1,8 @@
 /** t260u/t261u «Armar partido»: the player's own friendly matches + history. Private per account; read-only toward the club (nothing is sent anywhere). */
 import { q } from "./db";
 import { HttpError } from "./http-error";
-import { evaluate, aggregate, myOutcome, DEFAULT_ALLOWANCE, HOLES, normName, cardFromHoles, pickOfficialCard, courseLabelHits, strokesPlaced, type MatchDef, type Scores, type StoredMatch, type HoleCard } from "./match-core";
-import { getTeeTime, courseTeeData, playerHI, officialTees } from "./tee-times";
+import { evaluate, aggregate, myOutcome, DEFAULT_ALLOWANCE, HOLES, normName, cardFromHoles, courseFromMarker, courseLabelHits, resolveOfficialCard, strokesPlaced, type MatchDef, type Scores, type StoredMatch } from "./match-core";
+import { getTeeTime, courseTeeData, clubCourseNames, playerHI, officialTees } from "./tee-times";
 import type { TeeInfo } from "./match-core";
 import { buildData } from "./data";
 
@@ -68,28 +68,37 @@ export function cleanScores(s: any, def: MatchDef): Scores {
 const row = (r: any) => ({ id: r.id, date: r.date, course_label: r.course_label, tee_time_id: r.tee_time_id, status: r.status, def: r.def, scores: r.scores, result: r.result, finished_at: r.finished_at, updated_at: r.updated_at });
 const COLS = `id, to_char(date, 'YYYY-MM-DD') date, course_label, tee_time_id, status, def, scores, result, finished_at, updated_at`;
 
-/** Official par and S.I. for a booking: the synced course card (with admin corrections), then the player's own course list when the directory link missed. Never a made-up index. */
-export function officialCard(t: { course_label?: string | null; display_name?: string | null }, td: { holes?: HoleCard[] | null } | null, courses: { name?: string; course?: string; holes?: any[] }[] | null | undefined) {
-  const label = `${t.course_label || ""} ${t.display_name || ""}`;
-  const extra = (courses || []).filter(c => courseLabelHits(String(c.name || c.course || ""), label)).map(c => ({ holes: (c.holes || []).map((h: any) => ({ hole: h.hole, par: h.par, hcp: h.hcp ?? h.hole_hcp })) }));
-  return pickOfficialCard([{ holes: td?.holes }, ...extra]);
+/** Card for one booking. A null course id on a multi-course club is not a card: the event marker names the course when it matches exactly one, and an official scorecard of that course supplies par when the directory row has none. */
+async function bookingSources(userId: string, t: any) {
+  const [D0, names] = await Promise.all([
+    buildData(userId).catch(() => null) as Promise<any>,
+    t?.club_key ? clubCourseNames(t.club_key).catch(() => [] as string[]) : Promise.resolve([] as string[]),
+  ]);
+  const catalog = [...new Set([...names, ...((D0?.courses || []) as any[]).map((c: any) => String(c.course || c.name || "").trim()).filter(Boolean)])];
+  const hinted = t && t.course_id == null && !String(t.course_label || "").trim() ? courseFromMarker(t.event_name, catalog) : null;
+  const td = t?.club_key ? await courseTeeData(t.club_key, t.course_id ?? null, hinted).catch(() => null) : null;
+  const card = resolveOfficialCard(t || {}, td?.holes, D0?.courses, D0?.rounds, catalog);
+  return { td, card, player: D0?.player?.name ?? null };
 }
 /** Setup for «Armar partido» from a booking: me + the partners on the line (HCP shown = index), the course stroke index. */
 export async function matchSetup(userId: string, teeId: string) {
   const t: any = await getTeeTime(userId, teeId);
-  const [td, hi, D0] = await Promise.all([t.club_key ? courseTeeData(t.club_key, t.course_id).catch(() => null) : null, playerHI(userId).catch(() => null), buildData(userId).catch(() => null) as any]);
-  const meName = clean(D0?.player?.name || "Yo");
+  const [hi, src] = await Promise.all([playerHI(userId).catch(() => null), bookingSources(userId, t)]);
+  const td = src.td, card = src.card;
+  const meName = clean(src.player || "Yo");
   const comps = (Array.isArray(t.companions) ? t.companions : []).map((c: any) => ({ name: clean(typeof c === "string" ? c : c?.name), hcp: c && typeof c === "object" && c.hcp != null && isFinite(+c.hcp) ? +c.hcp : null, club_id: c?.player_id ?? c?.matricula ?? null })).filter((c: any) => c.name);
-  const card = officialCard(t, td, D0?.courses);
   const si = card.si, pars = card.pars;
-  const tees = await teeCatalog(t, td), ut = await usualTee(userId, td?.golflet_course_key ?? null);
+  const booked = { ...t, course_label: t.course_label || card.course };
+  const tees = await teeCatalog(booked, td), ut = await usualTee(userId, td?.golflet_course_key ?? null);
   const match = (name: string | null) => name ? tees.find(x => x.tee.toLowerCase() === name.toLowerCase())?.tee ?? null : null;
   const COL: Record<string, string> = { colorada: "rojo", roja: "rojo", azul: "azul", negra: "negro", blanca: "blanco", amarilla: "amarillo", verde: "verde" };
-  const fromLabel = (() => { const w = normName(String(t.course_label || "")).split(" "); for (const x of w) { const m = match(COL[x] || x); if (m) return m; } return null; })();
+  const fromLabel = (() => { const w = normName(String(booked.course_label || "")).split(" "); for (const x of w) { const m = match(COL[x] || x); if (m) return m; } return null; })();
   const defTee = match(ut) ?? fromLabel ?? tees[0]?.tee ?? null, tee_source = match(ut) ? "tu salida habitual (tus tarjetas)" : fromLabel ? "el color de la cancha de la reserva" : defTee ? "la primera salida de la cancha" : null;
   const genders = new Set(tees.map(x => x.gender || "C"));
+  const shown = t.display_name || t.club_name || "";
+  const courseLabel = card.course && !courseLabelHits(card.course, shown) ? `${shown} · ${card.course}` : shown;
   return { tees, pars, default_tee: defTee, tee_source, genders: [...genders],
-    hcp_rule: "Hándicap de cancha WHS por salida: Índice × Slope/113 + (Course Rating − Par), redondeado. Sin datos de la salida → el índice.", tee_time: { id: t.id, date: t.date, time: t.time, course_label: t.display_name || t.club_name, start_hole: t.start_hole === 10 ? 10 : 1, modality: t.modality, event_name: t.event_name },
+    hcp_rule: "Hándicap de cancha WHS por salida: Índice × Slope/113 + (Course Rating − Par), redondeado. Sin datos de la salida → el índice.", tee_time: { id: t.id, date: t.date, time: t.time, course_label: courseLabel, start_hole: t.start_hole === 10 ? 10 : 1, modality: t.modality, event_name: t.event_name },
     players: [{ id: "me", name: meName, hcp: hi, me: true, tee: defTee, gender: "C" }, ...comps.map((c: any) => ({ id: c.club_id ? `c:${c.club_id}` : `n:${normName(c.name)}`, name: c.name, hcp: c.hcp, tee: defTee, gender: "C" }))],
     si, si_source: card.placed ? "tarjeta del club" : null, hcp_base: tees.length ? "Hándicap de cancha según la salida de cada uno (índice de la reserva × slope/113 + CR − par)" : "Hándicap Index (no tenemos slope ni course rating de esta cancha)" };
 }
@@ -105,9 +114,8 @@ export async function getMatch(userId: string, id: string) {
 }
 async function bookingCard(userId: string, teeId: string) {
   const t: any = await getTeeTime(userId, teeId).catch(() => null);
-  if (!t) return pickOfficialCard([]);
-  const [td, D0] = await Promise.all([t.club_key ? courseTeeData(t.club_key, t.course_id).catch(() => null) : null, buildData(userId).catch(() => null) as any]);
-  return officialCard(t, td, D0?.courses);
+  if (!t) return resolveOfficialCard({}, null, []);
+  return (await bookingSources(userId, t)).card;
 }
 /** Create or update (upsert by the client's id). Finished matches are read-only (409). `finish: true` closes it. */
 export async function putMatch(userId: string, id: string, b: any) {
@@ -125,10 +133,11 @@ export async function putMatch(userId: string, id: string, b: any) {
     else if (tee) { const card = await bookingCard(userId, tee); def.si = card.si; if (!def.pars?.some(p => p != null) && card.pars.some(p => p != null)) def.pars = card.pars; }
     else def.si = cardFromHoles([]).si;
   } else if (tee) {
-    const t: any = await getTeeTime(userId, tee).catch(() => null), td = t?.club_key ? await courseTeeData(t.club_key, t.course_id).catch(() => null) : null;
-    const tees = t ? await teeCatalog(t, td) : []; if (tees.length) def.tees = tees; else delete def.tees;
-    const D0: any = await buildData(userId).catch(() => null);
-    const card = officialCard(t || {}, td, D0?.courses); def.si = card.si; if (card.pars.some(p => p != null)) def.pars = card.pars;
+    const t: any = await getTeeTime(userId, tee).catch(() => null);
+    const src = t ? await bookingSources(userId, t) : { td: null, card: resolveOfficialCard({}, null, []) };
+    const booked = t ? { ...t, course_label: t.course_label || src.card.course } : null;
+    const tees = booked ? await teeCatalog(booked, src.td) : []; if (tees.length) def.tees = tees; else delete def.tees;
+    def.si = src.card.si; if (src.card.pars.some(p => p != null)) def.pars = src.card.pars;
   } else { delete def.tees; def.si = cardFromHoles([]).si; }
   const scores = cleanScores(b?.scores, def), result = evaluate(def, scores);
   const done = !!b?.finish || result.finished;

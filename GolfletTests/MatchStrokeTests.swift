@@ -54,6 +54,13 @@ final class MatchStrokeTests: XCTestCase {
         XCTAssertEqual(MatchStrokes.shortName("Mateo Ruiz", peers: surnameFirst, me: true), "Vos")
     }
 
+    func testBlueSquareNamesAzulWhenTheBookingHasNoCourse() {
+        XCTAssertEqual(MatchStrokes.courseFromMarker("Copa del club 18hmp Dom 🟦", courses: ["Azul", "Colorada"]), "Azul")
+        XCTAssertEqual(MatchStrokes.courseFromMarker("Programa COLO 🟥", courses: ["Azul", "Colorada"]), "Colorada")
+        XCTAssertNil(MatchStrokes.courseFromMarker("Copa 🟥🟦", courses: ["Azul", "Colorada"]))
+        XCTAssertNil(MatchStrokes.courseFromMarker("Copa sin marca", courses: ["Azul", "Colorada"]))
+    }
+
     func testCardKeepsOfficialValuesAndLeavesGapsEmpty() {
         let built = MatchStrokes.card(from: [(hole: 2, par: 5, si: 1), (hole: 1, par: 4, si: nil)])
         XCTAssertEqual(built.pars[0], 4)
