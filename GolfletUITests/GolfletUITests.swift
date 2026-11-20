@@ -1666,7 +1666,7 @@ final class GolfletUITests: XCTestCase {
         assertEqualHoleColumns(placed)
         XCTAssertEqual(
             first(placed, "golpes-hoyo-totales").label,
-            "Vos: 0 · Joaquín L.: 3 · Augusto L.: 4 · Mateo R.: 7"
+            "Vos: 0 · Joaquín L.: 3 · Augusto L.: 3 · Mateo R.: 6"
         )
         XCTAssertEqual(first(placed, "golpes-celda-c:0-1").label, "vacío")
         XCTAssertEqual(first(placed, "golpes-celda-c:0-2").label, "1 golpe")
@@ -1686,7 +1686,7 @@ final class GolfletUITests: XCTestCase {
         assertEqualHoleColumns(empty)
         XCTAssertEqual(
             first(empty, "golpes-hoyo-totales").label,
-            "Vos: 0 · Joaquín L.: 3 · Augusto L.: 4 · Mateo R.: 7"
+            "Vos: 0 · Joaquín L.: 3 · Augusto L.: 3 · Mateo R.: 6"
         )
         XCTAssertEqual(empty.buttons.matching(identifier: "missing-holeStrokes").count, 0)
         XCTAssertGreaterThan(empty.buttons.matching(identifier: "missing-strokeIndex").count, 0)

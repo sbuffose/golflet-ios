@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { bookingCourseName, cardFromHoles, courseChoices, courseFromMarker, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced } from "../lib/match-core";
+import { bookingCourseName, cardFromHoles, courseChoices, courseFromMarker, courseHandicap, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced, strokesReceived } from "../lib/match-core";
 import { courseCardFromRow } from "../lib/tee-times-core";
 
 /** Official card already shipped as a fixture (course holes only, no player). */
@@ -143,6 +143,32 @@ test("an official scorecard of the same course fills par and never a stroke inde
   assert.ok(other.pars.every(v => v == null));
 });
 
+test("fourball strokes use the chosen course tee and change between Azul and Colorada", () => {
+  const hi = [3.1, 6.1, 7.1, 10.1];
+  const ch = (slope: number, rating: number) => hi.map(h => courseHandicap(h, { tee: "x", slope, course_rating: rating, par: 72 }));
+  const azul = ch(123, 70.2), colorada = ch(122, 71.1);
+  assert.deepEqual(azul, [2, 5, 6, 9]);
+  assert.deepEqual(colorada, [2, 6, 7, 10]);
+  assert.deepEqual(strokesReceived(azul as number[], 85), [0, 3, 3, 6]);
+  assert.deepEqual(strokesReceived(colorada as number[], 85), [0, 3, 4, 7]);
+  assert.deepEqual(strokesReceived(hi, 85), [0, 3, 3, 6]);
+  const players = [
+    { id: "me", name: "Ana Costa", hcp: 3.1, tee: "Azul", gender: "C" as const },
+    { id: "n:joaquin", name: "Lavalle Joaquín", hcp: 6.1, tee: "Azul", gender: "C" as const },
+    { id: "n:augusto", name: "Lavalle Augusto", hcp: 7.1, tee: "Azul", gender: "C" as const },
+    { id: "n:mateo", name: "Mateo Ruiz", hcp: 10.1, tee: "Azul", gender: "C" as const },
+  ];
+  const sides = [["me", "n:joaquin"], ["n:augusto", "n:mateo"]];
+  const onAzul = evaluate({ modality: "fourball", scoring: "hcp", allowance: 85, players, sides, si: Array(18).fill(null), tees: [{ tee: "Azul", gender: "C", slope: 123, course_rating: 70.2, par: 72 }] }, {});
+  const onColorada = evaluate({
+    modality: "fourball", scoring: "hcp", allowance: 85, sides, si: Array(18).fill(null),
+    players: players.map(p => ({ ...p, tee: "Rojo" })),
+    tees: [{ tee: "Rojo", gender: "C", slope: 122, course_rating: 71.1, par: 72 }],
+  }, {});
+  assert.deepEqual(onAzul.strokes, { me: 0, "n:joaquin": 3, "n:augusto": 3, "n:mateo": 6 });
+  assert.deepEqual(onColorada.strokes, { me: 0, "n:joaquin": 3, "n:augusto": 4, "n:mateo": 7 });
+});
+
 test("the course question appears only when the club has two libretas and the booking names neither", () => {
   assert.deepEqual(courseChoices(null, ["Azul", "Colorada"]), ["Azul", "Colorada"]);
   assert.equal(courseChoices("Azul", ["Azul", "Colorada"]), null);
@@ -150,6 +176,7 @@ test("the course question appears only when the club has two libretas and the bo
   assert.equal(courseFromMarker("Copa sin marca", ["Azul", "Colorada"]), null);
   const js = readFileSync(new URL("../public/match.js", import.meta.url), "utf8");
   assert.match(js, /¿En qué cancha juegan\?/);
+  assert.match(js, /TEES = base\?\.tees \|\| \[\]/);
   assert.match(js, /id="cancha-pregunta"/);
   assert.match(js, /method: 'POST'/);
 });
