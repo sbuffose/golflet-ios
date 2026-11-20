@@ -30,13 +30,26 @@ export async function teeDirectory(userId: string) {
 /** Tee data (slope, rating, par, stroke index) for a directory club/course, from the Golflet course synced from the club's cards. Null when we don't have it.
  *  Par and S.I. still come back when the row has a card but no tee ratings: an empty tee list must not drop the holes. */
 export { courseCardFromRow };
-export async function courseTeeData(clubKey: string, courseId: number | null) {
+export async function courseTeeData(clubKey: string, courseId: number | null, courseName?: string | null) {
   let row: any = null;
   if (courseId != null) { const [d] = await q(`select golflet_club_id, golflet_course_name from ar_course_directory where id=$1 and club_key=$2`, [courseId, clubKey]);
     if (d?.golflet_club_id && d.golflet_course_name) [row] = await q(`select club_id, name, par, tees, holes, holes_override from course where club_id=$1 and lower(name)=lower($2)`, [d.golflet_club_id, d.golflet_course_name]); }
   else { const [c] = await q(`select golflet_club_id from ar_club_directory where key=$1`, [clubKey]);
-    if (c?.golflet_club_id) { const cs = await q(`select club_id, name, par, tees, holes, holes_override from course where club_id=$1`, [c.golflet_club_id]); if (cs.length === 1) row = cs[0]; } }
+    if (c?.golflet_club_id) {
+      const name = String(courseName || "").trim();
+      const cs = name
+        ? await q(`select club_id, name, par, tees, holes, holes_override from course where club_id=$1 and lower(name)=lower($2)`, [c.golflet_club_id, name])
+        : await q(`select club_id, name, par, tees, holes, holes_override from course where club_id=$1`, [c.golflet_club_id]);
+      if (cs.length === 1) row = cs[0];
+    } }
   return courseCardFromRow(row);
+}
+/** Course names of the Golflet club linked to this directory key. Empty when the club is unknown. */
+export async function clubCourseNames(clubKey: string): Promise<string[]> {
+  const [c] = await q(`select golflet_club_id from ar_club_directory where key=$1`, [clubKey]);
+  if (!c?.golflet_club_id) return [];
+  const cs = await q(`select name from course where club_id=$1 order by name`, [c.golflet_club_id]);
+  return cs.map((r: any) => String(r.name || "")).filter(Boolean);
 }
 export async function playerHI(userId: string) { const D: any = await buildData(userId); const v = D.player?.handicap_index ?? (D.hi_history || []).at(-1)?.hi ?? null; return v == null ? null : Number(v); }
 export async function teeOptions(userId: string, clubKey: string, courseId: number | null, selected?: string | null) {

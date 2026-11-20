@@ -14,10 +14,29 @@ struct MatchSetupView: View {
     @Environment(\.palette) private var p
     let booking: TeeTime
 
+    private var clubCourses: [Course] {
+        let club = booking.clubName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let same = model.courses.filter { $0.clubName.caseInsensitiveCompare(club) == .orderedSame }
+        return same.isEmpty ? model.courses : same
+    }
+
+    private var resolvedCourseName: String? {
+        let named = booking.course.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !named.isEmpty, let hit = clubCourses.first(where: { $0.name.caseInsensitiveCompare(named) == .orderedSame }) {
+            return hit.name
+        }
+        return MatchStrokes.courseFromMarker(booking.eventName, courses: clubCourses.map(\.name))
+    }
+
     private var course: Course? {
-        let name = booking.course.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return nil }
-        return model.courses.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+        guard let name = resolvedCourseName else { return nil }
+        return clubCourses.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+    }
+
+    private var courseTitle: String {
+        if let name = resolvedCourseName { return "\(booking.clubName) · \(name)" }
+        let named = booking.course.trimmingCharacters(in: .whitespacesAndNewlines)
+        return named.isEmpty ? booking.clubName : "\(booking.clubName) · \(named)"
     }
 
     private var card: (pars: [Int?], si: [Int?]) {
@@ -46,7 +65,7 @@ struct MatchSetupView: View {
                     Text("Armar partido")
                         .font(GType.sheetTitle)
                         .foregroundStyle(p.ink)
-                    Text(booking.course.isEmpty ? booking.clubName : "\(booking.clubName) · \(booking.course)")
+                    Text(courseTitle)
                         .font(GType.body)
                         .foregroundStyle(p.ink2)
                     playerList
@@ -214,7 +233,7 @@ struct GolpesPorHoyoGrid: View {
                 .overlay { MissingMark(kind: kind, compact: true) }
                 .accessibilityElement(children: .contain)
         case .stroke(let mark, let voice, let identifier):
-            filled(mark, color: Color(hex: 0x0B2545), fill: .clear, align: .center, identifier: identifier, voice: voice, dot: true)
+            filled(mark, color: Color(hex: 0x86672F), fill: .clear, align: .center, identifier: identifier, voice: voice, dot: true)
         }
     }
 

@@ -77,6 +77,74 @@ export function pickOfficialCard(sources: { holes?: HoleCard[] | null }[]): { si
   const chosen = cards.find(c => strokesPlaced(c.si)) || cards.find(c => c.pars.some(p => p != null)) || cards[0];
   return { ...chosen, placed: strokesPlaced(chosen.si) };
 }
+const foldMark = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const MARK_COLOR: Record<string, RegExp> = { "🟥": /COLORAD|ROJ/, "🟦": /AZUL/, "🟩": /VERDE/, "🟨": /AMARILL/, "⬛": /NEGR/, "⬜": /BLANC/ };
+
+/** Course named by the event, only when one course of this club matches.
+ *  A name (or its first four letters, «COLO») wins. Else one color square (🟦 Azul, 🟥 Colorada).
+ *  Two squares, two courses, or no match → null. This does not invent a stroke index. */
+export function courseFromMarker(event: string | null | undefined, courses: string[]): string | null {
+  const title = String(event || "").trim();
+  const list = courses.map(c => c.trim()).filter(Boolean);
+  if (!title || !list.length) return null;
+  const upper = foldMark(title);
+  const words = (name: string) => foldMark(name).split(/\s+/).filter(w => w.length >= 4 && w !== "CANCHA");
+  const byName = list.filter(c => words(c).some(w => new RegExp(`\\b${escRe(w.slice(0, 4))}`).test(upper)));
+  if (byName.length === 1) return byName[0];
+  const colors = [...new Set((title.match(/🟥|🟦|🟩|🟨|⬛|⬜/gu) || []))];
+  if (colors.length !== 1) return null;
+  const re = MARK_COLOR[colors[0]];
+  const hit = re ? list.filter(c => re.test(foldMark(c))) : [];
+  return hit.length === 1 ? hit[0] : null;
+}
+
+/** The course this booking is for. A stored course label wins when it names exactly one known course.
+ *  An empty label falls back to the event marker. The club name alone is not a course. */
+export function bookingCourseName(t: { course_label?: string | null; event_name?: string | null }, courses: string[]): string | null {
+  const label = String(t.course_label || "").trim();
+  const list = [...new Set(courses.map(c => c.trim()).filter(Boolean))];
+  if (label) {
+    const hit = list.filter(c => courseLabelHits(c, label) || normName(c) === normName(label));
+    return hit.length === 1 ? hit[0] : null;
+  }
+  return courseFromMarker(t.event_name, list);
+}
+
+/** Par copied from an official scorecard of this course (`[hoyo, par, golpes]`). Strokes are not a stroke index. */
+export function scorecardHoles(rounds: { course?: string | null; official?: boolean | null; holes?: unknown }[] | null | undefined, courseName: string | null): HoleCard[] {
+  const want = normName(courseName || "");
+  if (!want) return [];
+  for (const r of rounds || []) {
+    if (r.official === false || normName(String(r.course || "")) !== want || !Array.isArray(r.holes)) continue;
+    const holes: HoleCard[] = [];
+    for (const h of r.holes) {
+      if (!Array.isArray(h) || h.length < 2) continue;
+      const hole = Number(h[0]);
+      if (Number.isInteger(hole)) holes.push({ hole, par: Number(h[1]) });
+    }
+    if (holes.some(h => { const p = Number(h.par); return Number.isInteger(p) && p >= 3 && p <= 6; })) return holes;
+  }
+  return [];
+}
+
+/** Directory card, then the player's course list for that same course, then par from an official scorecard. Never a made-up S.I. */
+export function resolveOfficialCard(
+  t: { course_label?: string | null; event_name?: string | null },
+  directoryHoles: HoleCard[] | null | undefined,
+  courses: { name?: string; course?: string; holes?: any[] }[] | null | undefined,
+  rounds?: { course?: string | null; official?: boolean | null; holes?: unknown }[] | null,
+  catalog?: string[],
+): { si: (number | null)[]; pars: (number | null)[]; placed: boolean; course: string | null } {
+  const names = [...new Set([...(catalog || []), ...(courses || []).map(c => String(c.name || c.course || ""))].map(s => s.trim()).filter(Boolean))];
+  const course = bookingCourseName(t, names);
+  const extra = course
+    ? (courses || []).filter(c => courseLabelHits(String(c.name || c.course || ""), course)).map(c => ({ holes: (c.holes || []).map((h: any) => ({ hole: h.hole, par: h.par, hcp: h.hcp ?? h.hole_hcp })) }))
+    : [];
+  const picked = pickOfficialCard([{ holes: directoryHoles }, ...extra, { holes: scorecardHoles(rounds, course) }]);
+  return { ...picked, course };
+}
+
 /** True when the booking label names this course (the course name is its own word). */
 export function courseLabelHits(courseName: string, label: string): boolean {
   const a = normName(courseName), b = normName(label);

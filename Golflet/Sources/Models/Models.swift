@@ -622,6 +622,8 @@ struct TeeTime: Identifiable, Hashable, Sendable {
     var windFrom: String? = nil
     var tempC: Int? = nil
     var rainMm: Double? = nil
+    /// Tournament title from the club. A single color square can name the course when the booking itself does not.
+    var eventName: String = ""
 
     var chipWhen: String { FormatAR.teeChip(startsAt) }
 

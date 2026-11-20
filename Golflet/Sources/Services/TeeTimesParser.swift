@@ -78,7 +78,8 @@ enum TeeTimesParser {
             windKmh: JSONFlex.int(from: weather?["wind_kmh"] ?? weather?["viento_kmh"] ?? item["wind_kmh"] ?? item["viento_kmh"]),
             windFrom: optionalString(weather?["wind_from"] ?? weather?["direction"] ?? item["wind_from"] ?? item["viento_desde"]),
             tempC: JSONFlex.int(from: weather?["temp_c"] ?? weather?["temperature_c"] ?? item["temp_c"] ?? item["temperature_c"]),
-            rainMm: JSONFlex.double(from: weather?["rain_mm"] ?? weather?["lluvia_mm"] ?? item["rain_mm"] ?? item["lluvia_mm"])
+            rainMm: JSONFlex.double(from: weather?["rain_mm"] ?? weather?["lluvia_mm"] ?? item["rain_mm"] ?? item["lluvia_mm"]),
+            eventName: firstNonEmpty(string(item["event_name"]), string(item["eventName"]), string(item["event"]))
         )
     }
 
