@@ -109,7 +109,9 @@ test("a course row without tee ratings still exposes par and S.I., and an overri
 test("the match screen no longer deals strokes from hole 1", () => {
   const js = readFileSync(new URL("../public/match.js", import.meta.url), "utf8");
   assert.equal(js.includes("hoyo 1 en adelante"), false);
-  assert.match(js, /no se pueden ubicar los golpes por hoyo/);
-  assert.match(js, /data-miss="strokes"|dash\('strokes'\)/);
+  assert.match(js, /<small class="gm-siwarn">Sin el S\.I\. de la cancha no se pueden ubicar los golpes por hoyo\.<\/small>/);
+  assert.match(js, /if \(!placed\) return cell\(h, ''\)/);
+  assert.equal(js.includes("dash('strokes')"), false);
+  assert.equal(js.includes('data-miss="strokes"'), false);
   assert.match(js, /shortName/);
 });

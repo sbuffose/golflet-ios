@@ -2707,6 +2707,7 @@ html.gp-fix .gp-strip>.gp-bd{flex:0 1 auto;min-height:0;max-height:none;overflow
 .gm-gh{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0 2px 8px}
 .gm-gh b{font-size:calc(15px*var(--ts,1));color:#0B2545}
 .gm-gh small{color:var(--color-ink2);font-size:calc(11.5px*var(--ts,1))}
+.gm-gh small.gm-siwarn{flex-basis:100%;margin-top:2px;color:#86672F;font-size:calc(12.5px*var(--ts,1));line-height:1.35}
 .gm-gt{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;margin-bottom:8px}
 .gm-gt th,.gm-gt td{text-align:center;padding:4px 0;font-size:calc(12px*var(--ts,1));border-bottom:1px solid rgba(15,61,46,.08);overflow:hidden;white-space:nowrap}
 .gm-gt th[scope=row]{text-align:left;width:30%;padding-right:4px;font-weight:650;color:#0B2545;text-overflow:ellipsis}

@@ -114,6 +114,12 @@ extension MockAPIClient {
         comps.second = 0
         let first = cal.date(from: comps) ?? base
         let second = first.addingTimeInterval(7 * 24 * 3600)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-strokes-empty") {
+            return [Self.strokeFixture(at: first, emptyCard: true)]
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-strokes") {
+            return [Self.strokeFixture(at: first, emptyCard: false)]
+        }
         let review = ProcessInfo.processInfo.arguments.contains("-ui-testing-review")
         return [
             TeeTime(
@@ -134,5 +140,18 @@ extension MockAPIClient {
                 companions: []
             )
         ]
+    }
+
+    /// Fixture flight for the stroke-index screen. Handicaps sit above the demo HI (3.1) so the received strokes are 3, 4 and 7.
+    private static func strokeFixture(at start: Date, emptyCard: Bool) -> TeeTime {
+        TeeTime(
+            id: emptyCard ? "tt-golpes-vacio" : "tt-golpes-azul",
+            startsAt: start,
+            clubName: emptyCard ? "Club sin tarjeta" : "Jockey Club Buenos Aires",
+            clubCode: emptyCard ? "000" : "118",
+            course: emptyCard ? "Sin tarjeta" : "Azul",
+            companions: ["Lavalle Joaquín", "Lavalle Augusto", "Mateo Ruiz"],
+            companionHandicaps: ["Lavalle Joaquín": 6.1, "Lavalle Augusto": 7.1, "Mateo Ruiz": 10.1]
+        )
     }
 }

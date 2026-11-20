@@ -29,9 +29,11 @@
       return `<table class="gm-gt num"><thead><tr><th scope="row">Hoyo</th>${hh.map(h => `<th${tdc(h)}>${h + 1}</th>`).join('')}</tr></thead><tbody>
         <tr class="gm-gm"><th scope="row">Par</th>${hh.map(h => cell(h, pars[h] != null ? pars[h] : dash('par'))).join('')}</tr>
         <tr class="gm-gm"><th scope="row">S.I.</th>${hh.map(h => cell(h, si[h] != null ? si[h] : dash('si'))).join('')}</tr>
-        ${ids.map(i => `<tr><th scope="row">${e(short(i))} <small>${E.strokes[i] || 0}</small></th>${hh.map(h => { const recv = E.strokes[i] || 0; if (!placed && recv > 0) return cell(h, dash('strokes')); const v = hs[i]?.[h] || 0; return cell(h, v ? `<span class="gm-gd" aria-label="${v} ${v === 1 ? 'golpe' : 'golpes'}">${'●'.repeat(Math.min(v, 3))}</span>` : ''); }).join('')}</tr>`).join('')}</tbody></table>`; };
-    const warn = placed ? '' : '<p class="foot gm-warn">Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo.</p>';
-    return `<div class="card gm-grid" aria-label="Golpes por hoyo"><div class="gm-gh"><b>Golpes por hoyo</b><small>● = 1 golpe · por S.I.${def.modality === 'metralleta' ? ' · contra el más bajo (en cada par, la diferencia)' : ''}</small></div>${Array.from({ length: 18 / BK }, (_, k) => block(k * BK)).join('')}${warn}
+        ${ids.map(i => `<tr><th scope="row">${e(short(i))} <small>${E.strokes[i] || 0}</small></th>${hh.map(h => { if (!placed) return cell(h, ''); const v = hs[i]?.[h] || 0; return cell(h, v ? `<span class="gm-gd" aria-label="${v} ${v === 1 ? 'golpe' : 'golpes'}">${'●'.repeat(Math.min(v, 3))}</span>` : ''); }).join('')}</tr>`).join('')}</tbody></table>`; };
+    const head = placed
+      ? `<div class="gm-gh"><b>Golpes por hoyo</b><small>● = 1 golpe · por S.I.${def.modality === 'metralleta' ? ' · contra el más bajo (en cada par, la diferencia)' : ''}</small></div>`
+      : `<div class="gm-gh"><b>Golpes por hoyo</b><small class="gm-siwarn">Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo.</small></div>`;
+    return `<div class="card gm-grid" aria-label="Golpes por hoyo">${head}${Array.from({ length: 18 / BK }, (_, k) => block(k * BK)).join('')}
       <p class="foot gm-gtot">${ids.map(i => `${e(short(i))}: ${E.strokes[i] || 0}`).join(' · ')}</p></div>`;
   }
 
@@ -107,7 +109,7 @@
         ${S.scoring === 'hcp' ? `<div class="card gm-al"><div class="gm-alr"><span>Porcentaje del hándicap</span><div class="gm-step"><button type="button" data-al="-5" aria-label="Bajar 5%">−</button><input type="text" inputmode="numeric" id="gmal" value="${al()}" aria-label="Porcentaje"><span>%</span><button type="button" data-al="5" aria-label="Subir 5%">+</button></div></div>
           <p class="foot">Por defecto ${MC().DEFAULT_ALLOWANCE[S.modality]}% (${S.modality === 'fourball' ? 'fourball' : 'match individual'}). El más bajo ${S.modality === 'metralleta' ? 'de cada par ' : ''}juega en cero; los demás reciben (su HCP − el más bajo) × ${al()}%, redondeado (0,5 sube a 1). Los golpes van por el S.I. de cada hoyo.</p>
           <p class="foot">${TEES.length ? `Base: hándicap de cancha de cada uno según su salida (WHS: índice × slope/113 + course rating − par, redondeado). Salida inicial: ${e(base.tee_source || '—')}.` : 'Base: el índice (no tenemos slope ni course rating de esta cancha).'}</p>
-          ${base?.si_source ? '' : '<p class="foot gm-warn">Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo. Tocá un «–» para ver por qué falta y qué hacer.</p>'}
+          ${base?.si_source || E ? '' : '<p class="foot gm-warn">Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo. Tocá un «–» para ver por qué falta y qué hacer.</p>'}
           ${missing ? '<p class="msg err">Con hándicap, todos necesitan su HCP: completalo arriba o jugá gross.</p>' : ''}
           ${E && S.modality === 'metralleta' ? `<div class="gm-mx"><small>Golpes por par</small>${E.pairs.map(pr => { const g = pr.strokes[pr.a] ? pr.a : pr.b, v = pr.strokes[g]; return `<div class="gm-mxr"><span>${e(nm(pr.a))} vs ${e(nm(pr.b))}</span><b class="num">${v ? `${e(short(g))} recibe ${v}` : 'parejos'}</b></div>`; }).join('')}</div>` : ''}</div>` : ''}
         ${S.scoring === 'hcp' && E ? gridHtml(def, E, short, -1) : ''}

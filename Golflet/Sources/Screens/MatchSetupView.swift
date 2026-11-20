@@ -125,6 +125,17 @@ struct GolpesPorHoyoGrid: View {
 
     private var placed: Bool { MatchStrokes.placed(si) }
 
+    @State private var tableWidth: CGFloat = 0
+
+    /// Same width for every hole, like the web grid (`table-layout: fixed`). Content width must not stretch a column.
+    private var columnWidth: CGFloat {
+        let inner = max(0, tableWidth - 16)
+        guard inner > labelWidth else { return 24 }
+        return (inner - labelWidth) / 9
+    }
+
+    private let labelWidth: CGFloat = 78
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Golpes por hoyo")
@@ -133,6 +144,7 @@ struct GolpesPorHoyoGrid: View {
             Text(placed ? "● = 1 golpe · por S.I." : "Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo.")
                 .font(GType.label)
                 .foregroundStyle(placed ? p.ink3 : Color(hex: 0x86672F))
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier(placed ? "golpes-hoyo-ok" : "golpes-hoyo-warn")
             block(from: 0)
             if pars.count > 9 || si.count > 9 { block(from: 9) }
@@ -143,6 +155,13 @@ struct GolpesPorHoyoGrid: View {
                     .accessibilityIdentifier("golpes-hoyo-totales")
             }
         }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { tableWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, newValue in tableWidth = newValue }
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("golpes-hoyo")
     }
@@ -150,27 +169,29 @@ struct GolpesPorHoyoGrid: View {
     private func block(from start: Int) -> some View {
         let holes = Array(start..<min(start + 9, 18))
         return VStack(spacing: 0) {
-            holeRow("Hoyo", holes: holes) { hole in
-                Text("\(hole + 1)")
-                    .foregroundStyle(Color.white)
+            HStack(spacing: 0) {
+                columnLabel("Hoyo", light: true)
+                ForEach(holes, id: \.self) { hole in
+                    Text("\(hole + 1)")
+                        .font(GType.label)
+                        .foregroundStyle(Color.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .modifier(HoleColumn(width: columnWidth, identifier: "golpes-col-\(hole + 1)"))
+                }
             }
             .background(Color(hex: 0x0B2545))
             valueRow("Par", holes: holes, kind: .holePar) { pars.indices.contains($0) ? pars[$0] : nil }
             valueRow("S.I.", holes: holes, kind: .strokeIndex) { si.indices.contains($0) ? si[$0] : nil }
             ForEach(rows) { row in
                 HStack(spacing: 0) {
-                    Text("\(row.label) \(row.received)")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink)
-                        .lineLimit(1)
-                        .frame(width: 78, alignment: .leading)
+                    columnLabel("\(row.label) \(row.received)", light: false)
+                        .accessibilityIdentifier("golpes-fila-\(row.id)")
                     ForEach(holes, id: \.self) { hole in
                         strokeCell(row: row, hole: hole)
-                            .frame(maxWidth: .infinity)
+                            .modifier(HoleColumn(width: columnWidth, identifier: "golpes-celda-\(row.id)-\(hole + 1)"))
                     }
                 }
-                .padding(.vertical, 2)
-                .accessibilityIdentifier("golpes-fila-\(row.id)")
             }
         }
         .padding(8)
@@ -178,20 +199,13 @@ struct GolpesPorHoyoGrid: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private func holeRow<Content: View>(_ title: String, holes: [Int], @ViewBuilder cell: (Int) -> Content) -> some View {
-        HStack(spacing: 0) {
-            Text(title)
-                .font(GType.label)
-                .foregroundStyle(Color.white)
-                .frame(width: 78, alignment: .leading)
-            ForEach(holes, id: \.self) { hole in
-                cell(hole)
-                    .font(GType.label)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
+    private func columnLabel(_ text: String, light: Bool) -> some View {
+        Text(text)
+            .font(GType.label)
+            .foregroundStyle(light ? Color.white : p.ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.65)
+            .frame(width: labelWidth, height: 28, alignment: .leading)
     }
 
     private func valueRow(_ title: String, holes: [Int], kind: MissingKind, value: @escaping (Int) -> Int?) -> some View {
@@ -199,33 +213,59 @@ struct GolpesPorHoyoGrid: View {
             Text(title)
                 .font(GType.label)
                 .foregroundStyle(p.ink2)
-                .frame(width: 78, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: labelWidth, height: 28, alignment: .leading)
             ForEach(holes, id: \.self) { hole in
-                if let number = value(hole) {
-                    Text("\(number)")
-                        .font(GType.label)
-                        .foregroundStyle(p.ink2)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    MissingMark(kind: kind, compact: true)
-                        .frame(maxWidth: .infinity)
+                Group {
+                    if let number = value(hole) {
+                        Text("\(number)")
+                            .font(GType.label)
+                            .foregroundStyle(p.ink2)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    } else {
+                        MissingMark(kind: kind, compact: true)
+                    }
                 }
+                .modifier(HoleColumn(width: columnWidth, identifier: nil))
             }
         }
     }
 
     @ViewBuilder
     private func strokeCell(row: Row, hole: Int) -> some View {
-        if !row.placed && row.received > 0 {
-            MissingMark(kind: .holeStrokes, compact: true)
-        } else if hole < row.dots.count, row.dots[hole] > 0 {
-            Text(String(repeating: "●", count: min(row.dots[hole], 3)))
+        let count = hole < row.dots.count ? row.dots[hole] : 0
+        if row.placed, count > 0 {
+            Text(String(repeating: "●", count: min(count, 3)))
                 .font(.system(size: 9))
                 .foregroundStyle(Color(hex: 0x0B2545))
-                .accessibilityLabel("\(row.dots[hole]) \(row.dots[hole] == 1 ? "golpe" : "golpes")")
+                .accessibilityLabel("\(count) \(count == 1 ? "golpe" : "golpes")")
         } else {
             Text(" ")
                 .font(GType.label)
+                .accessibilityLabel("vacío")
+        }
+    }
+}
+
+/// Fixed hole column. The width is assigned; the cell cannot grow with a two-digit S.I.
+private struct HoleColumn: ViewModifier {
+    var width: CGFloat
+    var identifier: String?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let identifier {
+            content
+                .lineLimit(1)
+                .frame(width: width, height: 28)
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityIdentifier(identifier)
+        } else {
+            content
+                .lineLimit(1)
+                .frame(width: width, height: 28)
+                .fixedSize(horizontal: true, vertical: false)
         }
     }
 }
