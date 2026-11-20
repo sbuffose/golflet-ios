@@ -428,13 +428,15 @@ jobs:
           ls -la /tmp/golflet-screenshots
           test -f /tmp/golflet-screenshots/ios-375-golpes-hoyo.png
           test -f /tmp/golflet-screenshots/ios-375-golpes-sin-si.png
+          test -f /tmp/golflet-screenshots/ios-375-cancha-pregunta.png
+          test -f /tmp/golflet-screenshots/ios-375-cancha-azul.png
 
       - name: Upload 375 captures
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: golpes-hoyo-375
-          path: /tmp/golflet-screenshots/ios-375-golpes-*.png
+          path: /tmp/golflet-screenshots/ios-375-*.png
           if-no-files-found: warn
           retention-days: 14
 

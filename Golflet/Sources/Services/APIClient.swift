@@ -85,6 +85,7 @@ protocol GolfletAPI: Sendable {
     func userSettings() async throws -> TextPrefs
     func saveUserSettings(_ prefs: TextPrefs) async throws -> TextPrefs
     func teeTimes() async throws -> [TeeTime]
+    func chooseBookingCourse(id: String, course: String) async throws
     func refreshBookings() async throws -> ReservationRefresh
     func refreshReservation(id: String) async throws -> ReservationRefresh
     func scorecardFetches() async throws -> [ScorecardFetchJob]
@@ -105,6 +106,8 @@ protocol GolfletAPI: Sendable {
 }
 
 extension GolfletAPI {
+    func chooseBookingCourse(id: String, course: String) async throws {}
+
     func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup {
         try await createGroup(name: name, photoJPEG: photoJPEG, idempotencyKey: nil)
     }

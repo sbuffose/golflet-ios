@@ -1693,6 +1693,24 @@ final class GolfletUITests: XCTestCase {
         for hole in 1...18 {
             XCTAssertEqual(first(empty, "golpes-celda-c:0-\(hole)").label, "vacío", "El hoyo \(hole) no quedó vacío")
         }
+        empty.terminate()
+
+        let ask = XCUIApplication()
+        openGolpes(ask, arguments: ["-ui-testing", "-ui-testing-strokes-ask"])
+        XCTAssertTrue(waitFor(ask, "cancha-pregunta"), "Falta la pregunta de cancha")
+        XCTAssertTrue(ask.staticTexts["¿En qué cancha juegan?"].exists)
+        XCTAssertTrue(ask.buttons["cancha-opcion-Azul"].exists)
+        XCTAssertTrue(ask.buttons["cancha-opcion-Colorada"].exists)
+        let askWidth = Int(ask.windows.firstMatch.frame.width.rounded())
+        pinTop(ask, "cancha-pregunta")
+        saveShot("ios-\(askWidth)-cancha-pregunta")
+        ask.buttons["cancha-opcion-Azul"].tap()
+        XCTAssertTrue(waitFor(ask, "golpes-hoyo-ok"), "Azul no cargó el S.I.")
+        pinTop(ask, "golpes-hoyo")
+        saveShot("ios-\(askWidth)-cancha-azul")
+        XCTAssertEqual(first(ask, "golpes-celda-c:0-2").label, "1 golpe")
+        XCTAssertEqual(first(ask, "golpes-celda-c:0-4").label, "1 golpe")
+        XCTAssertFalse(ask.staticTexts["¿En qué cancha juegan?"].exists)
     }
 
     private func openGolpes(_ app: XCUIApplication, arguments: [String]) {

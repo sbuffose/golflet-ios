@@ -74,7 +74,7 @@
     const TEES = base?.tees || [], TN = [...new Set(TEES.map(t => t.tee))], GEN = (base?.genders || []).includes('D');
     S.players.forEach(p => { if (p.tee === undefined) p.tee = base?.default_tee ?? null; if (!p.gender) p.gender = 'C'; });
     if (!S.modality) S.modality = S.players.length === 4 ? 'fourball' : S.players.length === 2 ? 'single' : S.players.length >= 3 ? 'metralleta' : 'single';
-    const si = base?.si || Array(18).fill(null), start = base?.tee_time?.start_hole || 1;
+    let si = base?.si || Array(18).fill(null); const start = base?.tee_time?.start_hole || 1;
     let addOpen = false, err = '';
     const al = () => S.allowance ?? MC().DEFAULT_ALLOWANCE[S.modality];
     const draw = () => { const ids = S.players.map(p => p.id); for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; } S.sides = [ids.slice(0, 2), ids.slice(2, 4)]; };
@@ -92,7 +92,10 @@
       const def = defOf(), missing = S.scoring === 'hcp' && def.players.some(p => p.hcp == null || !isFinite(p.hcp));
       const E = !missing && def.players.length >= 2 && (S.modality !== 'fourball' || okSides()) ? MC().evaluate(def, {}) : null;
       const recv = id => E ? (E.strokes[id] ?? 0) : null;
+      const ask = Array.isArray(base?.ask_course) && base.ask_course.length > 1 ? base.ask_course : [];
+      const askHtml = ask.length ? `<div class="card gm-ask" id="cancha-pregunta"><b>¿En qué cancha juegan?</b><div class="gm-asko">${ask.map(n => `<button type="button" class="btn" data-course="${e(n)}">${e(n)}</button>`).join("")}</div></div>` : "";
       el.innerHTML = `<div class="gm-hd"><h1>Armar partido</h1>${base?.tee_time ? `<p class="foot">${e(base.tee_time.course_label)} · ${e(base.tee_time.date.split('-').reverse().slice(0, 2).join('/'))} ${e(base.tee_time.time)}${start === 10 ? ' · sale del 10' : ''}</p>` : ''}</div>
+        ${askHtml}
         <div class="section"><h2>Jugadores</h2><span class="foot">HCP = índice de la reserva${TEES.length ? ' · salida = de dónde sale' : ''}</span></div>
         <div class="list gm-pl">${S.players.map((p, k) => `<div class="row"><div class="body"><div class="t">${e(p.name)}${p.me ? ' <small class="gm-me">vos</small>' : ''}${p.manual ? ' <small class="gm-me">a mano</small>' : ''}</div>${E && S.scoring === 'hcp' && def.players.some(x => x.id === p.id) && S.modality !== 'metralleta' ? `<div class="s">${recv(p.id) ? `Recibe <b class="num">${recv(p.id)}</b> ${recv(p.id) === 1 ? 'golpe' : 'golpes'}` : 'Juega en cero'}</div>` : ''}
             ${S.scoring === 'hcp' && TEES.length ? `<div class="gm-tee"><select data-tee="${k}" aria-label="Salida de ${e(p.name)}">${TN.map(t => `<option value="${e(t)}"${p.tee === t ? ' selected' : ''}>${e(t)}</option>`).join('')}<option value=""${!p.tee ? ' selected' : ''}>Sin salida (índice)</option></select>${GEN ? `<span class="gm-gen" role="radiogroup" aria-label="Rating">${[['C', 'H'], ['D', 'M']].map(([g, l]) => `<button type="button" role="radio" data-gen="${k}" data-g="${g}" aria-checked="${(p.gender || 'C') === g}" class="${(p.gender || 'C') === g ? 'on' : ''}">${l}</button>`).join('')}</span>` : ''}</div>
@@ -109,7 +112,7 @@
         ${S.scoring === 'hcp' ? `<div class="card gm-al"><div class="gm-alr"><span>Porcentaje del hándicap</span><div class="gm-step"><button type="button" data-al="-5" aria-label="Bajar 5%">−</button><input type="text" inputmode="numeric" id="gmal" value="${al()}" aria-label="Porcentaje"><span>%</span><button type="button" data-al="5" aria-label="Subir 5%">+</button></div></div>
           <p class="foot">Por defecto ${MC().DEFAULT_ALLOWANCE[S.modality]}% (${S.modality === 'fourball' ? 'fourball' : 'match individual'}). El más bajo ${S.modality === 'metralleta' ? 'de cada par ' : ''}juega en cero; los demás reciben (su HCP − el más bajo) × ${al()}%, redondeado (0,5 sube a 1). Los golpes van por el S.I. de cada hoyo.</p>
           <p class="foot">${TEES.length ? `Base: hándicap de cancha de cada uno según su salida (WHS: índice × slope/113 + course rating − par, redondeado). Salida inicial: ${e(base.tee_source || '—')}.` : 'Base: el índice (no tenemos slope ni course rating de esta cancha).'}</p>
-          ${base?.si_source || E ? '' : '<p class="foot gm-warn">Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo. Tocá un «–» para ver por qué falta y qué hacer.</p>'}
+          ${ask.length || base?.si_source || E ? '' : '<p class="foot gm-warn">Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo. Tocá un «–» para ver por qué falta y qué hacer.</p>'}
           ${missing ? '<p class="msg err">Con hándicap, todos necesitan su HCP: completalo arriba o jugá gross.</p>' : ''}
           ${E && S.modality === 'metralleta' ? `<div class="gm-mx"><small>Golpes por par</small>${E.pairs.map(pr => { const g = pr.strokes[pr.a] ? pr.a : pr.b, v = pr.strokes[g]; return `<div class="gm-mxr"><span>${e(nm(pr.a))} vs ${e(nm(pr.b))}</span><b class="num">${v ? `${e(short(g))} recibe ${v}` : 'parejos'}</b></div>`; }).join('')}</div>` : ''}</div>` : ''}
         ${S.scoring === 'hcp' && E ? gridHtml(def, E, short, -1) : ''}
@@ -119,6 +122,7 @@
       bind();
     };
     const bind = () => {
+      el.querySelectorAll('[data-course]').forEach(b => b.onclick = async () => { b.disabled = true; try { base = await H.api(`/api/matches/setup?tee=${encodeURIComponent(tee)}`, { method: 'POST', body: JSON.stringify({ course: b.dataset.course }) }); si = base?.si || si; if (!live('gm')) return; err = ''; render(); } catch (ex) { err = ex?.message || 'No se pudo guardar la cancha'; render(); } });
       el.querySelectorAll('[data-hcp]').forEach(i => i.onchange = () => { const v = i.value.trim().replace(',', '.'); const p = S.players[+i.dataset.hcp]; p.hcp = v === '' ? null : isFinite(+v) && +v >= -10 && +v <= 54 ? Math.round(+v * 10) / 10 : p.hcp; render(); });
       el.querySelectorAll('[data-tee]').forEach(i => i.onchange = () => { S.players[+i.dataset.tee].tee = i.value || null; render(); });
       el.querySelectorAll('[data-gen]').forEach(b => b.onclick = () => { S.players[+b.dataset.gen].gender = b.dataset.g; render(); });

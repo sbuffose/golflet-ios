@@ -20,13 +20,17 @@ test("bookings: row, header, empty page", () => {
   const n = P.parseBookings(NONE); assert.equal(n.none, true); assert.equal(n.rows.length, 0); assert.equal(n.recognized, true);
   assert.equal(P.parseBookings("<html>login</html>").recognized, false);
 });
-test("companions, events, and the course only when the source names it", () => {
+test("companions, events, and the course when the page names it", () => {
   assert.deepEqual(P.parseCompanions(COMP).players, [{ name: "Gomez Ana", hcp: 8.9 }, { name: "Perez Juan Carlos", hcp: 3.1 }]);
   const e = P.parseEvents(EV).get("15379")!;
   assert.equal(e.date, "2026-10-31"); assert.equal(e.modality, "Medal 36 Hoyos (1/2)");
-  assert.deepEqual(P.courseFromEvent(e.event, ["Azul", "Colorada"]), { course: null, how: null });
-  assert.deepEqual(P.courseFromEvent("Medal Viernes 18hmp COLO", ["Azul", "Colorada"]), { course: null, how: null });
+  assert.deepEqual(P.courseFromEvent(e.event, ["Azul", "Colorada"]), { course: "Colorada", how: "color" });
+  assert.deepEqual(P.courseFromEvent("Medal Viernes 18hmp COLO", ["Azul", "Colorada"]), { course: "Colorada", how: "nombre" });
+  assert.deepEqual(P.courseFromEvent("Copa del club 18hmp Dom 🟦", ["Azul", "Colorada"]), { course: "Azul", how: "color" });
   assert.deepEqual(P.courseFromEvent("Copa 🟥🟦", ["Azul", "Colorada"]), { course: null, how: null });
+  assert.deepEqual(P.courseFromEvent("Copa sin marca", ["Azul", "Colorada"]), { course: null, how: null });
+  assert.deepEqual(P.readBookingCourse({ venue: "Jockey Club", event: "Copa del club 🟦" }, ["Azul", "Colorada"]), { course: "Azul", how: "color" });
+  assert.deepEqual(P.readBookingCourse({ venue: "Colorada", event: "Copa del club 🟦" }, ["Azul", "Colorada"]), { course: "Colorada", how: "fuente" });
   assert.deepEqual(P.verifiedCourse({ venue: "Colorada" }, ["Azul", "Colorada"]), { course: "Colorada", how: "fuente" });
   assert.deepEqual(P.verifiedCourse({ venue: e.venue, course: e.event }, ["Azul", "Colorada"]), { course: null, how: null });
   assert.equal(P.inferDate(6, 31, "2026-10-28"), "2026-10-31");
