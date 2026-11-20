@@ -1660,6 +1660,9 @@ final class GolfletUITests: XCTestCase {
         let placed = XCUIApplication()
         openGolpes(placed, arguments: ["-ui-testing", "-ui-testing-strokes"])
         XCTAssertTrue(waitFor(placed, "golpes-hoyo-ok"), "Falta la leyenda por S.I.")
+        let width = Int(placed.windows.firstMatch.frame.width.rounded())
+        pinTop(placed, "golpes-hoyo")
+        saveShot("ios-\(width)-golpes-hoyo")
         assertEqualHoleColumns(placed)
         XCTAssertEqual(
             first(placed, "golpes-hoyo-totales").label,
@@ -1671,15 +1674,15 @@ final class GolfletUITests: XCTestCase {
         XCTAssertEqual(first(placed, "golpes-celda-c:0-4").label, "1 golpe")
         XCTAssertEqual(first(placed, "golpes-celda-c:0-17").label, "1 golpe")
         XCTAssertFalse(placed.staticTexts["Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo."].exists)
-        let width = Int(placed.windows.firstMatch.frame.width.rounded())
-        pinTop(placed, "golpes-hoyo")
-        saveShot("ios-\(width)-golpes-hoyo")
         placed.terminate()
 
         let empty = XCUIApplication()
         openGolpes(empty, arguments: ["-ui-testing", "-ui-testing-strokes-empty"])
         XCTAssertTrue(waitFor(empty, "golpes-hoyo-warn"), "Falta el aviso sin S.I.")
         XCTAssertTrue(empty.staticTexts["Sin el S.I. de la cancha no se pueden ubicar los golpes por hoyo."].exists)
+        let emptyWidth = Int(empty.windows.firstMatch.frame.width.rounded())
+        pinTop(empty, "golpes-hoyo")
+        saveShot("ios-\(emptyWidth)-golpes-sin-si")
         assertEqualHoleColumns(empty)
         XCTAssertEqual(
             first(empty, "golpes-hoyo-totales").label,
@@ -1690,9 +1693,6 @@ final class GolfletUITests: XCTestCase {
         for hole in 1...18 {
             XCTAssertEqual(first(empty, "golpes-celda-c:0-\(hole)").label, "vacío", "El hoyo \(hole) no quedó vacío")
         }
-        let emptyWidth = Int(empty.windows.firstMatch.frame.width.rounded())
-        pinTop(empty, "golpes-hoyo")
-        saveShot("ios-\(emptyWidth)-golpes-sin-si")
     }
 
     private func openGolpes(_ app: XCUIApplication, arguments: [String]) {
