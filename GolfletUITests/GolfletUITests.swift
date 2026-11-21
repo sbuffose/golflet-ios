@@ -2290,21 +2290,37 @@ final class GolfletUITests: XCTestCase {
         XCTAssertLessThanOrEqual(abs(first(app, "group-photo-g-cinco").frame.width - first(app, "group-photo-g-cinco").frame.height), 2)
         let width = Int(app.windows.firstMatch.frame.width.rounded())
         saveShot("ios-\(width)-grupo-foto")
-        app.staticTexts["Scratch"].firstMatch.tap()
-        XCTAssertTrue(waitFor(app, "group-hero", timeout: 6))
+        openListedGroup(app, "g-scratch")
+        XCTAssertTrue(waitFor(app, "group-hero", timeout: 10))
         XCTAssertTrue(first(app, "group-hero").label.contains("único"))
         XCTAssertTrue(waitFor(app, "group-solo", timeout: 4))
         XCTAssertTrue(waitFor(app, "group-photo-detail", timeout: 4))
         let detail = first(app, "group-photo-detail")
         XCTAssertGreaterThanOrEqual(detail.frame.width, 56)
         XCTAssertLessThanOrEqual(detail.frame.width, 72)
+        XCTAssertLessThanOrEqual(abs(detail.frame.width - detail.frame.height), 2)
         saveShot("ios-\(width)-clasificacion-1")
-        if app.navigationBars.buttons.firstMatch.exists { app.navigationBars.buttons.firstMatch.tap() }
-        app.staticTexts["Cinco"].firstMatch.tap()
-        XCTAssertTrue(waitFor(app, "group-hero", timeout: 6))
+        first(app, "close-grupo").tap()
+        XCTAssertTrue(app.buttons["home-hcp-groups"].waitForExistence(timeout: 8))
+        app.buttons["home-hcp-groups"].tap()
+        XCTAssertTrue(waitFor(app, "group-g-cinco", timeout: 8))
+        openListedGroup(app, "g-cinco")
+        XCTAssertTrue(waitFor(app, "group-hero", timeout: 10))
         XCTAssertTrue(first(app, "group-hero").label.contains("Empate"))
         XCTAssertGreaterThanOrEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", "T1")).count, 2)
         saveShot("ios-\(width)-clasificacion-5")
+    }
+
+    private func openListedGroup(_ app: XCUIApplication, _ id: String) {
+        let row = app.descendants(matching: .any)["group-\(id)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        if row.isHittable {
+            row.tap()
+            return
+        }
+        let photo = first(app, "group-photo-\(id)")
+        XCTAssertTrue(photo.exists)
+        photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     private func nudgePage(_ app: XCUIApplication, up: Bool) {
