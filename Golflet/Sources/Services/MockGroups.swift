@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 extension MockAPIClient {
     private static let groupsLock = NSLock()
@@ -18,6 +19,9 @@ extension MockAPIClient {
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-group-counts") {
             seedCountFixtures()
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-board") {
+            seedBoardFixtures()
         }
         return mutate { store, me in
             store.groups.filter { $0.members.contains { $0.id == me } }
@@ -390,6 +394,43 @@ extension MockAPIClient {
         }
     }
 
+    private func seedBoardFixtures() {
+        mutate { store, me in
+            guard !store.groups.contains(where: { $0.id == "g-cinco" }) else { return }
+            let owner = GroupMember(id: me, name: MockGroupStore.meName, initials: MockGroupStore.meInitials, photoURL: nil, role: .admin, isOwner: true)
+            func person(_ id: String, _ name: String, _ letters: String) -> GroupMember {
+                GroupMember(id: id, name: name, initials: letters, photoURL: nil, role: .member, isOwner: false)
+            }
+            let scratch = GolfletGroup(
+                id: "g-scratch", name: "Scratch", photoURL: "https://fixture.golflet.test/tall.jpg",
+                owner: owner, members: [owner], myRole: .admin, invite: nil, reportedMemberCount: 1
+            )
+            let players = [
+                person("tie-a", "Carla Díaz", "CD"),
+                person("tie-b", "Luis Gómez", "LG"),
+                person("p4", "Mateo Ruiz", "MR"),
+                person("p5", "Sol Vidal", "SV"),
+            ]
+            let cinco = GolfletGroup(
+                id: "g-cinco", name: "Cinco", photoURL: "https://fixture.golflet.test/wide.jpg",
+                owner: owner, members: [owner] + players, myRole: .admin, invite: nil, reportedMemberCount: 5
+            )
+            store.groups = [scratch, cinco]
+            GroupPhotoCache.store(Self.fixtureJPEG(width: 900, height: 1600, red: true), for: "g-scratch")
+            GroupPhotoCache.store(Self.fixtureJPEG(width: 1600, height: 700, red: false), for: "g-cinco")
+        }
+    }
+
+    private static func fixtureJPEG(width: Int, height: Int, red: Bool) -> Data {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { ctx in
+            (red ? UIColor(red: 0.784, green: 0.063, blue: 0.180, alpha: 1) : UIColor(red: 0.043, green: 0.145, blue: 0.271, alpha: 1)).setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        return image.jpegData(compressionQuality: 0.6) ?? Data()
+    }
+
     private func currentMember(role: GroupRole, owner: Bool) -> GroupMember {
         GroupMember(
             id: MockGroupStore.meID,
@@ -480,6 +521,15 @@ struct MockGroupStore: Sendable {
     }
 
     static func sample(metric: GroupMetricKind, memberID: String) -> (value: Double?, text: String?) {
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-board"), metric == .birdies {
+            switch memberID {
+            case meID, "tie-a": return (12, nil)
+            case "tie-b": return (8, nil)
+            case "p4": return (4, nil)
+            case "p5": return (1, nil)
+            default: break
+            }
+        }
         let shift: Double = {
             switch memberID {
             case meID: return 0

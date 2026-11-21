@@ -632,15 +632,7 @@ struct TeeTime: Identifiable, Hashable, Sendable {
     }
 
     static func companionsLine(from names: [String]) -> String? {
-        let cleaned = names
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        guard !cleaned.isEmpty else { return nil }
-        if cleaned.count <= 2 {
-            return "con " + cleaned.joined(separator: ", ")
-        }
-        let shown = cleaned.prefix(2).joined(separator: ", ")
-        return "con \(shown) +\(cleaned.count - 2)"
+        MatchStrokes.companionsLine(from: names)
     }
 
     func isUpcoming(now: Date = Date(), grace: TimeInterval = 3 * 3600) -> Bool {

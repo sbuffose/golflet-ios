@@ -2261,6 +2261,52 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    func testCaptureCompanionsLine() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-strokes"]
+        app.launch()
+        let partners = app.staticTexts["home-tee-partners-tt-golpes-azul"]
+        XCTAssertTrue(partners.waitForExistence(timeout: 8))
+        XCTAssertEqual(partners.label, "con Joaquín L. y Augusto L. +1")
+        let width = Int(app.windows.firstMatch.frame.width.rounded())
+        XCTAssertEqual(width, 375)
+        saveShot("ios-\(width)-companeros")
+    }
+
+    func testCaptureGroupBoard() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-ui-testing-board"]
+        app.launch()
+        let groups = app.buttons["home-hcp-groups"]
+        XCTAssertTrue(groups.waitForExistence(timeout: 8))
+        groups.tap()
+        XCTAssertTrue(waitFor(app, "group-photo-g-scratch", timeout: 8))
+        let scratch = first(app, "group-photo-g-scratch")
+        XCTAssertGreaterThanOrEqual(scratch.frame.width, 40)
+        XCTAssertLessThanOrEqual(scratch.frame.width, 48)
+        XCTAssertLessThanOrEqual(abs(scratch.frame.width - scratch.frame.height), 2)
+        XCTAssertTrue(waitFor(app, "group-photo-g-cinco", timeout: 4))
+        XCTAssertLessThanOrEqual(first(app, "group-photo-g-cinco").frame.width, 48)
+        let width = Int(app.windows.firstMatch.frame.width.rounded())
+        XCTAssertEqual(width, 375)
+        saveShot("ios-\(width)-grupo-foto")
+        app.staticTexts["Scratch"].firstMatch.tap()
+        XCTAssertTrue(waitFor(app, "group-hero", timeout: 6))
+        XCTAssertTrue(first(app, "group-hero").label.contains("único"))
+        XCTAssertTrue(waitFor(app, "group-solo", timeout: 4))
+        XCTAssertTrue(waitFor(app, "group-photo-detail", timeout: 4))
+        let detail = first(app, "group-photo-detail")
+        XCTAssertGreaterThanOrEqual(detail.frame.width, 56)
+        XCTAssertLessThanOrEqual(detail.frame.width, 72)
+        saveShot("ios-\(width)-clasificacion-1")
+        if app.navigationBars.buttons.firstMatch.exists { app.navigationBars.buttons.firstMatch.tap() }
+        app.staticTexts["Cinco"].firstMatch.tap()
+        XCTAssertTrue(waitFor(app, "group-hero", timeout: 6))
+        XCTAssertTrue(first(app, "group-hero").label.contains("Empate"))
+        XCTAssertGreaterThanOrEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", "T1")).count, 2)
+        saveShot("ios-\(width)-clasificacion-5")
+    }
+
     private func nudgePage(_ app: XCUIApplication, up: Bool) {
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: up ? 0.78 : 0.38))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: up ? 0.46 : 0.70))

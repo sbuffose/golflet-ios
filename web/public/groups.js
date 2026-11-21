@@ -21,7 +21,11 @@
   const CAT = k => { const t = MT[k][2]; return t === 't' ? 'score_types' : t === 'p' ? 'holes' : t === 'u' ? 'putting' : t === 'g' || t === 'r' ? 'gir_fir' : t === 'h' ? 'handicap' : 'scores'; };
   const hid = (m, k) => (m.hidden || []).includes(CAT(k));
   const NS = '<span class="gg-ns">No compartido</span>';
-  const photo = (g, cls = 'gg-av') => g.photo_url ? `<img class="${cls} gg-img" src="${H.esc(g.photo_url)}" alt="">` : `<div class="${cls}">${H.esc((g.initials || (g.name || '?').slice(0, 1)).toUpperCase())}</div>`;
+  const photo = (g, cls = 'gg-av') => {
+    const letter = H.esc((g.initials || String(g.name || '?').trim().slice(0, 1) || '?').toUpperCase());
+    if (!g.photo_url) return `<div class="${cls}">${letter}</div>`;
+    return `<div class="${cls}"><img class="gg-img" src="${H.esc(g.photo_url)}" alt="" onerror="this.style.display='none'">${letter}</div>`;
+  };
   const faceLine = g => {
     const list = Array.isArray(g.faces) ? g.faces : [];
     if (!list.length) return '';
@@ -230,7 +234,7 @@
     const gear = !isVs ? `<details class="gg-gear"><summary aria-label="Ajustes del grupo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></summary><div><a href="#/grupo/${id}/vista">Personalizar mi vista</a>${d.group.is_admin ? `<a href="#/grupo/${id}/ajustes">Cambiar foto</a><a href="#/grupo/${id}/ajustes">Ajustes y link de invitación</a>` : ''}</div></details>` : '';
     const cardsLine = m => { const eighteen = Number(m.cards_18 ?? m.rounds ?? 0), nine = Number(m.cards_9 || 0), total = eighteen + nine; if (!total) return ''; return nine ? `${total} tarjetas (${eighteen} de 18 y ${nine} de 9)` : (total === 1 ? '1 tarjeta' : `${total} tarjetas`); };
     const shortCards = m => { const total = Number(m.cards_18 ?? m.rounds ?? 0) + Number(m.cards_9 || 0); if (!total) return ''; return total === 1 ? '1 tarjeta' : `${total} tarjetas`; };
-    const lineCards = m => { const total = cardN(m); return total ? `${total} tarj.` : ''; };
+    const lineCards = m => shortCards(m);
     const rankOf = (key, title) => {
       const rows = ms.map(m => ({ m, v: val(m, key), hidden: hid(m, key) })).filter(x => !x.hidden && x.v != null);
       rows.sort((a, b) => (MT[key][3] ? a.v - b.v : b.v - a.v));
@@ -346,22 +350,31 @@
           gap = `a ${numTxt(dlt)} de ${firstOf(rows[ahead].m.name)}`;
         }
       }
-      const bits = ['Tu posición', posToken(place, places), gap, lineCards(rows[meAt].m)].filter(Boolean);
-      return `<caption class="gg-you">${H.esc(bits.join(' · '))}</caption>`;
+      const cards = lineCards(rows[meAt].m);
+      const tail = cards ? ` ${cards}.` : '';
+      const tied = places.filter(p => p === place).length > 1;
+      let text = 'Sos el único del grupo.';
+      if (rows.length < 2) text = cards ? `Sos el único del grupo. ${cards}.` : text;
+      else if (place === 1 && tied) text = `Empate en la punta.${tail}`;
+      else if (place === 1) text = gap ? `Estás 1º, ${gap}.${tail}` : `Estás 1º.${tail}`;
+      else text = gap ? `Estás ${posToken(place, places)}º, ${gap}.${tail}` : `Estás ${posToken(place, places)}º.${tail}`;
+      return `<caption class="gg-you">${H.esc(text)}</caption>`;
     };
     const rateCell = x => x.n < 3 ? 'Pocas tarjetas' : (x.rate != null ? H.f1(x.rate) : '—');
+    const emptyWhy = key => key === 'regular' ? 'Hacen falta 3 tarjetas de 18 para ver quién es más regular.' : key === 'racha' ? 'Todavía no hay una racha de rondas en el par o mejor.' : 'Sin tarjetas compartidas para este número.';
     const leaderChip = (key, label) => {
       const rows = boardRows(key);
-      if (!rows.length) return '';
+      if (!rows.length) return `<button type="button" class="gg-lead" data-cat="${key}" data-why="${H.esc(emptyWhy(key))}"><span class="k">${H.esc(label)}</span><b class="num">–</b><span class="who">Sin datos</span><small>Tocá para ver por qué</small></button>`;
       rows.sort((a, b) => (a.low ? a.v - b.v : b.v - a.v));
       const places = placesOf(rows);
       const tops = rows.filter((_, i) => places[i] === 1);
       const tie = tops.length > 1;
       const who = tie ? `T1 ${firstOf(tops[0].m.name)}` : firstOf(tops[0].m.name);
-      const gap = tie ? 'T1' : gapLine(key, rows);
+      const gap = tie ? '' : gapLine(key, rows);
       const sample = tops[0].n;
-      const rate = ['birdies', 'pars', 'eagles'].includes(key) && tops[0].rate != null && sample ? `${H.f1(tops[0].rate)} por ronda · ${sample} ${sample === 1 ? 'ronda' : 'rondas'}` : '';
-      return `<button type="button" class="gg-lead" data-cat="${key}"><span class="k">${H.esc(label)}</span><b>${H.esc(who)}</b><b class="num">${H.esc(shown(key, tops[0]))}</b><small>${H.esc(gap || '')}${rate ? ` · ${rate}` : ''}</small></button>`;
+      const rate = ['birdies', 'pars', 'eagles'].includes(key) && tops[0].rate != null && sample ? `${H.f1(tops[0].rate)} por ronda` : '';
+      const note = [tie ? 'Empate en la punta' : gap, rate].filter(Boolean).join(' · ');
+      return `<button type="button" class="gg-lead" data-cat="${key}"><span class="k">${H.esc(label)}</span><b class="num">${H.esc(shown(key, tops[0]))}</b><span class="who">${H.esc(who)}</span>${note ? `<small>${H.esc(note)}</small>` : ''}</button>`;
     };
     const boardTable = key => {
       const rows = boardRows(key);
@@ -372,9 +385,11 @@
       const body = rows.map((x, i) => {
         const place = places[i];
         const lead = place === 1 ? ' lead' : '';
-        return `<tr class="${x.m.is_me ? 'me' : ''}"><td class="pos"><b>${posToken(place, places)}</b>${moveMark(moved.get(x.m.member_id) || 0)}</td><td class="who"><a href="${hrefOf(key)}">${photo(x.m, 'gg-av')}<span>${H.esc(x.m.name)}</span></a></td><td class="tot${lead}">${H.esc(shown(key, x))}</td><td class="rate${x.n < 3 ? ' few' : ''}">${H.esc(rateCell(x))}</td><td class="cards">${cardN(x.m) || '—'}</td></tr>`;
+        const few = x.n < 3 ? '<small>Pocas tarjetas</small>' : '';
+        const total = x.v == null ? `<button type="button" class="gg-dash" data-why="${H.esc(emptyWhy(key))}">–</button>` : H.esc(shown(key, x));
+        return `<tr class="${x.m.is_me ? 'me' : ''}"><td class="pos"><b>${posToken(place, places)}</b>${moveMark(moved.get(x.m.member_id) || 0)}</td><td class="who"><a href="${hrefOf(key)}">${photo(x.m, 'gg-av')}<span>${H.esc(x.m.name)}</span>${few}</a></td><td class="tot${lead}">${total}</td></tr>`;
       }).join('');
-      return `<table class="gg-lb" id="gg-${key}">${youLine(key, rows, places)}<thead><tr><th class="pos">Pos</th><th class="who">Jugador</th><th>Total</th><th>Por ronda</th><th>Tarj.</th></tr></thead><tbody>${body}</tbody></table>`;
+      return `<table class="gg-lb" id="gg-${key}">${youLine(key, rows, places)}<thead><tr><th class="pos">Pos</th><th class="who">Jugador</th><th>Total</th></tr></thead><tbody>${body}</tbody></table>`;
     };
     const GOALS = { '1w': [1, '1 ronda esta semana'], '1m': [3, '3 rondas este mes'], '3q': [6, '6 rondas este trimestre'], '6s': [12, '12 rondas este semestre'], '12y': [20, '20 rondas este año'], '3m': [3, '3 rondas en 3 meses'], '6m': [6, '6 rondas en 6 meses'], '12m': [12, '12 rondas en 12 meses'] };
     const goal = GOALS[d.filters.range || ''];
@@ -384,24 +399,30 @@
     const CATS = [['birdies', 'Birdies'], ['pars', 'Pares'], ['eagles', 'Águilas'], ['best_net', 'Mejor neto'], ['regular', 'Regularidad'], ['rounds', 'Rondas'], ['racha', 'Rachas']];
     if (ms.some(m => !hid(m, 'aces') && Number(val(m, 'aces')) > 0)) CATS.push(['aces', 'Hoyos en uno']);
     const leaderStrip = !isVs ? `<div class="gg-leaders" aria-label="Líderes">${[['birdies', 'Birdies'], ['pars', 'Pares'], ['best_net', 'Mejor neto'], ['rounds', 'Rondas']].map(([k, label]) => leaderChip(k, label)).join('')}</div>` : '';
-    const tabs = !isVs ? `<div class="gg-tabs" role="tablist" aria-label="Categoría">${CATS.map(([k, t], i) => `<button type="button" role="tab" data-cat="${k}" aria-selected="${i ? 'false' : 'true'}" class="${i ? '' : 'on'}">${H.esc(t)}</button>`).join('')}</div>` : '';
+    const tabs = !isVs ? `<div class="gg-tabwrap"><div class="gg-tabs" role="tablist" aria-label="Categoría">${CATS.map(([k, t], i) => `<button type="button" role="tab" data-cat="${k}" aria-selected="${i ? 'false' : 'true'}" class="${i ? '' : 'on'}">${H.esc(t)}</button>`).join('')}</div><span class="gg-tabmore" aria-hidden="true" hidden></span></div>` : '';
     const slides = !isVs ? `<div class="gg-stages">${CATS.map(([k], i) => `<div class="gg-stage" data-cat="${k}"${i ? ' hidden' : ''}>${boardTable(k)}</div>`).join('')}</div>` : '';
     const fullTable = !isVs && secs.includes('table') ? `<details class="gg-full"><summary>Ver tabla completa</summary>${sec.table()}</details>` : '';
-    const mast = !isVs ? `<header class="gg-mast"><div class="gg-mast-row"><div><p class="gg-event">Clasificación</p><h1>${H.esc(d.group.name)}</h1><p class="gg-meet">${H.esc(periodLine())}</p></div>${gear}</div></header>` : bar(ms.map(m => m.name).join(' vs '), 'Mano a mano');
+    const mast = !isVs ? `<header class="gg-mast"><div class="gg-mast-row">${photo(d.group, 'gg-av gg-mast-av')}<div><p class="gg-event">Clasificación</p><h1>${H.esc(d.group.name)}</h1><p class="gg-meet">${H.esc(periodLine())}</p></div>${gear}</div></header>` : bar(ms.map(m => m.name).join(' vs '), 'Mano a mano');
+    const solo = !isVs && ms.length < 2;
+    const soloNote = solo ? `<div class="gg-solo"><b>Todavía estás solo</b><p>Invitá a alguien para comparar. No se inventan rivales ni tarjetas.</p>${d.group.is_admin ? `<a class="btn" href="#/grupo/${id}/ajustes">Compartir el link</a>` : '<p class="foot">Cuando alguien más se sume, acá ves la comparación.</p>'}</div>` : '';
     el.innerHTML = `${mast}
       ${filters(id, d, qs, base)}
-      ${leaderStrip}${tabs}${slides}${challenge}
-      ${!isVs ? worst : ''}
-      ${fullTable}
-      ${ms.length < 2 ? `<div class="msg"><img class="cad" src="/brand/caddie.png" alt="">Todavía sos el único en el grupo. ${d.group.is_admin ? `<a class="link" href="#/grupo/${id}/ajustes">Compartí el link por WhatsApp</a> o invitá por matrícula.` : 'Cuando alguien más se sume, acá ves la comparación.'}</div>` : ''}
-      ${secs.filter(k => k !== 'table').map(k => sec[k]()).join('')}
+      ${soloNote}
+      ${leaderStrip}${tabs}${slides}${solo ? '' : challenge}
+      ${solo ? '' : (!isVs ? worst : '')}
+      ${solo ? '' : fullTable}
+      ${solo ? '' : secs.filter(k => k !== 'table').map(k => sec[k]()).join('')}
       ${!isVs ? `<div class="section"><h2>Jugadores</h2></div><a class="card gg-list row" href="#/grupo/${id}/miembros"><div class="gg-t"><b>${d.group.is_admin ? 'Jugadores, admins e invitaciones' : 'Ver jugadores y salir del grupo'}</b><span>${ms.length} en el grupo · ${d.group.admins} admin${d.group.admins === 1 ? '' : 's'}${d.pending.length ? ` · ${d.pending.length} pendiente${d.pending.length === 1 ? '' : 's'}` : ''}</span></div>${CHEV}</a>` : ''}`;
     const selectCat = cat => {
       el.querySelectorAll('.gg-tabs button').forEach(x => { const on = x.dataset.cat === cat; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); });
       el.querySelectorAll('.gg-leaders button').forEach(x => x.classList.toggle('on', x.dataset.cat === cat));
       el.querySelectorAll('.gg-stage').forEach(s => { s.hidden = s.dataset.cat !== cat; });
     };
-    el.querySelectorAll('.gg-tabs button, .gg-leaders button').forEach(b => { b.onclick = () => selectCat(b.dataset.cat); });
+    el.querySelectorAll('.gg-tabs button, .gg-leaders button').forEach(b => { b.onclick = () => { selectCat(b.dataset.cat); if (b.dataset.why) H.toast(b.dataset.why); }; });
+    el.querySelectorAll('.gg-dash').forEach(b => { b.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); H.toast(b.dataset.why || 'Sin tarjetas compartidas para este número.'); }; });
+    const tabRow = el.querySelector('.gg-tabs'), tabMore = el.querySelector('.gg-tabmore');
+    const markTabs = () => { if (!tabRow || !tabMore) return; const more = tabRow.scrollWidth > tabRow.clientWidth + 2 && tabRow.scrollLeft + tabRow.clientWidth < tabRow.scrollWidth - 2; tabMore.hidden = !more; el.querySelector('.gg-tabwrap')?.classList.toggle('can-scroll', more); };
+    if (tabRow) { markTabs(); tabRow.addEventListener('scroll', markTabs, { passive: true }); requestAnimationFrame(markTabs); }
     const courseBtn = el.querySelector('[data-courses]');
     const courseDlg = el.querySelector('.gg-course-dlg');
     if (courseBtn && courseDlg) {

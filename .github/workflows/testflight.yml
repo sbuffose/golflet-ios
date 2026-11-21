@@ -420,6 +420,8 @@ jobs:
             -scheme Golflet \
             -destination "platform=iOS Simulator,id=$DEVICE_ID" \
             -only-testing:GolfletUITests/GolfletUITests/testCaptureGolpesHoyo \
+            -only-testing:GolfletUITests/GolfletUITests/testCaptureCompanionsLine \
+            -only-testing:GolfletUITests/GolfletUITests/testCaptureGroupBoard \
             -derivedDataPath "$RUNNER_TEMP/GolpesBuild" \
             -resultBundlePath "$RUNNER_TEMP/golpes.xcresult" \
             CODE_SIGN_IDENTITY="-" \
@@ -430,6 +432,10 @@ jobs:
           test -f /tmp/golflet-screenshots/ios-375-golpes-sin-si.png
           test -f /tmp/golflet-screenshots/ios-375-cancha-pregunta.png
           test -f /tmp/golflet-screenshots/ios-375-cancha-azul.png
+          test -f /tmp/golflet-screenshots/ios-375-companeros.png
+          test -f /tmp/golflet-screenshots/ios-375-grupo-foto.png
+          test -f /tmp/golflet-screenshots/ios-375-clasificacion-1.png
+          test -f /tmp/golflet-screenshots/ios-375-clasificacion-5.png
 
       - name: Upload 375 captures
         if: always()

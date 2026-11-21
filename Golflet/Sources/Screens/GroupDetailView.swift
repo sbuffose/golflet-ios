@@ -24,6 +24,7 @@ struct GroupDetailView: View {
     @State private var comparativoRoute: ComparativoRoute?
     @State private var profileRoute: MemberProfileRoute?
     @State private var compareMetric: String?
+    @State private var dashNote: String?
     @State private var showsFullTable = false
 
     private var group: GolfletGroup? {
@@ -77,6 +78,11 @@ struct GroupDetailView: View {
             }
             .golfletChrome()
             .environment(model)
+        }
+        .alert("Sin número", isPresented: Binding(get: { dashNote != nil }, set: { if !$0 { dashNote = nil } })) {
+            Button("Entendido", role: .cancel) { dashNote = nil }
+        } message: {
+            Text(dashNote ?? "")
         }
         .sheet(isPresented: $showsCourses) {
             courseSheet
@@ -206,6 +212,7 @@ struct GroupDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 14) {
                 GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 64, cacheID: group.id)
+                    .accessibilityIdentifier("group-photo-detail")
                 VStack(alignment: .leading, spacing: 4) {
                     GOverline(text: group.isAdmin ? "Administrador" : "Miembro")
                     Text(group.name)
@@ -420,17 +427,50 @@ struct GroupDetailView: View {
 
     private func comparisonSection(_ group: GolfletGroup) -> some View {
         let rows = comparison?.rows ?? []
+        let solo = group.members.filter { !$0.isPending }.count < 2
         return VStack(alignment: .leading, spacing: 16) {
+            if solo {
+                soloInvite(group)
+            }
             if !rows.isEmpty {
                 classification(rows, group: group)
             }
-            worstHoles
-            fullTable(rows)
-            evolution
-            holeByHole
-            manoAMano(group)
+            if !solo {
+                worstHoles
+                fullTable(rows)
+                evolution
+                holeByHole
+                manoAMano(group)
+            }
         }
         .padding(.bottom, 24)
+    }
+
+    private func soloInvite(_ group: GolfletGroup) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Todavía estás solo")
+                .font(GFont.ui(17, weight: .bold))
+                .foregroundStyle(p.ink)
+            Text("Invitá a alguien para comparar. No se inventan rivales ni tarjetas.")
+                .font(GType.body)
+                .foregroundStyle(p.ink2)
+            if group.isAdmin {
+                Button { showsGroupAdmin = true } label: {
+                    Text("Compartir el link")
+                        .font(GType.headline)
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(p.primary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("group-solo-invite")
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(p.primary.opacity(0.16), lineWidth: 1))
+        .accessibilityIdentifier("group-solo")
     }
 
     @ViewBuilder
@@ -685,54 +725,72 @@ struct GroupDetailView: View {
 
     private func leaderStrip(_ rows: [GroupComparisonRow]) -> some View {
         let keys: [GroupMetricKind] = [.birdies, .pars, .net, .rounds]
-        let chips = keys.compactMap { kind in rows.first { $0.metric == kind } }
-        return VStack(spacing: 0) {
-            ForEach(chips) { row in
-                let ranked = row.ranked()
-                let tops = ranked.filter { row.rank(of: $0.memberID) == 1 }
-                let tie = tops.count > 1
-                let who = tie ? "T1 \(firstName(tops.first?.memberName ?? ""))" : firstName(tops.first?.memberName ?? "")
-                let value = tops.first.map { display($0, metric: row.metric) } ?? ""
-                let gap = tie ? "T1" : leaderGap(row, ranked: ranked)
-                let rate = leaderRate(row, top: tops.first)
-                Button { compareMetric = row.metric.rawValue } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(row.metric == .net ? "Mejor neto" : row.metric.title)
-                            .font(GFont.ui(11, weight: .bold))
-                            .textCase(.uppercase)
-                            .lineLimit(1)
-                            .frame(width: 92, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(who)
-                                    .font(GFont.ui(15, weight: .semibold))
-                                    .lineLimit(1)
-                                Spacer(minLength: 6)
-                                Text(value)
-                                    .font(GFont.ui(15, weight: .bold))
-                                    .lineLimit(1)
-                            }
-                            Text([gap, rate].filter { !$0.isEmpty }.joined(separator: " · "))
-                                .font(GFont.ui(12, weight: .regular))
-                                .foregroundStyle(p.ink2)
-                                .lineLimit(1)
-                        }
-                    }
-                    .foregroundStyle(p.ink)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 52)
-                    .background(Color.white)
-                }
-                .buttonStyle(.plain)
-                .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.12)).frame(height: 1) }
+        let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+        return LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(keys) { kind in
+                let row = rows.first { $0.metric == kind }
+                broadcastTile(kind: kind, row: row)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.top, 10)
+        .padding(.top, 12)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Líderes")
+    }
+
+    private func broadcastTile(kind: GroupMetricKind, row: GroupComparisonRow?) -> some View {
+        let ranked = row?.ranked() ?? []
+        let tops = ranked.filter { row?.rank(of: $0.memberID) == 1 }
+        let tie = tops.count > 1
+        let who = tops.isEmpty ? "Sin datos" : (tie ? "T1 \(firstName(tops[0].memberName))" : firstName(tops[0].memberName))
+        let value = tops.first.map { display($0, metric: kind) } ?? "–"
+        let gap = tie ? "Empate en la punta" : (row.map { leaderGap($0, ranked: ranked) } ?? "")
+        let rate = row.map { leaderRate($0, top: tops.first) } ?? ""
+        let note = [gap, rate].filter { !$0.isEmpty }.joined(separator: " · ")
+        let on = compareMetric == kind.rawValue
+        return Button {
+            if tops.isEmpty {
+                dashNote = emptyWhy(kind)
+            }
+            compareMetric = kind.rawValue
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(kind == .net ? "Mejor neto" : kind.title)
+                    .font(GFont.ui(11, weight: .bold))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+                Text(value)
+                    .font(GFont.ui(34, weight: .bold))
+                    .foregroundStyle(on ? p.accent : p.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(who)
+                    .font(GFont.ui(14, weight: .semibold))
+                    .lineLimit(1)
+                if !note.isEmpty {
+                    Text(note)
+                        .font(GFont.ui(12, weight: .medium))
+                        .foregroundStyle(p.ink2)
+                        .lineLimit(2)
+                }
+            }
+            .foregroundStyle(p.ink)
+            .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+            .padding(12)
+            .background(Color.white)
+            .overlay(Rectangle().stroke(p.primary.opacity(0.16), lineWidth: 1))
+            .overlay(alignment: .bottom) { Rectangle().fill(on ? p.accent : Color.clear).frame(height: 3) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("group-lead-\(kind.rawValue)")
+    }
+
+    private func emptyWhy(_ metric: GroupMetricKind) -> String {
+        switch metric {
+        case .regular: return "Hacen falta 3 tarjetas de 18 para ver quién es más regular."
+        case .streak: return "Todavía no hay una racha de rondas en el par o mejor."
+        default: return "Sin tarjetas compartidas para este número."
+        }
     }
 
     private func leaderGap(_ row: GroupComparisonRow, ranked: [MemberMetricValue]) -> String {
@@ -745,7 +803,7 @@ struct GroupDetailView: View {
     private func leaderRate(_ row: GroupComparisonRow, top: MemberMetricValue?) -> String {
         guard let top, let rate = top.perRound, let sample = top.sample, sample > 0 else { return "" }
         guard row.metric == .birdies || row.metric == .pars || row.metric == .eagles else { return "" }
-        return "\(FormatAR.one(rate)) por ronda · \(sample) \(sample == 1 ? "ronda" : "rondas")"
+        return "\(FormatAR.one(rate)) por ronda"
     }
 
     private var courseButtonTitle: String {
@@ -802,7 +860,7 @@ struct GroupDetailView: View {
     }
 
     private func categoryTabs(_ rows: [GroupComparisonRow], selected: GroupComparisonRow) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal, showsIndicators: true) {
             HStack(spacing: 0) {
                 ForEach(rows) { row in
                     let on = row.id == selected.id
@@ -823,6 +881,17 @@ struct GroupDetailView: View {
             }
         }
         .overlay(alignment: .bottom) { Rectangle().fill(p.primary.opacity(0.18)).frame(height: 1) }
+        .overlay(alignment: .trailing) {
+            LinearGradient(colors: [Color.white.opacity(0), Color.white], startPoint: .leading, endPoint: .trailing)
+                .frame(width: 28)
+                .allowsHitTesting(false)
+                .overlay(alignment: .trailing) {
+                    Text("›")
+                        .font(GFont.ui(18, weight: .bold))
+                        .foregroundStyle(p.ink)
+                        .padding(.trailing, 2)
+                }
+        }
         .padding(.horizontal, 8)
         .id("group-category-tabs")
         .accessibilityIdentifier("group-category-tabs")
@@ -838,12 +907,10 @@ struct GroupDetailView: View {
     }
 
     private var columnHeads: some View {
-        HStack(spacing: 4) {
-            Text("Pos").frame(width: 44, alignment: .leading)
+        HStack(spacing: 8) {
+            Text("Pos").frame(width: 52, alignment: .leading)
             Text("Jugador").frame(maxWidth: .infinity, alignment: .leading)
-            Text("Total").frame(width: 44, alignment: .trailing)
-            Text("Por ronda").frame(width: 64, alignment: .trailing)
-            Text("Tarj.").frame(width: 32, alignment: .trailing)
+            Text("Total").frame(width: 56, alignment: .trailing)
         }
         .font(GFont.ui(10, weight: .semibold))
         .tracking(0.6)
@@ -855,11 +922,23 @@ struct GroupDetailView: View {
     }
 
     private func standingLine(_ row: GroupComparisonRow) -> String? {
-        guard let mineID = comparison?.hero?.memberID, row.rank(of: mineID) != nil else { return nil }
-        let token = posToken(row, memberID: mineID)
-        let gap = gapLine(row, memberID: mineID) ?? ""
-        let cards = shortCards(comparison?.hero?.cards)
-        return ["Tu posición", token, gap, cards].filter { !$0.isEmpty }.joined(separator: " · ")
+        guard let mineID = comparison?.hero?.memberID, let place = row.rank(of: mineID) else { return nil }
+        let ranked = row.ranked()
+        let cards = fullCards(comparison?.hero?.cards)
+        let tail = cards.isEmpty ? "" : " \(cards)."
+        if ranked.count < 2 { return cards.isEmpty ? "Sos el único del grupo." : "Sos el único del grupo. \(cards)." }
+        let tied = ranked.filter { row.rank(of: $0.memberID) == place }.count > 1
+        if place == 1, tied { return "Empate en la punta.\(tail)" }
+        if let gap = gapLine(row, memberID: mineID), !gap.isEmpty {
+            return place == 1 ? "Estás 1º, \(gap).\(tail)" : "Estás \(posToken(row, memberID: mineID))º, \(gap).\(tail)"
+        }
+        return place == 1 ? "Estás 1º.\(tail)" : "Estás \(place)º.\(tail)"
+    }
+
+    private func fullCards(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "" }
+        if raw.contains("tarjeta") { return raw }
+        return shortCards(raw).replacingOccurrences(of: "tarj.", with: "tarjetas")
     }
 
     private func shortCards(_ raw: String?) -> String {
@@ -874,14 +953,9 @@ struct GroupDetailView: View {
             ForEach(Array(ranked.enumerated()), id: \.element.id) { index, value in
                 let place = row.rank(of: value.memberID) ?? (index + 1)
                 let mine = value.memberID == comparison?.hero?.memberID
-                let few = value.sample.map { $0 < 3 } ?? false
-                let rate: String = {
-                    if let sample = value.sample, sample < 3 { return "Pocas tarjetas" }
-                    if let per = value.perRound { return FormatAR.one(per) }
-                    return "—"
-                }()
-                let cards = value.sample.map(String.init) ?? "—"
-                HStack(spacing: 4) {
+                let shown = display(value, metric: row.metric)
+                let missing = shown == "—" || shown == "–"
+                HStack(spacing: 8) {
                     HStack(spacing: 2) {
                         Text(posToken(row, memberID: value.memberID))
                             .font(GFont.ui(15, weight: .bold))
@@ -894,25 +968,37 @@ struct GroupDetailView: View {
                                 .foregroundStyle(delta > 0 ? p.ink : p.accent)
                         }
                     }
-                    .frame(width: 44, alignment: .leading)
+                    .frame(width: 52, alignment: .leading)
                     HStack(spacing: 8) {
-                        GroupPhotoView(url: value.photoURL ?? group.members.first { $0.id == value.memberID }?.photoURL, initials: faceLetter(value.memberName), size: 26)
-                        Text(value.memberName)
-                            .font(GFont.ui(14, weight: .semibold))
-                            .lineLimit(1)
+                        GroupPhotoView(url: value.photoURL ?? group.members.first { $0.id == value.memberID }?.photoURL, initials: faceLetter(value.memberName), size: 26, cacheID: value.memberID)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(value.memberName)
+                                .font(GFont.ui(14, weight: .semibold))
+                                .lineLimit(1)
+                            if let sample = value.sample, sample < 3 {
+                                Text("Pocas tarjetas")
+                                    .font(GFont.ui(11, weight: .semibold))
+                                    .foregroundStyle(p.ink2)
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(display(value, metric: row.metric))
-                        .font(GFont.ui(place == 1 ? 17 : 15, weight: .bold))
-                        .foregroundStyle(place == 1 ? p.accent : p.ink)
-                        .frame(width: 44, alignment: .trailing)
-                    Text(rate)
-                        .font(GFont.ui(few ? 10 : 13, weight: .semibold))
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 64, alignment: .trailing)
-                    Text(cards)
-                        .font(GFont.ui(14, weight: .semibold))
-                        .frame(width: 32, alignment: .trailing)
+                    Group {
+                        if missing {
+                            Button { dashNote = emptyWhy(row.metric) } label: {
+                                Text("–")
+                                    .font(GFont.ui(17, weight: .bold))
+                                    .frame(width: 56, alignment: .trailing)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Sin número. \(emptyWhy(row.metric))")
+                        } else {
+                            Text(shown)
+                                .font(GFont.ui(place == 1 ? 17 : 15, weight: .bold))
+                                .foregroundStyle(place == 1 ? p.accent : p.ink)
+                                .frame(width: 56, alignment: .trailing)
+                        }
+                    }
                 }
                 .foregroundStyle(p.ink)
                 .padding(.vertical, 10)

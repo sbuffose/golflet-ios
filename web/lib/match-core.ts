@@ -180,6 +180,37 @@ export function shortName(name: string, peers: string[], me = false): string {
   }
   return `${parts[0]} ${parts[parts.length - 1][0].toLocaleUpperCase("es")}.`;
 }
+/** First given-name token. «Pérez, Juan Carlos» and «Juan Pérez» → «Juan». A surname-first club line «Lavalle Joaquín» stays «Lavalle» until companionLabel disambiguates it. */
+export function givenToken(name: string): string {
+  const s = String(name || "").trim();
+  const body = s.includes(",") ? s.split(",").slice(1).join(",").trim() : s;
+  return body.split(/\s+/).filter(Boolean)[0] || s;
+}
+/** The short label on a booking card. Unique first tokens stay as the given name. A repeated token uses the same rule as the match grid. */
+export function companionLabel(name: string, peers: string[]): string {
+  const plain = givenToken(name);
+  if (!plain) return "";
+  const same = (a: string, b: string) => a.localeCompare(b, "es", { sensitivity: "accent" }) === 0;
+  if (peers.filter(p => same(givenToken(p), plain)).length < 2) return plain;
+  const s = String(name || "").trim();
+  if (s.includes(",")) {
+    const surname = s.split(",")[0].trim().split(/\s+/).filter(Boolean)[0] || "";
+    const initial = surname ? `${surname[0].toLocaleUpperCase("es")}.` : "";
+    return initial ? `${plain} ${initial}` : plain;
+  }
+  return shortName(s, peers, false);
+}
+export function companionLabels(names: string[]): string[] {
+  const cleaned = names.map(n => String(n || "").trim()).filter(Boolean);
+  return cleaned.map(n => companionLabel(n, cleaned));
+}
+/** «con Joaquín L. y Augusto L. +1». Empty when there is nobody. */
+export function companionsLine(names: string[]): string {
+  const labels = companionLabels(names);
+  if (!labels.length) return "";
+  const extra = labels.length > 2 ? ` +${labels.length - 2}` : "";
+  return `con ${labels.slice(0, 2).join(" y ")}${extra}`;
+}
 /** WHS Course Handicap (rounded, .5 up). Null when the tee lacks slope, rating or par — never invented. */
 export function courseHandicap(index: number | null, t: TeeInfo | null | undefined): number | null {
   if (index == null || !t || !(Number(t.slope) > 0) || !Number.isFinite(Number(t.course_rating)) || !(Number(t.par) > 0)) return null;

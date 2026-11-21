@@ -19,7 +19,7 @@ var GolfletMatchCore = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // lib/match-core.ts
+  // web/lib/match-core.ts
   var match_core_exports = {};
   __export(match_core_exports, {
     DEFAULT_ALLOWANCE: () => DEFAULT_ALLOWANCE,
@@ -27,11 +27,15 @@ var GolfletMatchCore = (() => {
     aggregate: () => aggregate,
     bookingCourseName: () => bookingCourseName,
     cardFromHoles: () => cardFromHoles,
+    companionLabel: () => companionLabel,
+    companionLabels: () => companionLabels,
+    companionsLine: () => companionsLine,
     courseChoices: () => courseChoices,
     courseFromMarker: () => courseFromMarker,
     courseHandicap: () => courseHandicap,
     courseLabelHits: () => courseLabelHits,
     evaluate: () => evaluate,
+    givenToken: () => givenToken,
     holeStrokes: () => holeStrokes,
     marksOf: () => marksOf,
     matchPlay: () => matchPlay,
@@ -194,6 +198,34 @@ var GolfletMatchCore = (() => {
       return `${given} ${parts[0][0].toLocaleUpperCase("es")}.`;
     }
     return `${parts[0]} ${parts[parts.length - 1][0].toLocaleUpperCase("es")}.`;
+  }
+  function givenToken(name) {
+    const s = String(name || "").trim();
+    const body = s.includes(",") ? s.split(",").slice(1).join(",").trim() : s;
+    return body.split(/\s+/).filter(Boolean)[0] || s;
+  }
+  function companionLabel(name, peers) {
+    const plain = givenToken(name);
+    if (!plain) return "";
+    const same = (a, b) => a.localeCompare(b, "es", { sensitivity: "accent" }) === 0;
+    if (peers.filter((p) => same(givenToken(p), plain)).length < 2) return plain;
+    const s = String(name || "").trim();
+    if (s.includes(",")) {
+      const surname = s.split(",")[0].trim().split(/\s+/).filter(Boolean)[0] || "";
+      const initial = surname ? `${surname[0].toLocaleUpperCase("es")}.` : "";
+      return initial ? `${plain} ${initial}` : plain;
+    }
+    return shortName(s, peers, false);
+  }
+  function companionLabels(names) {
+    const cleaned = names.map((n) => String(n || "").trim()).filter(Boolean);
+    return cleaned.map((n) => companionLabel(n, cleaned));
+  }
+  function companionsLine(names) {
+    const labels = companionLabels(names);
+    if (!labels.length) return "";
+    const extra = labels.length > 2 ? ` +${labels.length - 2}` : "";
+    return `con ${labels.slice(0, 2).join(" y ")}${extra}`;
   }
   function courseHandicap(index, t) {
     if (index == null || !t || !(Number(t.slope) > 0) || !Number.isFinite(Number(t.course_rating)) || !(Number(t.par) > 0)) return null;

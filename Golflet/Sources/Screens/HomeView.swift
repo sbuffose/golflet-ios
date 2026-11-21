@@ -1306,7 +1306,7 @@ struct HomeHcpPeople: View {
         Button(action: onGroups) {
             HStack(spacing: -8) {
                 ForEach(Array(groups.prefix(3))) { group in
-                    HomeHcpAvatar(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 22, fill: Color.white.opacity(0.16), ink: .white, ring: Color.white.opacity(0.85), verified: false)
+                    HomeHcpAvatar(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 22, fill: Color.white.opacity(0.16), ink: .white, ring: Color.white.opacity(0.85), verified: false, cacheID: group.id)
                 }
                 Text("\(groups.count) \(groups.count == 1 ? "grupo" : "grupos")")
                     .font(GFont.ui(12, weight: .regular))
@@ -1411,7 +1411,8 @@ struct HomeHcpPeople: View {
                     fill: p.surface2,
                     ink: p.primary,
                     ring: Color(hex: HomeHcpPeopleLayout.accent),
-                    verified: false
+                    verified: false,
+                    cacheID: group.id
                 )
                 copy(group.name, sub)
                 if let place = places[group.id] {
@@ -1604,30 +1605,31 @@ struct HomeHcpAvatar: View {
     var ring: Color
     var verified: Bool
 
+    var cacheID: String? = nil
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            ZStack {
-                Text(initials)
-                    .font(GFont.ui(size <= 28 ? 10.5 : (size < 40 ? 12 : 16), weight: .semibold))
-                    .foregroundStyle(ink)
-                if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
-                    AsyncImage(url: parsed) { phase in
-                        if let image = phase.image {
-                            image.resizable()
-                                .scaledToFill()
-                                .frame(width: size, height: size)
-                                .clipShape(Circle())
-                        } else {
-                            Color.clear.frame(width: size, height: size)
+            Color.clear
+                .frame(width: size, height: size)
+                .overlay {
+                    Text(initials)
+                        .font(GFont.ui(size <= 28 ? 10.5 : (size < 40 ? 12 : 16), weight: .semibold))
+                        .foregroundStyle(ink)
+                    if let cacheID, let data = GroupPhotoCache.data(for: cacheID), let image = UIImage(data: data) {
+                        Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size)
+                    } else if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
+                        AsyncImage(url: parsed) { phase in
+                            if let image = phase.image {
+                                image.resizable().scaledToFill().frame(width: size, height: size)
+                            }
                         }
+                        .frame(width: size, height: size)
                     }
-                    .frame(width: size, height: size)
                 }
-            }
-            .frame(width: size, height: size)
-            .background(fill)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(ring, lineWidth: 2))
+                .frame(width: size, height: size)
+                .background(fill)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(ring, lineWidth: 2))
 
             if verified {
                 let badge: CGFloat = size <= 28 ? 13 : 14

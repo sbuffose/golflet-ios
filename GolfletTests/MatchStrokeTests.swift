@@ -52,6 +52,12 @@ final class MatchStrokeTests: XCTestCase {
         XCTAssertEqual(MatchStrokes.shortName("Joaquín Lavalle", peers: givenFirst), "Joaquín L.")
         XCTAssertEqual(MatchStrokes.shortName("Augusto Lavalle", peers: givenFirst), "Augusto L.")
         XCTAssertEqual(MatchStrokes.shortName("Mateo Ruiz", peers: surnameFirst, me: true), "Vos")
+        XCTAssertEqual(
+            MatchStrokes.companionsLine(from: surnameFirst),
+            "con Joaquín L. y Augusto L. +1"
+        )
+        XCTAssertEqual(MatchStrokes.companionsLine(from: ["Juan", "Pedro"]), "con Juan y Pedro")
+        XCTAssertEqual(MatchStrokes.companionsLine(from: givenFirst), "con Joaquín y Augusto")
     }
 
     func testFourballStrokesFollowTheChosenCourseTee() {

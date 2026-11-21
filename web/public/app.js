@@ -730,9 +730,8 @@ const teeDate = s => { const d = dU(s); return `${WD[d.getUTCDay()]} ${d.getUTCD
 const compName = c => typeof c === 'string' ? c : (c && typeof c.name === 'string') ? c.name : '';
 const comps = t => (Array.isArray(t?.companions) ? t.companions : []).map(c => ({ name: compName(c).trim(), hcp: c && typeof c === 'object' && c.hcp != null && isFinite(+c.hcp) ? +c.hcp : null })).filter(c => c.name);
 const compInit = n => String(n || '').split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '·';
-/* "Pérez, Juan Carlos" or "Juan Pérez" → "Juan"; list → "con Juan y Pedro +2" (empty when nobody) */
-const firstN = n => { const s = String(n || '').trim(), p = s.includes(',') ? s.split(',')[1].trim() : s; return p.split(/\s+/)[0] || s; };
-const withWho = t => { const n = comps(t).map(c => firstN(c.name)); if (!n.length) return ''; const sh = n.slice(0, 2); return ` · con ${sh.join(' y ')}${n.length > 2 ? ` +${n.length - 2}` : ''}`; };
+/* Shared surname → «Joaquín L. y Augusto L. +1». Unique names stay «Juan y Pedro». */
+const withWho = t => { const line = window.GolfletMatchCore && GolfletMatchCore.companionsLine ? GolfletMatchCore.companionsLine(comps(t).map(c => c.name)) : ''; return line ? ` · ${line}` : ''; };
 const teeRow = t => { const d = dU(t.date);
   const card = t.scorecard_label ? `<div class="s">${esc(t.scorecard_label)}</div>` : '';
   return `<a class="row" href="#/tee/${t.id}">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name)}</div><div class="s tt-s">${(() => { const r = relDay(t.date), sh = +t.start_hole; return [t.course_label ? esc(t.course_label) : '', r === 'Hoy' || r === 'Mañana' ? r : `${WD[d.getUTCDay()]} · ${r}`, sh === 1 || sh === 10 ? `Hoyo ${sh}` : ''].filter(Boolean).join(' · '); })()}${esc(withWho(t))}</div>${card}</div><div class="score"><b class="num">${esc(t.time)}</b><span>salida</span></div>${ICON.chev}</a>`; };
@@ -1844,7 +1843,8 @@ async function loadHiGroups(){
     const show = gs.slice(0, 3);
     const href = gs.length === 1 ? `#/grupo/${encodeURIComponent(gs[0].id)}` : '#/amigos';
     el.innerHTML = `<a class="hp-stack" href="${href}" aria-label="${gs.length} grupos">${show.map(g => {
-      const face = g.photo_url ? `<img src="${esc(g.photo_url)}" alt="">` : esc((g.name || '?').trim().slice(0, 1).toUpperCase());
+      const letter = esc((g.name || '?').trim().slice(0, 1).toUpperCase());
+      const face = g.photo_url ? `<img src="${esc(g.photo_url)}" alt="" onerror="this.style.display='none'">${letter}` : letter;
       return `<span class="hp-av">${face}</span>`;
     }).join('')}<span class="hg-n">${gs.length} ${gs.length === 1 ? 'grupo' : 'grupos'}</span></a>`;
     el.hidden = false;
@@ -3828,7 +3828,7 @@ async function loadPrivRes(){
 }
 function sPrivado(){ return `<div class="bar"><span class="overline">Solo para vos</span><button class="close" data-close>${ICON.x}</button></div><div id="privado"><div class="msg">Leyendo tus tarjetas.</div></div>`; }
 const scoreFoot = s => s ? `En ${s.cards} tarjetas (${s.holes} hoyos), cada 18: ${s.eagles==null?'':per18(s.eagles)+' águilas · '}${per18(s.birdies)} birdies · ${per18(s.pars)} pares · ${per18(s.bogeys)} bogeys · ${per18(s.doubles)} dobles o peor. Es un promedio, no la suma. Más bajo en el diferencial es mejor.` : 'El resultado por hoyo aparece con al menos 3 tarjetas que tengan el detalle. No lo invento.';
-const teeRowP = t => `<${t.round_id?`a href="#/ronda/${t.round_id}"`:'div'} class="row">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name||'')}${t.course_label?' · '+esc(t.course_label):''}</div><div class="s">${esc(t.time)} · ${t.companions.length?esc(t.companions.join(', ')):'sin compañeros leídos'}</div></div>${t.round_id?`<div class="score"><b class="num">${n1(t.differential)}</b><span>dif.</span></div>${ICON.chev}`:'<div class="score"><span>sin tarjeta</span></div>'}</${t.round_id?'a':'div'}>`;
+const teeRowP = t => { const names = (t.companions || []).map(c => typeof c === 'string' ? c : (c && c.name) || '').filter(Boolean); const labels = window.GolfletMatchCore && GolfletMatchCore.companionLabels ? GolfletMatchCore.companionLabels(names) : names; return `<${t.round_id?`a href="#/ronda/${t.round_id}"`:'div'} class="row">${dateBlock(t.date)}<div class="body"><div class="t">${esc(t.club_name||'')}${t.course_label?' · '+esc(t.course_label):''}</div><div class="s">${esc(t.time)} · ${labels.length?esc(labels.join(', ')):'sin compañeros leídos'}</div></div>${t.round_id?`<div class="score"><b class="num">${n1(t.differential)}</b><span>dif.</span></div>${ICON.chev}`:'<div class="score"><span>sin tarjeta</span></div>'}</${t.round_id?'a':'div'}>`; };
 async function loadPrivado(what, arg){
   const el = $('#privado'); if (!el) return;
   try {
