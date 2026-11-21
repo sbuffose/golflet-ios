@@ -638,7 +638,8 @@ struct HomeView: View {
                             Text(partners)
                                 .font(GType.label)
                                 .foregroundStyle(p.ink2)
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     Spacer(minLength: 8)
@@ -1616,14 +1617,15 @@ struct HomeHcpAvatar: View {
                         .font(GFont.ui(size <= 28 ? 10.5 : (size < 40 ? 12 : 16), weight: .semibold))
                         .foregroundStyle(ink)
                     if let cacheID, let data = GroupPhotoCache.data(for: cacheID), let image = UIImage(data: data) {
-                        Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size)
+                        Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipped()
                     } else if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
                         AsyncImage(url: parsed) { phase in
                             if let image = phase.image {
-                                image.resizable().scaledToFill().frame(width: size, height: size)
+                                image.resizable().scaledToFill().frame(width: size, height: size).clipped()
                             }
                         }
                         .frame(width: size, height: size)
+                        .clipped()
                     }
                 }
                 .frame(width: size, height: size)

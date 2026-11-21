@@ -555,33 +555,31 @@ struct GroupPhotoView: View {
     var cacheID: String? = nil
 
     var body: some View {
-        Color.clear
-            .frame(width: size, height: size)
-            .overlay { face }
+        monogram
+            .overlay {
+                photo
+                    .frame(width: size, height: size)
+                    .clipped()
+            }
             .frame(width: size, height: size)
             .clipShape(Circle())
+            .contentShape(Circle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(initials)
     }
 
     @ViewBuilder
-    private var face: some View {
+    private var photo: some View {
         if let cacheID, let data = GroupPhotoCache.data(for: cacheID), let image = UIImage(data: data) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: size, height: size)
         } else if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
             AsyncImage(url: parsed) { phase in
                 if let image = phase.image {
                     image.resizable().scaledToFill()
-                } else {
-                    monogram
                 }
             }
-            .frame(width: size, height: size)
-        } else {
-            monogram
         }
     }
 
