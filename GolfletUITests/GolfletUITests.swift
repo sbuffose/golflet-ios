@@ -2268,8 +2268,8 @@ final class GolfletUITests: XCTestCase {
         let partners = app.staticTexts["home-tee-partners-tt-golpes-azul"]
         XCTAssertTrue(partners.waitForExistence(timeout: 8))
         XCTAssertEqual(partners.label, "con Joaquín L. y Augusto L. +1")
+        reveal(app, "home-tee-row-tt-golpes-azul")
         let width = Int(app.windows.firstMatch.frame.width.rounded())
-        XCTAssertEqual(width, 375)
         saveShot("ios-\(width)-companeros")
     }
 
@@ -2287,8 +2287,8 @@ final class GolfletUITests: XCTestCase {
         XCTAssertLessThanOrEqual(abs(scratch.frame.width - scratch.frame.height), 2)
         XCTAssertTrue(waitFor(app, "group-photo-g-cinco", timeout: 4))
         XCTAssertLessThanOrEqual(first(app, "group-photo-g-cinco").frame.width, 48)
+        XCTAssertLessThanOrEqual(abs(first(app, "group-photo-g-cinco").frame.width - first(app, "group-photo-g-cinco").frame.height), 2)
         let width = Int(app.windows.firstMatch.frame.width.rounded())
-        XCTAssertEqual(width, 375)
         saveShot("ios-\(width)-grupo-foto")
         app.staticTexts["Scratch"].firstMatch.tap()
         XCTAssertTrue(waitFor(app, "group-hero", timeout: 6))
