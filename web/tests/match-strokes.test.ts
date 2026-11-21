@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { bookingCourseName, cardFromHoles, courseChoices, courseFromMarker, courseHandicap, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced, strokesReceived } from "../lib/match-core";
+import { bookingCourseName, cardFromHoles, companionLabels, companionsLine, courseChoices, courseFromMarker, courseHandicap, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced, strokesReceived } from "../lib/match-core";
 import { courseCardFromRow } from "../lib/tee-times-core";
 
 /** Official card already shipped as a fixture (course holes only, no player). */
@@ -74,6 +74,12 @@ test("shared surnames get a given name and the surname initial", () => {
   assert.equal(shortName("Augusto Lavalle", ["Joaquín Lavalle", "Augusto Lavalle"]), "Augusto L.");
   assert.equal(shortName("Lavalle Cobo Joaquín María", ["Lavalle Cobo Joaquín María", "Lavalle Cobo Augusto"]), "Joaquín L.");
   assert.equal(shortName("Mateo Ruiz", names, true), "Vos");
+  assert.equal(companionsLine(names), "con Joaquín L. y Augusto L. +1");
+  assert.equal(companionsLine(["Juan", "Pedro", "Ana"]), "con Juan y Pedro +1");
+  assert.equal(companionsLine(["Joaquín Lavalle", "Augusto Lavalle"]), "con Joaquín y Augusto");
+  assert.deepEqual(companionLabels(["Lavalle Joaquín", "Lavalle Augusto", "Mateo Ruiz"]), ["Joaquín L.", "Augusto L.", "Mateo"]);
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /GolfletMatchCore\.companionsLine/);
 });
 
 test("the official card wins over an empty directory row and nothing is invented", () => {

@@ -37,6 +37,7 @@ struct GroupsView: View {
                                     groupRow(group)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityElement(children: .contain)
                                 .accessibilityIdentifier("group-\(group.id)")
                             }
                         }
@@ -130,7 +131,8 @@ struct GroupsView: View {
     private func groupRow(_ group: GolfletGroup) -> some View {
         GCard(radius: 18, padding: 14) {
             HStack(spacing: 12) {
-                GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 44)
+                GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 44, cacheID: group.id)
+                    .accessibilityIdentifier("group-photo-\(group.id)")
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.name)
                         .font(GType.headline)
@@ -553,23 +555,34 @@ struct GroupPhotoView: View {
     var cacheID: String? = nil
 
     var body: some View {
-        Group {
-            if let cacheID, let data = GroupPhotoCache.data(for: cacheID), let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
-                AsyncImage(url: parsed) { image in
+        Color.clear
+            .frame(width: size, height: size)
+            .overlay { face }
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(initials)
+    }
+
+    @ViewBuilder
+    private var face: some View {
+        if let cacheID, let data = GroupPhotoCache.data(for: cacheID), let image = UIImage(data: data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+        } else if let url, let parsed = URL(string: url), parsed.scheme == "https" || parsed.scheme == "http" {
+            AsyncImage(url: parsed) { phase in
+                if let image = phase.image {
                     image.resizable().scaledToFill()
-                } placeholder: {
+                } else {
                     monogram
                 }
-            } else {
-                monogram
             }
+            .frame(width: size, height: size)
+        } else {
+            monogram
         }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
     }
 
     private var monogram: some View {

@@ -144,6 +144,42 @@ enum MatchStrokes {
         return "\(parts[0]) \(initial)."
     }
 
+    /// First given-name token. A surname-first club line stays on the surname until `companionLabel` sees a collision.
+    static func givenToken(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body: String
+        if let comma = trimmed.firstIndex(of: ",") {
+            body = trimmed[trimmed.index(after: comma)...].trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            body = trimmed
+        }
+        return body.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? trimmed
+    }
+
+    /// Unique names keep the given name. A shared token uses the match-grid rule.
+    static func companionLabel(_ name: String, peers: [String]) -> String {
+        let plain = givenToken(name)
+        guard !plain.isEmpty else { return "" }
+        if peers.filter({ same(givenToken($0), plain) }).count < 2 { return plain }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let comma = trimmed.firstIndex(of: ",") {
+            let surname = trimmed[..<comma].trimmingCharacters(in: .whitespacesAndNewlines)
+            let initial = surname.first.map { String($0).uppercased(with: Locale(identifier: "es")) } ?? ""
+            return initial.isEmpty ? plain : "\(plain) \(initial)."
+        }
+        return shortName(trimmed, peers: peers)
+    }
+
+    /// «con Joaquín L. y Augusto L. +1». Nil when there is nobody.
+    static func companionsLine(from names: [String]) -> String? {
+        let cleaned = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return nil }
+        let labels = cleaned.map { companionLabel($0, peers: cleaned) }
+        let head = labels.prefix(2).joined(separator: " y ")
+        if labels.count > 2 { return "con \(head) +\(labels.count - 2)" }
+        return "con \(head)"
+    }
+
     private static func same(_ a: String, _ b: String) -> Bool {
         a.compare(b, options: .caseInsensitive, locale: Locale(identifier: "es")) == .orderedSame
     }

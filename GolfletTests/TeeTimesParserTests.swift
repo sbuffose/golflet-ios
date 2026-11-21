@@ -35,7 +35,7 @@ final class TeeTimesParserTests: XCTestCase {
         XCTAssertEqual(bookings[0].course, "Azul")
         XCTAssertEqual(bookings[0].companions, ["Juan", "Pedro", "Ana"])
         XCTAssertNil(bookings[0].companionHandicaps["Juan"])
-        XCTAssertEqual(bookings[0].companionsLine, "con Juan, Pedro +1")
+        XCTAssertEqual(bookings[0].companionsLine, "con Juan y Pedro +1")
         XCTAssertEqual(bookings[1].clubName, "Mar del Plata Golf Club")
         XCTAssertEqual(bookings[1].clubCode, "209")
         XCTAssertEqual(bookings[1].course, "Cancha Vieja")
@@ -64,7 +64,11 @@ final class TeeTimesParserTests: XCTestCase {
         XCTAssertNil(TeeTime.companionsLine(from: []))
         XCTAssertNil(TeeTime.companionsLine(from: ["", "  "]))
         XCTAssertEqual(TeeTime.companionsLine(from: ["Juan"]), "con Juan")
-        XCTAssertEqual(TeeTime.companionsLine(from: ["Juan", "Pedro"]), "con Juan, Pedro")
+        XCTAssertEqual(TeeTime.companionsLine(from: ["Juan", "Pedro"]), "con Juan y Pedro")
+        XCTAssertEqual(
+            TeeTime.companionsLine(from: ["Lavalle Joaquín", "Lavalle Augusto", "Mateo Ruiz"]),
+            "con Joaquín L. y Augusto L. +1"
+        )
     }
 
     func testFormatsChipAsShortWeekdayDayAndTime() {
@@ -107,7 +111,7 @@ final class TeeTimesParserTests: XCTestCase {
             ]]
         ])
         XCTAssertEqual(bookings.first?.companions, ["Juan", "Pedro"])
-        XCTAssertEqual(bookings.first?.companionsLine, "con Juan, Pedro")
+        XCTAssertEqual(bookings.first?.companionsLine, "con Juan y Pedro")
     }
 
     func testSnapshotReadsTeeTimesFromDataPayload() {
@@ -122,7 +126,7 @@ final class TeeTimesParserTests: XCTestCase {
             ]]
         ])
         XCTAssertEqual(snap.teeTimes.count, 1)
-        XCTAssertEqual(snap.teeTimes.first?.companionsLine, "con Juan, Pedro")
+        XCTAssertEqual(snap.teeTimes.first?.companionsLine, "con Juan y Pedro")
     }
 
     func testKeepsAForecastWhenTheBookingSendsOne() {

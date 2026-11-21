@@ -31,7 +31,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
     : `<a class="btn" id="go" href="/login">Entrar con tu matrícula</a><p class="foot gj-p" style="margin-top:12px">Entrás con tu matrícula y la contraseña de tu club. Después aceptás o rechazás la invitación: nada se comparte hasta que aceptes.</p>`;
   return page({ title: `${g.name} · Golflet`, ogTitle: g.name, image: img, url, status: 200,
     body: `<div class="brand"><img src="/icons/icon-192.png" alt=""><b>Golflet</b></div>
-<div class="gj-card">${g.photo_url ? `<img class="gj-ph" src="${esc(g.photo_url)}" alt="">` : `<span class="gj-ph gj-ph0" aria-hidden="true">${esc(g.name.trim()[0]?.toUpperCase() || "G")}</span>`}
+<div class="gj-card">${g.photo_url ? `<span class="gj-ph"><img src="${esc(g.photo_url)}" alt="" onerror="this.style.display='none'">${esc(g.name.trim()[0]?.toUpperCase() || "G")}</span>` : `<span class="gj-ph gj-ph0" aria-hidden="true">${esc(g.name.trim()[0]?.toUpperCase() || "G")}</span>`}
 <div><div class="overline">Te invitaron a un grupo</div><h1 class="gj-t">${esc(g.name)}</h1><p class="gj-s">Creado por ${esc(g.owner)} · ${g.members} ${g.members === 1 ? "jugador" : "jugadores"}</p></div></div>
 <p class="foot gj-p">${DESC}: tabla, evolución y hoyo por hoyo. Cada jugador elige qué comparte.</p>
 ${p.full ? `<div class="msg">El grupo ya está completo.</div>` : cta}
