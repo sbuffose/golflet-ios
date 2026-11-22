@@ -1334,7 +1334,7 @@ struct PlayHoleView: View {
         let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
         return rows.enumerated().map { index, shot in
             let previous = index > 0 ? rows[index - 1] : nil
-            (shot.shotNumber, shot.club ?? "—", shot.distanceYd ?? 0, shotDistanceText(shot, previous: previous))
+            return (shot.shotNumber, shot.club ?? "—", shot.distanceYd ?? 0, shotDistanceText(shot, previous: previous))
         }
     }
 
