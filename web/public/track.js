@@ -618,6 +618,23 @@
         paintDriver();
       }).catch(() => {});
     };
+    const clubFace = (id, label) => {
+      const raw = `${id} ${label}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      if (/(^|\s)(pt|putter|putt)($|\s)/.test(raw)) return 'putter';
+      if (/(^|\s)(pw|gw|sw|lw|aw)($|\s)/.test(raw) || /\bwedge\b/.test(raw)) return 'wedge';
+      if (/(^|\s)(dr|driver)($|\s)/.test(raw)) return 'driver';
+      if (/(^|\s)\d+w($|\s)/.test(raw) || /\b(madera|fairway|wood)\b/.test(raw)) return 'fairway';
+      if (/(^|\s)(hy|\dh)($|\s)/.test(raw) || /\b(hybrid|hibrido)\b/.test(raw)) return 'hybrid';
+      return 'iron';
+    };
+    const faceOf = (id, label) => {
+      const row = (S.bag || []).find(b => b && (b.id === id || b.code === id || b.club === id || b.label === id || b.name === id)) || {};
+      const gear = window.GolfletGear;
+      const face = clubFace(id, label);
+      const thumb = gear && typeof gear.thumb === 'function' ? gear.thumb(row.brand || '', row.model || row.model_name || '', face) : { src: `/clubs/silhouettes/${face}.svg`, kind: 'silhouette' };
+      return thumb && thumb.src ? thumb : { src: `/clubs/silhouettes/${face}.svg`, kind: 'silhouette' };
+    };
+    const faceImg = (id, label) => { const thumb = faceOf(id, label); return `<img class="tk-clubface" src="${esc(thumb.src)}" alt="" data-kind="${esc(thumb.kind || '')}">`; };
     const render = () => {
       stopCam();
       const rec = holeRec(), par = rec.par || gpsHole()?.par, hcp = rec.hcp || gpsHole()?.hcp;
@@ -664,7 +681,7 @@
           if (best) S.suggest = best;
         }
       }
-      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="Palo"><b>${esc(shortClub(picked?.label || ''))}</b><small>CLUB</small></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => { const on = c.id === S.club ? ' on' : ''; const sug = c.id === S.suggest ? ' sug' : ''; const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}" class="${(on + sug).trim()}"><b>${esc(shortClub(c.label))}</b>${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>` : '';
+      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(picked ? clubLabel(picked.label) : 'Palo')}">${picked ? faceImg(picked.id, picked.label) : ''}</button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => { const on = c.id === S.club ? ' on' : ''; const sug = c.id === S.suggest ? ' sug' : ''; const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}" class="${(on + sug).trim()}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
@@ -760,7 +777,7 @@
         if (editingShot.result !== 'lost' && editingShot.result !== 'penalty' && Number.isFinite(meters) && meters > 0) editBits.push(putt ? `${meters} m` : `${Math.round(meters / 0.9144)} yd`);
       }
       const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>${esc(editBits.join(' · '))}</b><button type="button" id="play-edit-club">Cambiar palo</button><button type="button" id="play-edit-move">${S.moveShot ? 'Guardar punto' : 'Mover el punto'}</button><button type="button" id="play-edit-x">Cerrar</button><button type="button" id="play-edit-del">Borrar</button>${S.askDel ? '<p>¿Borrar este golpe?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? '<p>Mové el mapa y tocá Guardar punto.</p>' : ''}</div>` : '';
-      const editSheet = S.pickClub && !showClub ? `<div class="tk-sheet" id="play-club-sheet" role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => { const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}"><b>${esc(shortClub(c.label))}</b>${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div>` : '';
+      const editSheet = S.pickClub && !showClub ? `<div class="tk-sheet" id="play-club-sheet" role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => { const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div>` : '';
       const painted = el.querySelector('.tk-tiles:not([data-pending])');
       const paintedHole = el.querySelector('#tkmap')?.dataset.hole || '';
       const paintedHTML = painted && paintedHole === String(S.hole) ? painted.outerHTML : '';
@@ -1365,9 +1382,12 @@
       const club = el.querySelector('#play-club');
       if (club) club.onchange = () => {
         S.club = club.value; S.clubChosen = true; S.clubAuto = 'chosen'; paintDriver();
-        const face = el.querySelector('#play-club-tile b');
         const picked = club.selectedOptions && club.selectedOptions[0];
-        if (face) face.textContent = shortClub(picked ? picked.textContent : '');
+        const label = picked ? picked.textContent : '';
+        const img = el.querySelector('#play-club-tile img');
+        const tileBtn = el.querySelector('#play-club-tile');
+        if (img) { const thumb = faceOf(club.value, label); img.src = thumb.src; img.dataset.kind = thumb.kind || ''; }
+        if (tileBtn) tileBtn.setAttribute('aria-label', clubLabel(label) || 'Palo');
       };
       const tile = el.querySelector('#play-club-tile');
       const list = el.querySelector('#play-club-list');

@@ -113,9 +113,10 @@ struct MatchPlayView: View {
                     ForEach(0..<18, id: \.self) { index in
                         Button("\(index + 1)") { hole = index }
                             .font(GType.label)
-                            .foregroundStyle(index == hole ? Color.white : p.primary)
-                            .frame(width: 32, height: 32)
-                            .background(index == hole ? p.primary : p.surface, in: Circle())
+                            .foregroundStyle(index == hole ? Color(hex: 0xF6F7F9) : Color(hex: 0x0B2545))
+                            .frame(width: 38, height: 38)
+                            .background(index == hole ? Color(hex: 0x0B2545) : Color(hex: 0xF6F7F9), in: Circle())
+                            .overlay(Circle().stroke(index == hole ? Color(hex: 0x0B2545) : Color(hex: 0x0B2545).opacity(0.22), lineWidth: 1))
                     }
                 }
             }

@@ -33,6 +33,23 @@ struct ReconstructView: View {
     @State private var showsManual = false
 
     private let clubs = ["Dr", "3W", "5W", "Hy", "4i", "5i", "6i", "7i", "8i", "9i", "PW", "GW", "SW", "LW", "Pt"]
+
+    private func clubName(_ code: String) -> String {
+        switch code {
+        case "Dr": return "Driver"
+        case "3W": return "Madera 3"
+        case "5W": return "Madera 5"
+        case "Hy": return "Híbrido"
+        case "PW": return "Pitching wedge"
+        case "GW": return "Gap wedge"
+        case "SW": return "Sand wedge"
+        case "LW": return "Lob wedge"
+        case "Pt": return "Putter"
+        default:
+            if code.hasSuffix("i"), let n = Int(code.dropLast()) { return "Hierro \(n)" }
+            return code
+        }
+    }
     private let teeNames = ["Azul", "Blanco", "Amarillo", "Colorado", "Negro"]
     private let results = ["fairway", "green", "rough", "bunker", "water", "ob", "penalty", "holed", "other"]
 
@@ -217,13 +234,16 @@ struct ReconstructView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(clubs, id: \.self) { name in
-                        Button(name) { club = name }
-                            .font(GType.label)
-                            .padding(.horizontal, 10)
-                            .frame(minHeight: 36)
-                            .foregroundStyle(club == name ? Color.white : p.ink)
-                            .background(club == name ? p.primary : p.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        Button { club = name } label: {
+                            ClubThumb(brand: nil, model: nil, face: ClubGear.face(name))
+                                .frame(width: 36, height: 36)
+                                .padding(4)
+                                .background(Color.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(club == name ? p.primary : p.hairline, lineWidth: club == name ? 2 : 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(clubName(name))
                     }
                 }
             }
@@ -237,7 +257,7 @@ struct ReconstructView: View {
                 aim()
             }
             Picker("Palo", selection: $club) {
-                ForEach(clubs, id: \.self) { Text($0).tag($0) }
+                ForEach(clubs, id: \.self) { Text(clubName($0)).tag($0) }
             }
             Picker("Resultado", selection: $result) {
                 Text("Sin resultado").tag("")

@@ -8,7 +8,7 @@ import test from "node:test";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
-const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".png": "image/png" };
+const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".png": "image/png", ".svg": "image/svg+xml", ".jpg": "image/jpeg" };
 const ART = "/opt/cursor/artifacts";
 
 const blank = () => Array(18).fill(null);
@@ -101,6 +101,13 @@ test("el partido muestra quién va arriba y abre el track existente", { timeout:
     assert.match(up, /All square/);
     assert.match(up, /Trackear golpes/);
     assert.equal(up.includes("partidos terminados"), false);
+    const hole = await page.$eval(".gm-hs button.on", el => {
+      const style = getComputedStyle(el);
+      return { text: (el.textContent || "").trim(), bg: style.backgroundColor, color: style.color };
+    });
+    assert.equal(hole.text, "1");
+    assert.equal(hole.bg, "rgb(11, 37, 69)");
+    assert.equal(hole.color, "rgb(246, 247, 249)");
     assert.equal(await fits(), true);
     await shot("web-375-partido-arriba");
 
@@ -110,9 +117,27 @@ test("el partido muestra quién va arriba y abre el track existente", { timeout:
       const err = document.querySelector("#tk-maperr");
       return !err || (err as HTMLElement).hidden;
     }, { timeout: 8000 }).catch(() => undefined);
-    const track = await page.evaluate(() => document.body.innerText);
-    assert.match(track, /No oficial/);
-    assert.match(track, /A buena/);
+    const track = await page.evaluate(() => {
+      const tile = document.querySelector("#play-club-tile");
+      const img = tile?.querySelector("img");
+      const good = document.querySelector("#play-good") as HTMLElement | null;
+      const goodStyle = good ? getComputedStyle(good) : null;
+      return {
+        text: document.body.innerText,
+        tile: (tile?.textContent || "").replace(/\s+/g, " ").trim(),
+        src: img?.getAttribute("src") || "",
+        good: (good?.textContent || "").trim(),
+        nowrap: goodStyle?.whiteSpace || "",
+        lines: good ? good.scrollHeight <= good.clientHeight + 1 : false,
+      };
+    });
+    assert.match(track.text, /No oficial/);
+    assert.equal(track.good, "A buena");
+    assert.equal(track.nowrap, "nowrap");
+    assert.equal(track.lines, true);
+    assert.equal(track.tile.includes("CLUB"), false);
+    assert.equal(/\bDr\b/.test(track.tile), false);
+    assert.match(track.src, /silhouettes\/driver\.svg/);
     await shot("web-375-partido-track");
 
     await open("fixture-square");

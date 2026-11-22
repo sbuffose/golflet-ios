@@ -39,11 +39,11 @@ enum ClubGear {
 
     static func face(_ name: String) -> String {
         let club = name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
-        if club == "driver" { return "driver" }
-        if club.contains("madera") { return "fairway" }
-        if club.contains("hibrido") { return "hybrid" }
-        if club == "putter" || club.contains("putt") { return "putter" }
-        if club == "gw" || club == "sw" || club == "lw" || club.contains("wedge") { return "wedge" }
+        if club == "putter" || club == "pt" || club.contains("putt") { return "putter" }
+        if club == "gw" || club == "sw" || club == "lw" || club == "pw" || club == "aw" || club.contains("wedge") { return "wedge" }
+        if club == "driver" || club == "dr" { return "driver" }
+        if club.contains("madera") || club.contains("fairway") || club.hasSuffix("w") { return "fairway" }
+        if club.contains("hibrido") || club.contains("hybrid") || club == "hy" || club.hasSuffix("h") { return "hybrid" }
         return "iron"
     }
 

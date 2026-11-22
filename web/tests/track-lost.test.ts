@@ -91,7 +91,7 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     const sheetBox = await page.$eval("#play-club-sheet", el => {
       const box = el.getBoundingClientRect();
       const style = getComputedStyle(el);
-      const names = [...el.querySelectorAll("button[data-club] b")].map(node => node.textContent || "");
+      const names = [...el.querySelectorAll("button[data-club]")].map(node => node.getAttribute("data-club") || "");
       const behind = document.querySelector("#play-hit") as HTMLElement | null;
       return { display: style.display, w: box.width, h: box.height, names, hit: behind ? behind.getBoundingClientRect().top : 0 };
     });
@@ -100,7 +100,7 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     assert.ok(sheetBox.names.length >= 12, sheetBox.names.join(","));
     assert.equal(sheetBox.names.some(name => /^\d{2,}/.test(name.trim())), false);
     const tiles = await page.$$eval("#play-club-list button[data-club]", els => els.map(el => ({
-      name: (el.querySelector("b")?.textContent || "").trim(),
+      name: el.getAttribute("data-club") || "",
       sub: (el.querySelector("small")?.textContent || "").trim(),
       sug: el.classList.contains("sug"),
       text: el.textContent || "",

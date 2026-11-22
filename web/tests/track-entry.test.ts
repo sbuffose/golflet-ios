@@ -307,13 +307,17 @@ test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { ti
         hit: hit.getBoundingClientRect().width,
         hitBg: getComputedStyle(hit).backgroundColor,
         list: list.hidden,
-        clubs: list.innerText,
+        clubs: [...list.querySelectorAll("button[data-club]")].map(el => el.getAttribute("aria-label") || "").join(" "),
+        faces: list.querySelectorAll(".tk-clubface").length,
+        abbrev: /\b(Dr|CLUB)\b/.test(list.innerText),
       };
     });
     assert.ok(bar.tile <= 72 && bar.hit <= 72, JSON.stringify(bar));
     assert.equal(bar.hitBg, "rgb(11, 37, 69)");
     assert.equal(bar.list, false);
-    assert.match(bar.clubs, /Driver|Dr/);
+    assert.match(bar.clubs, /Driver/);
+    assert.ok(bar.faces >= 12);
+    assert.equal(bar.abbrev, false);
     await page.screenshot({ path: join(art, "track-390-club-list.png") });
     const h2 = await visit("live-open", 2, "vieja-h2-green-390.png");
     assert.equal(h2.empty, false);
