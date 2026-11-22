@@ -107,6 +107,7 @@ struct MatchPlayView: View {
             if closed {
                 RoundedRectangle(cornerRadius: 0)
                     .stroke(p.accent, lineWidth: 2)
+                    .allowsHitTesting(false)
             }
         }
         .accessibilityIdentifier("match-board")
