@@ -212,7 +212,6 @@ struct GroupDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 14) {
                 GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 64, cacheID: group.id)
-                    .accessibilityIdentifier("group-photo-detail")
                 VStack(alignment: .leading, spacing: 4) {
                     GOverline(text: group.isAdmin ? "Administrador" : "Miembro")
                     Text(group.name)
@@ -611,6 +610,9 @@ struct GroupDetailView: View {
         let selected = board.first { $0.metric.rawValue == compareMetric } ?? board.first
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
+                GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 56, cacheID: group.id)
+                    .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 2))
+                    .accessibilityIdentifier("group-photo-detail")
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Clasificación")
                         .accessibilityIdentifier("group-usga")
