@@ -310,13 +310,18 @@ test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_00
       else request.abort();
     });
     const hideBar = () => page.evaluate(() => { const bar = document.querySelector("#tabbar"); if (bar) (bar as HTMLElement).style.display = "none"; });
+    const tap = (sel: string) => page.evaluate(s => {
+      const el = document.querySelector(s) as HTMLElement | null;
+      if (!el) throw new Error(s);
+      el.click();
+    }, sel);
     await page.goto(`http://127.0.0.1:${port}/#/partido/fixture-up`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#gm-track", { timeout: 8000 });
     await hideBar();
-    await page.click('.gm-hs button[data-h="1"]');
-    await page.click("#gm-track");
-    await page.waitForSelector("#tkprev", { timeout: 8000 });
-    await page.click("#tkprev");
+    await tap('.gm-hs button[data-h="1"]');
+    await tap("#gm-track");
+    await page.waitForSelector("#tkprev:not([disabled])", { timeout: 8000 });
+    await tap("#tkprev");
     await page.waitForFunction(() => (document.body.innerText || "").includes("Editar hoyo") && (document.body.innerText || "").includes("Driver"), { timeout: 8000 });
     await page.waitForSelector('#tkmap[data-map="ready"]', { timeout: 20000 });
     const doneHole = await page.evaluate(() => document.body.innerText || "");
@@ -341,7 +346,7 @@ test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_00
     assert.equal(list.href, "#/reconstruir/live-vuelta");
     assert.equal(list.text.includes("Editar hoyo"), false);
     await page.screenshot({ path: `${ART}/web-375-rondas-lista.png` });
-    await page.click(".rc-off");
+    await tap(".rc-off");
     await page.waitForFunction(() => (document.body.innerText || "").includes("Editar hoyo") && /Putter · \d+(?:,\d)? m/.test(document.body.innerText || ""), { timeout: 8000 });
     await page.waitForSelector('#tkmap[data-map="ready"]', { timeout: 20000 });
     const same = await page.evaluate(() => document.body.innerText || "");
@@ -360,15 +365,15 @@ test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_00
 
     await page.goto(`http://127.0.0.1:${port}/#/partido/fixture-up`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#gm-track", { timeout: 8000 });
-    await page.click("#gm-track");
+    await tap("#gm-track");
     await page.waitForSelector("#play-edit-hole", { timeout: 8000 });
-    await page.click("#play-edit-hole");
+    await tap("#play-edit-hole");
     await page.waitForSelector("#play-shot-3", { timeout: 8000 });
-    await page.click("#play-shot-3");
+    await tap("#play-shot-3");
     await page.waitForSelector("#play-edit-del", { timeout: 8000 });
-    await page.click("#play-edit-del");
+    await tap("#play-edit-del");
     await page.waitForSelector("#play-edit-yes", { timeout: 8000 });
-    await page.click("#play-edit-yes");
+    await tap("#play-edit-yes");
     await page.waitForFunction(() => {
       const row = JSON.parse(localStorage.getItem("golflet.match.fixture-up") || "{}");
       const rail = document.querySelectorAll("#rc-shots .tk-shot:not(.tk-more)").length;
