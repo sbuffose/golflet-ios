@@ -50,6 +50,11 @@ test("el partido muestra quién va arriba y abre el track existente", { timeout:
     if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
     const json = (data: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(data)); };
     if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, rounds: [], courses: [], clubs: [] });
+    if (url.pathname.startsWith("/api/matches/") && req.method === "PUT") {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      return json(JSON.parse(raw || "{}"));
+    }
     if (url.pathname === "/api/matches/fixture-up") return json(match("up"));
     if (url.pathname === "/api/matches/fixture-square") return json(match("square"));
     if (url.pathname === "/api/matches/fixture-done") return json(match("done"));
@@ -169,6 +174,8 @@ test("el partido muestra quién va arriba y abre el track existente", { timeout:
     await page.click("#rc-close");
     await page.waitForFunction(() => (document.querySelector("#gm-track")?.textContent || "").includes("Seguir track · 2 golpes"));
     await page.click('[data-p="augusto"][data-v="6"]');
+    await page.waitForFunction(() => !JSON.parse(localStorage.getItem("golflet.matchq") || "{}")["fixture-up"]);
+    await page.click('.gm-hs button[data-h="0"]');
     await page.waitForFunction(() => (document.querySelector("#gm-track")?.textContent || "").includes("Seguir track · 2 golpes"));
     const resumed = await page.evaluate(() => {
       const row = JSON.parse(localStorage.getItem("golflet.match.fixture-up") || "{}");
