@@ -222,7 +222,11 @@ struct HoleSatelliteMap: UIViewRepresentable {
             view.canShowCallout = false
             let marker = HoleMarker.image(kind: point.kind)
             view.image = marker
-            view.centerOffset = point.kind == "pin" ? CGPoint(x: 0, y: -10) : (point.kind.hasPrefix("n:") ? CGPoint(x: 8, y: -8) : .zero)
+            let shotLift: CGFloat = {
+                guard point.kind.hasPrefix("n:"), let number = Int(point.kind.dropFirst(2)) else { return 0 }
+                return CGFloat(number % 3) * 18
+            }()
+            view.centerOffset = point.kind == "pin" ? CGPoint(x: 6, y: -16) : (point.kind.hasPrefix("n:") ? CGPoint(x: 14, y: -12 - shotLift) : .zero)
             view.isDraggable = point.kind == "aim"
             return view
         }
@@ -269,6 +273,38 @@ enum HoleMarker {
                 ])
                 let box = text.size()
                 text.draw(at: CGPoint(x: (size - box.width) / 2, y: (size - box.height) / 2))
+            }
+        }
+        if kind == "pin" {
+            let width: CGFloat = 28
+            let height: CGFloat = 36
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+            return renderer.image { _ in
+                let pole = UIBezierPath()
+                pole.move(to: CGPoint(x: 8, y: height - 2))
+                pole.addLine(to: CGPoint(x: 8, y: 6))
+                pole.lineWidth = 2.5
+                pole.lineCapStyle = .round
+                UIColor(red: 0.04, green: 0.15, blue: 0.27, alpha: 1).setStroke()
+                pole.stroke()
+                let cloth = UIBezierPath()
+                cloth.move(to: CGPoint(x: 8, y: 6))
+                cloth.addLine(to: CGPoint(x: 24, y: 6))
+                cloth.addLine(to: CGPoint(x: 20, y: 12))
+                cloth.addLine(to: CGPoint(x: 24, y: 18))
+                cloth.addLine(to: CGPoint(x: 8, y: 18))
+                cloth.close()
+                UIColor(red: 0.89, green: 0.73, blue: 0.23, alpha: 1).setFill()
+                cloth.fill()
+                UIColor(red: 0.04, green: 0.15, blue: 0.27, alpha: 1).setStroke()
+                cloth.lineWidth = 1.4
+                cloth.stroke()
+                let base = UIBezierPath(ovalIn: CGRect(x: 4.2, y: height - 8.2, width: 7.6, height: 7.6))
+                UIColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1).setFill()
+                base.fill()
+                UIColor(red: 0.04, green: 0.15, blue: 0.27, alpha: 1).setStroke()
+                base.lineWidth = 1.5
+                base.stroke()
             }
         }
         let size: CGFloat = kind == "aim" ? 28 : 18

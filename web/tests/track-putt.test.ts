@@ -27,9 +27,19 @@ const ring = [
   { lat: GREEN.lat - 0.00012, lng: GREEN.lng - 0.00012 },
 ];
 
-test("a putt starts after the approach, in feet or inches, and the hole closes only on purpose", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+test("a putt starts after the approach, in feet or inches, and the hole closes only on purpose", { timeout: 180_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   const posts: Record<string, unknown>[] = [];
   const shots: Record<string, unknown>[] = [];
+  const deg = (meters: number) => meters / (6371008.8 * Math.PI / 180);
+  const eleven = { lat: GREEN.lat - deg(11 * 0.0254), lng: GREEN.lng };
+  const puttFrom = { lat: eleven.lat - deg(18 * 0.3048), lng: GREEN.lng };
+  const approach = { lat: puttFrom.lat - deg(152 * 0.9144), lng: GREEN.lng };
+  const driveFrom = { lat: approach.lat - deg(302 * 0.9144), lng: GREEN.lng };
+  const azulShots: Record<string, unknown>[] = [
+    { id: "drv", hole: 1, club: "Driver", lie: null, result: null, penalty_strokes: 0, lat: driveFrom.lat, lng: driveFrom.lng, end_lat: approach.lat, end_lng: approach.lng, distance_m: 276.1, distance_kind: "estimated" },
+    { id: "pw", hole: 1, club: "PW", lie: null, result: null, penalty_strokes: 0, lat: approach.lat, lng: approach.lng, end_lat: puttFrom.lat, end_lng: puttFrom.lng, distance_m: 139, distance_kind: "estimated" },
+    { id: "pt", hole: 1, club: "Putter", lie: "green", result: null, penalty_strokes: 0, lat: puttFrom.lat, lng: puttFrom.lng, end_lat: eleven.lat, end_lng: eleven.lng, distance_m: 5.5, distance_kind: "estimated" },
+  ];
   let failNext = false;
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", "http://127.0.0.1");
@@ -46,7 +56,11 @@ test("a putt starts after the approach, in feet or inches, and the hole closes o
       ]);
       if (url.pathname === "/api/gps/courses/209-cancha-vieja") return json({ course: { club_code: "209", course: "Cancha Vieja", holes: vieja } });
       if (url.pathname === "/api/gps/courses/209-green-ring") return json({ course: { club_code: "209", course: "Green Ring", holes: [{ hole: 1, par: 4, yards: 445, tee: vieja[0].tee, green: { center: GREEN } }] } });
+      if (url.pathname === "/api/gps/courses/209-azul") return json({ course: { club_code: "209", course: "Azul", holes: [{ hole: 1, par: 5, yards: 520, tee: driveFrom, green: { center: GREEN } }] } });
       if (url.pathname === "/api/course-maps/209/Green%20Ring" || url.pathname === "/api/course-maps/209/Green Ring") {
+        return json({ holes: [{ hole: 1, green: { polygon: ring } }] });
+      }
+      if (url.pathname === "/api/course-maps/209/Azul") {
         return json({ holes: [{ hole: 1, green: { polygon: ring } }] });
       }
       if (url.pathname === "/api/reconstructions" && req.method === "GET") {
@@ -55,6 +69,7 @@ test("a putt starts after the approach, in feet or inches, and the hole closes o
           { id: "live-ring", current_hole: 1, club_code: "209", vm_course: "Green Ring", course: "Green Ring", round_id: null },
           { id: "live-ring-fresh", current_hole: 1, club_code: "209", vm_course: "Green Ring", course: "Green Ring", round_id: null },
           { id: "live-out", current_hole: 1, club_code: "209", vm_course: "Green Ring", course: "Green Ring", round_id: null },
+          { id: "live-11", current_hole: 1, club_code: "209", vm_course: "Azul", course: "Azul", round_id: null },
         ] });
       }
       if (url.pathname === "/api/reconstructions/live-ring-fresh/shots" && req.method === "GET") return json({ shots: [] });
@@ -63,6 +78,15 @@ test("a putt starts after the approach, in feet or inches, and the hole closes o
       }
       if (url.pathname === "/api/reconstructions/live-ring/shots" && req.method === "GET") {
         return json({ shots: [{ id: "in1", hole: 1, club: "PW", lie: null, result: null, penalty_strokes: 0, lat: vieja[0].tee.lat, lng: vieja[0].tee.lng, end_lat: GREEN.lat, end_lng: GREEN.lng, distance_m: 400, distance_kind: "estimated" }] });
+      }
+      if (url.pathname === "/api/reconstructions/live-11/shots" && req.method === "GET") {
+        return json({ shots: azulShots });
+      }
+      if (url.pathname === "/api/reconstructions/live-11/shots" && req.method === "POST") {
+        const posted = JSON.parse(raw || "{}");
+        posts.push(posted);
+        azulShots.push({ id: `a${azulShots.length + 1}`, shot_number: azulShots.length + 1, ...posted });
+        return json({ shots: azulShots });
       }
       if (url.pathname.endsWith("/shots") && req.method === "POST") {
         if (failNext) { failNext = false; return json({ error: "no" }, 500); }
@@ -339,6 +363,67 @@ test("a putt starts after the approach, in feet or inches, and the hole closes o
     });
     assert.equal(posts.length, 1);
     assert.equal(posts[0].club, "PW");
+
+    posts.length = 0;
+    await page.setViewport({ width: 375, height: 812, hasTouch: true, isMobile: true });
+    await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-11`, { waitUntil: "networkidle0" });
+    await page.waitForFunction(() => {
+      const par = document.querySelector(".tk-hn")?.textContent || "";
+      return par.includes("Par 5") && !!document.querySelector("#play-hole-out") && !!document.querySelector(".tk-flagpin") && document.querySelector("#tkmap")?.getAttribute("data-moving") === "0";
+    }, { timeout: 20000 });
+    const openHole = await page.evaluate(() => document.body.innerText);
+    assert.match(openHole, /Embocar \(\+1\)/);
+    assert.match(openHole, /Dada/);
+    assert.equal(openHole.includes("Águila"), false);
+    assert.equal(await page.$("#play-next"), null);
+    const flagBox = () => page.$eval(".tk-flagpin", el => {
+      const r = el.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height) };
+    });
+    const nearFlag = await flagBox();
+    for (let i = 0; i < 6; i++) await page.click("#play-zoom-out");
+    const farFlag = await flagBox();
+    for (let i = 0; i < 6; i++) await page.click("#play-zoom-in");
+    assert.ok(nearFlag.w >= 14 && nearFlag.h >= 22, JSON.stringify(nearFlag));
+    assert.ok(Math.abs(farFlag.w - nearFlag.w) <= 2 && Math.abs(farFlag.h - nearFlag.h) <= 2, JSON.stringify({ farFlag, nearFlag }));
+    const colors = await page.evaluate(() => ({
+      cloth: getComputedStyle(document.querySelector(".tk-flagcloth") as Element).fill,
+      dot: getComputedStyle(document.querySelector(".tk-dot") as Element).fill,
+      pin: document.querySelector(".tk-pin") ? 1 : 0,
+    }));
+    assert.equal(colors.pin, 0);
+    assert.notEqual(colors.cloth, colors.dot);
+    await page.screenshot({ path: "/opt/cursor/artifacts/web-375-hoyo-11in.png" });
+    await page.evaluate(() => (document.querySelector("#play-hole-out") as HTMLButtonElement | null)?.click());
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("Birdie"), { timeout: 10000 });
+    const closed = await page.$eval("#tkro", el => el.textContent || "");
+    const rows = await page.$$eval("#rc-shots .tk-shot", nodes => nodes.map(node => (node as HTMLElement).innerText.replace(/\s+/g, " ").trim()));
+    const marks = await page.$$eval(".tk-shot-n", nodes => nodes.map(node => node.textContent || ""));
+    assert.match(closed, /4 golpes/, JSON.stringify({ closed, rows, marks, last: posts.at(-1) }));
+    assert.match(closed, /Birdie/);
+    assert.equal(closed.includes("Águila"), false);
+    assert.equal(posts.at(-1)?.result, "holed");
+    assert.deepEqual(rows.map(row => row.replace(/\s+/g, " ")), rows);
+    assert.match(rows[0] || "", /1\. Driver · 302 yd/);
+    assert.match(rows[1] || "", /2\. PW · 152 yd/);
+    assert.match(rows[2] || "", /3\. Putter · 18 ft/);
+    assert.match(rows[3] || "", /4\. Putter · \d+ in · Embocado/);
+    assert.equal((rows[3] || "").includes("18 ft"), false);
+    assert.equal(rows.some(row => row === "+1"), false);
+    assert.equal(await page.$("#play-shots-more"), null);
+    assert.equal(marks.includes("3–4") || marks.includes("3-4"), false);
+    assert.equal(marks.includes("3"), true);
+    assert.equal(marks.includes("4"), true);
+    const card = await page.$eval("#tkro", el => {
+      const r = el.getBoundingClientRect();
+      return { mid: r.left + r.width / 2, width: window.innerWidth };
+    });
+    assert.ok(Math.abs(card.mid - card.width / 2) < 20, JSON.stringify(card));
+    const next = await page.$eval("#play-next", el => getComputedStyle(el).backgroundColor);
+    const edit = await page.$eval("#play-edit-hole", el => getComputedStyle(el).backgroundColor);
+    assert.notEqual(next, edit);
+    await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-moving") === "0");
+    await page.screenshot({ path: "/opt/cursor/artifacts/web-375-hoyo-birdie.png" });
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));

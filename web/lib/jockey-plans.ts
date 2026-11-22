@@ -1,5 +1,6 @@
 /** Published fallback plans for Jockey Azul and Colorada when /api/strategy has no holes. */
 import { publicHole, type HoleStrategy } from "./strategy-parse";
+import { azulNineSwap } from "./azul-layout";
 
 type Yard = { n: number; par: number; hcp: number; yards: number };
 
@@ -126,12 +127,17 @@ function pack(id: string, key: string, overview: string, holes: { hole: number; 
 }
 
 function azul() {
-  return pack(
+  const built = pack(
     "118-jockey-azul",
     "1:Azul",
     "Cancha corta y técnica. El rough castiga y varios greens caen hacia adelante. Pensá el palo de salida hoyo por hoyo.",
     AZUL_YARDS.map(h => ({ hole: h.n, data: h.n === 7 ? azul7 : h.n === 8 ? azul8 : plan(h, "Azul") })),
   );
+  return {
+    ...built,
+    holes: built.holes.map(h => ({ ...h, hole: azulNineSwap(h.hole) })).sort((a, b) => a.hole - b.hole),
+    published_holes: built.published_holes.map(azulNineSwap).sort((a, b) => a - b),
+  };
 }
 
 function colorada() {

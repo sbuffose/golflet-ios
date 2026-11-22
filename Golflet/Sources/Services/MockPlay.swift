@@ -21,9 +21,10 @@ extension MockAPIClient {
         return GPSCourseList(courses: mine, nearby: nearby)
     }
 
-    func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail {
+    func gpsCourse(id: String, lat: Double?, lng: Double?, playedOn: String?) async throws -> GPSCourseDetail {
         _ = lat
         _ = lng
+        _ = playedOn
         let wanted = id.lowercased()
         guard let summary = Self.demoCourses.first(where: { $0.courseId == id })
             ?? Self.demoCourses.first(where: { wanted.contains("vieja") && $0.course.contains("Vieja") })

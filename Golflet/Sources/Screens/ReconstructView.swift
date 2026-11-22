@@ -521,7 +521,7 @@ struct ReconstructView: View {
     private func loadMap(club: String, name: String) async {
         let id = ReconstructionCourseId.make(clubCode: club, course: name)
         var bag: [Int: HoleEnds] = [:]
-        if let detail = try? await model.api.gpsCourse(id: id, lat: nil, lng: nil) {
+        if let detail = try? await model.api.gpsCourse(id: id, lat: nil, lng: nil, playedOn: artDate()) {
             for hole in detail.holes {
                 var ends = HoleEnds()
                 if let tee = hole.tee, ReconstructPayload.knownPoint(["lat": tee.lat, "lng": tee.lng] as [String: Any]) != nil {
@@ -533,7 +533,7 @@ struct ReconstructView: View {
                 bag[hole.number] = ends
             }
         }
-        if !club.isEmpty, !name.isEmpty, let map = try? await model.api.courseMap(club: club, course: name) {
+        if !club.isEmpty, !name.isEmpty, let map = try? await model.api.courseMap(club: club, course: name, playedOn: artDate()) {
             ReconstructPayload.mergeCourseMap(map, into: &bag)
         }
         holeEnds = bag

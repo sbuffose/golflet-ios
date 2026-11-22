@@ -24,7 +24,7 @@ export const GET = handle(async (req: Request, ctx: C) => {
   const holes = (sp.get("holes") || "").split(",").map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 18);
   const format = sp.get("format") === "simplex" ? "simplex" : "duplex";
   const rules = sp.get("rules") !== "torneo" && !d.torneo?.on && !d.torneo?.active ? "normal" : "torneo";   // t209u: full-length card (no strip) by default
-  const map = d.course.map === false ? null : await getCourseMap(d.course.club_code, d.course.course);
+  const map = d.course.map === false ? null : await getCourseMap(d.course.club_code, d.course.course, { layout: "current" });
   if (sp.get("as") === "cards") {   // t202u: card geometry for "Subir libreta" (no PDF), every rules × format variant
     const cards: Record<string, any> = {}, gg = getGreenGuide(d.course.club_code, d.course.course);
     for (const ru of ["torneo", "normal"] as const) for (const fo of ["duplex", "simplex"] as const) cards[`${ru}|${fo}`] = yardbookPdf(d, map, gg, null, { holes: [], format: fo, rules: ru }).card_meta;

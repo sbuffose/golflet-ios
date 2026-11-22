@@ -32,7 +32,11 @@ enum JockeyPlans {
                 if hole.n == 7 { return azul7 }
                 if hole.n == 8 { return azul8 }
                 return plan(hole, course: "Azul")
-            }
+            }.map { hole in
+                var next = hole
+                next.hole = next.hole <= 9 ? next.hole + 9 : next.hole - 9
+                return next
+            }.sorted { $0.hole < $1.hole }
         )
     }
 

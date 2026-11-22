@@ -29,6 +29,7 @@ struct TrackMark: Equatable, Sendable, Identifiable {
     var lost: Bool = false
     var provisional: Bool = false
     var recovery: Bool = false
+    var conceded: Bool = false
 }
 
 enum TrackSession {
@@ -63,6 +64,24 @@ enum TrackSession {
     static func puttFeet(meters: Double) -> Int? {
         guard meters > 1.2, meters <= 25 else { return nil }
         return Int((meters * 3.28084).rounded())
+    }
+
+    /// The ball is in the cup. Any greater distance is still a shot in play.
+    static func inTheCup(meters: Double) -> Bool {
+        greenToHole(meters: meters) == "En el hoyo"
+    }
+
+    /// Under 3 ft, and not already in the cup.
+    static func shortPutt(meters: Double) -> Bool {
+        guard let label = greenToHole(meters: meters) else { return false }
+        return label.hasSuffix(" in")
+    }
+
+    /// Closing while the ball is still out adds the missing putt. It never lowers the total.
+    static func scoredClose(strokes: Int, putts: Int?, inCup: Bool) -> (strokes: Int, putts: Int?) {
+        let n = max(0, strokes)
+        if inCup { return (n, putts) }
+        return (n + 1, (putts ?? 0) + 1)
     }
 
     /// On the green the hole is in feet, or in inches under 3 ft. Under one inch is the cup.

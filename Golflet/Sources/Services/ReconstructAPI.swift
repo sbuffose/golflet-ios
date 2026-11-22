@@ -61,10 +61,11 @@ extension LiveGolfletAPI {
         return ReconstructPayload.centers(json)
     }
 
-    func courseMap(club: String, course: String) async throws -> [String: Any] {
+    func courseMap(club: String, course: String, playedOn: String?) async throws -> [String: Any] {
         let clubPart = club.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? club
         let coursePart = course.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? course
-        return try await request("GET", "/api/course-maps/\(clubPart)/\(coursePart)")
+        let layout = (playedOn?.isEmpty == false ? "played_on=\(playedOn!.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? playedOn!)" : "layout=current")
+        return try await request("GET", "/api/course-maps/\(clubPart)/\(coursePart)?\(layout)")
     }
 }
 
@@ -98,7 +99,7 @@ extension MockAPIClient {
 
     func courseCenters(courseId: String) async throws -> [Int: ReconstructionPoint] { [:] }
 
-    func courseMap(club: String, course: String) async throws -> [String: Any] { [:] }
+    func courseMap(club: String, course: String, playedOn: String?) async throws -> [String: Any] { _ = playedOn; return [:] }
 
     func openTodayRound(course: String?, teeId: String?) async throws -> TodayTrack {
         TodayTrack(id: "mock-live", course: course ?? "Azul", ask: [], prompt: "")

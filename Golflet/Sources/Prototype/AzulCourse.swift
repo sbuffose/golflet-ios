@@ -69,14 +69,34 @@ struct AzulHoleGeo: Identifiable, Hashable {
 
 enum AzulCourse {
     static let credit = "Mapa © OpenStreetMap contributors (ODbL) · Cancha Azul, Jockey Club"
+    /// The club swapped the two nines on this day. Stored JSON keeps the previous order.
+    static let nineSwapFrom = "2026-11-22"
+    static let legacyDay = "2026-11-21"
 
     private static var cache: [Int: AzulHoleGeo]?
 
-    static func hole(_ n: Int) -> AzulHoleGeo {
+    static func nineSwap(_ n: Int) -> Int {
+        guard (1...18).contains(n) else { return n }
+        return n <= 9 ? n + 9 : n - 9
+    }
+
+    /// A missing date is the current layout, the one used while playing.
+    static func currentLayout(playedOn: String?) -> Bool {
+        let day = String((playedOn ?? "").prefix(10))
+        guard day.count == 10 else { return true }
+        return day >= nineSwapFrom
+    }
+
+    static func hole(_ n: Int, playedOn: String? = nil) -> AzulHoleGeo {
+        let display = min(18, max(1, n))
+        let stored = currentLayout(playedOn: playedOn) ? nineSwap(display) : display
         let holes = all()
-        if let hit = holes[min(18, max(1, n))] { return hit }
+        if var hit = holes[stored] {
+            hit.number = display
+            return hit
+        }
         return AzulHoleGeo(
-            number: n,
+            number: display,
             par: 4,
             meters: 350,
             line: [AzulCoord(lat: -34.4854, lng: -58.5324), AzulCoord(lat: -34.4831, lng: -58.5288)],
@@ -88,9 +108,12 @@ enum AzulCourse {
     static let coloradaCredit = "Salida © OpenStreetMap contributors (ODbL) · Cancha Colorada, Jockey Club. El centro del green es Golfistics, no el pin."
 
     /// Satellite when this course has a verified tee and green. Azul uses the OSM green. Colorada uses the OSM tee and the Golfistics green center. Anything else stays empty.
-    static func layout(forCourse name: String, hole number: Int) -> AzulHoleGeo? {
-        if isJockeyAzul(name), let geo = all()[number], geo.green.count >= 3 || geo.line.count >= 2 {
-            return geo
+    static func layout(forCourse name: String, hole number: Int, playedOn: String? = nil) -> AzulHoleGeo? {
+        if isJockeyAzul(name) {
+            guard (1...18).contains(number) else { return nil }
+            let geo = hole(number, playedOn: playedOn)
+            if geo.green.count >= 3 || geo.line.count >= 2 { return geo }
+            return nil
         }
         if isJockeyColorada(name) {
             return colorada(number)

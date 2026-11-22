@@ -20,6 +20,9 @@ exports.windPlay = windPlay;
 exports.onCup = onCup;
 exports.puttFeet = puttFeet;
 exports.greenToHole = greenToHole;
+exports.inTheCup = inTheCup;
+exports.shortPutt = shortPutt;
+exports.scoredClose = scoredClose;
 exports.puttMeters = puttMeters;
 exports.isPutterClub = isPutterClub;
 exports.yardNumber = yardNumber;
@@ -248,6 +251,25 @@ function greenToHole(meters) {
     const feet = Math.round(meters / M_PER_FT);
     return { text: `${feet} ft`, unit: "ft", n: feet };
 }
+/** The ball is in the cup. Any greater distance is still a shot in play. */
+function inTheCup(meters) {
+    return greenToHole(meters)?.unit === "cup";
+}
+/** Under 3 ft, and not already in the cup, the player can hole or concede the next stroke. */
+function shortPutt(meters) {
+    return greenToHole(meters)?.unit === "in";
+}
+/**
+ * Closing while the ball is still out adds the putt that has not been played.
+ * A missing putt count becomes that one stroke. It never lowers the total.
+ */
+function scoredClose(strokes, putts, inCup) {
+    const n = Math.max(0, Math.round(Number(strokes) || 0));
+    if (inCup)
+        return { strokes: n, putts };
+    const known = putts == null || !Number.isFinite(putts) ? 0 : Math.max(0, Math.round(putts));
+    return { strokes: n + 1, putts: known + 1 };
+}
 /** A putt the player types. Comma or dot. The map estimate is not rewritten to match it. */
 function puttMeters(value) {
     let n;
@@ -415,7 +437,7 @@ function deriveHoleCard(par, shots) {
     return { putts, drive, gir };
 }
 const VS_PAR = { [-2]: "Águila", [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Doble bogey", 3: "Triple bogey" };
-/** Closed-hole line. Putts stay unconfirmed when no shot is a putter or started on the green. */
+/** Closed-hole line. An unknown putt count does not change the stroke total. */
 function holeCloseText(par, strokes, putts) {
     const n = Math.max(0, Math.round(strokes));
     const puttLine = putts == null ? "Putts sin confirmar" : `${putts} ${putts === 1 ? "putt" : "putts"}`;

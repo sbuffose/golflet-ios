@@ -1,0 +1,69 @@
+-- Azul nine swap. DO NOT RUN.
+--
+-- The web and iOS read path already presents stored hole N as N+9 (and N+9 as N)
+-- from 2026-11-22. Running this script while that mapping is active would swap
+-- the holes a second time and put them back on the old numbers.
+--
+-- It is here so the geometry can be renumbered in course_map_hole later, with a
+-- backup, if Sebastián asks to store the new numbers and the read-time mapping
+-- is removed in the same change. Historical round.holes rows are not rewritten.
+--
+-- Idempotent guard: it only proceeds when hole 3 still carries the pre-swap tee
+-- (about -34.48596, -58.52593). After a successful swap that tee sits on hole 12.
+
+-- begin;
+--
+-- create table if not exists course_map_hole_azul_backup_20261122 as
+-- select m.club_code, m.course, h.course_map_id, h.hole, h.data, h.crosscheck, h.coverage, now() as backed_up_at
+-- from course_map_hole h
+-- join course_map m on m.id = h.course_map_id
+-- where m.club_code = '118' and lower(m.course) = 'azul';
+--
+-- do $$
+-- declare
+--   map_id int;
+--   tee text;
+-- begin
+--   select m.id into map_id from course_map m where m.club_code = '118' and lower(m.course) = 'azul' limit 1;
+--   if map_id is null then
+--     raise notice 'No hay course_map de la Azul. Nada que hacer.';
+--     return;
+--   end if;
+--   select h.data::text into tee from course_map_hole h where h.course_map_id = map_id and h.hole = 3;
+--   if tee is null or position('-34.4859' in tee) = 0 then
+--     raise notice 'El hoyo 3 ya no tiene la salida vieja. El script no toca filas.';
+--     return;
+--   end if;
+--   update course_map_hole set hole = hole + 100 where course_map_id = map_id and hole between 1 and 18;
+--   update course_map_hole
+--      set hole = case when hole - 100 <= 9 then hole - 100 + 9 else hole - 100 - 9 end
+--    where course_map_id = map_id and hole between 101 and 118;
+-- end $$;
+--
+-- commit;
+
+-- Today's tracked shots stay on the number the app showed (the stored order).
+-- Hole 1 of that round is the physical hole that is now 10, and hole 2 is now 11.
+-- Copying shot.hole is a production mutation. Do not run it without Sebastián's OK.
+--
+-- begin;
+-- create table if not exists shot_azul_20261122_backup as
+-- select s.id, s.live_round_id, s.hole, s.shot_number, s.lat, s.lng
+-- from shot s
+-- join live_round l on l.id = s.live_round_id
+-- where l.date = '2026-11-22' and l.club_code = '118' and lower(l.course) = 'azul';
+--
+-- update shot s
+--    set hole = case when s.hole <= 9 then s.hole + 9 else s.hole - 9 end
+--   from live_round l
+--  where s.live_round_id = l.id
+--    and l.date = '2026-11-22' and l.club_code = '118' and lower(l.course) = 'azul'
+--    and s.hole between 1 and 18;
+--
+-- update live_hole h
+--    set hole = case when h.hole <= 9 then h.hole + 9 else h.hole - 9 end
+--   from live_round l
+--  where h.live_round_id = l.id
+--    and l.date = '2026-11-22' and l.club_code = '118' and lower(l.course) = 'azul'
+--    and h.hole between 1 and 18;
+-- commit;

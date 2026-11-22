@@ -183,11 +183,16 @@ struct LiveGolfletAPI: GolfletAPI {
         return PlayParser.courses(try await request("GET", "/api/gps/courses\(suffix)"))
     }
 
-    func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail {
+    func gpsCourse(id: String, lat: Double?, lng: Double?, playedOn: String?) async throws -> GPSCourseDetail {
         var query: [String] = []
         if let lat, let lng {
             query.append("lat=\(lat)")
             query.append("lng=\(lng)")
+        }
+        if let playedOn, !playedOn.isEmpty {
+            query.append("played_on=\(playedOn.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? playedOn)")
+        } else {
+            query.append("layout=current")
         }
         let suffix = query.isEmpty ? "" : "?\(query.joined(separator: "&"))"
         guard let detail = PlayParser.courseDetail(try await request("GET", "/api/gps/courses/\(id)\(suffix)")) else {

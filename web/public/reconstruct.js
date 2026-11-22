@@ -271,6 +271,7 @@
     let roundId = pending?.roundId || "";
     let unofficial = pending?.unofficial === true || !roundId;
     const back = pending?.back || (roundId ? `#/ronda/${roundId}` : "#/rondas");
+    let playedOn = String(pending?.date || "").slice(0, 10);
     let holes = [];
     let shots = [];
     let bag = null;
@@ -294,13 +295,15 @@
           const kept = Number(row.current_hole);
           if (kept >= 1 && kept <= 18) savedHole = kept;
           if (row.club_code) clubCode = clubCode || row.club_code;
+          if (row.date) playedOn = String(row.date).slice(0, 10);
           if (!courseId && row.club_code && row.vm_course) {
             courseId = `${row.club_code}-${String(row.vm_course).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
           }
         }
       }
       if (courseId) {
-        const geo = await api("/api/gps/courses/" + encodeURIComponent(courseId));
+        const layoutQ = /^\d{4}-\d{2}-\d{2}$/.test(playedOn) ? "?played_on=" + encodeURIComponent(playedOn) : "?layout=current";
+        const geo = await api("/api/gps/courses/" + encodeURIComponent(courseId) + layoutQ);
         if (!mine()) return;
         const raw = geo.course?.holes || [];
         holes = raw.map(h => {
@@ -346,7 +349,7 @@
       retro: true,
       id: liveId,
       back,
-      live: { course: courseName || "Golflet", course_id: courseId, club_code: clubCode || null, current_hole: hole },
+      live: { course: courseName || "Golflet", course_id: courseId, club_code: clubCode || null, current_hole: hole, date: playedOn || null },
       shots,
       holes,
       course: { holes, course: courseName, course_id: courseId, club_code: clubCode || null },
