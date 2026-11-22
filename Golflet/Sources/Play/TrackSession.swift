@@ -48,9 +48,9 @@ enum TrackSession {
             case .confirmTee: return "Arrastrá el mapa para confirmar el tee"
             case .confirmFlag: return "Arrastrá el mapa para marcar la bandera"
             case .tracking: return "Arrastrá el mapa hasta donde terminó el golpe"
-            case .penaltyWhere: return "Penalidad: ¿adónde fue?"
+            case .penaltyWhere: return "Penalidad: ¿dónde fue?"
             case .relief: return "Penalidad. Elegí otra vez o drop"
-            case .drop: return "Arrastrá el mapa hasta el drop"
+            case .drop: return "Arrastrá hasta el lugar del drop"
             }
         }
     }

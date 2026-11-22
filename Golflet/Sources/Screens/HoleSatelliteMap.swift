@@ -10,6 +10,7 @@ struct MapRing: Hashable {
 struct HoleShotMark: Hashable {
     var number: Int
     var coord: GPSCoord
+    var label: String = ""
 }
 
 enum HoleGeoMath {
@@ -174,7 +175,8 @@ struct HoleSatelliteMap: UIViewRepresentable {
             map.addAnnotation(HolePoint(kind: "aim", coord: target))
         }
         for mark in shotMarks {
-            map.addAnnotation(HolePoint(kind: "n:\(mark.number)", coord: mark.coord))
+            let kind = mark.label == "x" ? "x" : "n:\(mark.number)"
+            map.addAnnotation(HolePoint(kind: kind, coord: mark.coord, note: mark.label))
         }
     }
 
@@ -234,13 +236,17 @@ struct HoleSatelliteMap: UIViewRepresentable {
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: point.kind) ?? MKAnnotationView(annotation: annotation, reuseIdentifier: point.kind)
             view.annotation = annotation
             view.canShowCallout = false
-            let marker = HoleMarker.image(kind: point.kind)
+            let marker = HoleMarker.image(kind: point.kind, note: point.note)
             view.image = marker
             let shotLift: CGFloat = {
                 guard point.kind.hasPrefix("n:"), let number = Int(point.kind.dropFirst(2)) else { return 0 }
                 return CGFloat(number % 3) * 18
             }()
-            view.centerOffset = point.kind == "pin" ? CGPoint(x: 6, y: -16) : (point.kind.hasPrefix("n:") ? CGPoint(x: 14, y: -12 - shotLift) : .zero)
+            if point.kind.hasPrefix("n:"), let image = view.image, image.size.width > 24 {
+                view.centerOffset = CGPoint(x: image.size.width / 2 - 11, y: -CGFloat(shotLift))
+            } else {
+                view.centerOffset = point.kind == "pin" ? CGPoint(x: 6, y: -16) : (point.kind.hasPrefix("n:") || point.kind == "x" ? CGPoint(x: 14, y: -12 - shotLift) : .zero)
+            }
             view.isDraggable = point.kind == "aim"
             return view
         }
@@ -264,17 +270,58 @@ struct HoleSatelliteMap: UIViewRepresentable {
 
 final class HolePoint: MKPointAnnotation {
     var kind: String
+    var note: String
 
-    init(kind: String, coord: GPSCoord) {
+    init(kind: String, coord: GPSCoord, note: String = "") {
         self.kind = kind
+        self.note = note
         super.init()
         coordinate = coord.cl
     }
 }
 
 enum HoleMarker {
-    static func image(kind: String) -> UIImage {
+    static func image(kind: String, note: String = "") -> UIImage {
+        if kind == "x" {
+            let size: CGFloat = 22
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+            return renderer.image { _ in
+                let mark = UIBezierPath()
+                mark.move(to: CGPoint(x: 4, y: 4))
+                mark.addLine(to: CGPoint(x: 18, y: 18))
+                mark.move(to: CGPoint(x: 18, y: 4))
+                mark.addLine(to: CGPoint(x: 4, y: 18))
+                mark.lineWidth = 3
+                mark.lineCapStyle = .round
+                UIColor(red: 0.78, green: 0.06, blue: 0.18, alpha: 1).setStroke()
+                mark.stroke()
+            }
+        }
         if kind.hasPrefix("n:"), let number = Int(kind.dropFirst(2)) {
+            let rest = note.hasPrefix("\(number). ") ? String(note.dropFirst("\(number). ".count)) : note
+            if !rest.isEmpty {
+                let caption = NSAttributedString(string: rest, attributes: [
+                    .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
+                    .foregroundColor: UIColor(red: 0.04, green: 0.15, blue: 0.27, alpha: 1)
+                ])
+                let textBox = caption.size()
+                let height: CGFloat = 22
+                let width = 26 + textBox.width + 12
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+                return renderer.image { _ in
+                    UIColor.white.setFill()
+                    UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: width, height: height), cornerRadius: 11).fill()
+                    UIColor(red: 0.78, green: 0.06, blue: 0.18, alpha: 1).setFill()
+                    UIBezierPath(ovalIn: CGRect(x: 2, y: 2, width: 18, height: 18)).fill()
+                    let digit = NSAttributedString(string: "\(number)", attributes: [
+                        .font: UIFont.systemFont(ofSize: 11, weight: .bold),
+                        .foregroundColor: UIColor.white
+                    ])
+                    let digitBox = digit.size()
+                    digit.draw(at: CGPoint(x: 11 - digitBox.width / 2, y: (height - digitBox.height) / 2))
+                    caption.draw(at: CGPoint(x: 24, y: (height - textBox.height) / 2))
+                }
+            }
             let size: CGFloat = 22
             let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
             return renderer.image { _ in

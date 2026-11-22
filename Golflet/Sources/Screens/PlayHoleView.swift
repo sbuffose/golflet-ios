@@ -39,6 +39,7 @@ struct PlayHoleView: View {
     @State private var sawDragHint = false
     @State private var showsClubs = false
     @State private var mapZoom = 0
+    @State private var cameraNudge = 0
     @State private var editingClosed = false
     @State private var editingShot: Shot?
     @State private var askDeleteShot = false
@@ -82,6 +83,11 @@ struct PlayHoleView: View {
                 .accessibilityHidden(true)
             reticle
                 .allowsHitTesting(false)
+            if !holeClosed {
+                liveReadout
+                    .allowsHitTesting(false)
+                sideColumn
+            }
             if holeClosed {
                 closedChrome
             } else {
@@ -257,7 +263,7 @@ struct PlayHoleView: View {
 
     private var focusID: String {
         let lat = track.ball.map { String(format: "%.5f", $0.lat) } ?? "x"
-        return "\(hole)-\(track.phase)-\(track.marks.count)-\(lat)"
+        return "\(hole)-\(track.phase)-\(track.marks.count)-\(lat)-\(cameraNudge)"
     }
 
     private var markLie: SGLie? {
@@ -286,7 +292,7 @@ struct PlayHoleView: View {
             focusID: focusID,
             framesHole: holeClosed,
             zoom: mapZoom,
-            shotMarks: holeClosed ? closedShotMarks : [],
+            shotMarks: shotPills,
             onCenter: { next in
                 if let mapCenter, abs(mapCenter.lat - next.lat) < 0.0000004, abs(mapCenter.lng - next.lng) < 0.0000004 {
                     return
@@ -445,10 +451,42 @@ struct PlayHoleView: View {
         return (line, vs)
     }
 
-    private var closedShotMarks: [HoleShotMark] {
-        activeTrack.marks.filter(\.countsStroke).enumerated().map { index, mark in
-            HoleShotMark(number: index + 1, coord: GPSCoord(lat: mark.at.lat, lng: mark.at.lng))
+    private var shotPills: [HoleShotMark] {
+        var prev = teeCoord
+        var number = 0
+        return activeTrack.marks.compactMap { mark in
+            let here = GPSCoord(lat: mark.at.lat, lng: mark.at.lng)
+            if mark.penalty {
+                return HoleShotMark(number: 0, coord: here, label: "x")
+            }
+            guard mark.countsStroke, !mark.drop else { return nil }
+            number += 1
+            let meters = Double(PlayMath.meters(from: prev, to: here))
+            let dist: String
+            if isPutter(mark.club), let span = TrackSession.greenToHole(meters: meters), span != "En el hoyo" {
+                dist = span
+            } else {
+                dist = "\(PlayMath.yards(from: prev, to: here)) yd"
+            }
+            let pill = HoleShotMark(number: number, coord: here, label: "\(number). \(spokenClub(mark.club)) · \(dist)")
+            prev = here
+            return pill
         }
+    }
+
+    private func spokenClub(_ club: String?) -> String {
+        let raw = (club ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = raw.uppercased()
+        if key == "DR" || key == "DRIVER" { return "Driver" }
+        if key == "PT" || key == "PUTTER" { return "Putter" }
+        if key == "PW" { return "Pitching wedge" }
+        if key == "GW" { return "Gap wedge" }
+        if key == "AW" { return "Approach wedge" }
+        if key == "SW" { return "Sand wedge" }
+        if key == "LW" { return "Lob wedge" }
+        if let wood = Int(key.dropLast()), key.hasSuffix("W") { return "Madera \(wood)" }
+        if let iron = Int(key.dropLast()), key.hasSuffix("I"), key.count == 2 { return "Hierro \(iron)" }
+        return raw.isEmpty ? "Golpe" : raw
     }
 
     private func mapZoomButton(system: String, delta: Int, id: String, label: String) -> some View {
@@ -508,9 +546,93 @@ struct PlayHoleView: View {
         let color = penalty ? Color(hex: BrandHex.red) : Color(hex: BrandHex.navy)
         return ZStack {
             Circle().stroke(color, lineWidth: 3).frame(width: 22, height: 22).background(Circle().fill(Color.white))
-            Circle().fill(color).frame(width: 3, height: 3)
+            if track.phase == .drop {
+                Text("X")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color(hex: BrandHex.red))
+            } else {
+                Circle().fill(color).frame(width: 3, height: 3)
+            }
         }
         .accessibilityIdentifier("play-reticle")
+    }
+
+    private var liveReadout: some View {
+        VStack(spacing: 2) {
+            Text(aimTitle)
+                .font(.system(size: aimTitle == "En el hoyo" ? 28 : 34, weight: .bold))
+                .foregroundStyle(Color(hex: BrandHex.navy))
+                .opacity(aimTitle == "En el hoyo" ? 0.45 : 1)
+                .animation(aimTitle == "En el hoyo" ? .easeInOut(duration: 0.45).repeatForever(autoreverses: true) : .default, value: aimTitle)
+            if let detail = aimDetail, aimTitle != "En el hoyo" {
+                Text(detail)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
+        .offset(y: -132)
+        .accessibilityIdentifier("play-live")
+    }
+
+    private var sideColumn: some View {
+        VStack(spacing: 8) {
+            Button { recenterHole() } label: {
+                Image(systemName: "scope")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.white))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-target")
+            .accessibilityLabel("Objetivo")
+            Button {
+                var next = track
+                next.phase = .confirmFlag
+                track = next
+            } label: {
+                Image(systemName: "flag.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color(hex: BrandHex.red))
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.white))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-flag")
+            .accessibilityLabel("Bandera")
+            Button { focusGPS() } label: {
+                Text("GPS")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(hex: BrandHex.navy))
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.white))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-gps")
+            .accessibilityLabel("GPS")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+        .padding(.trailing, 12)
+        .padding(.top, 180)
+    }
+
+    private func recenterHole() {
+        mapCenter = nil
+        cameraNudge += 1
+    }
+
+    private func focusGPS() {
+        guard let here = location.coordinate else {
+            message = "No hay una ubicación del GPS."
+            return
+        }
+        mapCenter = here
     }
 
     private var shotRail: some View {
@@ -826,10 +948,13 @@ struct PlayHoleView: View {
             return TrackSession.holeClose(par: current?.par, strokes: track.strokeCount, putts: putts)
         }
         switch track.phase {
-        case .tracking, .penaltyWhere:
+        case .confirmFlag:
+            return "\(PlayMath.yards(from: teeCoord, to: cursor)) yd"
+        case .tracking, .penaltyWhere, .drop:
             let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
+            if TrackSession.inTheCup(meters: meters) { return "En el hoyo" }
             if let span = TrackSession.greenToHole(meters: meters), meters <= 25 {
-                return span == "En el hoyo" ? span : "\(span) al hoyo"
+                return span == "En el hoyo" ? span : span
             }
             return "\(PlayMath.yards(from: aimOrigin, to: cursor)) yd"
         default:
@@ -1294,6 +1419,12 @@ struct PlayHoleView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("play-hole-picker")
+            Text("\(track.strokeCount)")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Color.white)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(p.primary))
+                .accessibilityIdentifier("play-score")
             Spacer()
             Button { changeHole(hole + 1) } label: {
                 Image(systemName: "chevron.right")
@@ -1457,7 +1588,7 @@ struct PlayHoleView: View {
             parts.append("\(yards) yd")
         }
         if let hcp = current?.hcp {
-            parts.append("Hcp \(hcp)")
+            parts.append("S.I. \(hcp)")
         }
         return parts.joined(separator: " · ")
     }
@@ -2093,11 +2224,29 @@ struct PlayHoleView: View {
                     Text(shotEditTitle(shot))
                         .font(GType.section)
                         .foregroundStyle(p.ink)
-                    Button("Mover el punto") {
+                    Button("Punto de inicio") {
+                        movingShotID = shot.id
+                        editingShot = nil
+                    }
+                    .accessibilityIdentifier("play-edit-start")
+                    Button("Punto final") {
                         movingShotID = shot.id
                         editingShot = nil
                     }
                     .accessibilityIdentifier("play-edit-move")
+                    Button("Objetivo") {
+                        aimTarget = cursor
+                        editingShot = nil
+                    }
+                    .accessibilityIdentifier("play-edit-aim")
+                    Button("Insertar tiro") {
+                        Task { await insertShot() }
+                    }
+                    .accessibilityIdentifier("play-edit-insert")
+                    Button(shot.intent == "recovery" ? "A buena · activo" : "A buena") {
+                        Task { await toggleRecovery(shot) }
+                    }
+                    .accessibilityIdentifier("play-edit-buena")
                     Text("Palo")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
@@ -2120,8 +2269,9 @@ struct PlayHoleView: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
-                                .background(p.surface)
+                                .background(shot.club == club.name ? Color.white : p.surface)
                                 .clipShape(RoundedRectangle(cornerRadius: 0))
+                                .overlay(RoundedRectangle(cornerRadius: 0).stroke(shot.club == club.name ? Color(hex: BrandHex.red) : Color.clear, lineWidth: 2))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("play-edit-club-\(club.name)")
@@ -2134,7 +2284,7 @@ struct PlayHoleView: View {
                         Button("Sí, borrar") { Task { await deleteShot(shot) } }
                             .accessibilityIdentifier("play-edit-yes")
                     } else {
-                        Button("Borrar") { askDeleteShot = true }
+                        Button("Borrar tiro") { askDeleteShot = true }
                             .font(GType.headline)
                             .foregroundStyle(p.accent)
                             .frame(maxWidth: .infinity)
@@ -2155,6 +2305,23 @@ struct PlayHoleView: View {
             let saved = try await model.api.patchShot(id: shot.id, body: ["club": club])
             if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
             editingShot = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func insertShot() async {
+        let mark = TrackMark(id: track.nextID, at: TrackPoint(lat: cursor.lat, lng: cursor.lng), club: chosenClub, countsStroke: true, holed: false, penalty: false, drop: false)
+        await postMark(mark)
+        editingShot = nil
+    }
+
+    private func toggleRecovery(_ shot: Shot) async {
+        let next: Any = shot.intent == "recovery" ? NSNull() : "recovery"
+        do {
+            let saved = try await model.api.patchShot(id: shot.id, body: ["intent": next])
+            if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
+            editingShot = saved
         } catch {
             message = error.localizedDescription
         }

@@ -2876,7 +2876,12 @@ img.me-face{object-fit:cover;padding:0}
 .tk-sh,.tk-live{fill:none;stroke:#C8102E;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .tk-origin circle{fill:#0B2545;stroke:#fff;stroke-width:2}
 .tk-lost-line{fill:none;stroke:#C8102E;stroke-width:3;stroke-dasharray:7 6}
-.tk-drop-line{fill:none;stroke:#E07A2F;stroke-width:3;stroke-dasharray:7 6}
+.tk-drop-line{fill:none;stroke:#C8102E;stroke-width:3;stroke-dasharray:7 6}
+.tk-drop-x{stroke:#C8102E;stroke-width:3}
+.tk-aimmark{fill:none;stroke:#E2B93B;stroke-width:3}
+@keyframes tkflash{50%{opacity:.28}}
+.tk-holeflash{animation:tkflash .7s steps(1) infinite}
+@media (prefers-reduced-motion: reduce){.tk-holeflash{animation:none}}
 .tk-lost line{stroke:#C8102E;stroke-width:3;stroke-linecap:round}
 .tk-ret b{position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;background:#C8102E;color:#fff;font:700 13px/28px Geist,system-ui,sans-serif;text-align:center}
 .tk-pl{fill:#0B2545;stroke:#fff;stroke-width:2.4}
@@ -3081,7 +3086,7 @@ html[data-ts] .bagtable .baghdr,html[data-ts] .bagtable .bagrow{grid-template-co
 html.rc-map,html.rc-map body{overflow:hidden;height:100%;touch-action:none}
 html.rc-map .tk-map{touch-action:none}
 html.rc-map .tk-dock{position:absolute;left:10px;right:68px;bottom:calc(8px + env(safe-area-inset-bottom));background:transparent;color:#F6F7F9;max-height:none;overflow:visible;border-radius:0;box-shadow:none;padding:0;pointer-events:none;display:flex;flex-direction:column;align-items:flex-start}
-html.rc-map .tk-nav,html.rc-map .tk-acts,html.rc-map .tk-play,html.rc-map .tk-rounds,html.rc-map .tk-club,html.rc-map .tk-msg,html.rc-map .tk-water,html.rc-map .tk-clublist,html.rc-map .tk-nextwide,html.rc-map .tk-nextblock,html.rc-map .tk-nextsub,html.rc-map .tk-sheet,html.rc-map .tk-penmenu,html.rc-map .tk-shots-rail,html.rc-map .tk-edit,html.rc-map .tk-teeact{pointer-events:auto}
+html.rc-map .tk-nav,html.rc-map .tk-acts,html.rc-map .tk-play,html.rc-map .tk-rounds,html.rc-map .tk-club,html.rc-map .tk-msg,html.rc-map .tk-water,html.rc-map .tk-clublist,html.rc-map .tk-nextwide,html.rc-map .tk-nextblock,html.rc-map .tk-nextsub,html.rc-map .tk-sheet,html.rc-map .tk-penmenu,html.rc-map .tk-shots-rail,html.rc-map .tk-edit,html.rc-map .tk-teeact,html.rc-map .tk-sidebtns{pointer-events:auto}
 html.rc-map .tk-teeact{order:4;display:flex;flex-wrap:wrap;gap:6px;max-width:210px;margin:0 0 6px}
 html.rc-map .tk-teelist{flex-basis:100%;display:flex;flex-direction:column;gap:4px;max-height:148px;overflow:auto}
 html.rc-map .tk-teeact button,html.rc-map .tk-teelist button{background:#0B2545;color:#F6F7F9;border:0;border-radius:999px;min-height:32px;padding:6px 10px;font:650 12px/1 Geist,system-ui,sans-serif;font-style:normal;text-align:left}
@@ -3111,7 +3116,7 @@ html.rc-map .tk-sheetx{position:absolute;right:8px;top:8px;width:44px;height:44p
 html.rc-map .tk-clublist{position:relative;left:auto;bottom:auto;z-index:1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none;max-height:none;overflow:visible;background:transparent;border-radius:0}
 html.rc-map .tk-clublist[hidden]{display:none!important}
 html.rc-map .tk-clublist button{background:#fff;color:#0B2545;border:1px solid #E6E2D8;border-radius:12px;width:100%;aspect-ratio:1;min-height:52px;height:auto;text-align:center;padding:4px;font:700 15px/1.1 Geist,system-ui,sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-html.rc-map .tk-clublist button.on{background:#fff;color:#0B2545;box-shadow:inset 0 0 0 2px #0B2545}
+html.rc-map .tk-clublist button.on,html.rc-map .tk-clublist button.on.sug{background:#fff;color:#0B2545;box-shadow:inset 0 0 0 2px #C8102E}
 html.rc-map .tk-clublist button.sug{box-shadow:inset 0 0 0 3px #C8A86A}
 html.rc-map .tk-clublist .tk-clubface{width:28px;height:28px}
 html.rc-map .tk-clublist button i,html.rc-map .tk-clublist button small{font-style:normal;font-size:10px;font-weight:650;letter-spacing:0;line-height:1.1;color:#3E4C62}
@@ -3122,7 +3127,7 @@ html.rc-map .tk-penmenu button{display:block;width:100%;min-height:44px;text-ali
 html.rc-map .tk-play .tk-enter,html.rc-map .tk-play .tk-cancel,html.rc-map .tk-play .tk-next{width:64px;height:64px;min-width:64px;min-height:64px;flex:0 0 64px;border-radius:14px;padding:0}
 html.rc-map .tk-enter,html.rc-map .tk-next{background:#0B2545;color:#fff}
 html.rc-map .tk-cancel{background:#C8102E;color:#fff;font-size:11px;font-weight:700}
-html.rc-map .tk-play .tk-enter{font-size:22px}
+html.rc-map .tk-play .tk-enter{font-size:12px;font-weight:700;letter-spacing:.02em}
 html.rc-map #play-cancel,html.rc-map #play-set{width:72px;height:48px;min-width:72px;min-height:44px;flex:0 0 72px;border-radius:12px;padding:0;font-size:13px;font-weight:700;letter-spacing:.04em}
 html.rc-map #play-undo,html.rc-map #play-penalty{width:44px;height:44px;min-width:44px;min-height:44px;flex:0 0 44px;border-radius:50%;padding:0;background:#fff;color:#0B2545}
 html.rc-map #play-undo{width:auto;min-width:44px;flex:0 0 auto;padding:0 12px;border-radius:999px}
@@ -3133,6 +3138,9 @@ html.rc-map .tk-side,html.rc-map #play-recovery{position:static;width:auto;min-w
 html.rc-map .tk-ro{top:60px;left:auto;right:12px;transform:none;background:rgba(11,37,69,.94);color:#fff;border-radius:16px;box-shadow:0 6px 16px rgba(0,0,0,.4);text-shadow:none;white-space:normal;max-width:168px;overflow:visible;padding:6px 12px 8px}
 html.rc-map .tk-ro.tk-setup{left:50%;right:auto;transform:translateX(-50%);top:112px}
 html.rc-map .tk-ro.tk-done{top:68px;left:50%;right:auto;transform:translateX(-50%);max-width:230px}
+html.rc-map .tk-ro.tk-live{top:calc(42% - 98px);left:50%;right:auto;transform:translateX(-50%);max-width:min(230px,calc(100% - 108px));text-align:center;background:#fff;color:#0B2545}
+html.rc-map .tk-ro.tk-live b,html.rc-map .tk-ro.tk-live small{color:#0B2545}
+html.rc-map .tk-ro.tk-live b.num{font-size:40px}
 html.rc-map .tk-ro.tk-done .cad.hole{width:28px;height:36px;margin:0 auto 2px}
 html.rc-map .tk-ro b{display:block;font-size:15px;font-weight:700;color:#fff;line-height:1.15;white-space:normal;font-style:normal}
 html.rc-map .tk-ro b.num{font-size:28px;line-height:1}
@@ -3162,11 +3170,16 @@ html.rc-map:has(.tk-teelist) .tk-shots-rail{bottom:328px}
 html.rc-map:has(#play-tee-gps) .tk-shots-rail{bottom:276px}
 html.rc-map:has(.tk-ro.tk-done) .tk-shots-rail{top:168px;bottom:auto;max-height:none;gap:8px;max-width:240px;overflow:visible}
 html.rc-map:has(.tk-ro.tk-done) .tk-shots-rail .tk-shot{max-width:none;overflow:visible;text-overflow:clip}
-html.rc-map .tk-edit{position:absolute;left:56px;right:12px;top:200px;bottom:auto;z-index:8;display:flex;flex-wrap:wrap;gap:8px;padding:12px;background:#fff;color:#0B2545;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.28)}
+html.rc-map .tk-edit{position:absolute;left:10px;right:auto;top:auto;bottom:168px;width:min(220px,calc(100% - 72px));max-height:42%;overflow:auto;z-index:9;display:flex;flex-wrap:wrap;gap:8px;padding:12px;background:#fff;color:#0B2545;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.28)}
 html.rc-map .tk-edit b{flex:1 0 100%;font-size:15px;font-weight:700}
 html.rc-map .tk-edit p{flex:1 0 100%;margin:0;font-size:13px}
 html.rc-map .tk-edit button{min-height:40px;border:0;border-radius:12px;background:#0B2545;color:#fff;font:650 13px/1 Geist,system-ui,sans-serif;padding:0 12px;cursor:pointer}
 html.rc-map .tk-edit #play-edit-del{background:transparent;color:#C8102E;border:1.5px solid #C8102E}
+html.rc-map .tk-edit #play-edit-buena[aria-pressed="true"]{box-shadow:inset 0 0 0 2px #C8102E}
+html.rc-map .tk-sidebtns{position:absolute;right:10px;top:22%;z-index:5;display:flex;flex-direction:column;gap:8px}
+html.rc-map .tk-sidebtns button{width:44px;height:44px;border:0;border-radius:50%;background:#fff;color:#0B2545;display:grid;place-items:center;font:700 11px/1 Geist,system-ui,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.28);cursor:pointer;padding:0}
+html.rc-map .tk-score{width:36px;height:36px;min-width:36px;border-radius:50%;display:grid;place-items:center;background:#0B2545;color:#fff;font:700 14px/1 Geist,system-ui,sans-serif;flex:0 0 auto}
+html.rc-map .tk-shots-rail .tk-shot.on{box-shadow:inset 0 0 0 2px #C8102E,0 4px 12px rgba(0,0,0,.28)}
 html.rc-map .tk-edit #play-edit-yes{background:#C8102E;color:#fff}
 html.rc-map .tk-shots-rail .tk-shot,html.rc-map .tk-shots-rail span{width:auto;max-width:210px;background:#fff;color:#0B2545;border:1px solid rgba(11,37,69,.18);border-radius:999px;padding:4px 10px;font-size:12px;line-height:1.2;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 12px rgba(0,0,0,.28)}
 html.rc-map .tk-shots-rail .tk-shot[hidden]{display:none!important}

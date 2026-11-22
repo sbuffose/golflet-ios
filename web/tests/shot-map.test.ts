@@ -196,7 +196,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     await page.click("#play-drop");
     await page.waitForFunction(() => document.querySelector("#play-reticle")?.getAttribute("data-cursor") === "drop");
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-drop.png" });
-    assert.equal(await page.$eval("#play-reticle b", el => el.textContent), "3");
+    assert.equal(await page.$eval("#play-reticle b", el => el.textContent), "X");
     await pan(page, 90, -20);
     const dropAt = await cursor(page);
     assert.ok(apart(dropAt.lat, dropAt.lng, penalty.end_lat, penalty.end_lng));
@@ -498,7 +498,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     }));
     assert.equal(resumedClub.value, "SW");
     assert.equal(resumedClub.blank, "");
-    assert.equal(await page.$eval("#play-club", el => (el as HTMLSelectElement).selectedOptions[0]?.textContent), "SW");
+    assert.equal(await page.$eval("#play-club", el => (el as HTMLSelectElement).selectedOptions[0]?.textContent), "Sand wedge");
     assert.equal(resumedClub.text.includes("Después"), false);
 
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-stale`, { waitUntil: "networkidle0" });

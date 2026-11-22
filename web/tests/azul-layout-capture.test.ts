@@ -55,9 +55,9 @@ test("la Azul nueva muestra los hoyos 1, 3 y 12 a 375", { timeout: 90_000, skip:
   mkdirSync(art, { recursive: true });
   const teeLat = (n: number) => current.find(h => h.hole === n)!.tees[0]!.center!.lat;
   const expect = [
-    { hole: 1, label: "Par 5", yards: "483 yd", hcp: "Hcp 4", lat: teeLat(1) },
-    { hole: 3, label: "Par 4", yards: "409 yd", hcp: "Hcp 16", lat: teeLat(3) },
-    { hole: 12, label: "Par 4", yards: "345 yd", hcp: "Hcp 9", lat: teeLat(12) },
+    { hole: 1, label: "Par 5", yards: "483 yd", hcp: "S.I. 4", lat: teeLat(1) },
+    { hole: 3, label: "Par 4", yards: "409 yd", hcp: "S.I. 16", lat: teeLat(3) },
+    { hole: 12, label: "Par 4", yards: "345 yd", hcp: "S.I. 9", lat: teeLat(12) },
   ];
   try {
     const page = await browser.newPage();

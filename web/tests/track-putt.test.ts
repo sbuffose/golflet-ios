@@ -405,7 +405,7 @@ test("a putt starts after the approach, in feet or inches, and the hole closes o
     assert.equal(posts.at(-1)?.result, "holed");
     assert.deepEqual(rows.map(row => row.replace(/\s+/g, " ")), rows);
     assert.match(rows[0] || "", /1\. Driver · 302 yd/);
-    assert.match(rows[1] || "", /2\. PW · 152 yd/);
+    assert.match(rows[1] || "", /2\. Pitching wedge · 152 yd/);
     assert.match(rows[2] || "", /3\. Putter · 18 ft/);
     assert.match(rows[3] || "", /4\. Putter · \d+ in · Embocado/);
     assert.equal((rows[3] || "").includes("18 ft"), false);

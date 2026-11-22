@@ -184,14 +184,14 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     await ready(page);
     const beforeZoom = Number(await page.$eval("#tkmap", el => el.getAttribute("data-z")));
     await page.click("#play-hit");
-    await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("PW"));
+    await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("Pitching wedge"));
     assert.equal(posts[1].club, "PW");
     assert.equal(posts[1].lie ?? null, null);
     assert.ok(Math.abs(Number(posts[1].lat) - Number(posts[0].end_lat)) < 1e-4, "el PW sale de donde terminó el driver");
     assert.ok(Number(posts[1].distance_m) > 50 && Number(posts[1].distance_m) < 160, `PW ${posts[1].distance_m} m`);
     const approachRail = await page.$eval("#rc-shots", el => el.textContent || "");
-    assert.match(approachRail, /PW · (\d+) yd/);
-    const pwYd = Number((approachRail.match(/PW · (\d+) yd/) || [])[1]);
+    assert.match(approachRail, /Pitching wedge · (\d+) yd/);
+    const pwYd = Number((approachRail.match(/Pitching wedge · (\d+) yd/) || [])[1]);
     assert.ok(pwYd > 50 && pwYd < 175, approachRail);
     await page.click("#play-lie");
     await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-putting") === "1" && document.querySelector("#tkmap")?.getAttribute("data-moving") === "0");
