@@ -136,6 +136,12 @@ struct HomeView: View {
             .golfletChrome()
             .environment(model)
         }
+        .confirmationDialog(model.todayPrompt, isPresented: Binding(get: { !model.todayAsk.isEmpty }, set: { if !$0 { model.todayAsk = [] } }), titleVisibility: .visible) {
+            ForEach(model.todayAsk, id: \.self) { course in
+                Button(course) { Task { await model.openTodayTrack(course: course) } }
+            }
+            Button("Cancelar", role: .cancel) { model.todayAsk = [] }
+        }
         .onChange(of: model.celebrateCards) { _, value in
             guard let value else { return }
             Task { await countUpCards(to: value) }
@@ -146,6 +152,18 @@ struct HomeView: View {
         showsHomeProfesores = false
         showsAgregarProfesor = false
         model.presentedProfesor = profesor
+    }
+
+    private var todayRound: Round? {
+        model.rounds.first { !$0.official && ($0.cardStatus == "En juego" || $0.cardStatus == "Tarjeta pendiente") }
+    }
+
+    private var showsTodayTrack: Bool {
+        if todayRound != nil { return true }
+        guard let tee = model.nextTeeTime else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: -3 * 3600) ?? .current
+        return calendar.isDateInToday(tee.startsAt)
     }
 
     private func header(scroll: ScrollViewProxy) -> some View {
@@ -211,7 +229,10 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("home-open-jugar")
-            Button { model.showsReconstruct = true } label: {
+            Button {
+                model.todayTrack = nil
+                model.showsReconstruct = true
+            } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Cargar una vuelta ya jugada")
                         .font(GType.headline)
@@ -323,6 +344,16 @@ struct HomeView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel("Jugar")
                         .accessibilityIdentifier("play-start")
+                        if showsTodayTrack {
+                            Button { Task { await model.openTodayTrack(course: nil) } } label: {
+                                Text(todayRound == nil ? "Trackear la vuelta de hoy" : "Seguir la vuelta de hoy")
+                                    .font(GType.label)
+                                    .foregroundStyle(p.onPrimary)
+                                    .frame(minHeight: 36)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("today-track")
+                        }
                         Button { showsHcpImpact = true } label: {
                             Text("Cambios")
                                 .font(GFont.ui(13, weight: .regular))
@@ -1191,7 +1222,12 @@ struct RoundRow: View {
             }
             return parts.joined(separator: " · ")
         }
-        if !round.official { return "No oficial · \(round.displayCourse)\(round.tee.isEmpty ? "" : " · \(round.tee)")" }
+        if !round.official {
+            let tee = round.tee.isEmpty ? "" : " · \(round.tee)"
+            if round.cardStatus == "En juego" { return "En juego · Tarjeta pendiente · \(round.displayCourse)\(tee)" }
+            if round.cardStatus == "Tarjeta pendiente" { return "Tarjeta pendiente · \(round.displayCourse)\(tee)" }
+            return "No oficial · \(round.displayCourse)\(tee)"
+        }
         var parts = [round.displayCourse]
         if !round.tee.isEmpty, round.tee.caseInsensitiveCompare(round.course) != .orderedSame {
             parts.append(round.tee)

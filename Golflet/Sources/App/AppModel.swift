@@ -40,6 +40,10 @@ final class AppModel {
     var isSignedIn: Bool
     var showsPlay = false
     var showsReconstruct = false
+    var todayTrack: RoundTrackContext?
+    var todayAsk: [String] = []
+    var todayPrompt = "¿Azul o Colorada?"
+    var linkAsks: [LinkAsk] = []
     var presentedProfesor: Profesor?
     var presentedRecap: RecapTarget?
     var recurring: RecurringReport?
@@ -378,6 +382,9 @@ final class AppModel {
             notificationsAvailable = false
             showsNotifications = false
             showsReconstruct = false
+            todayTrack = nil
+            todayAsk = []
+            linkAsks = []
             presentedProfesor = nil
             presentedInvite = nil
             presentedGroupID = nil
@@ -822,6 +829,36 @@ final class AppModel {
     }
 
     var nextTeeTime: TeeTime? { upcomingTeeTimes.first }
+
+    func openTodayTrack(course: String?) async {
+        do {
+            let opened = try await api.openTodayRound(course: course, teeId: nil)
+            if !opened.ask.isEmpty {
+                todayPrompt = opened.prompt.isEmpty ? "¿Azul o Colorada?" : opened.prompt
+                todayAsk = opened.ask
+                return
+            }
+            guard !opened.id.isEmpty else {
+                toastMessage = "No pudimos abrir la vuelta de hoy."
+                return
+            }
+            todayAsk = []
+            todayTrack = RoundTrackContext(roundId: "", date: Date(), courseName: opened.course, clubCode: "", hole: 1, liveId: opened.id)
+            showsReconstruct = true
+        } catch {
+            toastMessage = "No pudimos abrir la vuelta de hoy."
+        }
+    }
+
+    func confirmLink(liveId: String, roundId: String) async {
+        do {
+            try await api.confirmProvisionalLink(liveId: liveId, roundId: roundId)
+            linkAsks = []
+            apply(try await api.bootstrap())
+        } catch {
+            toastMessage = "No pudimos vincular la vuelta."
+        }
+    }
 
     func refreshTeeTimes() async {
         guard isSignedIn else {
@@ -1448,6 +1485,7 @@ final class AppModel {
         officialHistory = snap.hiHistory
         clubs = snap.clubs
         rounds = incoming
+        linkAsks = snap.linkAsks
         if let shownID, sameAccount, let fresh = incoming.first(where: { $0.roundId == shownID }) {
             presentedRound = fresh
         } else {

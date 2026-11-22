@@ -228,9 +228,20 @@ function heroMeta(){
     <a id="hcpimp" href="#/impacto"><div>Impacto</div><b class="num">${homeImpactMark()}</b></a>
   </div>`;
 }
+function todayTrackCard(){
+  const round = G.today_round;
+  const booking = G.today_booking;
+  const ask = G.today_ask;
+  if (round?.id) return `<a class="card row vx-tap" id="today-track" href="#/reconstruir/${encodeURIComponent(round.id)}"><div class="body"><div class="t">Seguir la vuelta de hoy</div><div class="s">${esc(round.course || "Cancha")} · En juego · Tarjeta pendiente</div></div></a>`;
+  if (Array.isArray(ask) && ask.length) return `<div class="card" id="today-ask"><p class="t">${esc(G.today_prompt || "¿Azul o Colorada?")}</p><div class="seg">${ask.map(c => `<button type="button" data-today-course="${esc(c)}">${esc(c)}</button>`).join("")}</div></div>`;
+  if (booking && !booking.course_label) return `<div class="card" id="today-ask"><p class="t">¿Azul o Colorada?</p><div class="seg">${["Azul", "Colorada"].map(c => `<button type="button" data-today-course="${esc(c)}">${esc(c)}</button>`).join("")}</div></div>`;
+  if (booking) return `<button type="button" class="btn ghost" id="today-start">Trackear la vuelta de hoy</button>`;
+  return "";
+}
 function heroActions(play){
   if (!play) return '';
-  return `<div class="hi-avs"><div id="hiprofs" hidden></div><div id="higroups" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a><a class="hi-ch-l" href="#/cambios">Cambios</a></div></div>`;
+  const hoy = G.today_round?.id ? `<a class="hp-prac" id="today-track-hero" href="#/reconstruir/${encodeURIComponent(G.today_round.id)}" aria-label="Seguir la vuelta de hoy"><span>Hoy</span></a>` : (G.today_booking ? `<button type="button" class="hp-prac" id="today-start-hero" aria-label="Trackear la vuelta de hoy"><span>Hoy</span></button>` : "");
+  return `<div class="hi-avs"><div id="hiprofs" hidden></div><div id="higroups" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a>${hoy}<a class="hi-ch-l" href="#/cambios">Cambios</a></div></div>`;
 }
 function homeCircle(){
   return '';
@@ -239,12 +250,12 @@ function vInicio(){
   const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
   const top = `<div class="top"><img class="cad xs" src="/brand/caddie.png" alt=""><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
-  if (!valid.length) return top + homeCircle() + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas. Actualizalas desde Cuenta.</div>` : emptyData('Empecemos por tu club'));
+  if (!valid.length) return top + homeCircle() + revealCard() + todayTrackCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas. Actualizalas desde Cuenta.</div>` : emptyData('Empecemos por tu club'));
   const hi = G.hi_history, d = hi.length>1 ? hi[hi.length-1].hi - hi[0].hi : null;
   const last = rounds.find(r => r.official !== false) || rounds[0];
   const hiNow = window.GolfletRules ? window.GolfletRules.officialIndex(G.player?.handicap_index, (hi || []).filter(h => h.hi != null).map(h => ({ date: h.date, hi: +h.hi }))) : (hi.at(-1)?.hi ?? G.player?.handicap_index ?? null);
   const hiMark = hiNow == null ? miss('handicap') : `<div class="big num">${f1(hiNow)}</div>`;
-  return top + revealCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
+  return top + revealCard() + todayTrackCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
     ${heroActions(true)}
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
     ${hiMark}</a>${hiNow == null ? '' : hiBand(hi, d)}
@@ -393,10 +404,18 @@ function vRondas(){
   if (segL!=='Todas' && !course(segL)) segL='Todas';
   const list = rounds.filter(r=>segL==='Todas'||r.course_key===segL), by = {};
   list.forEach(r=>(by[r.date.slice(0,4)] ||= []).push(r));
-  const unofficial = (G.unofficial_rounds || []).map(r => `<a class="row rc-off" href="#/reconstruir/${encodeURIComponent(r.id)}">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course || "Cancha")}</div><div class="s">No oficial${r.tee ? " · Tee " + esc(r.tee) : ""}</div></div><span class="badge">No oficial</span></a>`).join("");
-  const unofficialBlock = unofficial ? `<div class="section"><h2>No oficial</h2></div><p class="foot">Estas vueltas no tienen tarjeta del club. No entran en tus promedios ni en los números del grupo.</p><div class="list">${unofficial}</div>` : "";
+  const unofficial = (G.unofficial_rounds || []).map(r => {
+    const pending = r.pending_label === "En juego" || r.pending_label === "Tarjeta pendiente" ? r.pending_label : "";
+    const badge = pending || "No oficial";
+    const line = pending === "En juego" ? "Tarjeta pendiente" : badge;
+    const tee = r.tee ? " · Tee " + esc(r.tee) : "";
+    return `<a class="row rc-off" href="#/reconstruir/${encodeURIComponent(r.id)}">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course || "Cancha")}</div><div class="s">${line}${tee}</div></div><span class="badge">${badge}</span></a>`;
+  }).join("");
+  const linkAsk = (G.link_asks || []).map(a => `<div class="card" id="link-ask"><b>Hay más de una vuelta para esta tarjeta.</b><p class="foot">Elegí cuál vincular. No las unimos solas.</p>${(a.liveIds || []).flatMap(live => (a.roundIds || []).map(round => `<button type="button" class="btn ghost sm" data-link-live="${esc(live)}" data-link-round="${esc(round)}">Vincular ${esc(a.course || "la cancha")} · ${esc(a.date || "")}</button>`)).join("")}</div>`).join("");
+  const pendingRows = (G.unofficial_rounds || []).some(r => r.pending_label === "En juego" || r.pending_label === "Tarjeta pendiente");
+  const unofficialBlock = unofficial ? `<div class="section"><h2>${pendingRows ? "En juego" : "No oficial"}</h2></div><p class="foot">${pendingRows ? "La tarjeta del club todavía no llegó. Cuando llegue, esta vuelta cuenta como oficial." : "Estas vueltas no tienen tarjeta del club. No entran en tus promedios ni en los números del grupo."}</p><div class="list">${unofficial}</div>` : "";
   return `<div class="top"><span class="overline">${rounds.length} tarjetas · ${G.clubs.length===1?esc(G.clubs[0].club_name):G.clubs.length+' clubes'}</span></div>
-  <h1 class="ltitle">Rondas</h1>${reconEntry()}${G.courses.length>1?`<div class="seg">${segBtns(segL,'segl')}</div>`:''}
+  <h1 class="ltitle">Rondas</h1>${reconEntry()}${linkAsk}${todayTrackCard()}${G.courses.length>1?`<div class="seg">${segBtns(segL,'segl')}</div>`:''}
   <div class="rsort" role="radiogroup" aria-label="Ordenar"><span aria-hidden="true">Ordenar</span>${[['date','Fecha'],['gross','Mejor gross'],['net','Mejor neto']].map(([k,l])=>`<button type="button" role="radio" aria-checked="${sortL===k}" class="${sortL===k?'on':''}" data-sortl="${k}">${l}</button>`).join('')}</div>
   ${sortL==='gross' ? `<div class="list">${list.filter(r=>r.valid_card&&r.gross&&!r.is_9_holes).sort((a,b)=>a.gross-b.gross||(a.date<b.date?1:-1)).map(r=>roundRow(r, false, true)).join('')}</div><p class="foot">Solo tarjetas válidas de 18 hoyos, de la mejor a la peor.</p>` :
     sortL==='net' ? `<div class="list">${list.filter(r=>r.valid_card&&r.gross&&!r.is_9_holes).sort((a,b)=>(a.net==null)-(b.net==null)||(a.net??0)-(b.net??0)||(a.date<b.date?1:-1)).map(r=>roundRow(r, false, true)).join('')}</div><p class="foot">Solo tarjetas válidas de 18 hoyos, por neto de menor a mayor; las que no tienen neto van al final.</p>` :
@@ -416,7 +435,7 @@ function nine(r, c, from){
     <span class="lab">Hoyo</span>${hs.map(h=>`<span class="h">${h[0]}</span>`).join('')}<span class="h">${from?'VTA':'IDA'}</span>
     ${ydRow}
     <span class="lab">Par</span>${hs.map(h=>`<span class="c">${h[1]??''}</span>`).join('')}<span class="tot" style="color:var(--color-ink2);font-weight:var(--fw500,500)">${tot(hs.map(h=>h[1]))}</span>
-    <span class="lab"></span>${hs.map(h=>`<span class="sc-s"><span class="b ${cls(h[2]==null||h[1]==null?null:h[2]-h[1])}">${h[2]??'·'}</span></span>`).join('')}<span class="tot">${tot(hs.map(h=>h[2]))}</span>
+    <span class="lab"></span>${hs.map(h=>`<span class="sc-s"><span class="b ${cls(h[2]==null||h[1]==null?null:h[2]-h[1])}${(r.track_diff || []).includes(h[0]) ? " gap" : ""}">${h[2]??'·'}</span></span>`).join('')}<span class="tot">${tot(hs.map(h=>h[2]))}</span>
   </div>`;
 }
 function holeTally(r){
@@ -451,6 +470,7 @@ function sRonda(id){
   ${r.holes?.length?`<div class="card" style="margin-top:12px;padding:14px 12px">${nine(r,c,0)}<div class="sc"><span class="div"></span></div>${nine(r,c,9)}
     ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
+  ${(r.track_diff || []).length ? `<p class="foot" id="track-gap">El hoyo ${(r.track_diff || []).join(", ")} difiere del track. El score de la tarjeta queda igual.</p>` : ""}
   <div id="hmap"></div>
   <div id="rwx" hidden></div>
   <div class="section"><h2>Estadísticas de la ronda</h2>${has?'<span class="badge" id="gamebadge">Cargado</span>':''}</div>
@@ -1132,6 +1152,7 @@ async function loadTee(id, opts){
       ${t.event_name?`<p class="foot" style="margin-top:8px">${esc(t.event_name)}</p>`:''}
       <button type="button" class="btn ghost sm" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>
       <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
+      ${String(t.date) === String(G.today || "") ? (G.today_round?.id ? `<a class="btn ghost" id="tee-track" href="#/reconstruir/${encodeURIComponent(G.today_round.id)}">Seguir la vuelta de hoy</a>` : `<button type="button" class="btn ghost" id="today-start" data-tee="${esc(t.id)}">Trackear la vuelta de hoy</button>`) : ""}
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
       <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HI ${f1(c.hcp)}`:', HI no disponible'}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HI</span></div>`:`<div class="score"><span>HI no disponible</span></div>`}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
       <div id="scorecards"></div>
@@ -1448,6 +1469,7 @@ async function loadJugar(id){
     const groups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(cs) : [{ code: 'c', club: '', distance: null, rows: cs.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
     const courseRadios = (rows, checkedFirst) => rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${checkedFirst && i === 0 ? 'checked' : ''}><span class="body"><span class="t">${esc(c.name)}</span>${c.club ? `<span class="s">${esc(c.club)}</span>` : ''}</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('');
     el.innerHTML = `<div class="stitle">Empezar ronda</div>
+      ${todayTrackCard()}
       ${open ? `<a class="card row vx-tap jg-open" href="#/jugar/${esc(open.id)}"><div><div class="t">Seguir la ronda de hoy</div><div class="s">${esc(open.course || open.vm_course || 'Cancha')} · hoyo ${open.current_hole || 1}</div></div>${ICON.chev || '›'}</a>` : ''}
       <p class="lede">Elegí la cancha. En el hoyo confirmás el tee, después la bandera, y cada golpe con ENTER. El mapa se mueve bajo la mira.</p>
       <div class="section"><h2>Mis clubes</h2></div>
@@ -4043,7 +4065,24 @@ function askInline(btn, msg, yes = 'Sí, confirmar'){
     row.querySelector('[data-yes]').onclick = () => done(true); row.querySelector('[data-no]').onclick = () => done(false);
   });
 }
+async function openToday(course, teeId){
+  try {
+    const res = await api("/api/today-round", { method: "POST", body: JSON.stringify({ course: course || "", tee_id: teeId || G.today_booking?.id || "" }) });
+    if (res.ask?.length) { G.today_ask = res.ask; G.today_prompt = res.prompt || "¿Azul o Colorada?"; render(true); return; }
+    if (res.live_round?.id) { G.today_round = res.live_round; location.hash = `#/reconstruir/${res.live_round.id}`; }
+  } catch (e) { const box = document.querySelector("#today-ask, #today-start"); if (box) box.insertAdjacentHTML("afterend", `<p class="foot">${esc(e.message || "No pudimos abrir la vuelta de hoy.")}</p>`); }
+}
+async function confirmTodayLink(liveId, roundId, btn){
+  btn.disabled = true;
+  try {
+    await api("/api/today-round/link", { method: "POST", body: JSON.stringify({ live_id: liveId, round_id: roundId }) });
+    G = { ...G, ...(await api("/api/data")) }; derive(); render(true);
+  } catch (e) { btn.disabled = false; btn.insertAdjacentHTML("afterend", `<p class="foot">${esc(e.message || "No pudimos vincular la vuelta.")}</p>`); }
+}
 function bind(p, isDetail){
+  view.querySelectorAll("#today-start, #today-start-hero").forEach(starter => starter.onclick = () => openToday("", starter.dataset.tee || ""));
+  view.querySelectorAll("[data-today-course]").forEach(b => b.onclick = () => openToday(b.dataset.todayCourse, ""));
+  view.querySelectorAll("[data-link-live]").forEach(b => b.onclick = () => confirmTodayLink(b.dataset.linkLive, b.dataset.linkRound, b));
   view.querySelectorAll('[data-seg]').forEach(b=>b.onclick=()=>{ segR=b.dataset.seg; render(true); });
   view.querySelectorAll('[data-segl]').forEach(b=>b.onclick=()=>{ segL=b.dataset.segl; render(true); });
   view.querySelectorAll('[data-sortl]').forEach(b=>b.onclick=()=>{ sortL=b.dataset.sortl; render(true); });

@@ -94,6 +94,13 @@ struct ReconstructionShot: Identifiable, Equatable, Sendable {
     }
 }
 
+struct TodayTrack: Equatable, Sendable {
+    var id: String
+    var course: String
+    var ask: [String]
+    var prompt: String
+}
+
 struct RoundTrackContext: Equatable, Sendable {
     var roundId: String
     var date: Date

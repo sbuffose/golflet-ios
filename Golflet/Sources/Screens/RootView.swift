@@ -160,9 +160,9 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
-        .fullScreenCover(isPresented: bindings.showsReconstruct) {
+        .fullScreenCover(isPresented: bindings.showsReconstruct, onDismiss: { model.todayTrack = nil }) {
             NavigationStack {
-                ReconstructView()
+                ReconstructView(context: model.todayTrack)
             }
             .golfletChrome()
             .environment(model)

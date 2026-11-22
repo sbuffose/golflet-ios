@@ -265,6 +265,12 @@ struct RoundDetailView: View {
                     legend(item)
                 }
             }
+            if !round.trackDiff.isEmpty {
+                Text("El hoyo \(round.trackDiff.map(String.init).joined(separator: ", ")) difiere del track. El score de la tarjeta queda igual.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .accessibilityIdentifier("track-gap")
+            }
         }
     }
 
@@ -278,7 +284,7 @@ struct RoundDetailView: View {
                     .font(GType.overline)
                     .frame(width: 44, alignment: .leading)
                 ForEach(holes) { hole in
-                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 28)
+                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 28, differs: round.trackDiff.contains(hole.number))
                         .frame(maxWidth: .infinity)
                         .frame(height: 34)
                 }

@@ -117,6 +117,7 @@ button{font:inherit;color:inherit}
 .b{width:28px;height:28px;display:grid;place-items:center;font-size:calc(15px*var(--ts,1));font-weight:var(--fw600,600);border-radius:9px;letter-spacing:-.02em}
 .b.eagle{background:var(--color-primary);color:var(--color-accent);border-radius:50%;box-shadow:0 0 0 2px var(--color-bg,#F7F5F0),0 0 0 4px var(--color-primary)}
 .b.birdie{background:var(--color-accent);color:#fff;border-radius:50%}
+.b.gap{box-shadow:inset 0 -2px 0 #C8A86A}
 .b.par{color:var(--color-ink)}
 .b.bogey{background:#ECE8DF}
 .b.double{background:#4A514C;color:#fff}

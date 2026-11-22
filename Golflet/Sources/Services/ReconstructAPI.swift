@@ -14,6 +14,25 @@ extension LiveGolfletAPI {
         return ReconstructPayload.round(row, clubName: "")
     }
 
+    func openTodayRound(course: String?, teeId: String?) async throws -> TodayTrack {
+        var body: [String: Any] = [:]
+        if let course, !course.isEmpty { body["course"] = course }
+        if let teeId, !teeId.isEmpty { body["tee_id"] = teeId }
+        let json = try await request("POST", "/api/today-round", body: body)
+        let ask = (json["ask"] as? [Any] ?? []).compactMap { $0 as? String }
+        let row = json["live_round"] as? [String: Any]
+        return TodayTrack(
+            id: row?["id"] as? String ?? "",
+            course: row?["course"] as? String ?? course ?? "",
+            ask: ask,
+            prompt: json["prompt"] as? String ?? "¿Azul o Colorada?"
+        )
+    }
+
+    func confirmProvisionalLink(liveId: String, roundId: String) async throws {
+        _ = try await request("POST", "/api/today-round/link", body: ["live_id": liveId, "round_id": roundId])
+    }
+
     func reconstructionShots(liveRoundId: String) async throws -> [ReconstructionShot] {
         let json = try await request("GET", "/api/reconstructions/\(liveRoundId)/shots")
         return ReconstructPayload.shots(json["shots"])
@@ -80,6 +99,12 @@ extension MockAPIClient {
     func courseCenters(courseId: String) async throws -> [Int: ReconstructionPoint] { [:] }
 
     func courseMap(club: String, course: String) async throws -> [String: Any] { [:] }
+
+    func openTodayRound(course: String?, teeId: String?) async throws -> TodayTrack {
+        TodayTrack(id: "mock-live", course: course ?? "Azul", ask: [], prompt: "")
+    }
+
+    func confirmProvisionalLink(liveId: String, roundId: String) async throws {}
 }
 
 enum ReconstructPayload {
