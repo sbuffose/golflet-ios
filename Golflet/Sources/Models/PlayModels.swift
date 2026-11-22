@@ -40,6 +40,7 @@ struct GPSHole: Hashable, Sendable, Identifiable {
     var yards: [String: Int]
     var green: GPSGreen
     var tee: GPSCoord?
+    var tees: [GPSCoord] = []
 }
 
 struct GPSCourseDetail: Hashable, Sendable, Identifiable {

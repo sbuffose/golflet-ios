@@ -76,7 +76,7 @@
       more: false, history: false, saved: H.shots || [],
       alive: true, done: false, reopen: false, editN: 0, pickClub: false, moveShot: false, askDel: false, suggestedTee: null, suggestedPin: null, flagKind: 'none', adjusted: false, clubChosen: false, cmapTried: false,
       playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false, undoing: false,
-      driverTee: null, teeSource: '', teeName: '', moveTee: false, flagSource: '', wx: null, wxState: '', wxOpen: false, wxWhy: '', lostPair: null, provisionalNext: false, recovery: false, suggest: '', roundId: H.roundId || '',
+      driverTee: null, teeSource: '', teeName: '', moveTee: false, teeOpen: false, flagSource: '', wx: null, wxState: '', wxOpen: false, wxWhy: '', lostPair: null, provisionalNext: false, recovery: false, suggest: '', roundId: H.roundId || '',
     };
 
     const holeRec = () => S.holes.find(h => h.hole === S.hole || h.number === S.hole) || S.holes[S.hole - 1] || {};
@@ -196,6 +196,19 @@
       const dx = 0, dy = 0;
       const n = 2 ** S.cam.z;
       return unproj(S.cam.cx + dx / (n * 256), S.cam.cy + dy / (n * 256));
+    };
+    const pointAt = (clientX, clientY) => {
+      const map = mapBox();
+      if (!map) return null;
+      const rect = map.getBoundingClientRect();
+      const W = rect.width || map.clientWidth || innerWidth;
+      const H = rect.height || map.clientHeight || innerHeight;
+      const dx = clientX - rect.left - W / 2;
+      const dy = clientY - rect.top - H * 0.42;
+      const rad = -S.cam.hdg * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
+      const px = dx * c + dy * s, py = -dx * s + dy * c;
+      const n = 2 ** S.cam.z;
+      return unproj(S.cam.cx + px / (n * 256), S.cam.cy + py / (n * 256));
     };
     const toScreen = (ll, W, H) => {
       if (!ll) return null;
@@ -426,8 +439,10 @@
         if (!raw) return null;
         const j = JSON.parse(raw);
         const lat = Number(j && j.lat), lng = Number(j && j.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        return { lat, lng, name: String(j.name || ''), source: j.source === 'tee' ? 'tee' : 'jugador' };
+        const name = String((j && j.name) || '');
+        const source = j && j.source === 'tee' ? 'tee' : 'jugador';
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return name ? { lat: null, lng: null, name, source } : null;
+        return { lat, lng, name, source };
       } catch { return null; }
     };
     const writeSalida = rec => {
@@ -454,6 +469,11 @@
     const restoreSalida = () => {
       const saved = readSalida();
       if (!saved) return;
+      if (saved.lat == null || saved.lng == null) {
+        S.teeName = saved.name;
+        S.teeSource = saved.source;
+        return;
+      }
       applySalida(saved.lat, saved.lng, saved.name, saved.source);
     };
     const armRetro = () => {
@@ -826,6 +846,14 @@
       const cupSpot = cupLL();
       const ballToCup = ballSpot && cupSpot ? hav(ballSpot, cupSpot) : null;
       const offerFinish = putting() && ballToCup != null && R().shortPutt && R().shortPutt(ballToCup);
+      const choices = teeChoices();
+      const teeFace = (() => {
+        const picked = choices.find(b => b.name === S.teeName);
+        if (picked) return `${picked.name}${picked.yards != null ? ` · ${picked.yards} yd` : ''}`;
+        return cardYd ? `Salida · ${cardYd}` : 'Salida';
+      })();
+      const teeList = S.teeOpen ? `<div class="tk-teelist" id="play-tee-list" role="listbox">${choices.length ? choices.map(b => `<button type="button" role="option" data-tee="${esc(b.name)}" class="${b.name === S.teeName ? 'on' : ''}">${esc(b.name)}${b.yards != null ? ` · ${b.yards} yd` : ''}</button>`).join('') : '<p>Esta cancha no tiene salidas con yardas.</p>'}</div>` : '';
+      const teeBar = retro ? `<div class="tk-teeact">${teeList}<button type="button" class="tk-tee" id="play-tee" aria-expanded="${S.teeOpen ? 'true' : 'false'}" aria-label="Salida">${esc(teeFace)}</button><button type="button" id="play-move-tee" aria-pressed="${S.moveTee ? 'true' : 'false'}">${S.moveTee ? 'Listo' : 'Mover'}</button>${S.moveTee ? '<button type="button" id="play-tee-gps">Usar mi ubicación</button>' : ''}</div>` : '';
       const holeBits = [par ? `Par ${par}` : '', cardYd, verifiedFlag() && !verifiedTee() ? 'Sin salida verificada' : ''].filter(Boolean);
       const holeChip = retro ? `<div class="tk-hole" id="tk-hole"><b>Hoyo ${S.hole}</b>${H.unofficial ? `<span class="tk-unofficial">No oficial</span>` : ''}${holeBits.length ? `<span>${esc(holeBits.join(' · '))}</span>` : ''}</div>` : '';
       const read = cursorRead(here);
@@ -866,6 +894,7 @@
         ${hs ? `<a class="tk-strat" id="strategy-compact" href="#/estrategia/${encodeURIComponent(S.strat.course_key || S.course?.course_key || '')}">${esc(hs.plan_title || 'Plan del hoyo')}</a>` : ''}
         ${shotEditor}
         <div class="tk-dock">
+          ${teeBar}
           ${editSheet}
           ${retro && greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}
           ${retro && verifiedTee() && verifiedFlag() && !spanOk() ? `<p class="tk-opennote" id="rc-nogeo">La salida no cierra. No marco un rumbo.</p>` : ''}
@@ -994,6 +1023,9 @@
       map.dataset.cursorLng = cursor && Number.isFinite(cursor.lng) ? String(cursor.lng) : '';
       map.dataset.phase = S.track.phase || '';
       map.dataset.teeSource = S.teeSource || '';
+      map.dataset.teeName = S.teeName || '';
+      map.dataset.teeLat = S.track.tee && Number.isFinite(S.track.tee.lat) ? String(S.track.tee.lat) : '';
+      map.dataset.teeLng = S.track.tee && Number.isFinite(S.track.tee.lng) ? String(S.track.tee.lng) : '';
       map.dataset.flagSource = S.flagSource || '';
       map.dataset.lie = originOnGreen() ? 'green' : (lieAt(ballLL()) || '');
       map.dataset.cursorLie = lieAt(cursor) || '';
@@ -1361,7 +1393,7 @@
       if (n < 1 || n > 18 || S.busy) return;
       if (retro) {
         if (!S.alive) return;
-        S.hole = n; S.panned = false; S.msg = ''; S.penaltyShotId = null; S.history = false; S.done = false; S.reopen = false; S.editN = 0; S.pickClub = false; S.moveShot = false; S.askDel = false; S.teeSource = ''; S.flagSource = '';
+        S.hole = n; S.panned = false; S.msg = ''; S.penaltyShotId = null; S.history = false; S.done = false; S.reopen = false; S.editN = 0; S.pickClub = false; S.moveShot = false; S.askDel = false; S.teeSource = ''; S.teeName = ''; S.moveTee = false; S.teeOpen = false; S.flagSource = '';
         S.clubChosen = false;
         S.club = '';
         S.playerLie = ''; S.lieBall = null; S.holeIntent = false; S.puttDraft = ''; S.clubAuto = ''; S.clubBefore = '';
@@ -1381,7 +1413,8 @@
         const r = await api(`/api/live-rounds/${encodeURIComponent(S.id)}`, { method: 'PATCH', body: JSON.stringify({ current_hole: n }) });
         S.live = r.live_round || S.live;
       } catch (e) { /* the local hole still moves */ }
-      S.hole = n; S.track = R().trackNew(); S.panned = false; S.msg = ''; S.penaltyShotId = null; S.teeSource = ''; S.flagSource = '';
+      S.hole = n; S.track = R().trackNew(); S.panned = false; S.msg = ''; S.penaltyShotId = null; S.teeSource = ''; S.teeName = ''; S.moveTee = false; S.teeOpen = false; S.flagSource = '';
+      restoreSalida();
       fitCam(); S.busy = false; render();
     };
 
@@ -1647,13 +1680,59 @@
       };
       const zin = el.querySelector('#play-zoom-in'); if (zin) zin.onclick = () => zoomBy(0.4);
       const zout = el.querySelector('#play-zoom-out'); if (zout) zout.onclick = () => zoomBy(-0.4);
+      const teeBtn = el.querySelector('#play-tee');
+      if (teeBtn) teeBtn.onclick = () => { S.teeOpen = !S.teeOpen; render(); };
+      el.querySelectorAll('[data-tee]').forEach(b => { b.onclick = () => {
+        const name = b.getAttribute('data-tee') || '';
+        const box = teeChoices().find(x => x.name === name);
+        if (!box) return;
+        S.teeOpen = false;
+        if (box.lat != null && box.lng != null) {
+          applySalida(box.lat, box.lng, box.name, 'tee');
+          S.panned = false;
+          fitCam();
+        } else {
+          S.teeName = box.name;
+          S.teeSource = 'tee';
+          S.moveTee = false;
+          const tee = S.track.tee;
+          if (tee && Number.isFinite(tee.lat) && Number.isFinite(tee.lng)) writeSalida({ lat: tee.lat, lng: tee.lng, name: box.name, source: 'tee' });
+          else { try { localStorage.setItem(salidaKey(), JSON.stringify({ name: box.name, source: 'tee' })); } catch { /* the name stays for this hole on this device */ } }
+        }
+        render();
+      }; });
+      const moveTee = el.querySelector('#play-move-tee');
+      if (moveTee) moveTee.onclick = () => {
+        if (!S.moveTee) { S.moveTee = true; S.teeOpen = false; render(); return; }
+        const here = fromCenter();
+        if (!here || !Number.isFinite(here.lat)) { S.msg = 'No hay un punto en el mapa.'; render(); return; }
+        applySalida(here.lat, here.lng, S.teeName, 'jugador');
+        render();
+      };
+      const gpsTee = el.querySelector('#play-tee-gps');
+      if (gpsTee) gpsTee.onclick = () => {
+        const place = point => {
+          if (!S.alive || !point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return;
+          applySalida(point.lat, point.lng, S.teeName, 'jugador');
+          S.panned = false;
+          fitCam();
+          render();
+        };
+        if (S.pos && Number.isFinite(S.pos.lat) && Number.isFinite(S.pos.lng)) { place(S.pos); return; }
+        if (!navigator.geolocation) { S.msg = 'Este dispositivo no entrega la ubicación.'; render(); return; }
+        navigator.geolocation.getCurrentPosition(
+          p => place({ lat: p.coords.latitude, lng: p.coords.longitude }),
+          () => { if (!S.alive) return; S.msg = 'No hay una ubicación del GPS.'; render(); },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 4000 },
+        );
+      };
       el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
         const id = b.getAttribute('data-del');
         if (!id || typeof H.onUndo !== 'function') return;
         H.onUndo(id).then(shots => { if (!S.alive || shots == null) return; if (Array.isArray(shots)) S.saved = shots; S.msg = ''; render(); }).catch(e => { if (!S.alive) return; S.msg = e.message || 'No se pudo borrar el golpe.'; render(); });
       });
       if (!map) return;
-      let drag = null, last = null;
+      let drag = null, last = null, gesture = null;
       const pts = new Map();
       map.onpointerdown = e => {
         if (e.button) return;
@@ -1661,6 +1740,7 @@
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         drag = pts.size >= 2 ? 'pinch' : 'pan';
         last = { x: e.clientX, y: e.clientY };
+        gesture = { x: e.clientX, y: e.clientY, moved: 0 };
         try { map.setPointerCapture(e.pointerId); } catch (err) {}
       };
       map.onpointermove = e => {
@@ -1677,20 +1757,40 @@
           return;
         }
         const dx = e.clientX - last.x, dy = e.clientY - last.y; last = { x: e.clientX, y: e.clientY };
+        if (gesture) gesture.moved += Math.hypot(dx, dy);
         const rad = S.cam.hdg * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
         const px = -dx * c + dy * s, py = -dx * s - dy * c;
         const n = 2 ** S.cam.z;
         S.cam.cx += px / (n * 256); S.cam.cy += py / (n * 256);
         S.panned = true;
         S.adjusted = true;
+        if (S.moveTee) {
+          const here = fromCenter();
+          const hasStroke = (S.track.marks || []).some(m => m.countsStroke);
+          if (here && Number.isFinite(here.lat)) {
+            S.track = { ...S.track, tee: { lat: here.lat, lng: here.lng }, ball: hasStroke ? S.track.ball : { lat: here.lat, lng: here.lng } };
+            S.teeSource = 'jugador';
+          }
+        }
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         paintMap(); paintRead();
       };
       map.onpointerup = map.onpointercancel = e => {
+        const tap = gesture && gesture.moved < 8 && e && e.type !== 'pointercancel';
+        const draggedTee = S.moveTee && gesture && gesture.moved >= 8;
         if (e && e.pointerId != null) pts.delete(e.pointerId);
         if (pts.size >= 2) drag = 'pinch';
         else if (pts.size === 1) { drag = 'pan'; const only = [...pts.values()][0]; last = only ? { x: only.x, y: only.y } : last; }
-        else { drag = null; last = null; }
+        else { drag = null; last = null; gesture = null; }
+        if (tap && S.moveTee && e) {
+          const here = pointAt(e.clientX, e.clientY);
+          if (here && Number.isFinite(here.lat)) {
+            applySalida(here.lat, here.lng, S.teeName, 'jugador');
+            render();
+          }
+        } else if (draggedTee && S.track.tee && Number.isFinite(S.track.tee.lat)) {
+          writeSalida({ lat: S.track.tee.lat, lng: S.track.tee.lng, name: S.teeName, source: 'jugador' });
+        }
       };
       map.onwheel = e => { e.preventDefault(); zoomBy(e.deltaY > 0 ? -0.35 : 0.35); };
       map.oncontextmenu = e => e.preventDefault();

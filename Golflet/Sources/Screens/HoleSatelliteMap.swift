@@ -94,9 +94,10 @@ struct HoleSatelliteMap: UIViewRepresentable {
     var shotMarks: [HoleShotMark] = []
     var onCenter: (GPSCoord) -> Void
     var onTarget: (GPSCoord) -> Void
+    var onTap: (GPSCoord) -> Void = { _ in }
 
     func makeCoordinator() -> Coord {
-        Coord(onCenter: onCenter, onTarget: onTarget)
+        Coord(onCenter: onCenter, onTarget: onTarget, onTap: onTap)
     }
 
     func makeUIView(context: Context) -> MKMapView {
@@ -110,12 +111,16 @@ struct HoleSatelliteMap: UIViewRepresentable {
         map.pointOfInterestFilter = .excludingAll
         map.delegate = context.coordinator
         map.cameraZoomRange = MKMapView.CameraZoomRange(minCenterCoordinateDistance: 2, maxCenterCoordinateDistance: 12_000)
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coord.tapped(_:)))
+        tap.cancelsTouchesInView = false
+        map.addGestureRecognizer(tap)
         return map
     }
 
     func updateUIView(_ map: MKMapView, context: Context) {
         context.coordinator.onCenter = onCenter
         context.coordinator.onTarget = onTarget
+        context.coordinator.onTap = onTap
         context.coordinator.trackMode = trackMode
         let holeChanged = context.coordinator.holeNumber != holeNumber
         if holeChanged {
@@ -176,14 +181,23 @@ struct HoleSatelliteMap: UIViewRepresentable {
     final class Coord: NSObject, MKMapViewDelegate {
         var onCenter: (GPSCoord) -> Void
         var onTarget: (GPSCoord) -> Void
+        var onTap: (GPSCoord) -> Void
         var holeNumber = 0
         var cameraKey = ""
         var trackMode = false
         var dragging = false
 
-        init(onCenter: @escaping (GPSCoord) -> Void, onTarget: @escaping (GPSCoord) -> Void) {
+        init(onCenter: @escaping (GPSCoord) -> Void, onTarget: @escaping (GPSCoord) -> Void, onTap: @escaping (GPSCoord) -> Void) {
             self.onCenter = onCenter
             self.onTarget = onTarget
+            self.onTap = onTap
+        }
+
+        @objc func tapped(_ gesture: UITapGestureRecognizer) {
+            guard let map = gesture.view as? MKMapView else { return }
+            let point = gesture.location(in: map)
+            let coord = map.convert(point, toCoordinateFrom: map)
+            onTap(GPSCoord(lat: coord.latitude, lng: coord.longitude))
         }
 
         func reportCenter(_ map: MKMapView) {

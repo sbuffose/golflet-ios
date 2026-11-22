@@ -50,6 +50,11 @@ struct PlayHoleView: View {
     @State private var windTried = false
     @State private var windOpen = false
     @State private var windNote = ""
+    @State private var teeName = ""
+    @State private var teeSource = ""
+    @State private var chosenTee: GPSCoord?
+    @State private var moveTee = false
+    @State private var teeOpen = false
 
     private enum MarkMode { case aim, track }
 
@@ -201,6 +206,7 @@ struct PlayHoleView: View {
         .onAppear {
             installClosedFixtureIfNeeded()
             adoptSavedTrackIfNeeded()
+            restoreTee()
         }
     }
 
@@ -213,7 +219,7 @@ struct PlayHoleView: View {
     }
 
     private var teeCoord: GPSCoord {
-        current?.tee ?? pinCoord
+        chosenTee ?? current?.tee ?? pinCoord
     }
 
     private var playerCoord: GPSCoord {
@@ -288,7 +294,11 @@ struct PlayHoleView: View {
                 sawDragHint = true
                 mapCenter = next
             },
-            onTarget: { aimTarget = $0 }
+            onTarget: { aimTarget = $0 },
+            onTap: { point in
+                guard moveTee else { return }
+                applyTee(point, name: teeName, source: "jugador", finish: true)
+            }
         )
     }
 
@@ -668,6 +678,7 @@ struct PlayHoleView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("play-aim-label")
+                teeControls
                 if holeClosed, !closedStrokes.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(closedStrokes, id: \.n) { stroke in
@@ -801,7 +812,12 @@ struct PlayHoleView: View {
         return "flag \(flag ? 1 : 0) shots \(shots.count) open \(openingShots.count) store \(SavedRoundShots.load(roundID: liveRound.id).count) holed \(holed ? 1 : 0)"
     }
 
+    private var aimOrigin: GPSCoord {
+        track.marks.contains(where: \.countsStroke) ? playerCoord : teeCoord
+    }
+
     private var aimTitle: String {
+        if moveTee { return "Arrastrá la salida o tocala en el mapa" }
         if track.marks.contains(where: \.holed) {
             let putterShots = track.marks.filter { mark in
                 mark.countsStroke && !mark.penalty && !mark.lost && isPutter(mark.club)
@@ -815,21 +831,21 @@ struct PlayHoleView: View {
             if let span = TrackSession.greenToHole(meters: meters), meters <= 25 {
                 return span == "En el hoyo" ? span : "\(span) al hoyo"
             }
-            return "\(PlayMath.yards(from: playerCoord, to: cursor)) yd"
+            return "\(PlayMath.yards(from: aimOrigin, to: cursor)) yd"
         default:
             return track.prompt
         }
     }
 
     private var aimDetail: String? {
-        guard !track.marks.contains(where: \.holed) else { return nil }
+        guard !moveTee, !track.marks.contains(where: \.holed) else { return nil }
         switch track.phase {
         case .tracking, .penaltyWhere:
             let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
             if let span = TrackSession.greenToHole(meters: meters), meters <= 25 {
                 return span == "En el hoyo" ? nil : "estimada en el mapa"
             }
-            let left = "\(PlayMath.yards(from: playerCoord, to: pinCoord)) yd al hoyo"
+            let left = "\(PlayMath.yards(from: aimOrigin, to: pinCoord)) yd al hoyo"
             if track.marks.isEmpty && !sawDragHint {
                 return "\(left)\nArrastrá el mapa hasta donde terminó el golpe"
             }
@@ -1039,7 +1055,7 @@ struct PlayHoleView: View {
 
     private var suggestedClub: String? {
         guard chosenClub == nil else { return nil }
-        let yards = PlayMath.yards(from: playerCoord, to: cursor)
+        let yards = PlayMath.yards(from: aimOrigin, to: cursor)
         return TrackSession.suggest(yards: yards, bag: model.bag.map { ($0.name, $0.carry) })
     }
 
@@ -1136,7 +1152,7 @@ struct PlayHoleView: View {
     }
 
     private var suggestedName: String? {
-        TrackSession.suggest(yards: PlayMath.yards(from: playerCoord, to: cursor), bag: model.bag.map { ($0.name, $0.carry) })
+        TrackSession.suggest(yards: PlayMath.yards(from: aimOrigin, to: cursor), bag: model.bag.map { ($0.name, $0.carry) })
     }
 
     private var lostActions: some View {
@@ -1289,9 +1305,155 @@ struct PlayHoleView: View {
         }
     }
 
+    private var teeChoices: [TeeBox] {
+        TeeBoxes.list(yards: current?.yards ?? [:], centers: current?.tees ?? [], green: current?.green.center)
+    }
+
+    private var teeButtonTitle: String {
+        if let picked = teeChoices.first(where: { $0.name == teeName }) {
+            if let yards = picked.yards { return "\(picked.name) · \(yards) yd" }
+            return picked.name
+        }
+        if let yards = current?.yards.values.max() { return "Salida · \(yards) yd" }
+        return "Salida"
+    }
+
+    private var teeControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if teeOpen {
+                if teeChoices.isEmpty {
+                    Text("Esta cancha no tiene salidas con yardas.")
+                        .font(GFont.ui(12, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0x0B2545))
+                        .padding(8)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                ForEach(teeChoices, id: \.name) { box in
+                    Button { pickTee(box) } label: {
+                        Text(box.yards.map { "\(box.name) · \($0) yd" } ?? box.name)
+                            .font(GFont.ui(12, weight: .semibold))
+                            .foregroundStyle(Color(hex: 0xF6F7F9))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                            .frame(minHeight: 32)
+                            .background(Color(hex: 0x0B2545))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(box.name == teeName ? Color(hex: 0xC8102E) : Color.clear, lineWidth: 2))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("play-tee-\(box.name)")
+                }
+            }
+            HStack(spacing: 6) {
+                Button { teeOpen.toggle() } label: {
+                    Text(teeButtonTitle)
+                        .font(GFont.ui(12, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0xF6F7F9))
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 32)
+                        .background(Color(hex: 0x0B2545))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-tee")
+                Button(moveTee ? "Listo" : "Mover") {
+                    if moveTee { commitTeeAtCrosshair() } else { moveTee = true; teeOpen = false }
+                }
+                .font(GFont.ui(12, weight: .semibold))
+                .foregroundStyle(Color(hex: 0xF6F7F9))
+                .padding(.horizontal, 10)
+                .frame(minHeight: 32)
+                .background(Color(hex: 0x0B2545))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(moveTee ? Color(hex: 0xC8102E) : Color.clear, lineWidth: 2))
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-move-tee")
+                if moveTee {
+                    Button("Usar mi ubicación") { useMyLocation() }
+                        .font(GFont.ui(12, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 32)
+                        .background(Color(hex: 0xC8102E))
+                        .clipShape(Capsule())
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("play-tee-gps")
+                }
+            }
+        }
+    }
+
+    private struct SavedTee: Codable {
+        var lat: Double?
+        var lng: Double?
+        var name: String
+        var source: String
+    }
+
+    private func salidaKey() -> String { "golflet.salida.\(liveRound.id).\(hole)" }
+
+    private func persistTee() {
+        let rec = SavedTee(lat: chosenTee?.lat, lng: chosenTee?.lng, name: teeName, source: teeSource)
+        guard let data = try? JSONEncoder().encode(rec) else { return }
+        UserDefaults.standard.set(data, forKey: salidaKey())
+    }
+
+    private func restoreTee() {
+        teeName = ""
+        teeSource = ""
+        chosenTee = nil
+        moveTee = false
+        teeOpen = false
+        guard let data = UserDefaults.standard.data(forKey: salidaKey()),
+              let rec = try? JSONDecoder().decode(SavedTee.self, from: data) else { return }
+        teeName = rec.name
+        teeSource = rec.source
+        guard let lat = rec.lat, let lng = rec.lng else { return }
+        let point = GPSCoord(lat: lat, lng: lng)
+        chosenTee = point
+        track.tee = TrackPoint(lat: lat, lng: lng)
+        if !track.marks.contains(where: \.countsStroke) { track.ball = track.tee }
+    }
+
+    private func applyTee(_ point: GPSCoord, name: String, source: String, finish: Bool) {
+        teeName = name
+        teeSource = source
+        chosenTee = point
+        track.tee = TrackPoint(lat: point.lat, lng: point.lng)
+        if !track.marks.contains(where: \.countsStroke) { track.ball = track.tee }
+        if finish { moveTee = false; teeOpen = false }
+        persistTee()
+    }
+
+    private func pickTee(_ box: TeeBox) {
+        if let lat = box.lat, let lng = box.lng {
+            applyTee(GPSCoord(lat: lat, lng: lng), name: box.name, source: "tee", finish: true)
+            return
+        }
+        teeName = box.name
+        teeSource = "tee"
+        moveTee = false
+        teeOpen = false
+        persistTee()
+    }
+
+    private func commitTeeAtCrosshair() {
+        applyTee(cursor, name: teeName, source: "jugador", finish: true)
+    }
+
+    private func useMyLocation() {
+        guard let here = location.coordinate else {
+            message = "No hay una ubicación del GPS."
+            return
+        }
+        applyTee(here, name: teeName, source: "jugador", finish: true)
+    }
+
     private var holeChrome: String {
         var parts = ["Par \(current?.par ?? 0)"]
-        if let yards = current?.yards.values.max() {
+        let picked = teeChoices.first { $0.name == teeName }?.yards
+        if let yards = picked ?? current?.yards.values.max() {
             parts.append("\(yards) yd")
         }
         if let hcp = current?.hcp {
@@ -1456,7 +1618,14 @@ struct PlayHoleView: View {
         return "\(yards) yd"
     }
 
-    private func shotDistanceText(_ shot: Shot, previous: Shot?) -> String {
+    private func shotDistanceText(_ shot: Shot, previous: Shot?, fromTee: Bool = false) -> String {
+        if fromTee, let lat = shot.lat, let lng = shot.lng {
+            let end = GPSCoord(lat: lat, lng: lng)
+            let meters = Double(PlayMath.meters(from: teeCoord, to: end))
+            let putt = isPutter(shot.club) || shot.lie == "green"
+            if putt, let label = TrackSession.greenToHole(meters: meters), label != "En el hoyo" { return label }
+            if !putt { return "\(PlayMath.yards(from: teeCoord, to: end)) yd" }
+        }
         let putt = isPutter(shot.club) || shot.lie == "green"
         if putt, let meters = shot.distanceM, meters > 0, let label = TrackSession.greenToHole(meters: Double(meters)), label != "En el hoyo" {
             return label
@@ -1521,7 +1690,7 @@ struct PlayHoleView: View {
                                         .foregroundStyle(p.ink2)
                                 }
                                 Spacer()
-                                Text(shotDistanceText(shot, previous: index > 0 ? rows[index - 1] : nil))
+                                Text(shotDistanceText(shot, previous: index > 0 ? rows[index - 1] : nil, fromTee: index == 0))
                                     .font(GType.headline)
                                     .tabular()
                                     .foregroundStyle(p.ink)
@@ -2031,6 +2200,7 @@ struct PlayHoleView: View {
         markMode = .track
         track = TrackSession.State()
         adoptSavedTrackIfNeeded()
+        restoreTee()
         chosenClub = nil
         pinStep = .idle
         lastManualChange = Date()

@@ -117,6 +117,7 @@ enum CourseCache {
                     "hcp": hole.hcp as Any,
                     "yards": hole.yards,
                     "tee": encodeCoord(hole.tee) as Any,
+                    "tees": hole.tees.map { ["lat": $0.lat, "lng": $0.lng] },
                     "green": [
                         "front": encodeCoord(hole.green.front) as Any,
                         "center": encodeCoord(hole.green.center) as Any,
@@ -142,7 +143,8 @@ enum CourseCache {
                     center: decodeCoord(green["center"]),
                     back: decodeCoord(green["back"])
                 ),
-                tee: decodeCoord(hole["tee"])
+                tee: decodeCoord(hole["tee"]),
+                tees: (hole["tees"] as? [[String: Any]] ?? []).compactMap { decodeCoord($0) }
             )
         }
         return GPSCourseDetail(
