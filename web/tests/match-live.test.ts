@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import test from "node:test";
@@ -230,10 +231,18 @@ test("el partido muestra quién va arriba y abre el track existente", { timeout:
 test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   mkdirSync(ART, { recursive: true });
   let created = 0;
+  const tee = { lat: -34.5, lng: -58.5 };
+  const south = (meters: number) => tee.lat - meters / (6371000 * Math.PI / 180);
+  const driveM = 230 * 0.9144;
+  const approachM = 145 * 0.9144;
+  const puttM = 6;
+  const driveEnd = { lat: south(driveM), lng: tee.lng };
+  const approachEnd = { lat: south(driveM + approachM), lng: tee.lng };
+  const cup = { lat: south(driveM + approachM + puttM), lng: tee.lng };
   const shots = [
-    { id: "s1", hole: 1, club: "Driver", result: null, penalty_strokes: 0, lat: -34.5, lng: -58.5, end_lat: -34.5007, end_lng: -58.5 },
-    { id: "s2", hole: 1, club: "7i", result: null, penalty_strokes: 0, lat: -34.5007, lng: -58.5, end_lat: -34.5014, end_lng: -58.5 },
-    { id: "s3", hole: 1, club: "Putter", lie: "green", result: "holed", penalty_strokes: 0, lat: -34.5014, lng: -58.5, end_lat: -34.502, end_lng: -58.5 },
+    { id: "s1", hole: 1, club: "Driver", result: null, penalty_strokes: 0, lat: tee.lat, lng: tee.lng, end_lat: driveEnd.lat, end_lng: driveEnd.lng },
+    { id: "s2", hole: 1, club: "7i", result: null, penalty_strokes: 0, lat: driveEnd.lat, lng: driveEnd.lng, end_lat: approachEnd.lat, end_lng: approachEnd.lng },
+    { id: "s3", hole: 1, club: "Putter", lie: "green", result: "holed", penalty_strokes: 0, lat: approachEnd.lat, lng: approachEnd.lng, end_lat: cup.lat, end_lng: cup.lng },
   ];
   const round = { id: "live-vuelta", date: "2026-11-22", course: "Jockey Club Argentino · Azul", vm_course: "Azul", club_code: "fixture", official: false, round_id: null, current_hole: 1, tracked: true };
   const server = createServer(async (req, res) => {
@@ -262,7 +271,7 @@ test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_00
     if (url.pathname.startsWith("/api/gps/courses/")) return json({
       course: {
         course: "Azul", club_code: "fixture",
-        holes: [1, 2].map(hole => ({ hole, par: 4, tee: { lat: -34.5, lng: -58.5 }, green: { center: { lat: -34.502, lng: -58.5 }, front: { lat: -34.501, lng: -58.5 } } })),
+        holes: [1, 2].map(hole => ({ hole, par: 4, tee, green: { center: cup, front: approachEnd } })),
       },
     });
     if (url.pathname.startsWith("/api/")) return json({});
@@ -280,13 +289,21 @@ test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_00
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 375, height: 667, deviceScaleFactor: 2 });
-    const tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/17/80529/44586";
-    const tile = Buffer.from(await (await fetch(tileUrl)).arrayBuffer());
+    const tiles = new Map<string, Buffer>();
+    const tileBody = async (url: string) => {
+      const hit = tiles.get(url);
+      if (hit) return hit;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(String(res.status));
+      const body = Buffer.from(await res.arrayBuffer());
+      tiles.set(url, body);
+      return body;
+    };
     await page.setRequestInterception(true);
     page.on("request", request => {
       const url = request.url();
-      if (url.includes("arcgisonline.com")) {
-        request.respond({ status: 200, contentType: "image/jpeg", headers: { "access-control-allow-origin": "*" }, body: tile });
+      if (url.includes("arcgisonline.com") && /\/tile\/\d+\/\d+\/\d+/.test(url)) {
+        tileBody(url).then(body => request.respond({ status: 200, contentType: "image/jpeg", headers: { "access-control-allow-origin": "*" }, body })).catch(() => request.abort());
         return;
       }
       if (url.startsWith(`http://127.0.0.1:${port}`)) request.continue();
@@ -301,10 +318,15 @@ test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_00
     await page.waitForSelector("#tkprev", { timeout: 8000 });
     await page.click("#tkprev");
     await page.waitForFunction(() => (document.body.innerText || "").includes("Editar hoyo") && (document.body.innerText || "").includes("Driver"), { timeout: 8000 });
+    await page.waitForSelector('#tkmap[data-map="ready"]', { timeout: 20000 });
     const doneHole = await page.evaluate(() => document.body.innerText || "");
     assert.match(doneHole, /Hoyo 1/);
     assert.match(doneHole, /Editar hoyo/);
     assert.match(doneHole, /No oficial/);
+    assert.match(doneHole, /Putter · \d+(?:,\d)? m/);
+    assert.equal(/Putter · \d+ yd/.test(doneHole), false);
+    const puttMeters = Number((doneHole.match(/Putter · (\d+(?:,\d)?) m/) || [])[1]?.replace(",", ".") || "0");
+    assert.ok(puttMeters >= 3 && puttMeters <= 12, `putt ${puttMeters}`);
     assert.equal(created, 0);
     const linked = await page.evaluate(() => JSON.parse(localStorage.getItem("golflet.match.fixture-up") || "{}").track_id);
     assert.equal(linked, "live-vuelta");
@@ -317,14 +339,24 @@ test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_00
     assert.match(list.text, /Azul/);
     assert.match(list.text, /No oficial/);
     assert.equal(list.href, "#/reconstruir/live-vuelta");
+    assert.equal(list.text.includes("Editar hoyo"), false);
+    await page.screenshot({ path: `${ART}/web-375-rondas-lista.png` });
     await page.click(".rc-off");
-    await page.waitForFunction(() => (document.body.innerText || "").includes("Editar hoyo") && (document.body.innerText || "").includes("Putter"), { timeout: 8000 });
+    await page.waitForFunction(() => (document.body.innerText || "").includes("Editar hoyo") && /Putter · \d+(?:,\d)? m/.test(document.body.innerText || ""), { timeout: 8000 });
+    await page.waitForSelector('#tkmap[data-map="ready"]', { timeout: 20000 });
     const same = await page.evaluate(() => document.body.innerText || "");
     assert.match(same, /No oficial/);
     assert.match(same, /Hoyo 1/);
     assert.match(same, /Driver/);
+    assert.match(same, /Putter · \d+(?:,\d)? m/);
     assert.equal(created, 0);
     await page.screenshot({ path: `${ART}/web-375-rondas-mismo-track.png` });
+    const hash = async (name: string) => createHash("md5").update(await readFile(`${ART}/${name}.png`)).digest("hex");
+    const fromMatch = await hash("web-375-partido-hoyo-anterior");
+    const fromList = await hash("web-375-rondas-lista");
+    const fromRounds = await hash("web-375-rondas-mismo-track");
+    assert.notEqual(fromList, fromMatch);
+    assert.notEqual(fromList, fromRounds);
 
     await page.goto(`http://127.0.0.1:${port}/#/partido/fixture-up`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#gm-track", { timeout: 8000 });
