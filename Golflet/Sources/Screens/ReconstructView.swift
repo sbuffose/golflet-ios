@@ -3,6 +3,8 @@ import SwiftUI
 
 struct ReconstructView: View {
     var context: RoundTrackContext? = nil
+    var storedShots: [ReconstructionShot] = []
+    var onShots: (([ReconstructionShot]) -> Void)? = nil
     var onHoleScore: ((Int, Int) -> Void)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
@@ -270,6 +272,7 @@ struct ReconstructView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(p.accent)
                 .disabled(busy)
+                .accessibilityIdentifier("rc-save")
             ForEach(shots) { shot in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -291,7 +294,7 @@ struct ReconstructView: View {
                         .foregroundStyle(p.ink2)
                     HStack {
                         Button("Corregir") { load(shot) }
-                        Button("Borrar") { Task { if let live { await remove(live, shot) } } }
+                        Button("Borrar") { Task { await remove(live, shot) } }
                     }
                     .font(GType.label)
                 }
@@ -450,6 +453,7 @@ struct ReconstructView: View {
             date = context.date
             roundId = ""
             hole = min(18, max(1, context.hole))
+            if shots.isEmpty { shots = storedShots }
             staged = true
             if let course = RoundTrackCourse.match(courses: model.courses, clubCode: context.clubCode, name: context.courseName) {
                 courseKey = course.id
@@ -553,6 +557,10 @@ struct ReconstructView: View {
     }
 
     private func commit(_ round: ReconstructionRound?) async {
+        if round == nil, context?.roundId.isEmpty == true {
+            keepLocal()
+            return
+        }
         if let round {
             await save(round)
             return
@@ -604,10 +612,46 @@ struct ReconstructView: View {
         aim()
     }
 
-    private func remove(_ round: ReconstructionRound, _ shot: ReconstructionShot) async {
+    private func keepLocal() {
+        let made = draft()
+        let id = editing ?? UUID().uuidString
+        let meters = made.distanceM
+        let shot = ReconstructionShot(
+            id: id,
+            hole: made.hole,
+            club: made.club,
+            result: made.result,
+            penaltyStrokes: made.penaltyStrokes,
+            lat: made.lat,
+            lng: made.lng,
+            endLat: made.endLat,
+            endLng: made.endLng,
+            distanceM: made.distanceM,
+            lie: nil,
+            positionLabel: "Marcado",
+            distanceLabel: meters.map { "\(Int($0.rounded())) m" } ?? "sin distancia",
+            intent: nil
+        )
+        if let editing, let index = shots.firstIndex(where: { $0.id == editing }) { shots[index] = shot }
+        else { shots.append(shot) }
+        self.editing = nil
+        start = nil
+        end = nil
+        typedDistance = ""
+        note = ""
+        onShots?(shots)
+    }
+
+    private func remove(_ round: ReconstructionRound?, _ shot: ReconstructionShot) async {
+        if round == nil || roundId.isEmpty {
+            shots.removeAll { $0.id == shot.id }
+            onShots?(shots)
+            return
+        }
         do {
             try await model.api.deleteReconstructionShot(liveRoundId: round.id, shotId: shot.id)
             shots.removeAll { $0.id == shot.id }
+            onShots?(shots)
         } catch { note = error.localizedDescription }
     }
 }

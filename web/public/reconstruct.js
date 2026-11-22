@@ -278,6 +278,10 @@
         if (!mine()) return;
         shots = pack.shots || [];
       }
+      if (pending?.matchId && window.GolfletMatch?.trackShots) {
+        const local = window.GolfletMatch.trackShots(pending.matchId);
+        if (local.length > shots.length) shots = local;
+      }
       try {
         const pack = await api("/api/bag");
         const rows = Array.isArray(pack) ? pack : (Array.isArray(pack?.clubs) ? pack.clubs : (Array.isArray(pack?.bag) ? pack.bag : null));
@@ -307,6 +311,7 @@
       api, esc, toast: () => {}, cid: () => "",
       onSave: async (shot) => {
         if (!mine()) return null;
+        const kept = () => pending?.matchId && window.GolfletMatch?.trackKeep ? window.GolfletMatch.trackKeep(pending.matchId, shot) : null;
         try {
           if (!liveId) {
             if (!pending?.courseId || !pending?.date) throw new Error("Elegí la cancha.");
@@ -343,8 +348,15 @@
           };
           const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`, { method: "POST", body: JSON.stringify(body) });
           if (!mine()) return null;
-          return pack.shots || [];
+          const rows = Array.isArray(pack.shots) ? pack.shots : null;
+          if (rows && pending?.matchId && window.GolfletMatch?.trackReplace) window.GolfletMatch.trackReplace(pending.matchId, rows);
+          if (rows) return rows;
+          const local = kept();
+          if (local) return local;
+          return [];
         } catch (e) {
+          const local = kept();
+          if (local) return local;
           if (!mine()) return null;
           throw e;
         }
@@ -370,11 +382,21 @@
       },
       onUndo: async (shotId) => {
         if (!mine()) return null;
-        await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots?shot=${encodeURIComponent(shotId)}`, { method: "DELETE" });
-        if (!mine()) return null;
-        const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
-        if (!mine()) return null;
-        return pack.shots || [];
+        const drop = () => pending?.matchId && window.GolfletMatch?.trackDrop ? window.GolfletMatch.trackDrop(pending.matchId, shotId) : null;
+        if (!liveId || String(shotId).startsWith("local-")) return drop();
+        try {
+          await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots?shot=${encodeURIComponent(shotId)}`, { method: "DELETE" });
+          if (!mine()) return null;
+          const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
+          if (!mine()) return null;
+          const rows = pack.shots || [];
+          if (pending?.matchId && window.GolfletMatch?.trackReplace) window.GolfletMatch.trackReplace(pending.matchId, rows);
+          return rows;
+        } catch (e) {
+          const local = drop();
+          if (local) return local;
+          throw e;
+        }
       },
     });
   }

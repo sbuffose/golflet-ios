@@ -43,7 +43,7 @@ const match = (kind: "up" | "square" | "done") => {
   };
 };
 
-test("el partido muestra quién va arriba y abre el track existente", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+test("el partido muestra quién va arriba y abre el track existente", { timeout: 180_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   mkdirSync(ART, { recursive: true });
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", "http://127.0.0.1");
@@ -75,10 +75,16 @@ test("el partido muestra quién va arriba y abre el track existente", { timeout:
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 375, height: 667, deviceScaleFactor: 2 });
+    const tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/17/80529/44586";
+    const tile = Buffer.from(await (await fetch(tileUrl)).arrayBuffer());
     await page.setRequestInterception(true);
     page.on("request", request => {
       const url = request.url();
-      if (url.startsWith(`http://127.0.0.1:${port}`) || url.includes("arcgisonline.com")) request.continue();
+      if (url.includes("arcgisonline.com")) {
+        request.respond({ status: 200, contentType: "image/jpeg", headers: { "access-control-allow-origin": "*" }, body: tile });
+        return;
+      }
+      if (url.startsWith(`http://127.0.0.1:${port}`)) request.continue();
       else request.abort();
     });
     const open = async (id: string) => {
@@ -139,6 +145,50 @@ test("el partido muestra quién va arriba y abre el track existente", { timeout:
     assert.equal(/\bDr\b/.test(track.tile), false);
     assert.match(track.src, /silhouettes\/driver\.svg/);
     await shot("web-375-partido-track");
+
+    const hit = async (have: number) => {
+      await page.waitForFunction((want) => {
+        const button = document.querySelector("#play-hit") as HTMLButtonElement | null;
+        const shots = document.querySelectorAll("#rc-shots .tk-shot:not(.tk-more)").length;
+        const phase = document.querySelector("#tkmap")?.getAttribute("data-phase") || "";
+        return !!button && !button.disabled && shots === want && phase === "tracking";
+      }, { timeout: 20000 }, have);
+      await page.click("#play-hit");
+    };
+    await hit(0);
+    await hit(1);
+    await page.waitForFunction(() => document.querySelectorAll("#rc-shots .tk-shot:not(.tk-more)").length === 2, { timeout: 8000 }).catch(async (error) => {
+      const dump = await page.evaluate(() => ({
+        phase: document.querySelector("#tkmap")?.getAttribute("data-phase") || "",
+        map: document.querySelector("#tkmap")?.getAttribute("data-map") || "",
+        shots: document.querySelector("#rc-shots")?.textContent || "",
+        msg: document.body.innerText.slice(0, 500),
+      }));
+      throw new Error(`${error.message} ${JSON.stringify(dump)}`);
+    });
+    await page.click("#rc-close");
+    await page.waitForFunction(() => (document.querySelector("#gm-track")?.textContent || "").includes("Seguir track · 2 golpes"));
+    await page.click('[data-p="augusto"][data-v="6"]');
+    await page.waitForFunction(() => (document.querySelector("#gm-track")?.textContent || "").includes("Seguir track · 2 golpes"));
+    const resumed = await page.evaluate(() => {
+      const row = JSON.parse(localStorage.getItem("golflet.match.fixture-up") || "{}");
+      const track = JSON.parse(localStorage.getItem("golflet.matchtrack.fixture-up") || "{}");
+      return { augusto: row.scores?.augusto?.[0], shots: (track.holes?.["1"]?.shots || []).length, open: track.holes?.["1"]?.open, label: document.querySelector("#gm-track")?.textContent || "" };
+    });
+    assert.equal(resumed.augusto, 6);
+    assert.equal(resumed.shots, 2);
+    assert.equal(resumed.open, true);
+    assert.match(resumed.label, /Seguir track · 2 golpes/);
+    await shot("web-375-partido-seguir");
+    await page.click("#gm-track");
+    await page.waitForFunction(() => document.querySelectorAll("#rc-shots .tk-shot:not(.tk-more)").length === 2);
+    const again = await page.$$eval("#rc-shots .tk-shot:not(.tk-more)", nodes => nodes.map(node => (node.textContent || "").trim()));
+    assert.equal(again.length, 2);
+    assert.match(again[0], /^1\./);
+    assert.match(again[1], /^2\./);
+    await shot("web-375-partido-retomar");
+    await page.click("#rc-close");
+    await page.waitForSelector("#gm-track");
 
     await open("fixture-square");
     const square = await text();

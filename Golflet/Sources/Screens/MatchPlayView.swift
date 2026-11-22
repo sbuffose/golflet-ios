@@ -17,6 +17,7 @@ struct MatchPlayView: View {
     @State private var hole = 0
     @State private var scores: [[Int?]]
     @State private var showsTrack = false
+    @State private var trackShots: [ReconstructionShot] = []
 
     init(course: String, players: [MatchSetupPlayer], scores: [[Int?]]? = nil, bases: [Double] = [], si: [Int?] = [], allowance: Double = 100, scoringLabel: String = "Gross", onHoleScore: ((Int, Int) -> Void)? = nil) {
         self.course = course
@@ -43,7 +44,11 @@ struct MatchPlayView: View {
         }
         .sheet(isPresented: $showsTrack) {
             NavigationStack {
-                ReconstructView(context: RoundTrackContext(roundId: "", date: Date(), courseName: course, clubCode: "", hole: hole + 1)) { played, strokes in
+                ReconstructView(
+                    context: RoundTrackContext(roundId: "", date: Date(), courseName: course, clubCode: "", hole: hole + 1),
+                    storedShots: trackShots,
+                    onShots: { trackShots = $0 }
+                ) { played, strokes in
                     setScore(0, hole: played, strokes: strokes)
                 }
             }
@@ -124,9 +129,11 @@ struct MatchPlayView: View {
                 .font(GType.section)
                 .foregroundStyle(p.ink)
             if !closed, players.contains(where: \.isMe) {
-                Button("Trackear golpes") { showsTrack = true }
+                Button(trackTitle) { showsTrack = true }
                     .font(GType.headline)
                     .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(p.primary, in: RoundedRectangle(cornerRadius: 12))
                     .accessibilityIdentifier("match-track")
@@ -158,6 +165,7 @@ struct MatchPlayView: View {
                             .foregroundStyle(p.primary)
                             .frame(maxWidth: .infinity, minHeight: 36)
                             .background(p.surface, in: RoundedRectangle(cornerRadius: 8))
+                            .accessibilityIdentifier("match-score-\(index)-\(key)")
                     }
                     Button("X") { scores[index][hole] = 0 }
                         .font(GType.label)
@@ -166,6 +174,14 @@ struct MatchPlayView: View {
                 }
             }
         }
+    }
+
+    private var trackTitle: String {
+        let mine = trackShots.filter { $0.hole == hole + 1 }
+        let open = !mine.contains { $0.result == "holed" }
+        let count = open ? mine.reduce(0) { $0 + ($1.penaltyStrokes > 0 ? $1.penaltyStrokes : 1) } : 0
+        if count == 0 { return "Trackear golpes" }
+        return "Seguir track · \(count) \(count == 1 ? "golpe" : "golpes")"
     }
 
     private var names: [String] { players.map(\.name) }

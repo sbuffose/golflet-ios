@@ -11,7 +11,70 @@
   const MOD = { fourball: 'Match fourball', single: 'Mano a mano', metralleta: 'Metralleta' };
   const MODS = { fourball: '2 contra 2 · mejor bola neta de la pareja', single: '1 contra 1', metralleta: 'todos contra todos · un match por cada par' };
   const LS = { get: (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private */ } } };
-  const QK = 'golflet.matchq', MK = id => `golflet.match.${id}`, CUR = 'golflet.match.cur';
+  const QK = 'golflet.matchq', MK = id => `golflet.match.${id}`, CUR = 'golflet.match.cur', TRK = id => `golflet.matchtrack.${id}`;
+  const trackBag = id => { try { const v = JSON.parse(localStorage.getItem(TRK(id)) || 'null'); return v && v.holes ? v : { holes: {} }; } catch { return { holes: {} }; } };
+  const trackWrite = (id, bag) => { try { localStorage.setItem(TRK(id), JSON.stringify(bag)); } catch { /* private */ } };
+  const trackList = id => Object.values(trackBag(id).holes).flatMap(h => h.shots || []);
+  const shotRow = shot => ({
+    id: shot.id || `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    hole: Number(shot.hole),
+    club: shot.club || null,
+    result: shot.result || null,
+    penalty_strokes: shot.penalty ? 1 : (Number(shot.penalty_strokes) || 0),
+    lat: shot.from?.lat ?? shot.lat ?? null,
+    lng: shot.from?.lng ?? shot.lng ?? null,
+    end_lat: shot.land?.lat ?? shot.end_lat ?? null,
+    end_lng: shot.land?.lng ?? shot.end_lng ?? null,
+    lie: shot.lie || null,
+    intent: shot.intent || null,
+    distance_m: shot.distance_m ?? null,
+    distance_kind: shot.distance_kind || null,
+  });
+  const trackReplace = (id, shots) => {
+    const bag = { holes: {} };
+    for (const raw of shots || []) {
+      const row = shotRow(raw);
+      if (!row.hole) continue;
+      const key = String(row.hole);
+      const hole = bag.holes[key] || { open: true, shots: [] };
+      hole.shots.push(row);
+      if (row.result === 'holed') hole.open = false;
+      bag.holes[key] = hole;
+    }
+    trackWrite(id, bag);
+    return trackList(id);
+  };
+  const trackKeep = (id, shot) => {
+    const bag = trackBag(id);
+    const row = shotRow(shot);
+    const key = String(row.hole);
+    const hole = bag.holes[key] || { open: true, shots: [] };
+    hole.shots.push(row);
+    if (row.result === 'holed') hole.open = false;
+    bag.holes[key] = hole;
+    trackWrite(id, bag);
+    return trackList(id);
+  };
+  const trackDrop = (id, shotId) => {
+    const bag = trackBag(id);
+    for (const key of Object.keys(bag.holes)) {
+      const hole = bag.holes[key];
+      hole.shots = (hole.shots || []).filter(s => s.id !== shotId);
+      hole.open = !hole.shots.some(s => s.result === 'holed');
+    }
+    trackWrite(id, bag);
+    return trackList(id);
+  };
+  const trackOpenCount = (id, hole) => {
+    const row = trackBag(id).holes[String(hole)];
+    if (!row || row.open === false) return 0;
+    return (row.shots || []).reduce((n, s) => n + (Number(s.penalty_strokes) > 0 ? Number(s.penalty_strokes) : 1), 0);
+  };
+  const trackLabel = (id, hole) => {
+    const n = trackOpenCount(id, hole);
+    if (!n) return 'Trackear golpes';
+    return `Seguir track · ${n} ${n === 1 ? 'golpe' : 'golpes'}`;
+  };
   const qs = () => new URLSearchParams((location.hash.split('?')[1] || ''));
   const spin = '<div class="msg">Cargando…</div>';
   /* t264u/t265u: index → playing handicap per player, and the strokes grid (two 9-hole blocks: Hoyo / Par / S.I. + one row per player). */
@@ -190,7 +253,7 @@
       const table = def.modality === 'metralleta' ? `<div class="section"><h2>Tabla</h2></div><div class="card gm-tb"><table class="num"><thead><tr><th></th><th>G</th><th>E</th><th>P</th><th>Hoyos</th></tr></thead><tbody>${E.table.map(t => `<tr><th>${e(short(t.id))}</th><td>${t.won}</td><td>${t.tied}</td><td>${t.lost}</td><td>${t.holes_up > 0 ? '+' : ''}${t.holes_up}</td></tr>`).join('')}</tbody></table>
         </div>` : '';
       const pr = (() => { try { const v = JSON.parse(localStorage.getItem('golflet.prac') || 'null'); return v && v.date === todayAR() ? v : null; } catch { return null; } })();
-      const trackBtn = ro() || !ids.includes('me') ? '' : `<a class="gm-track" id="gm-track" href="#/reconstruir?partido=${encodeURIComponent(id)}&hole=${cur + 1}">Trackear golpes</a>`;
+      const trackBtn = ro() || !ids.includes('me') ? '' : `<a class="gm-track" id="gm-track" href="#/reconstruir?partido=${encodeURIComponent(id)}&hole=${cur + 1}">${e(trackLabel(id, cur + 1))}</a>`;
       const holeCard = `<div class="card gm-hole"><div class="gm-hh"><b class="num">Hoyo ${cur + 1}</b>${si ? `<span class="num">S.I. ${si}</span>` : ''}${def.pars?.[cur] ? `<span class="num">Par ${def.pars[cur]}</span>` : ''}${ro() ? '<span class="gm-ro">Solo lectura</span>' : ''}</div>${holeStk}${trackBtn}${rows}${concRow}${holeRes}${partHint}${ro() ? '' : `<p class="foot gm-lg">No hace falta anotarle a todos · X = no terminó (no suma golpes${def.modality === 'fourball' ? '; cuenta la bola del compañero' : ''})</p>`}
           ${ro() ? '' : `<div class="gm-nav">${order.indexOf(cur) > 0 ? `<button type="button" class="btn ghost sm" data-h="${order[order.indexOf(cur) - 1]}">‹ Hoyo ${order[order.indexOf(cur) - 1] + 1}</button>` : '<span></span>'}${order.indexOf(cur) < 17 ? `<button type="button" class="btn sm" data-h="${order[order.indexOf(cur) + 1]}">Hoyo ${order[order.indexOf(cur) + 1] + 1} ›</button>` : ''}</div>`}</div>`;
       if (opt.embed) el.innerHTML = `<div class="gm-shh" data-drag="1"><span class="gm-grab" aria-hidden="true"></span><div><b>${MOD[def.modality]}</b><small>${def.scoring === 'hcp' ? `Con hándicap al ${String(def.allowance).replace('.', ',')}%` : 'Gross'} · No cuenta para tus tarjetas${pending(id) ? ' · sin subir' : ''}</small></div><button type="button" class="gm-shx" data-close="1" aria-label="Cerrar el partido y volver al mapa">✕</button></div>
@@ -306,5 +369,5 @@
     save(m);
     return true;
   }
-  window.GolfletMatch = { init: h => { H = h; flush(); }, page, load, label, parent, statusShort, openSheet, closeSheet: () => closeSheet(false), sheetOpen: () => !!SHEET, gridHtml, applyTrack, current: () => { const c = LS.get(CUR, null); return c && c.date === todayAR() ? c.id : null; } };
+  window.GolfletMatch = { init: h => { H = h; flush(); }, page, load, label, parent, statusShort, openSheet, closeSheet: () => closeSheet(false), sheetOpen: () => !!SHEET, gridHtml, applyTrack, trackKeep, trackReplace, trackDrop, trackShots: trackList, trackLabel, current: () => { const c = LS.get(CUR, null); return c && c.date === todayAR() ? c.id : null; } };
 })();

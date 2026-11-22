@@ -1677,6 +1677,24 @@ final class GolfletUITests: XCTestCase {
         if track.isHittable { track.tap() } else { track.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         XCTAssertTrue(waitFor(up, "tk-unofficial", timeout: 8), "El track no quedó como no oficial")
         saveShot("ios-\(width)-partido-track")
+        let save = first(up, "rc-save")
+        XCTAssertTrue(save.waitForExistence(timeout: 8))
+        for _ in 0..<4 where !save.isHittable { up.swipeUp() }
+        save.tap()
+        save.tap()
+        let back = first(up, "reconstruct-back")
+        if back.isHittable { back.tap() } else { back.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        let follow = first(up, "match-track")
+        XCTAssertTrue(follow.waitForExistence(timeout: 8))
+        XCTAssertEqual(follow.label, "Seguir track · 2 golpes")
+        let other = first(up, "match-score-1-6")
+        if other.isHittable { other.tap() } else { other.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertEqual(first(up, "match-track").label, "Seguir track · 2 golpes")
+        saveShot("ios-\(width)-partido-seguir")
+        if follow.isHittable { follow.tap() } else { follow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        let kept = up.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hoyo 1 ·"))
+        XCTAssertTrue(kept.element(boundBy: 1).waitForExistence(timeout: 8))
+        XCTAssertGreaterThanOrEqual(kept.count, 2)
         up.terminate()
 
         let square = XCUIApplication()

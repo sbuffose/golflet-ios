@@ -2642,7 +2642,7 @@ a.gm-crow{text-decoration:none;color:inherit}
 .gm-st .gm-ln b{font:600 calc(16px*var(--ts,1))/1.2 Geist,system-ui,sans-serif;font-style:normal;color:#F6F7F9}
 .gm-st .gm-ln.me b{color:#E2C27A}
 .gm-st .gm-ln.them b{color:#F3A3A8}
-.gm-track{display:flex;align-items:center;justify-content:center;min-height:44px;margin:8px 0 4px;border-radius:12px;background:#0B2545;color:#F6F7F9;font:600 calc(15px*var(--ts,1))/1 Geist,system-ui,sans-serif;font-style:normal;text-decoration:none}
+.gm-track{display:flex;align-items:center;justify-content:center;min-height:44px;margin:8px 0 4px;padding:0 12px;border-radius:12px;background:#0B2545;color:#F6F7F9;font:600 calc(15px*var(--ts,1))/1 Geist,system-ui,sans-serif;font-style:normal;text-decoration:none;white-space:nowrap}
 .gm-stv{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;font-weight:600;font-size:calc(14px*var(--ts,1))}
 .gm-stv small{color:#C8102E}
 .gm-st b{font:700 calc(26px*var(--tsb,1))/1.1 Geist,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#C8102E}

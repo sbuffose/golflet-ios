@@ -441,6 +441,7 @@ jobs:
           test -f /tmp/golflet-screenshots/ios-375-partido-square.png
           test -f /tmp/golflet-screenshots/ios-375-partido-terminado.png
           test -f /tmp/golflet-screenshots/ios-375-partido-track.png
+          test -f /tmp/golflet-screenshots/ios-375-partido-seguir.png
 
       - name: Upload 375 captures
         if: always()
