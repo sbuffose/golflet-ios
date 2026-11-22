@@ -42,7 +42,7 @@ button{font:inherit;color:inherit}
 .hero{border-radius:var(--radius-xl);padding:22px 22px 18px;color:var(--color-onPrimary);position:relative;overflow:hidden;
   background:radial-gradient(120% 90% at 100% 0%,#24614a 0%,transparent 55%),linear-gradient(160deg,#134634,#0b2f23);box-shadow:var(--shadow-float)}
 .hero .overline{color:rgba(247,245,240,.62)}
-.hero .big{font-size:var(--type-statHero-size);font-weight:var(--fw600,600);letter-spacing:var(--type-statHero-tracking);line-height:1;margin-top:10px}
+.hero .big{font-size:var(--type-statHero-size);font-weight:var(--fw600,600);letter-spacing:var(--type-statHero-tracking);line-height:1;margin-top:10px;max-width:calc(100% - var(--hiw, 0px))}
 .hero .delta{display:inline-flex;align-items:center;gap:6px;font-size:calc(12.5px*var(--ts,1));font-weight:var(--fw600,600);background:rgba(200,168,106,.16);color:var(--color-accent);padding:5px 10px;border-radius:999px;margin-top:10px}
 .hero .meta{display:flex;gap:22px;margin-top:16px;border-top:1px solid rgba(247,245,240,.12);padding-top:14px}
 .hero .meta div{font-size:calc(12px*var(--ts,1));color:rgba(247,245,240,.6)}
@@ -1446,6 +1446,7 @@ a.vx-store{color:inherit;text-decoration:none;cursor:pointer}
 .ttpill .tp-c[hidden]{display:none}
 .ttpill:active{filter:brightness(.96)}
 .top.has-tt + .ltitle{min-height:62px}   /* t145u: width/size handled by fitGreeting() (no blanket shrink) */
+.top.has-tt + .ltitle.tt-below{min-height:0}
 #tees{scroll-margin-top:calc(env(safe-area-inset-top,0px) + 16px);border-radius:16px;transition:box-shadow .3s}
 /* t225u: only the next tee time is highlighted (brand green), the section title stays plain */
 #tees .row.tt-next{box-shadow:inset 0 0 0 1.5px #0B2545;border-radius:16px;background:#fff}
@@ -2514,7 +2515,7 @@ span.gp-lvft{flex:1 1 auto}
 .gp-flagm{cursor:grab}.gp-flagg{opacity:.6}
 @media (max-height:700px){.gp-prl .gp-tee,.gp-prl .gp-tl>.gp-vo:not(.gp-vm){display:none}.gp-prl .gp-lvww{display:none}}
 /* t253u: «Jugar práctica» inside the hero, right under the groups row */
-.hero .hi-avs .hi-prac{display:flex;justify-content:flex-end}
+.hero .hi-avs .hi-prac{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:2px}
 .hp-prac{display:inline-flex;align-items:center;gap:5px;padding:5px 11px 5px 9px;border-radius:999px;background:#C8102E;color:#0B2545;text-decoration:none;font-size:calc(12px*var(--ts,1));font-weight:700;white-space:nowrap;line-height:1.1;box-shadow:0 0 0 2px #0B2545;min-height:30px;box-sizing:border-box}
 .hp-prac:active{transform:translateY(1px)}
 /* t256u: Activar GPS + hole selector */

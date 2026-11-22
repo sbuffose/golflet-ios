@@ -780,30 +780,22 @@ function sourcesNote(clubs){
   return `<div class="tt-src">${clubs.map(c => { const b = c.pages.bookings; const bad = Object.entries(c.pages).filter(([,v]) => v.status==='missing' || v.status==='error');
     return `<div><b>${esc(c.club_name)}</b><span>${!b ? 'Todavía sin leer: se lee en la próxima actualización.' : b.status==='ok' ? `${b.items} ${b.items===1?'reserva':'reservas'} · leído ${ago(b.checked_at)}` : b.status==='empty' ? `Sin reservas próximas · leído ${ago(b.checked_at)}` : b.status==='missing' ? 'Este club no tiene la página de reservas.' : `No pudimos leer las reservas. La última lectura sigue siendo ${ago(b.checked_at)}.`}${bad.filter(([k])=>k!=='bookings').length ? ` · Falta: ${bad.filter(([k])=>k!=='bookings').map(([k])=>PAGEL[k]).join(', ')}` : ''}</span></div>`; }).join('')}</div>`;
 }
-/* t145u: "Hola, <Nombre>" never overlaps the PRÓXIMO TEE TIME tab and is never truncated.
-   1) reserve = tab width (inside the content box) + 12px gap; 2) if the greeting fits on one line at 42px → leave it;
-   3) else scale it down to fit (not below 28px); 4) still too long → tab drops to its own row under the greeting (flush right)
-   and the greeting gets the full width (scaled ≥ 28px, wrapping only as a last resort). No tee time → full width, same 42→28 rule. */
+/* "Hola, <Nombre>" keeps the full width (scaled from 42px down to 28px only when the name itself does not fit).
+   The next-tee-time chip never shares that line: it sits on its own row, under the greeting. */
 function fitGreeting(){
   const h = $('#greet'); if (!h) return; const top = h.previousElementSibling, pill = $('#ttpill'), has = !!(pill && !pill.hidden);
   h.style.fontSize = ''; h.style.paddingRight = '0px'; h.style.whiteSpace = 'nowrap'; h.style.marginBottom = ''; h.style.minHeight = ''; h.classList.remove('tt-below'); if (pill) pill.style.top = '';
   const base = parseFloat(getComputedStyle(h).fontSize) || 42, MIN = 28, W = h.clientWidth; if (!W) return;
   const rg = document.createRange(); rg.selectNodeContents(h); const nat = rg.getBoundingClientRect().width + 2;
-  const vp = parseFloat(getComputedStyle(view).paddingRight) || 18, reserve = has ? Math.max(0, pill.offsetWidth - vp) + 12 : 0, avail = W - reserve;
-  if (nat <= avail) { h.style.paddingRight = reserve + 'px'; return; }
-  const s = base * avail / nat * .98;
-  if (has && s >= MIN) { h.style.fontSize = s.toFixed(1) + 'px'; h.style.paddingRight = reserve + 'px'; return; }
-  const s2 = base * W / nat * .98; h.style.paddingRight = '0px';
-  if (s2 < base) h.style.fontSize = Math.max(MIN, s2).toFixed(1) + 'px';
-  if (s2 < MIN) h.style.whiteSpace = 'normal';
-  if (!has) return;
+  if (nat > W) { const s = base * W / nat * .98; h.style.fontSize = Math.max(MIN, s).toFixed(1) + 'px'; if (s < MIN) h.style.whiteSpace = 'normal'; }
+  if (!has || !top) return;
+  /* The tee-time chip used to share the greeting line and cover the name. It sits on its own row, under the whole greeting. */
   h.classList.add('tt-below'); h.style.minHeight = '0px';
-  const tb = (() => { const r2 = document.createRange(); r2.selectNodeContents(h); return r2.getBoundingClientRect().bottom; })();
-  const off = Math.max(h.getBoundingClientRect().bottom, tb) - top.getBoundingClientRect().top + 6;
-  pill.style.top = off + 'px'; h.style.marginBottom = (pill.offsetHeight + 4 + 18) + 'px';
+  const off = h.getBoundingClientRect().bottom - top.getBoundingClientRect().top + 8;
+  pill.style.top = off + 'px'; h.style.marginBottom = (pill.offsetHeight + 16) + 'px';
 }
 let fitT; addEventListener('resize', () => { clearTimeout(fitT); fitT = setTimeout(fitGreeting, 80); });
-document.fonts?.addEventListener?.('loadingdone', () => fitGreeting());
+document.fonts?.addEventListener?.('loadingdone', () => { fitGreeting(); sizeHiAvs(); });
 async function loadTeeCard(fresh){
   const el = $('#tees'); if (!el) return;
   let d = fresh; if (!d) { try { d = await api('/api/tee-times?scope=upcoming&limit=4'); } catch(e){ el.innerHTML = ''; return; } }
@@ -1860,16 +1852,24 @@ async function loadHiProfs(){
     }
     el.hidden = false;
   } catch(e){ el.hidden = true; }
+  sizeHiAvs();
 }
 /* t147u/t148u/t149u: the player's groups on the HI card, as ONE element (stacked photos/initials + count) → #/amigos (list) → #/grupo/:id.
    No groups → gold "+" circle "Crear grupo" → #/amigos/nuevo. */
 function sizeHiAvs(){ const a = document.querySelector('.hero .hi-avs'), h = a?.closest('.hero'); if (!h) return; h.classList.remove('avs-below');
-  /* t155u: profesor on top, groups below, right-aligned. If the stack would touch the label's longest word or the big HI number, it moves to its own row above. */
-  const w = [...a.children].some(c => !c.hidden) ? a.offsetWidth + 14 : 0; h.style.setProperty('--avw', w + 'px'); if (!w) return;
-  const ov = h.querySelector('.vx-hlink .overline');
-  if (ov) { const probe = document.createElement('span'); probe.textContent = 'HANDICAP'; probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap'; ov.appendChild(probe); const need = probe.offsetWidth; probe.remove(); if (ov.clientWidth - w < need) { h.classList.add('avs-below'); return; } }
-  const big = h.querySelector('.big'); if (!big) return; const rg = document.createRange(); rg.selectNodeContents(big); const b = rg.getBoundingClientRect(), r = a.getBoundingClientRect();
-  if (r.left < b.right + 10 && r.bottom > b.top + 6) h.classList.add('avs-below'); }
+  /* Avatars stay pinned top-right. The title clears only the avatars; the number clears the whole right column (avatars, then Seguir vuelta and Cambios). The stack never jumps above the title. */
+  const avs = [...a.querySelectorAll('#hiprofs, #higroups')].filter(c => !c.hidden && c.offsetWidth);
+  const avw = avs.length ? Math.max(...avs.map(c => c.offsetWidth)) + 14 : 0;
+  const stack = [...a.children].some(c => !c.hidden) ? a.offsetWidth + 14 : 0;
+  h.style.setProperty('--avw', avw + 'px');
+  h.style.setProperty('--hiw', Math.max(avw, stack) + 'px');
+  const meta = h.querySelector('.meta');
+  if (!meta) return;
+  meta.style.marginTop = '';
+  const base = parseFloat(getComputedStyle(meta).marginTop) || 0;
+  const overlap = a.getBoundingClientRect().bottom + 8 - meta.getBoundingClientRect().top;
+  if (overlap > 0) meta.style.marginTop = (base + overlap) + 'px';
+}
 addEventListener('resize', () => sizeHiAvs());
 function grossPlace(members){
   const rows = (members || []).filter(m => m && m.avg_gross != null && !(m.hidden || []).includes('scores'));

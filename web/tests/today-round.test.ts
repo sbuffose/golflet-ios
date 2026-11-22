@@ -70,6 +70,8 @@ test("la vuelta de hoy se trackea sin tarjeta y después queda vinculada", { tim
       const booking = { id: "tt-hoy", date: "2026-11-22", time: "08:30", club_name: "Jockey Club Argentino", course_label: "Azul", start_hole: 1, companions: ["Joaquín Lavalle", "Augusto Lavalle"] };
       return json({ fresh: true, tee_times: [booking], new: [], changed: [] });
     }
+    if (url.pathname === "/api/profesores") return json({ profesores: [{ profesor_id: "prof-ana", name: "Ana Ruiz", verified: true }] });
+    if (url.pathname === "/api/groups") return json({ groups: [{ id: "grp-jueves", name: "Los jueves" }] });
     if (url.pathname.startsWith("/api/")) return json({});
     const file = url.pathname === "/" ? "/index.html" : url.pathname;
     try {
@@ -102,8 +104,38 @@ test("la vuelta de hoy se trackea sin tarjeta y después queda vinculada", { tim
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#today-track", { timeout: 8000 });
     await page.waitForFunction(() => document.body.innerText.includes("08:30"), { timeout: 8000 });
+    await page.waitForSelector("#hiprofs .hp-av", { timeout: 8000 });
+    await page.waitForSelector("#higroups .hp-av", { timeout: 8000 });
     await hideBar();
+    let layout = "";
+    for (let i = 0; i < 20 && !String(layout).startsWith("ok"); i++) {
+      layout = await page.evaluate(`(() => {
+      const r = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect() : null; };
+      const greet = r("#greet"), pill = r("#ttpill"), prof = r("#hiprofs"), group = r("#higroups");
+      const play = r("#today-track"), cambios = r(".hero .hi-ch-l"), meta = r(".hero .meta");
+      const hero = document.querySelector(".hero");
+      const bigEl = document.querySelector(".hero .big");
+      const titleEl = document.querySelector(".hero .overline");
+      if (!greet || !pill || !bigEl || !titleEl || !prof || !group || !play || !cambios || !meta || !hero) return "missing";
+      const digits = document.createRange(); digits.selectNodeContents(bigEl); const big = digits.getBoundingClientRect();
+      const words = document.createRange(); words.selectNodeContents(titleEl); const title = words.getBoundingClientRect();
+      const hit = (a, b) => !(a.bottom <= b.top + 1 || a.top >= b.bottom - 1 || a.right <= b.left + 1 || a.left >= b.right - 1);
+      const problems = [];
+      if (hero.classList.contains("avs-below")) problems.push("avs-below");
+      if (hit(greet, pill) || pill.top < greet.bottom - 1) problems.push("pill");
+      if (hit(title, prof) || hit(title, group)) problems.push("title");
+      if (big.right > play.left + 1 || hit(big, group) || hit(big, prof)) problems.push("number");
+      if (play.top < group.bottom - 2) problems.push("play");
+      if (cambios.top < play.bottom - 2) problems.push("cambios");
+      if (hit(cambios, meta) || hit(play, meta)) problems.push("stats");
+      if (big.width < 40) problems.push("narrow");
+      return problems.join(",") || "ok " + Math.round(cambios.bottom) + "/" + Math.round(meta.top) + " play " + Math.round(play.bottom) + " margin " + getComputedStyle(document.querySelector(".hero .meta")).marginTop;
+    })()`);
+      if (!String(layout).startsWith("ok")) await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(String(layout).startsWith("ok"), true, String(layout));
     const home = await page.evaluate(() => document.body.innerText);
+    assert.match(home, /1 grupo/);
     assert.match(home, /Seguir vuelta/);
     assert.match(home, /handicap index/i);
     assert.match(home, /14,2/);
