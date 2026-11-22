@@ -257,7 +257,29 @@ export function matchPlay(A: string[], B: string[], scores: Scores, strokes: Rec
   const remaining = HOLES - played, finished = closed || remaining === 0;
   return { up, played, remaining, finished, dormie: !finished && up !== 0 && Math.abs(up) === remaining, text: statusText(up, remaining, finished), result: finished ? (up > 0 ? "A" : up < 0 ? "B" : "H") : null, margin: Math.abs(up), holes };
 }
+export type Standing = { text: string; tone: "me" | "them" | "even"; versus: string };
 export type PairRes = { a: string; b: string; strokes: Record<string, number>; state: MatchState };
+/** One line for the navy board: «Vos 2 arriba», «Joaquín L. 1 arriba», «All square», finished «Ganó X 3&2». */
+export function pairStanding(a: string, b: string, state: MatchState, name: (id: string) => string, me = "me"): Standing {
+  const who = (id: string) => (id === me ? "Vos" : name(id));
+  const other = (id: string) => who(id === a ? b : a);
+  if (state.finished) {
+    if (state.up === 0) return { text: "Empate", tone: "even", versus: `${who(a)} vs ${who(b)}` };
+    const winner = state.up > 0 ? a : b;
+    return { text: `Ganó ${who(winner)} ${state.text}`, tone: winner === me ? "me" : "them", versus: other(winner) };
+  }
+  if (state.up === 0) return { text: state.text, tone: "even", versus: `${who(a)} vs ${who(b)}` };
+  const leader = state.up > 0 ? a : b;
+  return { text: `${who(leader)} ${state.text}`, tone: leader === me ? "me" : "them", versus: other(leader) };
+}
+/** Same gross on a hole is not added twice: the track total replaces Vos's score. */
+export function applyHoleScore(scores: Scores, player: string, hole: number, strokes: number): Scores {
+  const h = hole - 1;
+  const next: Scores = { ...scores, [player]: [...(scores[player] || Array(18).fill(null))] };
+  if (h < 0 || h > 17 || !Number.isInteger(strokes) || strokes < 1 || strokes > 20) return scores;
+  next[player][h] = strokes;
+  return next;
+}
 export type TableRow = { id: string; name: string; won: number; tied: number; lost: number; holes_up: number; open: number };
 export type Evaluation = { modality: Modality; strokes: Record<string, number>; hole_strokes: Record<string, number[]>; strokes_placed: boolean; sides: string[][]; main: MatchState | null; pairs: PairRes[]; table: TableRow[]; finished: boolean; summary: string; playing?: Record<string, PlayingHcp> };
 
@@ -280,7 +302,8 @@ export function evaluate(def: MatchDef, scores: Scores): Evaluation {
       if (!s.finished) { ra.open++; rb.open++; } else if (s.result === "H") { ra.tied++; rb.tied++; } else if (s.result === "A") { ra.won++; rb.lost++; } else { rb.won++; ra.lost++; } }
     table.sort((x, y) => y.won - x.won || y.holes_up - x.holes_up || x.lost - y.lost || x.name.localeCompare(y.name, "es"));
     const finished = pairs.length > 0 && pairs.every(p => p.state.finished);
-    return { modality: "metralleta", strokes, hole_strokes: hsOf(strokes), strokes_placed: placed, sides: ids.map(i => [i]), main: null, pairs, table, finished, summary: finished ? `Ganó ${table[0]?.name ?? ""}` : `${pairs.filter(p => p.state.finished).length}/${pairs.length} partidos terminados`, playing };
+    const board = pairs.map(p => pairStanding(p.a, p.b, p.state, name));
+    return { modality: "metralleta", strokes, hole_strokes: hsOf(strokes), strokes_placed: placed, sides: ids.map(i => [i]), main: null, pairs, table, finished, summary: board.map(s => s.text).join(" · ") || "All square", playing };
   }
   const sides = def.modality === "single" ? [[P[0]?.id], [P[1]?.id]].map(s => s.filter(Boolean) as string[]) : (def.sides || []);
   const ids = sides.flat(), strokes = strokesOf(ids), hs = hsOf(strokes), main = matchPlay(sides[0] || [], sides[1] || [], scores, hs, start, marksOf(scores).conc || [], DONE);

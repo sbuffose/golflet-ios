@@ -674,7 +674,7 @@
         const focus = pts.length ? { lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length } : null;
         const sat = focus ? `<div class="tk-sat" id="hole-satellite" style="height:220px;border-radius:12px;background:#0B2545 center/cover no-repeat;background-image:url('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${focus.lng - 0.01},${focus.lat - 0.008},${focus.lng + 0.01},${focus.lat + 0.008}&bboxSR=4326&imageSR=4326&size=800,480&f=image')"></div>` : '';
         el.innerHTML = `<div class="tk" id="play-track">
-          <div class="tk-top"><button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button><b class="tk-cn">${name}</b></div>
+          <div class="tk-top"><button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button><b class="tk-cn">${name}</b>${H.unofficial ? `<span class="tk-unofficial">No oficial</span>` : ''}</div>
           ${sat}
           <p class="tk-empty" id="rc-nogeo">Este hoyo no tiene geometría verificada. No marco un punto inventado.</p>
           <div class="tk-dock"><div class="tk-nav">
@@ -772,7 +772,7 @@
         ${rail}
         <div class="tk-top">
           ${retro ? `<button type="button" class="tk-ib" id="rc-close" aria-label="Volver a la tarjeta">✕</button>` : `<a class="tk-ib" href="#/inicio" aria-label="Inicio">⌂</a>`}
-          <b class="tk-cn">${name}</b>
+          <b class="tk-cn">${name}</b>${retro && H.unofficial ? `<span class="tk-unofficial">No oficial</span>` : ''}
         </div>
         ${setup ? holeChip : ''}
         <div class="tk-chips">${windChip()}</div>
@@ -1207,7 +1207,13 @@
             return { ...m, n: prior + 1 };
           }),
         };
-        if (out.holed) { S.done = true; S.frame = 'overview'; }
+        if (out.holed) {
+          S.done = true; S.frame = 'overview';
+          const rows = (S.saved || []).filter(s => Number(s.hole) === Number(S.hole)).length;
+          const marks = (S.track.marks || []).filter(m => m.countsStroke).length;
+          const strokes = Math.max(rows, marks);
+          if (H.onHoleClosed && strokes > 0) H.onHoleClosed(S.hole, strokes);
+        }
         else if (phase === 'tracking') S.frame = 'play';
         if (phase === 'penaltyWhere') S.penaltyShotId = id;
         S.holeIntent = false;

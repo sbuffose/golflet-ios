@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ReconstructView: View {
     var context: RoundTrackContext? = nil
+    var onHoleScore: ((Int, Int) -> Void)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
@@ -59,6 +60,7 @@ struct ReconstructView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(context == nil ? "Cerrar" : "Volver") {
+                    reportClosedHole()
                     model.showsReconstruct = false
                     dismiss()
                 }
@@ -412,7 +414,29 @@ struct ReconstructView: View {
         return "\(formatter.string(from: date)) · \(course)"
     }
 
+    /// A holed hole replaces Vos's score on the match. The same total is not added twice.
+    private func reportClosedHole() {
+        guard let onHoleScore else { return }
+        let mine = shots.filter { $0.hole == hole }
+        guard mine.contains(where: { $0.result == "holed" }) else { return }
+        let strokes = mine.reduce(0) { partial, shot in
+            partial + (shot.penaltyStrokes > 0 ? shot.penaltyStrokes : 1)
+        }
+        if strokes > 0 { onHoleScore(hole, strokes) }
+    }
+
     private func loadSetup() async {
+        if let context, context.roundId.isEmpty {
+            date = context.date
+            roundId = ""
+            hole = min(18, max(1, context.hole))
+            staged = true
+            if let course = RoundTrackCourse.match(courses: model.courses, clubCode: context.clubCode, name: context.courseName) {
+                courseKey = course.id
+                await loadMap(club: course.clubCode, name: course.name)
+            }
+            return
+        }
         do { setup = try await model.api.reconstructionSetup() }
         catch { note = error.localizedDescription; return }
         guard let context else { return }

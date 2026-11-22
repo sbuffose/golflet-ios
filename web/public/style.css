@@ -2635,6 +2635,14 @@ a.gm-crow{text-decoration:none;color:inherit}
 .gm-go:disabled{opacity:.5}
 .gm-st{background:#0B2545;color:#F6F7F9;border-radius:18px;padding:14px 16px;margin-top:10px;display:grid;gap:4px;text-align:center}
 .gm-st.fin{border:2px solid #C8102E}
+#gm-board.gm-st{text-align:left;padding:8px 12px;gap:0}
+.gm-ln{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0;min-height:28px;font-style:normal}
+.gm-ln b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 calc(16px*var(--ts,1))/1.2 Geist,system-ui,sans-serif;font-style:normal;color:#F6F7F9}
+.gm-ln small{flex:none;font:500 calc(13px*var(--ts,1))/1.2 Geist,system-ui,sans-serif;font-style:normal;color:rgba(246,247,249,.72);white-space:nowrap}
+.gm-st .gm-ln b{font:600 calc(16px*var(--ts,1))/1.2 Geist,system-ui,sans-serif;font-style:normal;color:#F6F7F9}
+.gm-st .gm-ln.me b{color:#E2C27A}
+.gm-st .gm-ln.them b{color:#F3A3A8}
+.gm-track{display:flex;align-items:center;justify-content:center;min-height:44px;margin:8px 0 4px;border-radius:12px;background:#0B2545;color:#F6F7F9;font:600 calc(15px*var(--ts,1))/1 Geist,system-ui,sans-serif;font-style:normal;text-decoration:none}
 .gm-stv{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;font-weight:600;font-size:calc(14px*var(--ts,1))}
 .gm-stv small{color:#C8102E}
 .gm-st b{font:700 calc(26px*var(--tsb,1))/1.1 Geist,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#C8102E}
@@ -2650,7 +2658,7 @@ a.gm-crow{text-decoration:none;color:inherit}
 .gm-hh{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
 .gm-hh b{font-size:calc(20px*var(--tsb,1))}
 .gm-hh span{color:var(--color-ink2);font-weight:600}
-.gm-ro{margin-left:auto;font-size:12px;color:#86672F}
+.gm-ro{margin-left:auto;font-size:12px;font-style:normal;white-space:nowrap;color:#86672F}
 .gm-pr{display:grid;gap:6px;padding:8px 0;border-top:1px solid rgba(15,61,46,.08)}
 .gm-pn{display:flex;align-items:baseline;gap:8px}
 .gm-pn b{font-size:calc(15.5px*var(--ts,1))}

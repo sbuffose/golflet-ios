@@ -1659,6 +1659,51 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    func testCapturePartido() {
+        let up = XCUIApplication()
+        up.launchArguments = ["-ui-testing", "-ui-testing-match-up"]
+        up.launch()
+        XCTAssertTrue(waitFor(up, "screen-partido-vivo"), "No se abrió el partido")
+        let ahead = up.staticTexts["Vos 2 arriba"]
+        XCTAssertTrue(ahead.waitForExistence(timeout: 8))
+        XCTAssertTrue(ahead.isHittable)
+        XCTAssertTrue(up.staticTexts["Joaquín L. 1 arriba"].exists)
+        XCTAssertEqual(up.staticTexts.matching(NSPredicate(format: "label == %@", "All square")).count, 1)
+        XCTAssertTrue(first(up, "match-track").exists)
+        XCTAssertFalse(up.staticTexts["0/3 partidos terminados"].exists)
+        let width = Int(up.windows.firstMatch.frame.width.rounded())
+        saveShot("ios-\(width)-partido-arriba")
+        let track = first(up, "match-track")
+        if track.isHittable { track.tap() } else { track.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(up, "tk-unofficial", timeout: 8), "El track no quedó como no oficial")
+        saveShot("ios-\(width)-partido-track")
+        up.terminate()
+
+        let square = XCUIApplication()
+        square.launchArguments = ["-ui-testing", "-ui-testing-match-square"]
+        square.launch()
+        XCTAssertTrue(waitFor(square, "screen-partido-vivo"))
+        let even = square.staticTexts["All square"]
+        XCTAssertTrue(even.waitForExistence(timeout: 8))
+        XCTAssertTrue(even.isHittable)
+        XCTAssertEqual(square.staticTexts.matching(NSPredicate(format: "label == %@", "All square")).count, 3)
+        let squareWidth = Int(square.windows.firstMatch.frame.width.rounded())
+        saveShot("ios-\(squareWidth)-partido-square")
+        square.terminate()
+
+        let done = XCUIApplication()
+        done.launchArguments = ["-ui-testing", "-ui-testing-match-done"]
+        done.launch()
+        XCTAssertTrue(waitFor(done, "screen-partido-vivo"))
+        let won = done.staticTexts["Ganó Vos 3&2"]
+        XCTAssertTrue(won.waitForExistence(timeout: 8))
+        XCTAssertTrue(won.isHittable)
+        XCTAssertTrue(done.staticTexts["Ganó Joaquín L. 3&2"].exists)
+        XCTAssertFalse(first(done, "match-track").exists)
+        let doneWidth = Int(done.windows.firstMatch.frame.width.rounded())
+        saveShot("ios-\(doneWidth)-partido-terminado")
+    }
+
     func testCaptureGolpesHoyo() {
         let placed = XCUIApplication()
         openGolpes(placed, arguments: ["-ui-testing", "-ui-testing-strokes"])

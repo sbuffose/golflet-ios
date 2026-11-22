@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { bookingCourseName, cardFromHoles, companionLabels, companionsLine, courseChoices, courseFromMarker, courseHandicap, courseLabelHits, evaluate, holeStrokes, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced, strokesReceived } from "../lib/match-core";
+import { applyHoleScore, bookingCourseName, cardFromHoles, companionLabels, companionsLine, courseChoices, courseFromMarker, courseHandicap, courseLabelHits, evaluate, holeStrokes, pairStanding, pickOfficialCard, resolveOfficialCard, scorecardHoles, shortName, strokesPlaced, strokesReceived } from "../lib/match-core";
 import { courseCardFromRow } from "../lib/tee-times-core";
 
 /** Official card already shipped as a fixture (course holes only, no player). */
@@ -195,4 +195,60 @@ test("the match screen no longer deals strokes from hole 1", () => {
   assert.equal(js.includes("dash('strokes')"), false);
   assert.equal(js.includes('data-miss="strokes"'), false);
   assert.match(js, /shortName/);
+  assert.match(js, /Trackear golpes/);
+  assert.match(js, /pairStanding/);
+});
+
+const blank = () => Array(18).fill(null);
+const trio = {
+  modality: "metralleta" as const, scoring: "gross" as const, allowance: 100, si: Array(18).fill(null),
+  players: [
+    { id: "me", name: "Fixture Vos", hcp: 0 },
+    { id: "joaquin", name: "Joaquín Lavalle", hcp: 0 },
+    { id: "augusto", name: "Augusto Lavalle", hcp: 0 },
+  ],
+};
+const line = (ev: ReturnType<typeof evaluate>, index: number) => {
+  const pair = ev.pairs[index];
+  return pairStanding(pair.a, pair.b, pair.state, id => shortName(trio.players.find(p => p.id === id)?.name || id, trio.players.map(p => p.name), id === "me")).text;
+};
+
+test("the board says who is up, all square, and a finished 3&2", () => {
+  const me = blank(), joaquin = blank(), augusto = blank();
+  me[0] = 4; joaquin[0] = 5; me[1] = 4; joaquin[1] = 5; joaquin[2] = 4; augusto[2] = 5;
+  const live = evaluate(trio, { me, joaquin, augusto });
+  assert.deepEqual(live.pairs.map((_, i) => line(live, i)), ["Vos 2 arriba", "All square", "Joaquín L. 1 arriba"]);
+  assert.equal(live.summary.includes("partidos terminados"), false);
+
+  const tied = blank();
+  tied[0] = 4;
+  const square = evaluate(trio, { me: tied, joaquin: [...tied], augusto: [...tied] });
+  assert.deepEqual(square.pairs.map(p => p.state.text), ["All square", "All square", "All square"]);
+
+  const win = blank(), mid = blank(), last = blank();
+  for (let hole = 0; hole < 3; hole++) { win[hole] = 4; mid[hole] = 5; last[hole] = 6; }
+  for (let hole = 3; hole < 16; hole++) { win[hole] = 4; mid[hole] = 4; last[hole] = 4; }
+  const done = evaluate(trio, { me: win, joaquin: mid, augusto: last });
+  assert.deepEqual(done.pairs.map((_, i) => line(done, i)), ["Ganó Vos 3&2", "Ganó Vos 3&2", "Ganó Joaquín L. 3&2"]);
+  assert.equal(done.finished, true);
+});
+
+test("a stroke on the first index turns a lost hole into a half", () => {
+  const si = Array.from({ length: 18 }, (_, i) => i + 1);
+  const players = [{ id: "me", name: "Ana", hcp: 0 }, { id: "beto", name: "Beto", hcp: 1 }];
+  const scores = { me: [4, ...Array(17).fill(null)], beto: [5, ...Array(17).fill(null)] };
+  const gross = evaluate({ modality: "metralleta", scoring: "gross", allowance: 100, players, si }, scores);
+  const net = evaluate({ modality: "metralleta", scoring: "hcp", allowance: 100, players, si }, scores);
+  assert.equal(pairStanding("me", "beto", gross.pairs[0].state, () => "Beto").text, "Vos 1 arriba");
+  assert.equal(net.pairs[0].strokes.beto, 1);
+  assert.equal(net.pairs[0].state.up, 0);
+  assert.equal(pairStanding("me", "beto", net.pairs[0].state, () => "Beto").text, "All square");
+});
+
+test("the track total replaces the hole and is not added on top", () => {
+  const start = { me: [4, ...Array(17).fill(null)] };
+  const next = applyHoleScore(start, "me", 1, 5);
+  assert.equal(next.me[0], 5);
+  assert.equal(applyHoleScore(next, "me", 1, 5).me[0], 5);
+  assert.equal(applyHoleScore(start, "me", 1, 0), start);
 });

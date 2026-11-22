@@ -10,7 +10,7 @@
     const q = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
     const params = new URLSearchParams(q);
     const hole = Number(params.get("hole"));
-    return { roundId: params.get("ronda") || "", hole: hole >= 1 && hole <= 18 ? String(hole) : "" };
+    return { roundId: params.get("ronda") || "", hole: hole >= 1 && hole <= 18 ? String(hole) : "", matchId: params.get("partido") || "" };
   }
 
   function matchCourse(official, courses) {
@@ -23,6 +23,10 @@
     if (!root) return;
     const id = root.dataset.id || "";
     const query = roundQuery();
+    if (!id && query.matchId) {
+      mountMatch(root, query.matchId, query.hole);
+      return;
+    }
     if (!id && query.roundId) {
       mountRound(root, query.roundId, query.hole);
       return;
@@ -179,6 +183,43 @@
     return Array.isArray(row) ? row[1] : (row.par || null);
   }
 
+  async function mountMatch(root, matchId, hole) {
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(`golflet.match.${matchId}`) || "null"); } catch { stored = null; }
+    const back = `#/partido/${matchId}?hoyo=${hole || 1}`;
+    const onHoleClosed = (n, strokes) => { if (window.GolfletMatch?.applyTrack) window.GolfletMatch.applyTrack(matchId, n, strokes); };
+    if (stored?.track_id) {
+      await mountEditor(root, stored.track_id, hole, { back, onHoleClosed, matchId, unofficial: true });
+      return;
+    }
+    root.innerHTML = `<div class="card"><p class="s">Abriendo el track de este hoyo. Esta vuelta no cuenta para tus tarjetas.</p></div>`;
+    let courseId = stored?.course_id || "";
+    if (!courseId) {
+      try {
+        const pack = await api("/api/gps/courses");
+        const want = String(stored?.course_label || "").toLowerCase();
+        const hit = (pack.courses || []).find(c => want && String(c.label || c.course || c.vm_course || "").toLowerCase().includes(want));
+        courseId = hit?.course_id || "";
+      } catch { courseId = ""; }
+    }
+    if (!courseId) {
+      root.innerHTML = picker();
+      await mountPicker(root);
+      const err = root.querySelector("#rc-err");
+      if (err) err.textContent = "Elegí la cancha. El track del partido queda como no oficial y no entra en tus tarjetas.";
+      return;
+    }
+    await mountEditor(root, "", hole, {
+      courseId,
+      date: stored?.date || new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10),
+      courseName: stored?.course_label || "",
+      back,
+      onHoleClosed,
+      matchId,
+      unofficial: true,
+    });
+  }
+
   async function mountEditor(root, id, holeHint, pending) {
     const visit = ++VISIT;
     const mine = () => visit === VISIT && !!root.isConnected;
@@ -191,7 +232,7 @@
     let savedHole = 0;
     let courseName = pending?.courseName || "";
     let roundId = pending?.roundId || "";
-    let unofficial = !roundId;
+    let unofficial = pending?.unofficial === true || !roundId;
     const back = pending?.back || (roundId ? `#/ronda/${roundId}` : "#/rondas");
     let holes = [];
     let shots = [];
@@ -210,8 +251,9 @@
         if (row) {
           courseName = courseName || row.course || "";
           roundId = roundId || row.round_id || "";
-          if (row.official === false || (!row.round_id && row.official !== true)) unofficial = true;
-          if (row.round_id) unofficial = false;
+          if (pending?.unofficial === true) unofficial = true;
+          else if (row.official === false || (!row.round_id && row.official !== true)) unofficial = true;
+          else if (row.round_id) unofficial = false;
           const kept = Number(row.current_hole);
           if (kept >= 1 && kept <= 18) savedHole = kept;
           if (row.club_code) clubCode = clubCode || row.club_code;
@@ -261,6 +303,7 @@
       bag: Array.isArray(bag) ? bag : CLUBS.map(c => ({ code: c })),
       roundId: roundId || "",
       unofficial,
+      onHoleClosed: pending?.onHoleClosed || null,
       api, esc, toast: () => {}, cid: () => "",
       onSave: async (shot) => {
         if (!mine()) return null;
@@ -271,9 +314,17 @@
             if (!mine()) return null;
             liveId = created?.live_round?.id || "";
             if (!liveId) throw new Error("No pudimos abrir la vuelta.");
+            if (pending?.matchId) {
+              try {
+                const key = `golflet.match.${pending.matchId}`;
+                const match = JSON.parse(localStorage.getItem(key) || "null");
+                if (match) { match.track_id = liveId; localStorage.setItem(key, JSON.stringify(match)); }
+              } catch { /* the score still returns through onHoleClosed */ }
+            }
             if (!mine()) return null;
             const ronda = pending.roundId ? `&ronda=${encodeURIComponent(pending.roundId)}` : "";
-            history.replaceState(null, "", `#/reconstruir/${liveId}?hole=${shot.hole}${ronda}`);
+            const partido = pending.matchId ? `&partido=${encodeURIComponent(pending.matchId)}` : "";
+            history.replaceState(null, "", `#/reconstruir/${liveId}?hole=${shot.hole}${ronda}${partido}`);
           }
           if (!mine()) return null;
           const body = {
