@@ -284,6 +284,23 @@ struct LiveGolfletAPI: GolfletAPI {
         return detail
     }
 
+    func weatherNow(lat: Double, lng: Double, retry: Bool) async throws -> WeatherNow? {
+        let q = String(format: "lat=%.5f&lng=%.5f%@", lat, lng, retry ? "&retry=1" : "")
+        let json = try await request("GET", "/api/weather/now?\(q)")
+        guard let kmh = JSONFlex.double(from: json["kmh"]), let from = JSONFlex.double(from: json["from_deg"]) else { return nil }
+        return WeatherNow(
+            at: json["at"] as? String ?? "",
+            hhmm: json["hhmm"] as? String ?? "",
+            kmh: kmh,
+            gustKmh: JSONFlex.double(from: json["gust_kmh"]),
+            fromDeg: from,
+            tempC: JSONFlex.double(from: json["temp_c"]),
+            precipMm: JSONFlex.double(from: json["precip_mm"]),
+            source: json["source"] as? String ?? "Open-Meteo",
+            stale: json["stale"] as? Bool ?? false
+        )
+    }
+
     func roundWeather(roundId: String) async throws -> RoundWeather? {
         let encoded = roundId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? roundId
         let json = try await request("GET", "/api/rounds/\(encoded)/weather")

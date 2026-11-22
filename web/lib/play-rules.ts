@@ -178,6 +178,12 @@ export function windRelative(fromDeg: number | null | undefined, bearing: number
   return "cruzado";
 }
 
+/** Degrees clockwise from the direction of play. 0 points toward the green: the wind is pushing that way. */
+export function windArrow(fromDeg: number | null | undefined, bearing: number | null | undefined): number | null {
+  if (fromDeg == null || bearing == null || !Number.isFinite(+fromDeg) || !Number.isFinite(+bearing)) return null;
+  return norm(+fromDeg + 180 - +bearing);
+}
+
 export function windPlay(hole: number, fromDeg: number | null | undefined, bearing: number | null | undefined, speedKmh: number | null | undefined): { relative: WindRel; text: string } {
   if (bearing == null || !Number.isFinite(+bearing)) {
     return { relative: "unavailable", text: `Hoyo ${hole} · Sin rumbo verificado del tee al green. No clasifico el viento.` };
@@ -269,6 +275,41 @@ export function yardNumber(value: unknown): number | null {
 export function yardLabel(value: unknown): string {
   const n = yardNumber(value);
   return n == null ? "" : `${n} yd`;
+}
+
+export type TeeBox = { name: string; yards: number | null; lat: number | null; lng: number | null };
+
+/** Named tees from the card, longest first. A point moves only when the hole has more than one tee center:
+ *  the farthest from the green is the longest tee. One center is not assigned to a color. */
+export function teeBoxes(yards: unknown, polygons: unknown, green: LL | null): TeeBox[] {
+  const named: { name: string; yards: number }[] = [];
+  if (yards && typeof yards === "object" && !Array.isArray(yards)) {
+    for (const [name, value] of Object.entries(yards as Record<string, unknown>)) {
+      const n = yardNumber(value);
+      if (n != null && name.trim()) named.push({ name: name.trim().toUpperCase(), yards: n });
+    }
+  } else {
+    const n = yardNumber(yards);
+    if (n != null) named.push({ name: "SALIDA", yards: n });
+  }
+  named.sort((a, b) => b.yards - a.yards || a.name.localeCompare(b.name));
+  const centers: LL[] = [];
+  const list = Array.isArray(polygons) ? polygons : [];
+  for (const item of list) {
+    const raw = item && typeof item === "object" ? item as { center?: { lat?: unknown; lng?: unknown }; lat?: unknown; lng?: unknown } : null;
+    const point = knownPoint(raw?.center?.lat, raw?.center?.lng) || knownPoint(raw?.lat, raw?.lng);
+    if (point) centers.push(point);
+  }
+  const pin = green && knownPoint(green.lat, green.lng);
+  if (pin && centers.length > 1) centers.sort((a, b) => metersBetween(b, pin) - metersBetween(a, pin));
+  const assign = centers.length > 1;
+  if (!named.length) {
+    return centers.map((c, i) => ({ name: centers.length === 1 ? "SALIDA" : `TEE ${i + 1}`, yards: null, lat: c.lat, lng: c.lng }));
+  }
+  return named.map((row, i) => {
+    const spot = assign ? centers[i] : null;
+    return { name: row.name, yards: row.yards, lat: spot?.lat ?? null, lng: spot?.lng ?? null };
+  });
 }
 
 const EARTH_M = 6_371_008.8;

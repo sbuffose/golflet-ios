@@ -2895,8 +2895,14 @@ img.me-face{object-fit:cover;padding:0}
 .tk-top{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;z-index:4;display:flex;align-items:center;gap:8px}
 .tk-ib{width:42px;height:42px;border-radius:50%;border:0;background:rgba(15,61,46,.88);color:#F6F7F9;display:grid;place-items:center;text-decoration:none;font:650 13px/1 Geist,system-ui,sans-serif;cursor:pointer}
 .tk-cn{flex:1;text-align:center;font-size:14px;font-weight:650;text-shadow:0 1px 8px rgba(0,0,0,.55);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tk-chips{position:absolute;top:calc(60px + env(safe-area-inset-top));left:12px;right:12px;z-index:4;display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
-.tk-chip{background:rgba(15,61,46,.86);color:#F6F7F9;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:650}
+.tk-chips{position:absolute;top:calc(58px + env(safe-area-inset-top));left:12px;right:auto;z-index:4;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:168px;pointer-events:none}
+.tk-chip{background:#0B2545;color:#F6F7F9;border-radius:14px;padding:6px 8px;font-size:12px;font-weight:650;font-style:normal}
+.tk-wx{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 6px;border:0;font:650 12px/1 Geist,system-ui,sans-serif;font-style:normal;pointer-events:auto;max-width:168px;text-align:left}
+.tk-wxarr{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:8px solid #F6F7F9;transform-origin:50% 65%}
+.tk-wx small{flex-basis:100%;font-size:10px;font-weight:550;opacity:.75}
+.tk-wxwhy{pointer-events:auto;background:#fff;color:#0B2545;border-radius:12px;padding:8px 10px;max-width:168px;text-align:left;font-style:normal}
+.tk-wxwhy p{margin:0}
+.tk-wxwhy button{margin-top:8px;background:#C8102E;color:#fff;border:0;border-radius:999px;min-height:36px;padding:8px 12px;font:650 13px/1 Geist,system-ui,sans-serif;font-style:normal}
 .tk-ro{position:absolute;left:50%;top:calc(42% + 18px);transform:translateX(-50%);z-index:4;background:#fff;color:#0B2545;border-radius:999px;padding:5px 12px;text-align:center;max-width:calc(100% - 32px);box-shadow:0 4px 16px rgba(0,0,0,.28);pointer-events:none}
 .tk-ro b{display:block;font-size:14px;font-weight:650;line-height:1.2}
 .tk-setup b{white-space:nowrap}

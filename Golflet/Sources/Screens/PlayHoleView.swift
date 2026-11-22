@@ -46,6 +46,10 @@ struct PlayHoleView: View {
     @State private var recovery = false
     @State private var waterAsk = false
     @State private var droppedClientIDs: Set<String> = []
+    @State private var nowWind: WeatherNow?
+    @State private var windTried = false
+    @State private var windOpen = false
+    @State private var windNote = ""
 
     private enum MarkMode { case aim, track }
 
@@ -142,6 +146,7 @@ struct PlayHoleView: View {
             beginPace()
             await loadPaceEstimate()
             await refreshLivePace()
+            await loadWind(retry: false)
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
@@ -578,14 +583,55 @@ struct PlayHoleView: View {
     }
 
     private var windChip: some View {
-        Text(windLine)
-            .font(GFont.ui(12, weight: .semibold))
-            .foregroundStyle(p.ink)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.white.opacity(0.94))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+        VStack(alignment: .trailing, spacing: 6) {
+            Button {
+                if nowWind == nil { windOpen.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    if let wind = nowWind {
+                        if let turn = windTurn {
+                            Image(systemName: "location.north.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .rotationEffect(.degrees(turn))
+                                .accessibilityHidden(true)
+                        }
+                        Text(windBits(wind))
+                        Text(wind.source + (wind.hhmm.isEmpty ? "" : " \(wind.hhmm)") + (wind.stale ? " · última lectura" : ""))
+                            .font(.system(size: 10, weight: .medium))
+                            .opacity(0.75)
+                    } else if windTried {
+                        Text("–")
+                    }
+                }
+                .font(GFont.ui(12, weight: .semibold))
+                .foregroundStyle(Color(hex: 0xF6F7F9))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(hex: 0x0B2545))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("play-wind")
+            if windOpen && nowWind == nil {
+                VStack(alignment: .trailing, spacing: 8) {
+                    Text(windNote.isEmpty ? "Open-Meteo y MET Norway no devolvieron viento." : windNote)
+                        .font(GFont.ui(12, weight: .medium))
+                        .foregroundStyle(Color(hex: 0x0B2545))
+                        .multilineTextAlignment(.trailing)
+                    Button("Reintentar") { Task { await loadWind(retry: true) } }
+                        .font(GFont.ui(13, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 36)
+                        .background(Color(hex: 0xC8102E))
+                        .clipShape(Capsule())
+                        .accessibilityIdentifier("play-wind-retry")
+                }
+                .padding(10)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
     }
 
     private var matchChip: some View {
@@ -812,19 +858,36 @@ struct PlayHoleView: View {
         return club == "pt" || club == "putter"
     }
 
-    private var windLine: String {
-        guard let booking = sameDayBooking else { return "Clima no disponible" }
-        return HoleWind.shotNote(kmh: booking.windKmh, tempC: booking.tempC, rainMm: booking.rainMm, from: booking.windFrom)
+    private var windTurn: Double? {
+        guard let from = nowWind?.fromDeg else { return nil }
+        let bearing = HoleGeoMath.heading(from: teeCoord, to: pinCoord)
+        return HoleWind.pushDegrees(fromDeg: from, bearingDeg: bearing)
     }
 
-    private var sameDayBooking: TeeTime? {
-        let day = String(liveRound.date.prefix(10))
-        let fmt = DateFormatter()
-        fmt.calendar = Calendar(identifier: .gregorian)
-        fmt.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
-        fmt.dateFormat = "yyyy-MM-dd"
-        let same = model.teeTimes.filter { fmt.string(from: $0.startsAt) == day }
-        return same.count == 1 ? same[0] : nil
+    private func windBits(_ wind: WeatherNow) -> String {
+        var bits = ["\(Int(wind.kmh.rounded())) km/h"]
+        if let temp = wind.tempC { bits.append("\(Int(temp.rounded()))°C") }
+        if let rain = wind.precipMm, rain > 0 { bits.append("lluvia") }
+        return bits.joined(separator: " · ")
+    }
+
+    private func loadWind(retry: Bool) async {
+        let pin = current?.green.center ?? current?.tee
+        guard let pin else {
+            nowWind = nil
+            windTried = true
+            windNote = "Este hoyo no tiene un punto para pedir el clima."
+            return
+        }
+        do {
+            nowWind = try await model.api.weatherNow(lat: pin.lat, lng: pin.lng, retry: retry)
+            windNote = nowWind == nil ? "Open-Meteo y MET Norway no devolvieron viento." : ""
+            if nowWind != nil { windOpen = false }
+        } catch {
+            nowWind = nil
+            windNote = error.localizedDescription
+        }
+        windTried = true
     }
 
     private var offerShortPutt: Bool {
@@ -869,16 +932,16 @@ struct PlayHoleView: View {
         await hit(holed: true, penalty: false, intent: conceded ? "conceded" : nil, atCup: true)
     }
 
+    @ViewBuilder
     private var markActions: some View {
-        switch track.phase {
-        case .confirmTee, .confirmFlag, .drop:
+        if track.phase == .confirmTee || track.phase == .confirmFlag || track.phase == .drop {
             HStack(spacing: 8) {
                 if track.phase == .drop {
                     cancelButton
                 }
                 setButton
             }
-        case .relief:
+        } else if track.phase == .relief {
             HStack(spacing: 8) {
                 Button("Otra vez") { track = TrackSession.reload(track) }
                     .font(GType.headline)
@@ -898,7 +961,7 @@ struct PlayHoleView: View {
                     .accessibilityIdentifier("play-drop")
                 cancelButton
             }
-        case .tracking, .penaltyWhere:
+        } else {
             HStack(spacing: 8) {
                 if track.phase == .tracking {
                     Button("P") { track = TrackSession.beginPenalty(track) }

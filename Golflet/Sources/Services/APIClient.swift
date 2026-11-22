@@ -103,6 +103,7 @@ protocol GolfletAPI: Sendable {
     func courseCenters(courseId: String) async throws -> [Int: ReconstructionPoint]
     func courseMap(club: String, course: String, playedOn: String?) async throws -> [String: Any]
     func roundWeather(roundId: String) async throws -> RoundWeather?
+    func weatherNow(lat: Double, lng: Double, retry: Bool) async throws -> WeatherNow?
     func openTodayRound(course: String?, teeId: String?) async throws -> TodayTrack
     func confirmProvisionalLink(liveId: String, roundId: String) async throws
 }
@@ -112,6 +113,8 @@ extension GolfletAPI {
     func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail {
         try await gpsCourse(id: id, lat: lat, lng: lng, playedOn: nil)
     }
+
+    func weatherNow(lat: Double, lng: Double, retry: Bool) async throws -> WeatherNow? { nil }
 
     func courseMap(club: String, course: String) async throws -> [String: Any] {
         try await courseMap(club: club, course: course, playedOn: nil)

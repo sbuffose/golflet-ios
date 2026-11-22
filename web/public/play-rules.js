@@ -16,6 +16,7 @@ exports.screenOf = screenOf;
 exports.worldTile = worldTile;
 exports.bearingDeg = bearingDeg;
 exports.windRelative = windRelative;
+exports.windArrow = windArrow;
 exports.windPlay = windPlay;
 exports.onCup = onCup;
 exports.puttFeet = puttFeet;
@@ -27,6 +28,7 @@ exports.puttMeters = puttMeters;
 exports.isPutterClub = isPutterClub;
 exports.yardNumber = yardNumber;
 exports.yardLabel = yardLabel;
+exports.teeBoxes = teeBoxes;
 exports.shotDistanceLabel = shotDistanceLabel;
 exports.trackHoleSummary = trackHoleSummary;
 exports.deriveHoleCard = deriveHoleCard;
@@ -217,6 +219,12 @@ function windRelative(fromDeg, bearing) {
         return "favor";
     return "cruzado";
 }
+/** Degrees clockwise from the direction of play. 0 points toward the green: the wind is pushing that way. */
+function windArrow(fromDeg, bearing) {
+    if (fromDeg == null || bearing == null || !Number.isFinite(+fromDeg) || !Number.isFinite(+bearing))
+        return null;
+    return norm(+fromDeg + 180 - +bearing);
+}
 function windPlay(hole, fromDeg, bearing, speedKmh) {
     if (bearing == null || !Number.isFinite(+bearing)) {
         return { relative: "unavailable", text: `Hoyo ${hole} · Sin rumbo verificado del tee al green. No clasifico el viento.` };
@@ -311,6 +319,43 @@ function yardNumber(value) {
 function yardLabel(value) {
     const n = yardNumber(value);
     return n == null ? "" : `${n} yd`;
+}
+/** Named tees from the card, longest first. A point moves only when the hole has more than one tee center:
+ *  the farthest from the green is the longest tee. One center is not assigned to a color. */
+function teeBoxes(yards, polygons, green) {
+    const named = [];
+    if (yards && typeof yards === "object" && !Array.isArray(yards)) {
+        for (const [name, value] of Object.entries(yards)) {
+            const n = yardNumber(value);
+            if (n != null && name.trim())
+                named.push({ name: name.trim().toUpperCase(), yards: n });
+        }
+    }
+    else {
+        const n = yardNumber(yards);
+        if (n != null)
+            named.push({ name: "SALIDA", yards: n });
+    }
+    named.sort((a, b) => b.yards - a.yards || a.name.localeCompare(b.name));
+    const centers = [];
+    const list = Array.isArray(polygons) ? polygons : [];
+    for (const item of list) {
+        const raw = item && typeof item === "object" ? item : null;
+        const point = knownPoint(raw?.center?.lat, raw?.center?.lng) || knownPoint(raw?.lat, raw?.lng);
+        if (point)
+            centers.push(point);
+    }
+    const pin = green && knownPoint(green.lat, green.lng);
+    if (pin && centers.length > 1)
+        centers.sort((a, b) => metersBetween(b, pin) - metersBetween(a, pin));
+    const assign = centers.length > 1;
+    if (!named.length) {
+        return centers.map((c, i) => ({ name: centers.length === 1 ? "SALIDA" : `TEE ${i + 1}`, yards: null, lat: c.lat, lng: c.lng }));
+    }
+    return named.map((row, i) => {
+        const spot = assign ? centers[i] : null;
+        return { name: row.name, yards: row.yards, lat: spot?.lat ?? null, lng: spot?.lng ?? null };
+    });
 }
 const EARTH_M = 6371008.8;
 function metersBetween(a, b) {

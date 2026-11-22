@@ -76,7 +76,7 @@
       more: false, history: false, saved: H.shots || [],
       alive: true, done: false, reopen: false, editN: 0, pickClub: false, moveShot: false, askDel: false, suggestedTee: null, suggestedPin: null, flagKind: 'none', adjusted: false, clubChosen: false, cmapTried: false,
       playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false, undoing: false,
-      driverTee: null, teeSource: '', flagSource: '', wx: null, wxState: '', lostPair: null, provisionalNext: false, recovery: false, suggest: '', roundId: H.roundId || '',
+      driverTee: null, teeSource: '', teeName: '', moveTee: false, flagSource: '', wx: null, wxState: '', wxOpen: false, wxWhy: '', lostPair: null, provisionalNext: false, recovery: false, suggest: '', roundId: H.roundId || '',
     };
 
     const holeRec = () => S.holes.find(h => h.hole === S.hole || h.number === S.hole) || S.holes[S.hole - 1] || {};
@@ -413,6 +413,49 @@
       const fromTee = !((S.saved || []).some(s => Number(s.hole) === Number(S.hole)));
       S.club = R().teeClub ? R().teeClub(S.bag, par, '', fromTee) : '';
     };
+    const salidaKey = () => `golflet.salida.${S.id || 'local'}.${S.hole}`;
+    const teeChoices = () => {
+      const rec = holeRec();
+      const yards = rec.yards != null ? rec.yards : gpsHole()?.yards;
+      const pin = cupLL();
+      return R().teeBoxes ? R().teeBoxes(yards, cmapHole()?.tees, pin) : [];
+    };
+    const readSalida = () => {
+      try {
+        const raw = localStorage.getItem(salidaKey());
+        if (!raw) return null;
+        const j = JSON.parse(raw);
+        const lat = Number(j && j.lat), lng = Number(j && j.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return { lat, lng, name: String(j.name || ''), source: j.source === 'tee' ? 'tee' : 'jugador' };
+      } catch { return null; }
+    };
+    const writeSalida = rec => {
+      try { localStorage.setItem(salidaKey(), JSON.stringify({ lat: rec.lat, lng: rec.lng, name: rec.name || '', source: rec.source || 'jugador' })); } catch { /* this device keeps the choice when storage is available */ }
+    };
+    const applySalida = (lat, lng, name, source) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const point = { lat, lng };
+      const hasStroke = (S.track.marks || []).some(m => m.countsStroke);
+      let phase = S.track.phase;
+      let flag = S.track.flag;
+      const ball = hasStroke ? S.track.ball : point;
+      if (!hasStroke && phase === 'confirmTee' && (flag || S.suggestedPin)) {
+        flag = flag || (S.suggestedPin ? { ...S.suggestedPin } : flag);
+        phase = 'tracking';
+        S.frame = 'play';
+      }
+      S.track = { ...S.track, tee: point, ball, flag, phase };
+      S.teeName = name || '';
+      S.teeSource = source === 'tee' ? 'tee' : 'jugador';
+      S.moveTee = false;
+      writeSalida({ lat, lng, name: S.teeName, source: S.teeSource });
+    };
+    const restoreSalida = () => {
+      const saved = readSalida();
+      if (!saved) return;
+      applySalida(saved.lat, saved.lng, saved.name, saved.source);
+    };
     const armRetro = () => {
       const teeRaw = verifiedTee();
       const read = flagRead();
@@ -436,6 +479,7 @@
           S.frame = 'seek';
           S.flagKind = pin ? read.kind : 'none';
         }
+        restoreSalida();
         return;
       }
       const marks = [];
@@ -487,6 +531,7 @@
       if (landed && landed.lie === 'green' && play) { S.playerLie = 'green'; S.lieBall = { ...play }; }
       S.clubAuto = S.clubAuto === 'putt' ? 'putt' : '';
       syncClubToOrigin();
+      restoreSalida();
     };
     const playingPoint = marks => {
       for (let i = marks.length - 1; i >= 0; i--) {
@@ -522,6 +567,7 @@
       const holeSpan = meters == null || !R().greenToHole ? null : R().greenToHole(meters);
       const ball = S.track.ball || S.track.tee;
       const flown = here && ball ? yd(hav(ball, here)) : null;
+      if (S.moveTee) return `<b>Arrastrá la salida o tocala en el mapa</b>`;
       if (retro && phase === 'confirmTee') {
         if (S.suggestedTee && S.frame === 'tee') return `<b>Confirmá la salida</b>`;
         return `<b>Arrastrá para confirmar la salida</b><small>Sin salida verificada</small>`;
@@ -551,8 +597,11 @@
           return `<b class="num">${holeSpan.text} al hoyo</b><small>estimada en el mapa</small>`;
         }
         if (S.flagKind === 'pin' && inCup) return `<b>En el hoyo</b><small>ENTER confirma</small>`;
+        const played = (S.track.marks || []).some(m => m.countsStroke);
+        const remainAt = played ? here : (ball || here);
+        const remain = remainAt && cup ? hav(remainAt, cup) : null;
         const travel = flown == null ? '' : `${flown} yd`;
-        const left = yd(meters) == null ? '' : `${yd(meters)} yd al hoyo`;
+        const left = yd(remain) == null ? '' : `${yd(remain)} yd al hoyo`;
         return aimChip(travel, left, ball, here);
       }
       if (phase === 'confirmTee' || phase === 'confirmFlag' || phase === 'drop' || phase === 'penaltyWhere' || phase === 'relief') {
@@ -567,7 +616,7 @@
     };
     const flightWind = (from, to) => {
       const w = S.wind;
-      if (!w || w.kmh == null || (w.source && w.source !== 'open-meteo-archive')) return '';
+      if (!w || w.kmh == null) return '';
       const gust = w.gust_kmh != null ? ` · ráfagas ${Math.round(Number(w.gust_kmh))} km/h` : '';
       const rain = Number(w.precip_mm) > 0 || w.condition === 'lluvia' || w.condition === 'tormenta' ? ' · lluvia' : '';
       const plan = window.GolfletPlanCore;
@@ -586,17 +635,22 @@
     };
 
     const windChip = () => {
-      if (S.wxState === 'none') return `<span class="tk-chip">Clima no disponible</span>`;
-      if (!S.wind || S.wind.kmh == null || (retro && S.wind.source && S.wind.source !== 'open-meteo-archive')) return '';
-      const gust = S.wind.gust_kmh != null ? ` · ráfagas ${Math.round(Number(S.wind.gust_kmh))} km/h` : '';
-      const rain = Number(S.wind.precip_mm) > 0 || S.wind.condition === 'lluvia' || S.wind.condition === 'tormenta' ? ' · lluvia' : '';
-      if (S.wind.from_deg == null) {
-        const temp = S.wind.temp_c != null ? ` · ${String(S.wind.temp_c).replace('.', ',')}°C` : '';
-        return `<span class="tk-chip">${Math.round(Number(S.wind.kmh))} km/h${esc(temp)}${esc(gust)}${esc(rain)}. Sin dirección. No ajusto las yardas.</span>`;
+      if (S.wxState === 'none' || !S.wind || S.wind.kmh == null) {
+        if (S.wxState !== 'none') return '';
+        const why = S.wxOpen ? `<div class="tk-wxwhy" id="play-wx-why"><p>${esc(S.wxWhy || 'Open-Meteo y MET Norway no devolvieron viento.')}</p><button type="button" id="play-wx-retry">Reintentar</button></div>` : '';
+        return `<button type="button" class="tk-chip tk-wx" id="play-wx" aria-expanded="${S.wxOpen ? 'true' : 'false'}">–</button>${why}`;
       }
-      const b = S.track.tee && S.track.flag ? R().bearingDeg(S.track.tee, S.track.flag) : null;
-      const play = R().windPlay(S.hole, S.wind.from_deg, b, S.wind.kmh);
-      return `<span class="tk-chip">${esc(play.text)}${esc(gust)}${esc(rain)}</span>`;
+      const temp = S.wind.temp_c != null ? `${Math.round(Number(S.wind.temp_c))}°C` : '';
+      const rain = Number(S.wind.precip_mm) > 0 || S.wind.condition === 'lluvia' || S.wind.condition === 'tormenta' ? 'lluvia' : '';
+      const from = S.track.tee || S.suggestedTee;
+      const to = S.track.flag || cupLL();
+      const bearing = from && to ? R().bearingDeg(from, to) : null;
+      const turn = S.wind.from_deg != null && bearing != null && R().windArrow ? R().windArrow(S.wind.from_deg, bearing) : null;
+      const arrow = turn == null ? '' : `<span class="tk-wxarr" style="transform:rotate(${Math.round(turn)}deg)" aria-hidden="true"></span>`;
+      const bits = [`${Math.round(Number(S.wind.kmh))} km/h`, temp, rain].filter(Boolean).join(' · ');
+      const when = S.wind.hhmm || '';
+      const src = S.wind.source ? `${S.wind.source}${when ? ` ${when}` : ''}${S.wind.stale ? ' · última lectura' : ''}` : when;
+      return `<button type="button" class="tk-chip tk-wx" id="play-wx">${arrow}<b class="num">${esc(bits)}</b>${src ? `<small>${esc(src)}</small>` : ''}</button>`;
     };
 
     const paintDriver = () => {
@@ -636,7 +690,8 @@
     const render = () => {
       stopCam();
       const rec = holeRec(), par = rec.par || gpsHole()?.par, hcp = rec.hcp || gpsHole()?.hcp;
-      const cardYd = R().yardLabel ? R().yardLabel(rec.yards != null ? rec.yards : gpsHole()?.yards) : '';
+      const pickedTee = teeChoices().find(b => b.name && b.name === S.teeName);
+      const cardYd = pickedTee && pickedTee.yards != null ? `${pickedTee.yards} yd` : (R().yardLabel ? R().yardLabel(rec.yards != null ? rec.yards : gpsHole()?.yards) : '');
       const phase = S.track.phase;
       const pen = phase === 'penaltyWhere' || phase === 'relief' || phase === 'drop';
       const setPhase = phase === 'confirmTee' || phase === 'confirmFlag' || phase === 'drop';
@@ -717,7 +772,7 @@
         const penalty = s.result === 'penalty' || Number(s.penalty_strokes) > 0;
         const finish = s.intent === 'conceded' ? 'Dada' : (s.result === 'holed' ? 'Embocado' : '');
         const puttShot = !penalty && (finish || s.lie === 'green' || /putt/i.test(String(s.club || '')));
-        const fromPoint = puttShot && prevKnown ? prevKnown : R().knownPoint(s.lat, s.lng);
+        const fromPoint = (i === 0 || puttShot) && prevKnown ? prevKnown : R().knownPoint(s.lat, s.lng);
         const holePoint = finish && !end ? cupLL() : null;
         const toPoint = end || holePoint;
         const label = R().shotDistanceLabel ? R().shotDistanceLabel({
@@ -1517,6 +1572,10 @@
       };
       const lostBtn = el.querySelector('#play-lost'); if (lostBtn) lostBtn.onclick = () => postLost(false);
       const provBtn = el.querySelector('#play-lost-prov'); if (provBtn) provBtn.onclick = () => postLost(true);
+      const wxBtn = el.querySelector('#play-wx');
+      if (wxBtn) wxBtn.onclick = () => { if (S.wxState !== 'none') return; S.wxOpen = !S.wxOpen; render(); };
+      const wxRetry = el.querySelector('#play-wx-retry');
+      if (wxRetry) wxRetry.onclick = () => { if (S.loadWx) S.loadWx(true); };
       const flagBtn = el.querySelector('#play-flag');
       if (flagBtn) flagBtn.onclick = () => { S.track = { ...S.track, phase: 'confirmFlag' }; S.frame = 'flag'; S.adjusted = false; S.panned = false; fitCam(); render(); };
       const prev = el.querySelector('#tkprev'); if (prev) prev.onclick = () => goHole(S.hole - 1);
@@ -1667,10 +1726,7 @@
         const q = S.course?.course_id || cid0 ? `course_id=${encodeURIComponent(S.course?.course_id || cid0)}` : '';
         if (q) S.strat = await api('/api/strategy?' + q);
       } catch (e) {}
-      try {
-        const pin = teeCoord() || S.pos;
-        if (pin) S.wind = await api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}`);
-      } catch (e) {}
+      await loadRoundWx();
       if (!S.alive) return;
       if (!S.panned && !S.adjusted) fitCam();
       render();
@@ -1714,19 +1770,45 @@
     document.documentElement.classList.add('rc-map');
     fitCam(); render();
     loadDriverHistory();
-    const loadRoundWx = async () => {
-      if (!S.roundId) return;
-      try {
-        const w = await api(`/api/rounds/${encodeURIComponent(S.roundId)}/weather`);
-        const row = w && w.weather;
-        if (w && w.source === 'open-meteo-archive' && row && row.wind_kmh != null) {
-          S.wind = { kmh: row.wind_kmh, from_deg: row.wind_from_deg ?? row.from_deg ?? null, source: w.source, temp_c: row.temp_c ?? null, gust_kmh: row.gust_kmh ?? null, precip_mm: row.precip_mm ?? null, condition: row.condition ?? null };
-          S.wxState = 'archive';
-        } else S.wxState = 'none';
-      } catch (e) { S.wxState = 'none'; }
+    const loadRoundWx = async (retry) => {
+      const day = String(S.live?.date || '').slice(0, 10);
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+      const pin = (S.track && S.track.tee) || verifiedTee() || cupLL() || S.pos;
+      const playingNow = day === today;
+      if (playingNow) {
+        if (pin && Number.isFinite(+pin.lat) && Number.isFinite(+pin.lng)) {
+          try {
+            const now = await api(`/api/weather/now?lat=${pin.lat}&lng=${pin.lng}${retry ? '&retry=1' : ''}`);
+            if (now && now.kmh != null && now.from_deg != null) {
+              S.wind = { kmh: now.kmh, from_deg: now.from_deg, source: now.source || 'Open-Meteo', temp_c: now.temp_c ?? null, gust_kmh: now.gust_kmh ?? null, precip_mm: now.precip_mm ?? null, hhmm: now.hhmm || '', at: now.at || '', stale: !!now.stale };
+              S.wxState = 'now';
+              S.wxWhy = '';
+              if (S.alive) render();
+              return;
+            }
+            S.wxWhy = 'Open-Meteo y MET Norway no devolvieron viento.';
+          } catch (e) { S.wxWhy = (e && e.message) || 'Open-Meteo y MET Norway no devolvieron viento.'; }
+        } else S.wxWhy = 'Este hoyo no tiene un punto para pedir el clima.';
+      } else if (S.roundId) {
+        try {
+          const w = await api(`/api/rounds/${encodeURIComponent(S.roundId)}/weather${retry ? '?retry=1' : ''}`);
+          const row = w && w.weather;
+          if (row && row.wind_kmh != null) {
+            S.wind = { kmh: row.wind_kmh, from_deg: row.wind_from_deg ?? row.from_deg ?? null, source: w.source || '', temp_c: row.temp_c ?? null, gust_kmh: row.gust_kmh ?? null, precip_mm: row.precip_mm ?? null, condition: row.condition ?? null, hhmm: '', stale: false };
+            S.wxState = 'round';
+            S.wxWhy = '';
+            if (S.alive) render();
+            return;
+          }
+          S.wxWhy = 'Esa vuelta no tiene viento guardado.';
+        } catch (e) { S.wxWhy = (e && e.message) || 'No pudimos leer el clima de la vuelta.'; }
+      } else S.wxWhy = 'Open-Meteo y MET Norway no devolvieron viento.';
+      S.wind = null;
+      S.wxState = 'none';
       if (S.alive) render();
     };
-    if (retro) { loadCourseMap(); loadRoundWx(); }
+    S.loadWx = loadRoundWx;
+    if (retro) loadCourseMap().finally(() => { if (S.alive) loadRoundWx(); });
     if (!retro) { watch(); loadExtras(); }
     const onResize = () => paintMap();
     addEventListener('resize', onResize);

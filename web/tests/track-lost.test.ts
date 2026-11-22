@@ -159,7 +159,7 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     assert.deepEqual(deleted.slice().sort(), ["s1", "s2", "s3", "s4"]);
 
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-vieja?hole=1&ronda=r-none`, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => (document.querySelector(".tk-chip")?.textContent || "").includes("Clima no disponible"), { timeout: 15000 });
+    await page.waitForFunction(() => (document.querySelector(".tk-chip")?.textContent || "").trim() === "–", { timeout: 15000 });
     await page.screenshot({ path: "/opt/cursor/artifacts/clima-sin-datos-390.png" });
     await page.evaluate(() => { location.hash = "#/reconstruir/live-vieja?hole=1&ronda=r-wind"; });
     await page.waitForFunction(() => {

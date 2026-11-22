@@ -99,6 +99,11 @@ enum HoleWind {
         }
     }
 
+    /// Degrees clockwise from the direction of play. 0 points toward the green.
+    static func pushDegrees(fromDeg: Double, bearingDeg: Double) -> Double {
+        normalize(fromDeg + 180 - bearingDeg)
+    }
+
     /// Arrow points where the wind pushes the ball: up the screen is the direction of play.
     static func arrowDegrees(_ relative: Relative) -> Double {
         switch relative {

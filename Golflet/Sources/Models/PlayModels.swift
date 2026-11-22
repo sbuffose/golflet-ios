@@ -309,6 +309,18 @@ struct ShotRestore: Hashable, Sendable {
     var clientId: String
 }
 
+struct WeatherNow: Hashable, Sendable {
+    var at: String
+    var hhmm: String
+    var kmh: Double
+    var gustKmh: Double?
+    var fromDeg: Double
+    var tempC: Double?
+    var precipMm: Double?
+    var source: String
+    var stale: Bool
+}
+
 struct RoundWeather: Hashable, Sendable {
     var condition: String
     var label: String
