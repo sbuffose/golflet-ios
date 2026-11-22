@@ -138,7 +138,7 @@ struct RoundDetailView: View {
                 .accessibilityLabel("Tee times")
                 Spacer()
                 Button { showsTrack = true } label: {
-                    Text("Track Shots")
+                    Text(trackCue)
                         .font(GFont.ui(14, weight: .semibold))
                         .foregroundStyle(Color.white)
                         .padding(.horizontal, 12)
@@ -151,6 +151,12 @@ struct RoundDetailView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
         }
+    }
+
+    private var trackCue: String {
+        let n = round.gpsShots
+        if n < 1 { return "Trackear golpes" }
+        return "Seguir track · \(n) \(n == 1 ? "golpe" : "golpes")"
     }
 
     private var header: some View {

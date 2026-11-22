@@ -228,6 +228,11 @@ function heroMeta(){
     <a id="hcpimp" href="#/impacto"><div>Impacto</div><b class="num">${homeImpactMark()}</b></a>
   </div>`;
 }
+function trackCue(n){
+  const count = Math.max(0, Number(n) || 0);
+  if (!count) return "Trackear golpes";
+  return `Seguir track · ${count} ${count === 1 ? "golpe" : "golpes"}`;
+}
 function todayTrackCard(){
   const round = G.today_round;
   const booking = G.today_booking;
@@ -238,10 +243,23 @@ function todayTrackCard(){
   if (booking) return `<button type="button" class="btn ghost" id="today-start">Trackear la vuelta de hoy</button>`;
   return "";
 }
+function heroPlay(){
+  const round = G.today_round;
+  if (round?.id) return `<a class="hp-prac" id="today-track" href="#/reconstruir/${encodeURIComponent(round.id)}" aria-label="Seguir la vuelta de hoy"><span>Seguir vuelta</span></a>`;
+  if (G.today_booking || (Array.isArray(G.today_ask) && G.today_ask.length)) return `<button type="button" class="hp-prac" id="today-start-hero" aria-label="Trackear la vuelta de hoy"><span>Trackear</span></button>`;
+  return `<a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a>`;
+}
+function todayHeroFoot(){
+  const round = G.today_round;
+  const ask = Array.isArray(G.today_ask) && G.today_ask.length ? G.today_ask : (G.today_booking && !G.today_booking.course_label ? ["Azul", "Colorada"] : null);
+  if (round?.id) return `<a class="hi-hoy" href="#/reconstruir/${encodeURIComponent(round.id)}">${esc(round.course || "Cancha")} · En juego · Tarjeta pendiente</a>`;
+  if (ask) return `<div class="hi-hoy" id="today-ask"><span>${esc(G.today_prompt || "¿Azul o Colorada?")}</span>${ask.map(c => `<button type="button" data-today-course="${esc(c)}">${esc(c)}</button>`).join("")}</div>`;
+  if (G.today_booking) return `<p class="hi-hoy">${esc(G.today_booking.course_label || "Hoy")} · Tarjeta pendiente</p>`;
+  return "";
+}
 function heroActions(play){
   if (!play) return '';
-  const hoy = G.today_round?.id ? `<a class="hp-prac" id="today-track-hero" href="#/reconstruir/${encodeURIComponent(G.today_round.id)}" aria-label="Seguir la vuelta de hoy"><span>Hoy</span></a>` : (G.today_booking ? `<button type="button" class="hp-prac" id="today-start-hero" aria-label="Trackear la vuelta de hoy"><span>Hoy</span></button>` : "");
-  return `<div class="hi-avs"><div id="hiprofs" hidden></div><div id="higroups" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a>${hoy}<a class="hi-ch-l" href="#/cambios">Cambios</a></div></div>`;
+  return `<div class="hi-avs"><div id="hiprofs" hidden></div><div id="higroups" hidden></div><div class="hi-prac">${heroPlay()}<a class="hi-ch-l" href="#/cambios">Cambios</a></div></div>`;
 }
 function homeCircle(){
   return '';
@@ -255,11 +273,12 @@ function vInicio(){
   const last = rounds.find(r => r.official !== false) || rounds[0];
   const hiNow = window.GolfletRules ? window.GolfletRules.officialIndex(G.player?.handicap_index, (hi || []).filter(h => h.hi != null).map(h => ({ date: h.date, hi: +h.hi }))) : (hi.at(-1)?.hi ?? G.player?.handicap_index ?? null);
   const hiMark = hiNow == null ? miss('handicap') : `<div class="big num">${f1(hiNow)}</div>`;
-  return top + revealCard() + todayTrackCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
+  return top + revealCard() + `<div class="cols"><div class="col-a"><div class="o1"><div class="hero">
     ${heroActions(true)}
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
     ${hiMark}</a>${hiNow == null ? '' : hiBand(hi, d)}
     ${heroMeta()}
+    ${todayHeroFoot()}
   </div>${homeCircle()}</div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
   ${roundRow(last, true, true)}</div></div>
@@ -3684,6 +3703,8 @@ function bindQuick(id){
       if (found) {
         const pack = await api(`/api/reconstructions/${encodeURIComponent(found.id)}/shots`);
         const shots = (pack && pack.shots) || [];
+        const cue = document.getElementById('track-shots');
+        if (cue) cue.textContent = trackCue(shots.length);
         holes.forEach(h => {
           const mine = shots.filter(s => Number(s.hole) === Number(h[0]));
           derived.set(h[0], Rules.deriveHoleCard(h[1] == null ? null : Number(h[1]), mine.map(factOf)));
@@ -4014,7 +4035,8 @@ function render(keepScroll){
     const here = location.hash || '#/inicio', back = (GROUPISH(p[0]) && GG) ? GG.parent(here) : (p[0] === 'plan' && GP) ? GP.parent(here) : ((p[0] === 'partido' || p[0] === 'partidos') && GM) ? GM.parent(here) : (p[0] === 'metricas' && p[2]) ? `#/metricas/${metTab(p[1])}` : (p[0] === 'diferencial' && p[1]) ? (BACK[here] || `#/ronda/${p[1]}`) : (BACK[here] || PARENT[p[0]] || '#/inicio');
     detail = detail.replace(/<button class="close" data-close>[\s\S]*?<\/button>/g, '');
     view.dataset.v = 'd-' + p[0];
-    const trackShots = p[0] === 'ronda' && p[1] ? `<a class="track-shots" id="track-shots" href="#/reconstruir?ronda=${encodeURIComponent(p[1])}&amp;hole=1">Track Shots</a>` : '';
+    const trackedRound = p[0] === 'ronda' && p[1] ? rounds.find(x => x.round_id === p[1]) : null;
+    const trackShots = p[0] === 'ronda' && p[1] ? `<a class="track-shots" id="track-shots" href="#/reconstruir?ronda=${encodeURIComponent(p[1])}&amp;hole=1">${trackCue(trackedRound && trackedRound.gps_shots)}</a>` : '';
     view.innerHTML = `<div class="pg"><nav class="crumbs" aria-label="Volver"><a class="crumb-back" href="${esc(back)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1L3 6l5 5"/></svg>${esc(labelFor(back))}</a>${trackShots}</nav>
       <div class="md${aside ? ' has-aside' : ''}">${aside ? `<aside class="md-list">${aside}</aside>` : ''}<article class="md-detail">${detail}</article></div></div>`;
     window.scrollTo(0, 0);

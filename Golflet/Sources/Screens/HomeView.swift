@@ -327,12 +327,17 @@ struct HomeView: View {
                             onCreate: { model.presentCreateGroup() },
                             compact: true
                         )
-                        Button { model.showsPlay = true } label: {
+                        Button {
+                            if showsTodayTrack { Task { await model.openTodayTrack(course: nil) } }
+                            else { model.showsPlay = true }
+                        } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: "location.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .accessibilityHidden(true)
-                                Text("Jugar")
+                                if !showsTodayTrack {
+                                    Image(systemName: "location.fill")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .accessibilityHidden(true)
+                                }
+                                Text(showsTodayTrack ? (todayRound == nil ? "Trackear" : "Seguir vuelta") : "Jugar")
                                     .font(GType.label)
                             }
                             .foregroundStyle(p.onPrimary)
@@ -342,18 +347,8 @@ struct HomeView: View {
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Jugar")
-                        .accessibilityIdentifier("play-start")
-                        if showsTodayTrack {
-                            Button { Task { await model.openTodayTrack(course: nil) } } label: {
-                                Text(todayRound == nil ? "Trackear la vuelta de hoy" : "Seguir la vuelta de hoy")
-                                    .font(GType.label)
-                                    .foregroundStyle(p.onPrimary)
-                                    .frame(minHeight: 36)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("today-track")
-                        }
+                        .accessibilityLabel(showsTodayTrack ? (todayRound == nil ? "Trackear la vuelta de hoy" : "Seguir la vuelta de hoy") : "Jugar")
+                        .accessibilityIdentifier(showsTodayTrack ? "today-track" : "play-start")
                         Button { showsHcpImpact = true } label: {
                             Text("Cambios")
                                 .font(GFont.ui(13, weight: .regular))
@@ -373,6 +368,12 @@ struct HomeView: View {
                     hiStat("Mejor", snap.bestGross.map(String.init) ?? "–", .roundList(.bestGross(yearOnly: false)))
                     hiStat("Prom.", snap.yearAverage.map { FormatAR.one($0) } ?? "–", .roundList(.average(yearOnly: false)))
                     hiStat("Impacto", impactText, nil)
+                }
+                if let round = todayRound {
+                    Text("\(round.displayCourse) · En juego · Tarjeta pendiente")
+                        .font(GType.label)
+                        .foregroundStyle(p.onPrimary.opacity(0.85))
+                        .lineLimit(1)
                 }
             }
         }

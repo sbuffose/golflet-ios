@@ -233,7 +233,7 @@ test("bag, cancha, hero and group photo stay readable on a phone", { timeout: 12
       };
     });
     assert.equal(trackPlace?.href, "#/reconstruir?ronda=r-nov&hole=1");
-    assert.equal(trackPlace?.label, "Track Shots");
+    assert.equal(trackPlace?.label, "Trackear golpes");
     assert.equal(trackPlace?.quickStays, true);
     note("inicio");
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });

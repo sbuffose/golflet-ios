@@ -12,13 +12,18 @@ const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javasc
 const ART = "/opt/cursor/artifacts";
 
 const holes = Array.from({ length: 18 }, (_, i) => [i + 1, 4, i === 2 ? 4 : 4]);
+const past = {
+  round_id: "card-prev", date: "2026-11-15", course: "Azul", course_key: "1:Azul", course_label: "Azul",
+  club_name: "Jockey Club Argentino", gross: 78, net: 70, valid_card: true, official: true,
+  holes, tournament: "Medal", differential_computed: 8.4,
+};
 const pending = () => ({
   user: { name: "TEST-ONLY", pending_first_sync: false, first_name: "Fixture" },
-  player: { name: "TEST-ONLY" },
-  rounds: [],
+  player: { name: "TEST-ONLY", handicap_index: 14.2 },
+  rounds: [past],
   clubs: [{ id: "club-1", club_name: "Jockey Club Argentino" }],
   courses: [],
-  hi_history: [],
+  hi_history: [{ date: "2023-10-01", hi: 21.1 }, { date: "2026-11-15", hi: 14.2 }],
   today: "2026-11-22",
   today_round: { id: "live-hoy", date: "2026-11-22", course: "Azul", tee: "", pending_label: "En juego" },
   today_booking: null,
@@ -27,10 +32,10 @@ const pending = () => ({
 });
 const linked = () => ({
   user: { name: "TEST-ONLY", pending_first_sync: false, first_name: "Fixture" },
-  player: { name: "TEST-ONLY" },
+  player: { name: "TEST-ONLY", handicap_index: 14.2 },
   rounds: [{
     round_id: "card-hoy", date: "2026-11-22", course: "Azul", course_key: "1:Azul", club_name: "Jockey Club Argentino",
-    gross: 72, net: 72, valid_card: true, official: true, holes, track_diff: [3], tournament: "Tarjeta",
+    gross: 72, net: 72, valid_card: true, official: true, holes, track_diff: [3], tournament: "Tarjeta", gps_shots: 2,
   }],
   clubs: [{ id: "club-1", club_name: "Jockey Club Argentino" }],
   courses: [],
@@ -53,12 +58,18 @@ test("la vuelta de hoy se trackea sin tarjeta y después queda vinculada", { tim
     if (url.pathname === "/api/data") return json(mode === "pending" ? pending() : linked());
     if (url.pathname === "/api/reconstructions") return json({
       rounds: [],
-      reconstructions: [{ id: "live-hoy", date: "2026-11-22", course: "Azul", tee: "", club_code: "fixture", vm_course: "Azul", round_id: null, current_hole: 1, official: false, tracked: true }],
+      reconstructions: [{ id: "live-hoy", date: "2026-11-22", course: "Azul", tee: "", club_code: "fixture", vm_course: "Azul", round_id: mode === "linked" ? "card-hoy" : null, current_hole: 1, official: mode === "linked", tracked: true }],
     });
-    if (url.pathname.startsWith("/api/reconstructions/") && url.pathname.endsWith("/shots")) return json({ shots: [] });
+    if (url.pathname.startsWith("/api/reconstructions/") && url.pathname.endsWith("/shots")) return json({
+      shots: mode === "linked" ? [{ id: "s1", hole: 1, club: "Dr", penalty_strokes: 0, result: "fairway" }, { id: "s2", hole: 1, club: "7i", penalty_strokes: 0, result: "green" }] : [],
+    });
     if (url.pathname.startsWith("/api/gps/courses/")) return json({
       course: { course: "Azul", club_code: "fixture", holes: [{ hole: 1, par: 4, tee: { lat: -34.5, lng: -58.5 }, green: { center: { lat: -34.501, lng: -58.5 }, front: { lat: -34.501, lng: -58.5 } } }] },
     });
+    if (url.pathname.startsWith("/api/tee-times")) {
+      const booking = { id: "tt-hoy", date: "2026-11-22", time: "08:30", club_name: "Jockey Club Argentino", course_label: "Azul", start_hole: 1, companions: ["Joaquín Lavalle", "Augusto Lavalle"] };
+      return json({ fresh: true, tee_times: [booking], new: [], changed: [] });
+    }
     if (url.pathname.startsWith("/api/")) return json({});
     const file = url.pathname === "/" ? "/index.html" : url.pathname;
     try {
@@ -90,9 +101,13 @@ test("la vuelta de hoy se trackea sin tarjeta y después queda vinculada", { tim
     const hideBar = () => page.evaluate(() => { const bar = document.querySelector("#tabbar"); if (bar) (bar as HTMLElement).style.display = "none"; });
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#today-track", { timeout: 8000 });
+    await page.waitForFunction(() => document.body.innerText.includes("08:30"), { timeout: 8000 });
     await hideBar();
     const home = await page.evaluate(() => document.body.innerText);
-    assert.match(home, /Seguir la vuelta de hoy/);
+    assert.match(home, /Seguir vuelta/);
+    assert.match(home, /handicap index/i);
+    assert.match(home, /14,2/);
+    assert.match(home, /Última ronda/);
     assert.match(home, /En juego/);
     assert.match(home, /Tarjeta pendiente/);
     assert.equal(home.includes("Sin cargar"), false);
@@ -121,6 +136,7 @@ test("la vuelta de hoy se trackea sin tarjeta y después queda vinculada", { tim
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.evaluate(() => { location.hash = "#/ronda/card-hoy"; });
     await page.waitForSelector("#track-gap", { timeout: 8000 });
+    await page.waitForFunction(() => (document.querySelector("#track-shots")?.textContent || "").includes("Seguir track · 2 golpes"), { timeout: 8000 });
     await hideBar();
     const card = await page.evaluate(() => ({ text: document.body.innerText, gaps: document.querySelectorAll(".b.gap").length, pending: document.querySelectorAll(".rc-off").length }));
     assert.match(card.text, /difiere del track/);
@@ -128,6 +144,8 @@ test("la vuelta de hoy se trackea sin tarjeta y después queda vinculada", { tim
     assert.equal(card.gaps > 0, true);
     assert.equal(card.pending, 0);
     assert.equal(card.text.includes("Sin cargar"), false);
+    assert.match(card.text, /Seguir track · 2 golpes/);
+    assert.equal(card.text.includes("Track Shots"), false);
     await page.screenshot({ path: `${ART}/web-375-rondas-vinculada.png` });
   } finally {
     await browser.close();
