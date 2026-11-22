@@ -203,7 +203,7 @@ test("drive, approach, putt and the next hole stay distinct", { timeout: 120_000
     }));
     assert.equal(onGreen.club, "Pt");
     assert.equal(onGreen.label, "Putter");
-    assert.match(onGreen.text, /En el hoyo|m al hoyo/);
+    assert.match(onGreen.text, /En el hoyo|ft al hoyo|in al hoyo/);
     assert.ok(onGreen.z > beforeZoom, `${onGreen.z} vs ${beforeZoom}`);
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-putt.png" });
     assert.equal(await page.$("#play-putt-m"), null);

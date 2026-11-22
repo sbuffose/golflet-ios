@@ -24,10 +24,10 @@ test("el Driver guarda las yardas del punto al punto y un putt no es cualquier p
   const fringe = shotDistanceLabel({ lat: tee.lat, lng: tee.lng, end_lat: tee.lat + 0.00012, end_lng: tee.lng, lie: null, distance_kind: null });
   assert.equal(fringe.kind, "yards");
   const typed = shotDistanceLabel({ lat: land.lat, lng: land.lng, end_lat: land.lat + 0.00002, end_lng: land.lng, lie: "green", distance_m: "2,4", distance_kind: "manual" });
-  assert.equal(typed.text, "2,4 m a mano");
+  assert.equal(typed.text, "8 ft a mano");
   const putt = shotDistanceLabel({ lat: land.lat, lng: land.lng, end_lat: land.lat + 0.00002, end_lng: land.lng, lie: "green" });
   assert.equal(putt.kind, "putt");
-  assert.match(putt.text, / m$/);
+  assert.match(putt.text, / ft$/);
 });
 
 test("los putts salen del green y el centro no completa el hoyo", () => {

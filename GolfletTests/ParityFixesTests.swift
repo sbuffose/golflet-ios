@@ -196,6 +196,9 @@ final class ParityFixesTests: XCTestCase {
         XCTAssertTrue(TrackSession.onCup(meters: 0.4))
         XCTAssertEqual(TrackSession.puttFeet(meters: 3), 10)
         XCTAssertNil(TrackSession.puttFeet(meters: 40))
+        XCTAssertEqual(TrackSession.greenToHole(meters: 1.8288), "6 ft")
+        XCTAssertEqual(TrackSession.greenToHole(meters: 0.4572), "18 in")
+        XCTAssertEqual(TrackSession.greenToHole(meters: 0), "En el hoyo")
 
         let onTheCup = TrackSession.enter(state, at: flag, club: "PW", onCup: true, putting: false)
         XCTAssertFalse(onTheCup.holed)

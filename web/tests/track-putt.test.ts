@@ -27,7 +27,7 @@ const ring = [
   { lat: GREEN.lat - 0.00012, lng: GREEN.lng - 0.00012 },
 ];
 
-test("a putt starts after the approach, in meters, and the hole closes only on purpose", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+test("a putt starts after the approach, in feet or inches, and the hole closes only on purpose", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   const posts: Record<string, unknown>[] = [];
   const shots: Record<string, unknown>[] = [];
   let failNext = false;
@@ -175,19 +175,59 @@ test("a putt starts after the approach, in meters, and the hole closes only on p
     assert.equal(armed.club, "Putter");
     assert.equal(armed.label, "Putter");
     assert.equal(armed.putting, "1");
-    assert.match(armed.text, /En el hoyo|m al hoyo/);
-    assert.equal(armed.text.includes("ft"), false);
+    assert.match(armed.text, /En el hoyo|ft al hoyo|in al hoyo/);
+    assert.equal(armed.text.includes(" m al hoyo"), false);
     assert.equal(armed.posts, 1);
     assert.equal(await page.$("#play-putt-m"), null);
-    for (let i = 0; i < 8 && (await page.$eval("#tkro", el => el.textContent || "")).includes("En el hoyo"); i++) {
-      await page.mouse.move(195, 300);
-      await page.mouse.down();
-      await page.mouse.move(195, 420, { steps: 4 });
-      await page.mouse.up();
+    await page.setViewport({ width: 375, height: 812, hasTouch: true, isMobile: true });
+    for (let i = 0; i < 24; i++) {
+      const zoomed = await page.$eval("#tkmap", el => Number(el.getAttribute("data-z") || "0"));
+      const cap = await page.evaluate(() => Number((globalThis as { GolfletRules?: { VISUAL_ZOOM_MAX?: number } }).GolfletRules?.VISUAL_ZOOM_MAX || 0));
+      if (zoomed >= cap - 0.05) break;
+      await page.click("#play-zoom-in");
+      await new Promise(r => setTimeout(r, 40));
     }
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /m al hoyo/);
-    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /estimada en el mapa/);
-    assert.equal((await page.$eval("#tkro", el => el.textContent || "")).includes("ft"), false);
+    const zoom = await page.$eval("#tkmap", el => ({
+      z: Number(el.getAttribute("data-z") || "0"),
+      tileZ: Number(el.getAttribute("data-tile-z") || "0"),
+      imagery: el.getAttribute("data-imagery") || "",
+    }));
+    const cap = await page.evaluate(() => Number((globalThis as { GolfletRules?: { VISUAL_ZOOM_MAX?: number } }).GolfletRules?.VISUAL_ZOOM_MAX || 0));
+    const imageryMax = await page.evaluate(() => Number((globalThis as { GolfletRules?: { IMAGERY_ZOOM_MAX?: number } }).GolfletRules?.IMAGERY_ZOOM_MAX || 0));
+    assert.ok(zoom.z >= cap - 0.05, JSON.stringify(zoom));
+    assert.equal(zoom.tileZ, imageryMax);
+    assert.equal(zoom.imagery, "scaled");
+    const readOut = () => page.$eval("#tkro", el => el.textContent || "");
+    const stepAway = async (pixels: number) => {
+      await page.mouse.move(180, 360);
+      await page.mouse.down();
+      await page.mouse.move(180, 360 + pixels, { steps: 3 });
+      await page.mouse.up();
+      await new Promise(r => setTimeout(r, 20));
+    };
+    for (let i = 0; i < 80 && !/18 in al hoyo/.test(await readOut()); i++) {
+      const now = await readOut();
+      if (/ft al hoyo/.test(now)) await stepAway(-2);
+      else await stepAway(2);
+    }
+    const inches = await readOut();
+    assert.match(inches, /18 in al hoyo/);
+    assert.match(inches, /estimada en el mapa/);
+    await ready(page);
+    const inchTiles = await page.$$eval("img.tk-tile", nodes => nodes.map(node => (node as HTMLImageElement).naturalWidth).filter(n => n > 0).length);
+    assert.ok(inchTiles > 0, "el mapa del putt corto no tiene teselas");
+    await page.screenshot({ path: "/opt/cursor/artifacts/web-375-putt-18in.png" });
+    for (let i = 0; i < 80 && !/6 ft al hoyo/.test(await readOut()); i++) {
+      const now = await readOut();
+      const feetNow = Number((now.match(/(\d+) ft al hoyo/) || [])[1] || 0);
+      if (feetNow > 6) await stepAway(-2);
+      else await stepAway(3);
+    }
+    const feet = await readOut();
+    assert.match(feet, /6 ft al hoyo/);
+    assert.match(feet, /estimada en el mapa/);
+    await ready(page);
+    await page.screenshot({ path: "/opt/cursor/artifacts/web-375-putt-6ft.png" });
     await ready(page);
     for (const w of [320, 430]) {
       await page.setViewport({ width: w, height: 844, hasTouch: true, isMobile: true });

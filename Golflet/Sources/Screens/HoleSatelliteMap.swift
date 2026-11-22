@@ -109,6 +109,7 @@ struct HoleSatelliteMap: UIViewRepresentable {
         map.showsCompass = false
         map.pointOfInterestFilter = .excludingAll
         map.delegate = context.coordinator
+        map.cameraZoomRange = MKMapView.CameraZoomRange(minCenterCoordinateDistance: 2, maxCenterCoordinateDistance: 12_000)
         return map
     }
 
@@ -128,7 +129,7 @@ struct HoleSatelliteMap: UIViewRepresentable {
             context.coordinator.cameraKey = cameraKey
             let holeMeters = max(40.0, Double(PlayMath.meters(from: tee, to: pin)))
             // Web overview (`frameHole` mode overview) keeps the green at the reticle and the tee down-screen.
-            let distance = (framesHole ? max(360, holeMeters * 1.15) : max(90, holeMeters * 0.72)) * pow(0.78, Double(zoom))
+            let distance = max(2, (framesHole ? max(360, holeMeters * 1.15) : max(90, holeMeters * 0.72)) * pow(0.78, Double(zoom)))
             let look = framesHole ? pin : focus
             let camera = MKMapCamera(lookingAtCenter: look.cl, fromDistance: distance, pitch: 0, heading: heading)
             map.setCamera(camera, animated: animateCamera && !holeChanged)

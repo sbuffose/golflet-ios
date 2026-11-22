@@ -67,8 +67,8 @@ export function holeSpan(tee: LL | null | undefined, flag: LL | null | undefined
 export type FrameMode = "overview" | "tee" | "flag" | "play" | "point" | "seek";
 export type HoleFrame = { mode: FrameMode; z: number; cx: number; cy: number; bearing: number | null; aimLat: number; aimLng: number };
 
-/** Visual zoom may scale the last real tile by up to three levels. The tile request stays on a real zoom. */
-export const VISUAL_ZOOM_MAX = IMAGERY_ZOOM_MAX + 3;
+/** Visual zoom scales the last real tile. The tile request stays on a real zoom so the picture does not go blank. */
+export const VISUAL_ZOOM_MAX = IMAGERY_ZOOM_MAX + 6;
 
 const clampNum = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
@@ -199,6 +199,19 @@ export function puttFeet(meters: number): number | null {
   return Math.round(meters * 3.28084);
 }
 
+const M_PER_FT = 0.3048;
+const M_PER_IN = 0.0254;
+
+/** On the green the hole is in feet, or in inches under 3 ft. Under one inch is the cup. */
+export function greenToHole(meters: number): { text: string; unit: "ft" | "in" | "cup"; n: number } | null {
+  if (!Number.isFinite(meters) || meters < 0) return null;
+  const inches = Math.round(meters / M_PER_IN);
+  if (inches < 1) return { text: "En el hoyo", unit: "cup", n: 0 };
+  if (meters / M_PER_FT < 3) return { text: `${inches} in`, unit: "in", n: inches };
+  const feet = Math.round(meters / M_PER_FT);
+  return { text: `${feet} ft`, unit: "ft", n: feet };
+}
+
 /** A putt the player types. Comma or dot. The map estimate is not rewritten to match it. */
 export function puttMeters(value: unknown): number | null {
   let n: number;
@@ -244,8 +257,6 @@ function metersBetween(a: LL, b: LL): number {
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
-const fmtM = (m: number) => (Math.round(m * 10) / 10).toFixed(1).replace(".", ",");
-
 export type ShotLabel = { text: string; yards: number | null; meters: number | null; kind: "yards" | "putt" | "manual" | "missing" | "penalty" };
 
 /**
@@ -270,14 +281,16 @@ export function shotDistanceLabel(shot: {
   const flown = from && to ? metersBetween(from, to) : null;
   if (shot.distance_kind === "manual") {
     const typed = puttMeters(shot.distance_m);
-    if (typed == null) return { text: "Sin metros", yards: null, meters: null, kind: "manual" };
-    return { text: `${fmtM(typed)} m a mano`, yards: null, meters: typed, kind: "manual" };
+    if (typed == null) return { text: "Sin distancia", yards: null, meters: null, kind: "manual" };
+    const typedSpan = greenToHole(typed);
+    return { text: `${typedSpan && typedSpan.unit !== "cup" ? typedSpan.text : "En el hoyo"} a mano`, yards: null, meters: typed, kind: "manual" };
   }
   const originGreen = shot.lie === "green" && (flown == null || flown <= 50);
   if (originGreen) {
     const meters = flown != null ? Math.round(flown * 10) / 10 : (typeof shot.distance_m === "number" && shot.distance_m > 0 && shot.distance_m <= 50 ? Math.round(shot.distance_m * 10) / 10 : null);
     if (meters == null) return { text: "Sin ubicación", yards: null, meters: null, kind: "missing" };
-    return { text: `${fmtM(meters)} m`, yards: null, meters, kind: "putt" };
+    const span = greenToHole(meters);
+    return { text: span && span.unit !== "cup" ? span.text : "En el hoyo", yards: null, meters, kind: "putt" };
   }
   if (flown != null) {
     const yards = Math.round(flown / 0.9144);

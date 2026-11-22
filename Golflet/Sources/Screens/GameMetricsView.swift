@@ -279,7 +279,7 @@ struct GameMetricsView: View {
                         Text("Distancia promedio a la bandera")
                             .font(GType.label)
                             .foregroundStyle(p.ink2)
-                        Text(GameMetricsCopy.yards(pu.firstPutt.avgYd))
+                        Text(GameMetricsCopy.puttSpan(yards: pu.firstPutt.avgYd))
                             .font(GType.statM)
                             .tabular()
                             .foregroundStyle(p.ink)

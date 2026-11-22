@@ -521,8 +521,8 @@
       const phase = S.track.phase;
       const cup = cupLL();
       const meters = here && cup ? hav(here, cup) : null;
-      const feet = meters == null ? null : R().puttFeet(meters);
       const cupOn = meters != null && R().onCup(meters);
+      const holeSpan = meters == null || !R().greenToHole ? null : R().greenToHole(meters);
       const ball = S.track.ball || S.track.tee;
       const flown = here && ball ? yd(hav(ball, here)) : null;
       if (retro && phase === 'confirmTee') {
@@ -548,9 +548,8 @@
           return `<img class="cad hole" src="/brand/caddie.png" alt=""><b>${esc(close.line)}</b>${close.vs ? `<small>${esc(close.vs)}</small>` : ''}`;
         }
         if (putting()) {
-          if (cupOn) return `<b>En el hoyo</b>`;
-          const left = meters == null ? '—' : `${fmtM(meters)} m al hoyo`;
-          return `<b class="num">${left}</b><small>estimada en el mapa</small>`;
+          if (!holeSpan || holeSpan.unit === 'cup') return `<b>En el hoyo</b>`;
+          return `<b class="num">${holeSpan.text} al hoyo</b><small>estimada en el mapa</small>`;
         }
         if (S.flagKind === 'pin' && cupOn) return `<b>En el hoyo</b><small>ENTER confirma</small>`;
         const travel = flown == null ? '' : `${flown} yd`;
@@ -735,7 +734,9 @@
         const prev = playingPoint(S.track.marks.slice(0, S.track.marks.indexOf(m)));
         const meters = prev ? hav(prev, { lat: m.lat, lng: m.lng }) : null;
         const putt = !m.penalty && !m.lost && (m.putt || /putt/i.test(String(m.club || '')));
-        return { id: m.id, club: m.lost ? 'Perdida' : m.penalty ? 'Penalidad +1' : (putt && !m.recovery ? `Putt ${i + 1}` : (clubLabel(m.club) || m.club || '—')), yards: m.penalty || m.lost ? '' : (putt && !m.recovery && meters != null ? `${fmtM(meters)} m` : (meters == null ? '' : `${yd(meters)} yd`)), unknown: !m.penalty && !m.lost && !R().knownPoint(m.lat, m.lng), n: m.n || i + 1, abuenatag: !!m.recovery };
+        const span = putt && !m.recovery && meters != null && R().greenToHole ? R().greenToHole(meters) : null;
+        const dist = m.penalty || m.lost ? '' : (span ? (span.unit === 'cup' ? '' : span.text) : (meters == null ? '' : `${yd(meters)} yd`));
+        return { id: m.id, club: m.lost ? 'Perdida' : m.penalty ? 'Penalidad +1' : (putt && !m.recovery ? `Putt ${i + 1}` : (clubLabel(m.club) || m.club || '—')), yards: dist, unknown: !m.penalty && !m.lost && !R().knownPoint(m.lat, m.lng), n: m.n || i + 1, abuenatag: !!m.recovery };
       });
       const railOpen = S.railHole === S.hole && !!S.railOpen;
       const railMany = railSource.length > 3;
@@ -774,7 +775,10 @@
         if (clubName) editBits.push(String(clubName));
         const meters = Number(editingShot.distance_m);
         const putt = editingShot.lie === 'green' || /putt/i.test(String(editingShot.club || ''));
-        if (editingShot.result !== 'lost' && editingShot.result !== 'penalty' && Number.isFinite(meters) && meters > 0) editBits.push(putt ? `${meters} m` : `${Math.round(meters / 0.9144)} yd`);
+        if (editingShot.result !== 'lost' && editingShot.result !== 'penalty' && Number.isFinite(meters) && meters > 0) {
+          const span = putt && R().greenToHole ? R().greenToHole(meters) : null;
+          editBits.push(span && span.unit !== 'cup' ? span.text : (putt ? 'En el hoyo' : `${Math.round(meters / 0.9144)} yd`));
+        }
       }
       const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>${esc(editBits.join(' · '))}</b><button type="button" id="play-edit-club">Cambiar palo</button><button type="button" id="play-edit-move">${S.moveShot ? 'Guardar punto' : 'Mover el punto'}</button><button type="button" id="play-edit-x">Cerrar</button><button type="button" id="play-edit-del">Borrar</button>${S.askDel ? '<p>¿Borrar este golpe?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? '<p>Mové el mapa y tocá Guardar punto.</p>' : ''}</div>` : '';
       const editSheet = S.pickClub && !showClub ? `<div class="tk-sheet" id="play-club-sheet" role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => { const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div>` : '';

@@ -65,6 +65,15 @@ enum TrackSession {
         return Int((meters * 3.28084).rounded())
     }
 
+    /// On the green the hole is in feet, or in inches under 3 ft. Under one inch is the cup.
+    static func greenToHole(meters: Double) -> String? {
+        guard meters.isFinite, meters >= 0 else { return nil }
+        let inches = Int((meters / 0.0254).rounded())
+        if inches < 1 { return "En el hoyo" }
+        if meters / 0.3048 < 3 { return "\(inches) in" }
+        return "\(Int((meters / 0.3048).rounded())) ft"
+    }
+
     static func set(_ state: State, at point: TrackPoint) -> State {
         var next = state
         switch state.phase {

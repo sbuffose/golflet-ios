@@ -414,7 +414,13 @@ enum GameMetricsCopy {
 
     static let flagHow = "Distancia a la bandera de ese día: la que cargó el club, la que marcaste vos o la que marcó otro jugador; si no había, al centro del green."
     static let flagHowApproach = "Cada golpe que salió a entre 30 y 150 yd de la bandera. Distancia a la bandera de ese día (del club, tuya o de otro jugador); si no había, al centro del green. Tocá una distancia para ver el detalle."
-    static let flagHowPutting = "Desde donde marcaste el primer putt hasta la bandera de ese día: la que cargó el club, la que marcaste vos o la que marcó otro jugador. Si nadie la marcó, al centro del green."
+    static func puttSpan(yards: Double?) -> String {
+        guard let yards else { return "—" }
+        if let label = TrackSession.greenToHole(meters: yards * 0.9144), label != "En el hoyo" { return label }
+        return "—"
+    }
+
+    static let flagHowPutting = "Desde donde marcaste el primer putt hasta la bandera de ese día, en pies o en pulgadas si queda a menos de 3 ft: la que cargó el club, la que marcaste vos o la que marcó otro jugador. Si nadie la marcó, al centro del green."
 
     static func flagSource(_ value: String?) -> String {
         switch value {

@@ -320,7 +320,7 @@ struct PlayHoleView: View {
             HStack(alignment: .bottom, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(closedStrokes, id: \.n) { stroke in
-                        Text("\(stroke.n). \(stroke.club) · \(stroke.yards) yd")
+                        Text("\(stroke.n). \(stroke.club) · \(stroke.span)")
                             .font(GFont.ui(12, weight: .semibold))
                             .foregroundStyle(p.ink)
                             .lineLimit(1)
@@ -434,7 +434,7 @@ struct PlayHoleView: View {
 
     private func mapZoomButton(system: String, delta: Int, id: String, label: String) -> some View {
         Button {
-            mapZoom = min(6, max(-2, mapZoom + delta))
+            mapZoom = min(18, max(-2, mapZoom + delta))
         } label: {
             Image(systemName: system)
                 .font(.system(size: 18, weight: .semibold))
@@ -621,7 +621,7 @@ struct PlayHoleView: View {
                 if holeClosed, !closedStrokes.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(closedStrokes, id: \.n) { stroke in
-                            Text("\(stroke.n). \(stroke.club) · \(stroke.yards) yd")
+                            Text("\(stroke.n). \(stroke.club) · \(stroke.span)")
                                 .font(GType.headline)
                                 .foregroundStyle(p.ink)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -762,8 +762,9 @@ struct PlayHoleView: View {
         switch track.phase {
         case .tracking, .penaltyWhere:
             let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
-            if TrackSession.onCup(meters: meters) { return "En el hoyo" }
-            if meters > 1.2 && meters <= 25 { return "\(FormatAR.one(meters)) m al hoyo" }
+            if let span = TrackSession.greenToHole(meters: meters), meters <= 25 {
+                return span == "En el hoyo" ? span : "\(span) al hoyo"
+            }
             return "\(PlayMath.yards(from: playerCoord, to: cursor)) yd"
         default:
             return track.prompt
@@ -775,8 +776,9 @@ struct PlayHoleView: View {
         switch track.phase {
         case .tracking, .penaltyWhere:
             let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
-            if TrackSession.onCup(meters: meters) { return nil }
-            if meters > 1.2 && meters <= 25 { return "estimada en el mapa" }
+            if let span = TrackSession.greenToHole(meters: meters), meters <= 25 {
+                return span == "En el hoyo" ? nil : "estimada en el mapa"
+            }
             let left = "\(PlayMath.yards(from: playerCoord, to: pinCoord)) yd al hoyo"
             if track.marks.isEmpty && !sawDragHint {
                 return "\(left)\nArrastrá el mapa hasta donde terminó el golpe"
@@ -1316,18 +1318,44 @@ struct PlayHoleView: View {
         }
     }
 
-    private var closedStrokes: [(n: Int, club: String, yards: Int)] {
+    private var closedStrokes: [(n: Int, club: String, yards: Int, span: String)] {
         let marks = activeTrack.marks.filter(\.countsStroke)
         if !marks.isEmpty {
             return marks.enumerated().map { index, mark in
                 let previous = index == 0 ? activeTrack.tee : marks[index - 1].at
-                return (index + 1, mark.club ?? "—", strokeYards(from: previous, to: mark.at))
+                let yards = strokeYards(from: previous, to: mark.at)
+                let meters = previous.map {
+                    Double(PlayMath.meters(from: GPSCoord(lat: $0.lat, lng: $0.lng), to: GPSCoord(lat: mark.at.lat, lng: mark.at.lng)))
+                }
+                let span = puttSpan(club: mark.club, meters: meters, yards: yards)
+                return (index + 1, mark.club ?? "—", yards, span)
             }
         }
         let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
-        return rows.map { shot in
-            (shot.shotNumber, shot.club ?? "—", shot.distanceYd ?? 0)
+        return rows.enumerated().map { index, shot in
+            let previous = index > 0 ? rows[index - 1] : nil
+            (shot.shotNumber, shot.club ?? "—", shot.distanceYd ?? 0, shotDistanceText(shot, previous: previous))
         }
+    }
+
+    private func puttSpan(club: String?, meters: Double?, yards: Int) -> String {
+        let putt = isPutter(club)
+        if putt, let meters, let label = TrackSession.greenToHole(meters: meters), label != "En el hoyo" {
+            return label
+        }
+        return "\(yards) yd"
+    }
+
+    private func shotDistanceText(_ shot: Shot, previous: Shot?) -> String {
+        let putt = isPutter(shot.club) || shot.lie == "green"
+        if putt, let meters = shot.distanceM, meters > 0, let label = TrackSession.greenToHole(meters: Double(meters)), label != "En el hoyo" {
+            return label
+        }
+        if putt, let previous, let fromLat = previous.lat, let fromLng = previous.lng, let lat = shot.lat, let lng = shot.lng {
+            let meters = Double(PlayMath.meters(from: GPSCoord(lat: fromLat, lng: fromLng), to: GPSCoord(lat: lat, lng: lng)))
+            if let label = TrackSession.greenToHole(meters: meters), label != "En el hoyo" { return label }
+        }
+        return shot.distanceYd.map { "\($0) yd" } ?? "—"
     }
 
     private func strokeYards(from: TrackPoint?, to: TrackPoint) -> Int {
@@ -1383,7 +1411,7 @@ struct PlayHoleView: View {
                                         .foregroundStyle(p.ink2)
                                 }
                                 Spacer()
-                                Text(shot.distanceYd.map { "\($0) yd" } ?? "—")
+                                Text(shotDistanceText(shot, previous: index > 0 ? rows[index - 1] : nil))
                                     .font(GType.headline)
                                     .tabular()
                                     .foregroundStyle(p.ink)
@@ -1774,7 +1802,8 @@ struct PlayHoleView: View {
     private func shotEditTitle(_ shot: Shot) -> String {
         var bits = ["Golpe \(shot.shotNumber)"]
         if let club = shot.club, !club.isEmpty { bits.append(club) }
-        if let yards = shot.distanceYd { bits.append("\(yards) yd") }
+        let dist = shotDistanceText(shot, previous: nil)
+        if dist != "—" { bits.append(dist) }
         return bits.joined(separator: " · ")
     }
 
