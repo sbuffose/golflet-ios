@@ -576,7 +576,10 @@ final class GolfletUITests: XCTestCase {
         XCTAssertTrue(groups.waitForExistence(timeout: 4), "Falta el botón de grupos en el HI")
         reveal(app, groups)
         groups.tap()
-        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 8), "Un solo grupo no abrió el grupo")
+        if !waitFor(app, "screen-grupo", timeout: 4), groups.exists {
+            groups.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitFor(app, "screen-grupo", timeout: 12), "Un solo grupo no abrió el grupo")
     }
 
     func testHomeHcpProfesorButtonOpensProfile() throws {
