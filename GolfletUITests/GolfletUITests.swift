@@ -1701,10 +1701,11 @@ final class GolfletUITests: XCTestCase {
         square.launchArguments = ["-ui-testing", "-ui-testing-match-square"]
         square.launch()
         XCTAssertTrue(waitFor(square, "screen-partido-vivo"))
-        let even = square.staticTexts["All square"]
+        let evens = square.staticTexts.matching(NSPredicate(format: "label == %@", "All square"))
+        let even = evens.element(boundBy: 0)
         XCTAssertTrue(even.waitForExistence(timeout: 8))
         XCTAssertTrue(even.isHittable)
-        XCTAssertEqual(square.staticTexts.matching(NSPredicate(format: "label == %@", "All square")).count, 3)
+        XCTAssertEqual(evens.count, 3)
         let squareWidth = Int(square.windows.firstMatch.frame.width.rounded())
         saveShot("ios-\(squareWidth)-partido-square")
         square.terminate()
