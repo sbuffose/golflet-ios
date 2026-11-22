@@ -100,6 +100,16 @@ struct RoundTrackContext: Equatable, Sendable {
     var courseName: String
     var clubCode: String
     var hole: Int
+    var liveId: String = ""
+
+    init(roundId: String, date: Date, courseName: String, clubCode: String, hole: Int, liveId: String = "") {
+        self.roundId = roundId
+        self.date = date
+        self.courseName = courseName
+        self.clubCode = clubCode
+        self.hole = hole
+        self.liveId = liveId
+    }
 }
 
 enum RoundTrackCourse {

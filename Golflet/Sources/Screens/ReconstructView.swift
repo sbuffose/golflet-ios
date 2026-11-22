@@ -449,6 +449,26 @@ struct ReconstructView: View {
     }
 
     private func loadSetup() async {
+        if let context, !context.liveId.isEmpty {
+            date = context.date
+            hole = min(18, max(1, context.hole))
+            do { setup = try await model.api.reconstructionSetup() }
+            catch {
+                roundId = ""
+                if shots.isEmpty { shots = storedShots }
+                staged = true
+                return
+            }
+            if let saved = setup.saved.first(where: { $0.id == context.liveId }) {
+                await open(saved)
+                hole = min(18, max(1, context.hole))
+                return
+            }
+            roundId = ""
+            if shots.isEmpty { shots = storedShots }
+            staged = true
+            return
+        }
         if let context, context.roundId.isEmpty {
             date = context.date
             roundId = ""
@@ -546,6 +566,7 @@ struct ReconstructView: View {
         live = round
         do {
             shots = try await model.api.reconstructionShots(liveRoundId: round.id)
+            onShots?(shots)
             let name = round.vmCourse.isEmpty ? round.course : round.vmCourse
             if !round.clubCode.isEmpty { await loadMap(club: round.clubCode, name: name) }
         } catch { note = error.localizedDescription }
@@ -585,6 +606,9 @@ struct ReconstructView: View {
     private func save(_ round: ReconstructionRound) async {
         busy = true
         defer { busy = false }
+        let edited = editing != nil
+        let holeN = draft().hole
+        let holed = draft().result == "holed"
         do {
             if let editing {
                 let shot = try await model.api.updateReconstructionShot(liveRoundId: round.id, shotId: editing, shot: draft())
@@ -597,6 +621,8 @@ struct ReconstructView: View {
             end = nil
             typedDistance = ""
             note = ""
+            onShots?(shots)
+            publishHole(holeN, edited: edited || holed)
         } catch { note = error.localizedDescription }
     }
 
@@ -612,8 +638,18 @@ struct ReconstructView: View {
         aim()
     }
 
+    private func publishHole(_ hole: Int, edited: Bool) {
+        guard let onHoleScore else { return }
+        let mine = shots.filter { $0.hole == hole }
+        let closed = mine.contains { $0.result == "holed" }
+        guard edited || closed else { return }
+        let strokes = mine.reduce(0) { $0 + ($1.penaltyStrokes > 0 ? $1.penaltyStrokes : 1) }
+        if strokes > 0 { onHoleScore(hole, strokes) }
+    }
+
     private func keepLocal() {
         let made = draft()
+        let edited = editing != nil
         let id = editing ?? UUID().uuidString
         let meters = made.distanceM
         let shot = ReconstructionShot(
@@ -640,18 +676,21 @@ struct ReconstructView: View {
         typedDistance = ""
         note = ""
         onShots?(shots)
+        publishHole(shot.hole, edited: edited || made.result == "holed")
     }
 
     private func remove(_ round: ReconstructionRound?, _ shot: ReconstructionShot) async {
-        if round == nil || roundId.isEmpty {
-            shots.removeAll { $0.id == shot.id }
-            onShots?(shots)
+        if let round {
+            do {
+                try await model.api.deleteReconstructionShot(liveRoundId: round.id, shotId: shot.id)
+                shots.removeAll { $0.id == shot.id }
+                onShots?(shots)
+                publishHole(shot.hole, edited: true)
+            } catch { note = error.localizedDescription }
             return
         }
-        do {
-            try await model.api.deleteReconstructionShot(liveRoundId: round.id, shotId: shot.id)
-            shots.removeAll { $0.id == shot.id }
-            onShots?(shots)
-        } catch { note = error.localizedDescription }
+        shots.removeAll { $0.id == shot.id }
+        onShots?(shots)
+        publishHole(shot.hole, edited: true)
     }
 }

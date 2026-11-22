@@ -18,6 +18,7 @@ struct MatchPlayView: View {
     @State private var scores: [[Int?]]
     @State private var showsTrack = false
     @State private var trackShots: [ReconstructionShot] = []
+    @State private var trackLiveId = ""
 
     init(course: String, players: [MatchSetupPlayer], scores: [[Int?]]? = nil, bases: [Double] = [], si: [Int?] = [], allowance: Double = 100, scoringLabel: String = "Gross", onHoleScore: ((Int, Int) -> Void)? = nil) {
         self.course = course
@@ -45,7 +46,7 @@ struct MatchPlayView: View {
         .sheet(isPresented: $showsTrack) {
             NavigationStack {
                 ReconstructView(
-                    context: RoundTrackContext(roundId: "", date: Date(), courseName: course, clubCode: "", hole: hole + 1),
+                    context: RoundTrackContext(roundId: "", date: Date(), courseName: course, clubCode: "", hole: hole + 1, liveId: trackLiveId),
                     storedShots: trackShots,
                     onShots: { trackShots = $0 }
                 ) { played, strokes in
@@ -55,6 +56,7 @@ struct MatchPlayView: View {
             .environment(model)
             .golfletChrome()
         }
+        .task { await resolveTrack() }
     }
 
     private var head: some View {
@@ -174,6 +176,43 @@ struct MatchPlayView: View {
                 }
             }
         }
+    }
+
+    private func resolveTrack() async {
+        if !trackLiveId.isEmpty { return }
+        let day = artDay()
+        guard let setup = try? await model.api.reconstructionSetup() else { return }
+        let needle = fold(course)
+        let tail = needle.split(separator: "·").last.map { fold($0) } ?? needle
+        if let found = setup.saved.first(where: { row in
+            guard row.official == false, row.date == day else { return false }
+            let blob = fold("\(row.course) \(row.vmCourse)")
+            return !tail.isEmpty && blob.contains(tail)
+        }) {
+            trackLiveId = found.id
+            return
+        }
+        guard let courseRow = model.courses.first(where: { row in
+            let name = fold(row.name)
+            return !tail.isEmpty && (needle.contains(name) || name.contains(tail))
+        }) else { return }
+        let id = ReconstructionCourseId.make(clubCode: courseRow.clubCode, course: courseRow.name)
+        if let created = try? await model.api.createReconstruction(date: day, courseId: id, roundId: nil, tee: nil) {
+            trackLiveId = created.id
+        }
+    }
+
+    private func artDay() -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(identifier: "America/Argentina/Buenos_Aires")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
+
+    private func fold(_ value: some StringProtocol) -> String {
+        value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_AR"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var trackTitle: String {

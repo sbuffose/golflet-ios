@@ -104,9 +104,24 @@
   let FLUSHING = false;
   async function flush() {
     if (FLUSHING) return; FLUSHING = true;
-    try { const Q = LS.get(QK, {});
-      for (const id of Object.keys(Q)) { try { const r = await H.api(`/api/matches/${id}`, { method: 'PUT', body: JSON.stringify(Q[id]) }); LS.set(MK(id), r); const Q2 = LS.get(QK, {}); if (Q2[id] && JSON.stringify(Q2[id]) === JSON.stringify(Q[id])) { delete Q2[id]; LS.set(QK, Q2); } }
-        catch (err) { if (err?.status === 409 || err?.status === 400 || err?.status === 404) { const Q2 = LS.get(QK, {}); delete Q2[id]; LS.set(QK, Q2); if (err.status !== 409) H.toast(err.message || 'No se pudo guardar el partido'); } else break; } }
+    try {
+      let again = true;
+      while (again) {
+        again = false;
+        const Q = LS.get(QK, {});
+        for (const id of Object.keys(Q)) {
+          const sent = Q[id];
+          try {
+            const r = await H.api(`/api/matches/${id}`, { method: 'PUT', body: JSON.stringify(sent) });
+            const Q2 = LS.get(QK, {});
+            if (Q2[id] && JSON.stringify(Q2[id]) === JSON.stringify(sent)) { LS.set(MK(id), r); delete Q2[id]; LS.set(QK, Q2); }
+            else if (Q2[id]) again = true;
+          } catch (err) {
+            if (err?.status === 409 || err?.status === 400 || err?.status === 404) { const Q2 = LS.get(QK, {}); delete Q2[id]; LS.set(QK, Q2); if (err.status !== 409) H.toast(err.message || 'No se pudo guardar el partido'); }
+            else break;
+          }
+        }
+      }
     } finally { FLUSHING = false; }
   }
   addEventListener('online', () => flush());

@@ -226,3 +226,124 @@ test("el partido muestra quién va arriba y abre el track existente", { timeout:
     server.close();
   }
 });
+
+test("el partido abre la vuelta del día y un hoyo ya jugado", { timeout: 180_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+  mkdirSync(ART, { recursive: true });
+  let created = 0;
+  const shots = [
+    { id: "s1", hole: 1, club: "Driver", result: null, penalty_strokes: 0, lat: -34.5, lng: -58.5, end_lat: -34.5007, end_lng: -58.5 },
+    { id: "s2", hole: 1, club: "7i", result: null, penalty_strokes: 0, lat: -34.5007, lng: -58.5, end_lat: -34.5014, end_lng: -58.5 },
+    { id: "s3", hole: 1, club: "Putter", lie: "green", result: "holed", penalty_strokes: 0, lat: -34.5014, lng: -58.5, end_lat: -34.502, end_lng: -58.5 },
+  ];
+  const round = { id: "live-vuelta", date: "2026-11-22", course: "Jockey Club Argentino · Azul", vm_course: "Azul", club_code: "fixture", official: false, round_id: null, current_hole: 1, tracked: true };
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
+    const json = (data: unknown, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(data)); };
+    if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, rounds: [], unofficial_rounds: [{ id: "live-vuelta", date: "2026-11-22", course: "Azul", official: false }], courses: [], clubs: [] });
+    if (url.pathname === "/api/matches/fixture-up" && req.method === "PUT") {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      const body = JSON.parse(raw || "{}");
+      const base = match("up");
+      return json({ ...base, ...body, id: base.id, status: body.finish ? "done" : base.status });
+    }
+    if (url.pathname === "/api/matches/fixture-up") return json(match("up"));
+    if (url.pathname === "/api/reconstructions" && req.method === "POST") { created += 1; return json({ live_round: { id: "should-not-create" } }, 201); }
+    if (url.pathname === "/api/reconstructions") return json({ rounds: [], reconstructions: [round] });
+    if (url.pathname === "/api/reconstructions/live-vuelta/shots" && req.method === "DELETE") {
+      const id = url.searchParams.get("shot");
+      const index = shots.findIndex(s => s.id === id);
+      if (index >= 0) shots.splice(index, 1);
+      return json({ ok: true });
+    }
+    if (url.pathname === "/api/reconstructions/live-vuelta/shots") return json({ shots });
+    if (url.pathname === "/api/gps/courses") return json({ courses: [{ course_id: "fixture-azul", label: "jockey club argentino · azul", course: "Azul", vm_course: "Azul" }] });
+    if (url.pathname.startsWith("/api/gps/courses/")) return json({
+      course: {
+        course: "Azul", club_code: "fixture",
+        holes: [1, 2].map(hole => ({ hole, par: 4, tee: { lat: -34.5, lng: -58.5 }, green: { center: { lat: -34.502, lng: -58.5 }, front: { lat: -34.501, lng: -58.5 } } })),
+      },
+    });
+    if (url.pathname.startsWith("/api/")) return json({});
+    const file = url.pathname === "/" ? "/index.html" : url.pathname;
+    try {
+      const buf = await readFile(new URL(file.slice(1), ROOT));
+      res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" });
+      res.end(buf);
+    } catch { res.writeHead(404); res.end("missing"); }
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", () => resolve()));
+  const port = (server.address() as { port: number }).port;
+  const { default: puppeteer } = await import("puppeteer-core");
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 375, height: 667, deviceScaleFactor: 2 });
+    const tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/17/80529/44586";
+    const tile = Buffer.from(await (await fetch(tileUrl)).arrayBuffer());
+    await page.setRequestInterception(true);
+    page.on("request", request => {
+      const url = request.url();
+      if (url.includes("arcgisonline.com")) {
+        request.respond({ status: 200, contentType: "image/jpeg", headers: { "access-control-allow-origin": "*" }, body: tile });
+        return;
+      }
+      if (url.startsWith(`http://127.0.0.1:${port}`)) request.continue();
+      else request.abort();
+    });
+    const hideBar = () => page.evaluate(() => { const bar = document.querySelector("#tabbar"); if (bar) (bar as HTMLElement).style.display = "none"; });
+    await page.goto(`http://127.0.0.1:${port}/#/partido/fixture-up`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#gm-track", { timeout: 8000 });
+    await hideBar();
+    await page.click('.gm-hs button[data-h="1"]');
+    await page.click("#gm-track");
+    await page.waitForSelector("#tkprev", { timeout: 8000 });
+    await page.click("#tkprev");
+    await page.waitForFunction(() => (document.body.innerText || "").includes("Editar hoyo") && (document.body.innerText || "").includes("Driver"), { timeout: 8000 });
+    const doneHole = await page.evaluate(() => document.body.innerText || "");
+    assert.match(doneHole, /Hoyo 1/);
+    assert.match(doneHole, /Editar hoyo/);
+    assert.match(doneHole, /No oficial/);
+    assert.equal(created, 0);
+    const linked = await page.evaluate(() => JSON.parse(localStorage.getItem("golflet.match.fixture-up") || "{}").track_id);
+    assert.equal(linked, "live-vuelta");
+    await page.screenshot({ path: `${ART}/web-375-partido-hoyo-anterior.png` });
+
+    await page.goto(`http://127.0.0.1:${port}/#/rondas`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".rc-off", { timeout: 8000 });
+    await hideBar();
+    const list = await page.evaluate(() => ({ text: document.body.innerText, href: document.querySelector(".rc-off")?.getAttribute("href") || "" }));
+    assert.match(list.text, /Azul/);
+    assert.match(list.text, /No oficial/);
+    assert.equal(list.href, "#/reconstruir/live-vuelta");
+    await page.click(".rc-off");
+    await page.waitForFunction(() => (document.body.innerText || "").includes("Editar hoyo") && (document.body.innerText || "").includes("Putter"), { timeout: 8000 });
+    const same = await page.evaluate(() => document.body.innerText || "");
+    assert.match(same, /No oficial/);
+    assert.match(same, /Hoyo 1/);
+    assert.match(same, /Driver/);
+    assert.equal(created, 0);
+    await page.screenshot({ path: `${ART}/web-375-rondas-mismo-track.png` });
+
+    await page.goto(`http://127.0.0.1:${port}/#/partido/fixture-up`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#gm-track", { timeout: 8000 });
+    await page.click("#gm-track");
+    await page.waitForSelector("#play-edit-hole", { timeout: 8000 });
+    await page.click("#play-edit-hole");
+    await page.waitForSelector("#play-shot-3", { timeout: 8000 });
+    await page.click("#play-shot-3");
+    await page.waitForSelector("#play-edit-del", { timeout: 8000 });
+    await page.click("#play-edit-del");
+    await page.waitForSelector("#play-edit-yes", { timeout: 8000 });
+    await page.click("#play-edit-yes");
+    await page.waitForFunction(() => {
+      const row = JSON.parse(localStorage.getItem("golflet.match.fixture-up") || "{}");
+      const rail = document.querySelectorAll("#rc-shots .tk-shot:not(.tk-more)").length;
+      return row.scores?.me?.[0] === 2 && rail === 2;
+    }, { timeout: 8000 });
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
