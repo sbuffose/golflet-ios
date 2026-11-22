@@ -428,11 +428,10 @@ struct GroupDetailView: View {
         let rows = comparison?.rows ?? []
         let solo = group.members.filter { !$0.isPending }.count < 2
         return VStack(alignment: .leading, spacing: 16) {
-            if solo {
-                soloInvite(group)
-            }
             if !rows.isEmpty {
                 classification(rows, group: group)
+            } else if solo {
+                soloInvite(group)
             }
             if !solo {
                 worstHoles
@@ -700,6 +699,11 @@ struct GroupDetailView: View {
                 .accessibilityIdentifier("group-view-range")
             }
             .padding(.top, 12)
+
+            if group.members.filter({ !$0.isPending }).count < 2 {
+                soloInvite(group)
+                    .padding(.top, 12)
+            }
 
             leaderStrip(rows)
             if let selected {
