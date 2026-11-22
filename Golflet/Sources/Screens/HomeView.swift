@@ -1849,7 +1849,7 @@ struct HomeGroupsSheet: View {
                                     GroupPhotoView(
                                         url: group.photoURL,
                                         initials: GroupsParser.initials(group.name),
-                                        size: 44
+                                        size: 40
                                     )
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(group.name)
@@ -1862,7 +1862,7 @@ struct HomeGroupsSheet: View {
                                         let people = group.members.filter { !$0.isPending }
                                         if !people.isEmpty {
                                             HStack(spacing: 8) {
-                                                MemberFaceStack(members: people, size: 28)
+                                                MemberFaceStack(members: people, size: 38)
                                                 Text(memberNames(people))
                                                     .font(GType.label)
                                                     .foregroundStyle(p.ink2)
