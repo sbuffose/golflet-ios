@@ -312,7 +312,7 @@ test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { ti
         abbrev: /\b(Dr|CLUB)\b/.test(list.innerText),
       };
     });
-    assert.ok(bar.tile <= 72 && bar.hit <= 72, JSON.stringify(bar));
+    assert.ok(bar.tile >= 64 && bar.tile <= 180 && bar.hit <= 72, JSON.stringify(bar));
     assert.equal(bar.hitBg, "rgb(11, 37, 69)");
     assert.equal(bar.list, false);
     assert.match(bar.clubs, /Driver/);

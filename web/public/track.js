@@ -47,6 +47,17 @@
     if ((m = /^(\d)I$/.exec(u))) return `Hierro ${m[1]}`;
     return s;
   };
+  const sameClub = (code, option) => {
+    const raw = String(code || '').trim();
+    if (!raw || !option) return false;
+    const id = String(option.id || '');
+    const label = String(option.label || '');
+    const named = clubLabel(raw);
+    if (raw === id || raw === label || named === id || named === label || clubLabel(id) === named) return true;
+    if (R().isDriverClub && R().isDriverClub(raw, named) && R().isDriverClub(id, label)) return true;
+    if (R().isPutterClub && R().isPutterClub(raw, named) && R().isPutterClub(id, label)) return true;
+    return false;
+  };
   const PROMPT = { confirmTee: 'Arrastrá para confirmar la salida', confirmFlag: 'Arrastrá para ubicar el hoyo', tracking: 'Arrastrá hasta donde terminó el tiro', penaltyWhere: 'Penalidad: ¿dónde fue?', relief: 'Penalidad. Elegí otra vez o drop', drop: 'Arrastrá hasta el lugar del drop' };
   const shortClub = label => {
     const t = String(label || '').trim();
@@ -75,7 +86,7 @@
       track: R().trackNew(), cam: { z: 17, cx: 0.5, cy: 0.5, hdg: 0 }, frame: 'overview', axis: null, mapReady: false, mapGen: 0, tileCache: new Map(), tileFlight: new Map(),
       more: false, history: false, saved: H.shots || [],
       alive: true, done: false, reopen: false, editN: 0, pickClub: false, moveShot: false, editPoint: '', aimLL: null, askDel: false, suggestedTee: null, suggestedPin: null, flagKind: 'none', adjusted: false, clubChosen: false, cmapTried: false,
-      playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false, undoing: false,
+      playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false, undoing: false, tileCap: 0, greenTiles: true,
       driverTee: null, teeSource: '', teeName: '', moveTee: false, teeOpen: false, flagSource: '', wx: null, wxState: '', wxOpen: false, wxWhy: '', lostPair: null, provisionalNext: false, recovery: false, suggest: '', roundId: H.roundId || '',
     };
 
@@ -133,6 +144,20 @@
       return S.playerLie === 'green' && sameSpot(S.lieBall, ball);
     };
     const putting = () => S.track.phase === 'tracking' && !S.done && originOnGreen();
+    const cupDistance = () => {
+      const ball = ballLL();
+      const cup = cupLL();
+      if (!ball || !cup) return null;
+      return hav(ball, cup);
+    };
+    const nearCup = () => {
+      const d = cupDistance();
+      return d != null && d <= 25;
+    };
+    const atCup = () => {
+      const d = cupDistance();
+      return d != null && d < 2;
+    };
     const putterChoice = () => {
       const bag = R().bagClubs ? R().bagClubs(S.bag) : [];
       const hit = bag.find(c => R().isPutterClub && R().isPutterClub(c.id, c.label));
@@ -369,10 +394,11 @@
       if (ball && !S.done) {
         const s = toScreen(ball, W, H);
         const n = S.track.marks.filter(m => m.countsStroke).length + 1;
-        if (s && phase === 'tracking') {
+        const onCup = pin && hav(ball, pin) != null && hav(ball, pin) < 2;
+        if (s && phase === 'tracking' && !onCup) {
           reserve(s[0], s[1]);
           o += `<g class="tk-origin" data-n="${n}" data-lat="${ball.lat}" data-lng="${ball.lng}"><circle cx="${s[0]}" cy="${s[1]}" r="11"/><text class="tk-aim-n" x="${s[0]}" y="${s[1] - 18}">${n}</text></g>`;
-        } else if (s) {
+        } else if (s && !onCup) {
           reserve(s[0], s[1]);
           o += `<g class="tk-origin" data-lat="${ball.lat}" data-lng="${ball.lng}"><circle cx="${s[0]}" cy="${s[1]}" r="8"/></g>`;
         }
@@ -415,10 +441,23 @@
             dist = span && span.unit !== 'cup' ? span.text : '';
           } else if (meters != null) dist = `${yd(meters)} yd`;
         }
-        const rest = [name, dist].filter(Boolean).join(' · ').slice(0, 36);
-        const w = Math.max(72, Math.min(176, 28 + rest.length * 6.4));
-        const px = Math.round(x + 14), py = Math.round(y - 30);
-        o += `<g class="tk-mapill" transform="translate(${px},${py})"><rect width="${w.toFixed(0)}" height="22" rx="11" fill="#fff"/><circle cx="11" cy="11" r="9" fill="#C8102E"/><text fill="#fff" font-size="11" font-weight="700" font-family="Geist,system-ui,sans-serif" text-anchor="middle" x="11" y="15">${m.n}</text><text fill="#0B2545" font-size="11" font-weight="650" font-family="Geist,system-ui,sans-serif" x="24" y="15">${esc(rest)}</text></g>`;
+        const rest = [name, dist].filter(Boolean).join(' · ').slice(0, 28);
+        const w = Math.max(86, Math.min(148, 34 + rest.length * 6.2));
+        const flagAt = pin ? toScreen(pin, W, H) : null;
+        const obstacles = S.done ? [[0, 46, 184, 248], [W / 2 - 146, 40, W / 2 + 146, 104], [0, H - 268, W, H], [W - 66, 64, W, H * 0.62]] : [];
+        const clampX = qx => Math.min(W - 72 - w / 2, Math.max(8 + w / 2, qx));
+        let px = clampX(x + 14 + w / 2), py = y, n = 0;
+        const hits = (qx, qy) => placed.some(p => Math.abs(p[0] - qx) < (w / 2 + 16) && Math.abs(p[1] - qy) < 18)
+          || obstacles.some(([l, t, r, b]) => qx + w / 2 > l && qx - w / 2 < r && qy + 12 > t && qy - 12 < b)
+          || qy < 40 || qy > H - 20;
+        while ((hits(px, py) || (flagAt && Math.hypot(flagAt[0] - px, flagAt[1] - py) < 36)) && n < 14) {
+          n += 1;
+          py = y + n * 20;
+          px = clampX(x + 14 + w / 2);
+        }
+        placed.push([px, py]);
+        const left = Math.round(px - w / 2), top = Math.round(py - 11);
+        o += `<g class="tk-mapill" transform="translate(${left},${top})"><rect width="${w.toFixed(0)}" height="22" rx="11" fill="#fff"/><circle cx="11" cy="11" r="9" fill="#C8102E"/><text class="tk-shot-n" x="11" y="11">${m.n}</text><text fill="#0B2545" font-size="11" font-weight="650" font-family="Geist,system-ui,sans-serif" x="24" y="15">${esc(rest)}</text></g>`;
       };
       if (S.aimLL && R().knownPoint(S.aimLL.lat, S.aimLL.lng)) {
         const s = toScreen(S.aimLL, W, H);
@@ -435,22 +474,16 @@
       let pillFrom = tee && R().knownPoint(tee.lat, tee.lng);
       for (const m of strokes) {
         const from = pillFrom;
-        if (m.holed && pin) {
-          const s = toScreen(pin, W, H);
-          if (!s) { drawStroke(m, String(m.n)); }
-          else {
-            const x = s[0] + 18, y = s[1] - 6;
-            placed.push([x, y]);
-            const r = 11;
-            o += `<g class="tk-shot-mark" data-n="${m.n}" data-lost="0" data-lat="${pin.lat}" data-lng="${pin.lng}"><circle class="tk-dot" cx="${x}" cy="${y}" r="${r}"/><text class="tk-shot-n" x="${x}" y="${y}">${m.n}</text></g>`;
-            shotPill(x, y, m, from);
-          }
+        const end = m.holed && pin ? pin : m.at;
+        if (S.done) {
+          const a = from ? toScreen(from, W, H) : null;
+          const b = end ? toScreen(end, W, H) : null;
+          if (a && b) shotPill((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, m, from);
+          else if (b) shotPill(b[0], b[1] - 28, m, from);
         } else {
           drawStroke(m, String(m.n));
-          const s = toScreen(m.at, W, H);
-          if (s) shotPill(s[0], s[1], m, from);
         }
-        if (m.at) pillFrom = m.at;
+        if (end) pillFrom = end;
       }
       return o;
     };
@@ -578,7 +611,7 @@
       };
       const remembered = [...saved].reverse().find(s => s.club && s.result !== 'penalty' && !(Number(s.penalty_strokes) > 0));
       const options = R().bagClubs ? R().bagClubs(S.bag) : [];
-      const known = remembered && options.find(c => c.id === String(remembered.club) || c.label === String(remembered.club));
+      const known = remembered && options.find(c => sameClub(remembered.club, c));
       if (known) { S.club = known.id; S.clubChosen = true; }
       else if (remembered && R().isPutterClub && R().isPutterClub(String(remembered.club), String(remembered.club))) {
         S.club = 'Pt'; S.clubChosen = true; S.clubAuto = 'putt';
@@ -619,9 +652,10 @@
       const phase = S.track.phase;
       const cup = cupLL();
       const meters = here && cup ? hav(here, cup) : null;
-      const inCup = meters != null && R().inTheCup && R().inTheCup(meters);
-      const holeSpan = meters == null || !R().greenToHole ? null : R().greenToHole(meters);
       const ball = S.track.ball || S.track.tee;
+      const ballCup = ball && cup ? hav(ball, cup) : null;
+      const inCup = (meters != null && R().inTheCup && R().inTheCup(meters)) || (ballCup != null && R().inTheCup && R().inTheCup(ballCup));
+      const holeSpan = meters == null || !R().greenToHole ? null : R().greenToHole(meters);
       const flown = here && ball ? yd(hav(ball, here)) : null;
       if (S.moveTee) return `<b>Arrastrá la salida o tocala en el mapa</b>`;
       if (retro && phase === 'confirmTee') {
@@ -646,7 +680,7 @@
           const holedShot = rows.some(s => s.result === 'holed' || s.intent === 'conceded') || (S.track.marks || []).some(m => m.holed);
           const scored = R().scoredClose ? R().scoredClose(strokeN, knowPutts ? puttN : null, holedShot) : { strokes: strokeN, putts: knowPutts ? puttN : null };
           const close = R().holeCloseText ? R().holeCloseText(holeRec().par || null, scored.strokes, scored.putts) : { line: `${scored.strokes} golpes`, vs: null };
-          return `<img class="cad hole" src="/brand/caddie.png" alt=""><b>${esc(close.line)}</b>${close.vs ? `<small>${esc(close.vs)}</small>` : ''}`;
+          return `<b>${esc(close.line)}${close.vs ? ` · ${esc(close.vs)}` : ''}</b>`;
         }
         if (inCup) return `<b class="tk-holeflash">En el hoyo</b>`;
         if (putting()) {
@@ -694,7 +728,7 @@
       if (S.wxState === 'none' || !S.wind || S.wind.kmh == null) {
         if (S.wxState !== 'none') return '';
         const why = S.wxOpen ? `<div class="tk-wxwhy" id="play-wx-why"><p>${esc(S.wxWhy || 'Open-Meteo y MET Norway no devolvieron viento.')}</p><button type="button" id="play-wx-retry">Reintentar</button></div>` : '';
-        return `<button type="button" class="tk-chip tk-wx" id="play-wx" aria-expanded="${S.wxOpen ? 'true' : 'false'}">–</button>${why}`;
+        return `<button type="button" class="tk-chip tk-wx" id="play-wx" aria-expanded="${S.wxOpen ? 'true' : 'false'}">Clima</button>${why}`;
       }
       const temp = S.wind.temp_c != null ? `${Math.round(Number(S.wind.temp_c))}°C` : '';
       const rain = Number(S.wind.precip_mm) > 0 || S.wind.condition === 'lluvia' || S.wind.condition === 'tormenta' ? 'lluvia' : '';
@@ -790,7 +824,9 @@
           if (best) S.suggest = best;
         }
       }
-      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(picked ? clubLabel(picked.label) : 'Palo')}">${picked ? faceImg(picked.id, picked.label) : ''}</button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => { const on = c.id === S.club ? ' on' : ''; const sug = c.id === S.suggest ? ' sug' : ''; const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}" class="${(on + sug).trim()}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
+      const shownClub = picked || clubChoices.find(c => c.id === S.suggest);
+      const tileName = shownClub ? clubLabel(shownClub.label) : 'Palo';
+      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(tileName)}">${faceImg(shownClub ? shownClub.id : '', shownClub ? shownClub.label : '')}<span>${esc(tileName)}</span></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => { const on = c.id === S.club ? ' on' : ''; const sug = c.id === S.suggest ? ' sug' : ''; const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}" class="${(on + sug).trim()}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
@@ -919,15 +955,16 @@
         return `<button type="button" id="play-edit-${kind === 'end' ? 'move' : kind}">${text}</button>`;
       };
       const buenaOn = editingShot && editingShot.intent === 'recovery';
-      const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>${esc(editBits.join(' · '))}</b><button type="button" id="play-edit-club">Cambiar palo</button>${pointBtn('start', 'Punto de inicio')}${pointBtn('end', 'Punto final')}${pointBtn('aim', 'Objetivo')}<button type="button" id="play-edit-insert">Insertar tiro</button><button type="button" id="play-edit-buena" aria-pressed="${buenaOn ? 'true' : 'false'}">A buena${buenaOn ? ' · activo' : ''}</button><button type="button" id="play-edit-x">Cerrar</button><button type="button" id="play-edit-del">Borrar tiro</button>${S.askDel ? '<p>¿Borrar este tiro?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? `<p>Mové el mapa hasta ${pointWord}.</p>` : ''}</div>` : '';
-      const editSheet = S.pickClub && !showClub ? `<div class="tk-sheet" id="play-club-sheet" role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => { const yards = tileYards(c); const on = editingShot && (c.id === editingShot.club || c.label === editingShot.club) ? ' on' : ''; return `<li><button type="button" data-club="${esc(c.id)}" class="${on.trim()}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div>` : '';
+      const editGrid = S.pickClub ? `<ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => { const yards = tileYards(c); const on = editingShot && sameClub(editingShot.club, c) ? ' on' : ''; return `<li><button type="button" data-club="${esc(c.id)}" class="${on.trim()}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul>` : '';
+      const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>${esc(editBits.join(' · '))}</b><button type="button" id="play-edit-club">Cambiar palo</button>${editGrid}${pointBtn('start', 'Punto de inicio')}${pointBtn('end', 'Punto final')}${pointBtn('aim', 'Objetivo')}<button type="button" id="play-edit-insert">Insertar tiro</button><button type="button" id="play-edit-buena" aria-pressed="${buenaOn ? 'true' : 'false'}">A buena${buenaOn ? ' · activo' : ''}</button><button type="button" id="play-edit-x">Cerrar</button><button type="button" id="play-edit-del">Borrar tiro</button>${S.askDel ? '<p>¿Borrar este tiro?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? `<p>Mové el mapa hasta ${pointWord}.</p>` : ''}</div>` : '';
+      const editSheet = '';
       const painted = el.querySelector('.tk-tiles:not([data-pending])');
       const paintedHole = el.querySelector('#tkmap')?.dataset.hole || '';
       const paintedHTML = painted && paintedHole === String(S.hole) ? painted.outerHTML : '';
       el.innerHTML = `<div class="tk" id="play-track">
         <div class="tk-map" id="tkmap"></div>
         <div class="tk-maperr" id="tk-maperr" hidden><b>El mapa no cargó.</b><button type="button" id="tk-retry">Reintentar</button></div>
-        <div class="tk-ret on ${pen ? 'pen' : ''}" id="play-reticle" data-cursor="${cursorKind}" aria-hidden="true"><i></i>${cursorKind === 'drop' ? '<b class="tk-x">X</b>' : ''}</div>
+        <div class="tk-ret${S.done || (ballToCup != null && ballToCup < 2) ? '' : ' on'}${pen ? ' pen' : ''}" id="play-reticle" data-cursor="${cursorKind}" aria-hidden="true"><i></i>${cursorKind === 'drop' ? '<b class="tk-x">X</b>' : ''}</div>
         ${retro ? `<div class="tk-sidebtns"><button type="button" id="play-target" aria-label="Objetivo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg></button>${cupLL() ? `<button type="button" id="play-flag" aria-label="Bandera"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 20V4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6 5.2h9.2l-2 3 2 3H6" fill="#C8102E" stroke="#C8102E"/></svg></button>` : ''}<button type="button" id="play-gps" aria-label="GPS">GPS</button></div><div class="tk-zoom"><button type="button" id="play-zoom-in" aria-label="Acercar">+</button><button type="button" id="play-zoom-out" aria-label="Alejar">−</button></div>` : ''}
         ${rail}
         <div class="tk-top">
@@ -952,7 +989,7 @@
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>
             <div class="tk-hn"><b>Hoyo ${S.hole}</b><span>${`Par ${par || '—'}${cardYd ? ` · ${cardYd}` : ''}${hcp != null && hcp !== '' && Number.isFinite(Number(hcp)) ? ` · S.I. ${hcp}` : ''}`}</span></div>
             <b class="tk-score" id="play-score">${savedRows.length || S.track.marks.filter(m => m.countsStroke).length}</b>
-            ${(marking || (!retro && phase === 'tracking')) ? `<div class="tk-penwrap"><button type="button" class="tk-round tk-pen" id="play-penalty" aria-haspopup="menu" aria-expanded="false" aria-controls="play-pen-menu" aria-label="Penalidad">P</button><div class="tk-penmenu" id="play-pen-menu" role="menu" hidden><button type="button" id="play-pen-stroke" role="menuitem">Penalidad +1</button>${marking ? '<button type="button" id="play-lost" role="menuitem">Pelota perdida / fuera de límites</button><button type="button" id="play-lost-prov" role="menuitem">Pelota perdida · jugué la provisional</button>' : ''}</div></div>` : ''}
+            ${phase === 'tracking' ? `<div class="tk-penwrap"><button type="button" class="tk-round tk-pen" id="play-penalty" aria-haspopup="menu" aria-expanded="false" aria-controls="play-pen-menu" aria-label="Penalidad">P</button><div class="tk-penmenu" id="play-pen-menu" role="menu" hidden><button type="button" id="play-pen-stroke" role="menuitem">Penalidad +1</button>${marking ? '<button type="button" id="play-lost" role="menuitem">Pelota perdida / fuera de límites</button><button type="button" id="play-lost-prov" role="menuitem">Pelota perdida · jugué la provisional</button>' : ''}</div></div>` : ''}
             <button type="button" id="tknext" ${S.hole >= 18 ? 'disabled' : ''} aria-label="Hoyo siguiente">›</button>
           </div>
           ${S.teeSource === 'jugador' ? `<p class="tk-player" id="tk-player">Salida confirmada por vos. No es una medida.</p>` : ''}
@@ -989,7 +1026,8 @@
       const gen = ++S.mapGen;
       S.mapReady = false;
       const W = map.clientWidth || innerWidth, Hh = map.clientHeight || innerHeight;
-      const tileZ = Math.max(0, Math.min(R().IMAGERY_ZOOM_MAX, Math.floor(S.cam.z)));
+      const tileCap = Math.min(19, Math.max(Number(R().IMAGERY_ZOOM_MAX) || 17, Number(S.tileCap) || 0));
+      const tileZ = Math.max(0, Math.min(tileCap, Math.floor(S.cam.z)));
       const scale = 2 ** (S.cam.z - tileZ);
       const n = 2 ** tileZ;
       const cx = S.cam.cx * n, cy = S.cam.cy * n;
@@ -1055,7 +1093,7 @@
       map.dataset.cy = String(S.cam.cy);
       map.dataset.z = String(S.cam.z);
       map.dataset.tileZ = String(tileZ);
-      map.dataset.imagery = S.cam.z > R().IMAGERY_ZOOM_MAX + 0.05 ? 'scaled' : 'native';
+      map.dataset.imagery = S.cam.z > tileZ + 0.05 ? 'scaled' : 'native';
       map.dataset.flagKind = S.flagKind || '';
       map.dataset.frame = S.axis?.mode || '';
       map.dataset.bearing = S.axis?.bearing == null ? '' : String(S.axis.bearing);
@@ -1134,6 +1172,13 @@
           return;
         }
         if (!kinds.every(k => k === 'real')) {
+          if (tileZ > Number(R().IMAGERY_ZOOM_MAX) && kinds.some(k => k === 'placeholder' || k === 'error')) {
+            S.greenTiles = false;
+            S.tileCap = Number(R().IMAGERY_ZOOM_MAX);
+            S.cam.z = Number(R().IMAGERY_ZOOM_MAX);
+            paintMap();
+            return;
+          }
           failMap('blocked', kinds.some(k => k === 'placeholder'));
           return;
         }
@@ -1267,15 +1312,50 @@
       }
     };
 
+    const summaryFrame = (ends, W, Hh) => {
+      const tee = ends.tee && R().knownPoint(ends.tee.lat, ends.tee.lng);
+      const flag = ends.flag && R().knownPoint(ends.flag.lat, ends.flag.lng);
+      if (!tee || !flag || !R().holeSpan(tee, flag)) return null;
+      const [tx, ty] = proj(tee.lat, tee.lng);
+      const [fx, fy] = proj(flag.lat, flag.lng);
+      const dist = Math.hypot(tx - fx, ty - fy);
+      const holeBearing = R().bearingDeg(tee, flag);
+      if (!(dist > 0) || holeBearing == null) return null;
+      const top = 132, bottom = 252, sideL = 176, sideR = 64;
+      const safeH = Math.max(180, Hh - top - bottom);
+      const z = Math.max(15, Math.min(Number(R().IMAGERY_ZOOM_MAX) || 17, Math.log2((safeH - 64) / (dist * 256))));
+      const n = 2 ** z;
+      const midX = (tx + fx) / 2, midY = (ty + fy) / 2;
+      const dx = (sideL + (W - sideR)) / 2 - W / 2;
+      const dy = (top + (Hh - bottom)) / 2 - Hh * 0.42;
+      const rad = -holeBearing * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
+      const px = dx * c + dy * s, py = -dx * s + dy * c;
+      return { mode: 'overview', z, cx: midX - px / (n * 256), cy: midY - py / (n * 256), bearing: holeBearing, aimLat: flag.lat, aimLng: flag.lng };
+    };
     const targetFrame = () => {
       const map = mapBox();
       const W = map?.clientWidth || innerWidth, Hh = map?.clientHeight || innerHeight;
       const ball = S.track.ball && R().knownPoint(S.track.ball.lat, S.track.ball.lng);
       const ends = cameraEnds();
-      if (putting() && !S.panned && !S.done) {
+      S.tileCap = Number(R().IMAGERY_ZOOM_MAX) || 17;
+      if (S.done && ends.tee && ends.flag) {
+        const fitted = summaryFrame(ends, W, Hh);
+        if (fitted) return fitted;
+      }
+      if (!S.done && !S.panned && S.track.phase === 'tracking' && (putting() || nearCup())) {
         const cup = cupLL();
         const zoomed = cup && R().frameHole(null, cup, 'flag', { width: W, height: Hh });
-        if (zoomed) { zoomed.z = Number(R().VISUAL_ZOOM_MAX) || zoomed.z; return zoomed; }
+        if (zoomed) {
+          const z = S.greenTiles === false ? Number(R().IMAGERY_ZOOM_MAX) : 19;
+          zoomed.z = z;
+          S.tileCap = z;
+          if (atCup()) {
+            const n = 2 ** z;
+            zoomed.cx -= 44 / (n * 256);
+            zoomed.cy -= 58 / (n * 256);
+          }
+          return zoomed;
+        }
       }
       const mode = S.done ? 'overview' : (S.frame || 'overview');
       return tightenOpen(R().frameHole(ends.tee, ends.flag, mode, { width: W, height: Hh }, ball)
@@ -1583,15 +1663,20 @@
         const img = el.querySelector('#play-club-tile img');
         const tileBtn = el.querySelector('#play-club-tile');
         if (img) { const thumb = faceOf(club.value, label); img.src = thumb.src; img.dataset.kind = thumb.kind || ''; }
-        if (tileBtn) tileBtn.setAttribute('aria-label', clubLabel(label) || 'Palo');
+        if (tileBtn) {
+          tileBtn.setAttribute('aria-label', clubLabel(label) || 'Palo');
+          const name = tileBtn.querySelector('span');
+          if (name) name.textContent = clubLabel(label) || 'Palo';
+        }
       };
       const tile = el.querySelector('#play-club-tile');
-      const list = el.querySelector('#play-club-list');
       const sheet = el.querySelector('#play-club-sheet');
-      if (tile && list) tile.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); list.hidden = !list.hidden; if (sheet) sheet.hidden = list.hidden; };
+      const bagList = sheet ? sheet.querySelector('.tk-clublist') : null;
+      const list = el.querySelector('#play-shot-editor .tk-clublist') || el.querySelector('#play-club-list');
+      if (tile && bagList) tile.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); bagList.hidden = !bagList.hidden; if (sheet) sheet.hidden = bagList.hidden; };
       const shut = el.querySelector('#play-club-close');
-      if (shut && list) shut.onclick = ev => { ev.preventDefault(); list.hidden = true; if (sheet) sheet.hidden = true; };
-      if (S.pickClub && list && sheet) { list.hidden = false; sheet.hidden = false; }
+      if (shut && bagList) shut.onclick = ev => { ev.preventDefault(); bagList.hidden = true; if (sheet) sheet.hidden = true; };
+      if (S.pickClub && bagList && sheet && !el.querySelector('#play-shot-editor .tk-clublist')) { bagList.hidden = false; sheet.hidden = false; }
       if (list) list.querySelectorAll('button').forEach(btn => { btn.onclick = () => {
         const id = btn.getAttribute('data-club') || '';
         if (S.editN) { S.pickClub = false; patchShot({ club: id }); return; }
@@ -1778,6 +1863,7 @@
       const zoomBy = d => {
         stopCam();
         const cap = Number(R().VISUAL_ZOOM_MAX) || (R().IMAGERY_ZOOM_MAX + 2.15);
+        S.tileCap = Number(R().IMAGERY_ZOOM_MAX) || 17;
         S.cam.z = Math.max(15, Math.min(cap, +(S.cam.z + d).toFixed(3)));
         S.adjusted = true;
         paintMap(); paintRead();

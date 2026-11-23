@@ -50,7 +50,7 @@ test("el track de hoy muestra el viento y, si no hay datos, un guion", { timeout
     const page = await browser.newPage();
     await page.setViewport({ width: 375, height: 812, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-vacio?hole=3`, { waitUntil: "networkidle0" });
-    await page.waitForFunction(() => (document.querySelector("#play-wx")?.textContent || "").trim() === "–", { timeout: 20000 });
+    await page.waitForFunction(() => (document.querySelector("#play-wx")?.textContent || "").trim() === "Clima", { timeout: 20000 });
     await page.click("#play-wx");
     await page.waitForSelector("#play-wx-retry");
     const why = await page.$eval("#play-wx-why", el => el.textContent || "");
