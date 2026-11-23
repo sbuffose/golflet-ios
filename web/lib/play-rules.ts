@@ -184,6 +184,24 @@ export function windArrow(fromDeg: number | null | undefined, bearing: number | 
   return norm(+fromDeg + 180 - +bearing);
 }
 
+const WIND_CARDINAL = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"] as const;
+
+/** Where the wind comes from, in eight Spanish compass points. */
+export function windCardinal(fromDeg: number | null | undefined): string | null {
+  if (fromDeg == null || !Number.isFinite(+fromDeg)) return null;
+  return WIND_CARDINAL[Math.round(norm(+fromDeg) / 45) % 8];
+}
+
+/** Short face of the wind along the hole. Crosswind from the right is «de derecha». */
+export function windSide(fromDeg: number | null | undefined, bearing: number | null | undefined): string | null {
+  if (fromDeg == null || bearing == null || !Number.isFinite(+fromDeg) || !Number.isFinite(+bearing)) return null;
+  const delta = norm(+fromDeg - +bearing);
+  if (delta < 45 || delta >= 315) return "en contra";
+  if (delta >= 135 && delta < 225) return "a favor";
+  if (delta >= 45 && delta < 135) return "cruzado de derecha";
+  return "de izquierda";
+}
+
 export function windPlay(hole: number, fromDeg: number | null | undefined, bearing: number | null | undefined, speedKmh: number | null | undefined): { relative: WindRel; text: string } {
   if (bearing == null || !Number.isFinite(+bearing)) {
     return { relative: "unavailable", text: `Hoyo ${hole} · Sin rumbo verificado del tee al green. No clasifico el viento.` };
@@ -213,7 +231,7 @@ export function greenToHole(meters: number): { text: string; unit: "ft" | "in" |
   if (!Number.isFinite(meters) || meters < 0) return null;
   const inches = Math.round(meters / M_PER_IN);
   if (inches < 1) return { text: "En el hoyo", unit: "cup", n: 0 };
-  if (meters / M_PER_FT < 3) return { text: `${inches} in`, unit: "in", n: inches };
+  if (meters / M_PER_FT < 3 - 1e-6) return { text: `${inches} in`, unit: "in", n: inches };
   const feet = Math.round(meters / M_PER_FT);
   return { text: `${feet} ft`, unit: "ft", n: feet };
 }
@@ -253,7 +271,41 @@ export function puttMeters(value: unknown): number | null {
 }
 
 export function isPutterClub(id: string, label = ""): boolean {
-  return /^(pt|putter)$/i.test(id.trim()) || /^putter\b/i.test(String(label || "").trim());
+  const face = id.trim();
+  const name = String(label || "").trim();
+  return /^(pt|putt|putter)$/i.test(face) || /^putter\b/i.test(name) || /^putter\b/i.test(face);
+}
+
+export type PuttShot = {
+  club?: unknown;
+  lie?: unknown;
+  intent?: unknown;
+  result?: unknown;
+  penalty?: boolean;
+  recovery?: boolean;
+  originGreen?: boolean;
+};
+
+/** A putter stroke, or a stroke that started on the green. Recovery and penalties are not putts. */
+export function shotCountsAsPutt(shot: PuttShot): boolean {
+  if (shot.penalty || shot.recovery || shot.intent === "recovery") return false;
+  const result = String(shot.result || "");
+  if (result === "penalty" || result === "lost") return false;
+  const club = String(shot.club || "");
+  if (isPutterClub(club, club)) return true;
+  return shot.lie === "green" || shot.originGreen === true;
+}
+
+/**
+ * Putts already stored on the shots. Null only when none of the strokes say
+ * the club or whether they started on the green. Zero is a real count.
+ */
+export function countedPutts(shots: PuttShot[]): number | null {
+  const playable = shots.filter(s => !s.penalty && s.result !== "penalty" && s.result !== "lost");
+  if (!playable.length) return null;
+  const know = playable.some(s => String(s.club || "").trim() || s.lie || s.originGreen === true || s.originGreen === false);
+  if (!know) return null;
+  return playable.filter(shotCountsAsPutt).length;
 }
 
 /** A scorecard stores yards as a number or as a tee map ({ BLANCO: 445 }). Never stringify the object. */
@@ -401,7 +453,7 @@ export type ShotLabel = { text: string; yards: number | null; meters: number | n
 export function shotDistanceLabel(shot: {
   lat?: unknown; lng?: unknown; end_lat?: unknown; end_lng?: unknown;
   prev_lat?: unknown; prev_lng?: unknown;
-  lie?: unknown; distance_m?: unknown; distance_kind?: unknown; penalty?: boolean;
+  lie?: unknown; club?: unknown; distance_m?: unknown; distance_kind?: unknown; penalty?: boolean;
 }): ShotLabel {
   if (shot.penalty) return { text: "", yards: null, meters: null, kind: "penalty" };
   const start = knownPoint(shot.lat, shot.lng);
@@ -420,11 +472,13 @@ export function shotDistanceLabel(shot: {
     const typedSpan = greenToHole(typed);
     return { text: `${typedSpan && typedSpan.unit !== "cup" ? typedSpan.text : "En el hoyo"} a mano`, yards: null, meters: typed, kind: "manual" };
   }
-  const originGreen = shot.lie === "green" && (flown == null || flown <= 50);
+  const namedPutter = isPutterClub(String(shot.club || ""), String(shot.club || ""));
+  const originGreen = (shot.lie === "green" && (flown == null || flown <= 50)) || namedPutter;
   if (originGreen) {
-    const meters = flown != null ? Math.round(flown * 10) / 10 : (typeof shot.distance_m === "number" && shot.distance_m > 0 && shot.distance_m <= 50 ? Math.round(shot.distance_m * 10) / 10 : null);
-    if (meters == null) return { text: "Sin ubicación", yards: null, meters: null, kind: "missing" };
-    const span = greenToHole(meters);
+    const precise = flown != null ? flown : (typeof shot.distance_m === "number" && shot.distance_m > 0 && shot.distance_m <= 50 ? shot.distance_m : null);
+    if (precise == null) return { text: "Sin ubicación", yards: null, meters: null, kind: "missing" };
+    const span = greenToHole(precise);
+    const meters = Math.round(precise * 10) / 10;
     return { text: span && span.unit !== "cup" ? span.text : "En el hoyo", yards: null, meters, kind: "putt" };
   }
   if (flown != null) {

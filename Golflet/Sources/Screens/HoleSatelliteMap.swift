@@ -93,6 +93,8 @@ struct HoleSatelliteMap: UIViewRepresentable {
     var framesHole: Bool = false
     var zoom: Int = 0
     var shotMarks: [HoleShotMark] = []
+    /// Dotted segment from the reticle to the flag while the shot is live.
+    var aimLine: [GPSCoord] = []
     var onCenter: (GPSCoord) -> Void
     var onTarget: (GPSCoord) -> Void
     var onTap: (GPSCoord) -> Void = { _ in }
@@ -141,6 +143,7 @@ struct HoleSatelliteMap: UIViewRepresentable {
             map.setCamera(camera, animated: animateCamera && !holeChanged)
         }
         refreshShots(map)
+        refreshAim(map)
         refreshAnnotations(map, context: context)
         context.coordinator.reportCenter(map)
     }
@@ -163,6 +166,14 @@ struct HoleSatelliteMap: UIViewRepresentable {
         guard shotPoints.count >= 2 else { return }
         let overlay = MKPolyline(coordinates: shotPoints.map(\.cl), count: shotPoints.count)
         overlay.title = "shots"
+        map.addOverlay(overlay)
+    }
+
+    private func refreshAim(_ map: MKMapView) {
+        map.removeOverlays(map.overlays.filter { $0.title == "toflag" })
+        guard aimLine.count >= 2 else { return }
+        let overlay = MKPolyline(coordinates: aimLine.map(\.cl), count: aimLine.count)
+        overlay.title = "toflag"
         map.addOverlay(overlay)
     }
 
@@ -226,6 +237,12 @@ struct HoleSatelliteMap: UIViewRepresentable {
                 return renderer
             }
             let renderer = MKPolylineRenderer(overlay: overlay)
+            if overlay.title == "toflag" {
+                renderer.strokeColor = .white
+                renderer.lineWidth = 2
+                renderer.lineDashPattern = [2, 7]
+                return renderer
+            }
             renderer.strokeColor = overlay.title == "shots" ? UIColor(red: 0.78, green: 0.06, blue: 0.18, alpha: 1) : .white
             renderer.lineWidth = overlay.title == "shots" ? 3 : 2
             return renderer

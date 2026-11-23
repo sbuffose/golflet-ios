@@ -47,6 +47,20 @@
     if ((m = /^(\d)I$/.exec(u))) return `Hierro ${m[1]}`;
     return s;
   };
+  const gridName = c => {
+    const label = clubLabel(c);
+    if (!label) return '';
+    const deg = label.match(/(\d+)\s*°/);
+    if (deg) return `${deg[1]}°`;
+    if (/^pw$/i.test(String(c || '').trim()) || /^pitching wedge$/i.test(label)) return 'PW';
+    return label;
+  };
+  const clubIsPutt = club => {
+    const raw = String(club || '').trim();
+    if (!raw) return false;
+    if (R().isPutterClub && R().isPutterClub(raw, clubLabel(raw))) return true;
+    return /^putter\b/i.test(clubLabel(raw));
+  };
   const sameClub = (code, option) => {
     const raw = String(code || '').trim();
     if (!raw || !option) return false;
@@ -403,6 +417,7 @@
       const phase = S.track.phase;
       const ball = S.track.ball && R().knownPoint(S.track.ball.lat, S.track.ball.lng);
       if (phase === 'tracking' && !S.done && cursor && ball && hav(ball, cursor) > 0.4) line([ball, cursor], 'tk-live');
+      if ((phase === 'tracking' || phase === 'penaltyWhere') && !S.done && cursor && pin && hav(cursor, pin) > 1.5) line([cursor, pin], 'tk-toflag');
       const placed = [];
       const reserve = (x, y) => { placed.push([x, y]); };
       const nudge = (x, y) => {
@@ -461,8 +476,8 @@
         let dist = '';
         if (from && m.at && !m.lost) {
           const meters = hav(from, m.at);
-          const putt = /putt|^pt$/i.test(String(m.club || '')) || (R().isPutterClub && R().isPutterClub(String(m.club || ''), clubLabel(m.club)));
-          if (putt && meters != null && meters <= 50 && R().greenToHole) {
+          const putt = clubIsPutt(m.club) || (from && lieAt(from) === 'green' && meters != null && meters <= 55);
+          if (putt && meters != null && R().greenToHole) {
             const span = R().greenToHole(meters);
             dist = span && span.unit !== 'cup' ? span.text : '';
           } else if (meters != null) dist = `${yd(meters)} yd`;
@@ -472,14 +487,17 @@
         const flagAt = pin ? toScreen(pin, W, H) : null;
         const obstacles = S.done ? [[0, 46, 184, 248], [W / 2 - 146, 40, W / 2 + 146, 104], [0, H - 268, W, H], [W - 66, 64, W, H * 0.62]] : [];
         const clampX = qx => Math.min(W - 72 - w / 2, Math.max(8 + w / 2, qx));
-        let px = clampX(x + 14 + w / 2), py = y, n = 0;
+        const besideFlag = flagAt && Math.hypot(flagAt[0] - x, flagAt[1] - y) < 78;
+        let px = besideFlag ? clampX(flagAt[0] - w / 2 - 40) : clampX(x + 14 + w / 2);
+        let py = besideFlag ? flagAt[1] + 28 : y;
+        let n = 0;
         const hits = (qx, qy) => placed.some(p => Math.abs(p[0] - qx) < (w / 2 + 16) && Math.abs(p[1] - qy) < 18)
           || obstacles.some(([l, t, r, b]) => qx + w / 2 > l && qx - w / 2 < r && qy + 12 > t && qy - 12 < b)
           || qy < 40 || qy > H - 20;
-        while ((hits(px, py) || (flagAt && Math.hypot(flagAt[0] - px, flagAt[1] - py) < 36)) && n < 14) {
+        while ((hits(px, py) || (flagAt && Math.hypot(flagAt[0] - px, flagAt[1] - py) < 58)) && n < 16) {
           n += 1;
-          py = y + n * 20;
-          px = clampX(x + 14 + w / 2);
+          py = (besideFlag ? flagAt[1] + 28 : y) + n * 24;
+          px = besideFlag ? clampX(flagAt[0] - w / 2 - 40) : clampX(x + 14 + w / 2);
         }
         placed.push([px, py]);
         const left = Math.round(px - w / 2), top = Math.round(py - 11);
@@ -701,8 +719,21 @@
         if (S.done) {
           const rows = (S.saved || []).filter(s => Number(s.hole) === Number(S.hole));
           const strokeN = rows.length ? rows.length : S.track.marks.filter(m => m.countsStroke).length;
-          const puttN = rows.filter(s => s.result !== 'penalty' && (s.lie === 'green' || /putt/i.test(String(s.club || '')))).length;
-          const knowPutts = puttN > 0;
+          const puttSource = rows.length ? rows : (S.track.marks || []).filter(m => m.countsStroke).map(m => ({ club: m.club, lie: m.putt ? 'green' : null, intent: m.recovery ? 'recovery' : null, result: m.lost ? 'lost' : (m.penalty ? 'penalty' : null), originGreen: false }));
+          let prevEnd = teeCoord();
+          const puttFacts = puttSource.map(s => {
+            const start = R().knownPoint(s.lat, s.lng) || prevEnd;
+            const end = R().knownPoint(s.end_lat, s.end_lng) || R().knownPoint(s.lat, s.lng);
+            const from = start || prevEnd;
+            const meters = from && end ? hav(from, end) : null;
+            const onGreen = s.lie === 'green' || lieAt(from) === 'green' || lieAt(prevEnd) === 'green';
+            const short = meters == null || meters <= 55;
+            if (end && s.result !== 'penalty') prevEnd = end;
+            return { club: s.club, lie: onGreen && short ? 'green' : null, intent: s.intent, result: s.result, penalty: s.result === 'penalty' || Number(s.penalty_strokes) > 0, recovery: s.intent === 'recovery', originGreen: !!(onGreen && short && s.intent !== 'recovery') };
+          });
+          const counted = R().countedPutts ? R().countedPutts(puttFacts) : null;
+          const knowPutts = counted != null;
+          const puttN = counted || 0;
           const holedShot = rows.some(s => s.result === 'holed' || s.intent === 'conceded') || (S.track.marks || []).some(m => m.holed);
           const scored = R().scoredClose ? R().scoredClose(strokeN, knowPutts ? puttN : null, holedShot) : { strokes: strokeN, putts: knowPutts ? puttN : null };
           const close = R().holeCloseText ? R().holeCloseText(holeRec().par || null, scored.strokes, scored.putts) : { line: `${scored.strokes} golpes`, vs: null };
@@ -713,9 +744,7 @@
           if (!holeSpan || holeSpan.unit === 'cup') return `<b class="tk-holeflash">En el hoyo</b>`;
           return `<b class="num">${esc(holeSpan.text)}</b><small> al hoyo</small><small> estimada en el mapa</small>`;
         }
-        const played = (S.track.marks || []).some(m => m.countsStroke);
-        const remainAt = played ? here : (ball || here);
-        const remain = remainAt && cup ? hav(remainAt, cup) : null;
+        const remain = here && cup ? hav(here, cup) : null;
         const travel = flown == null ? '' : `${flown} yd`;
         const left = yd(remain) == null ? '' : `${yd(remain)} yd al hoyo`;
         return aimChip(travel, left, ball, here);
@@ -727,46 +756,42 @@
       return aimChip(flown == null ? '' : `${flown} yd`, meters == null ? '' : `${yd(meters)} yd al hoyo`, ball, here);
     };
     const aimChip = (travel, left, ball, here) => {
-      const first = !((S.track.marks || []).some(m => m.countsStroke)) && !S.panned;
-      return `<b class="num">${travel || '—'}</b>${left ? `<small>${left}</small>` : ''}${first ? '<small>Arrastrá hasta donde terminó el golpe</small>' : ''}${flightWind(ball, here)}`;
+      return `<b class="num">${travel || '—'}</b>${left ? `<span class="tk-left">${left}</span>` : ''}${flightWind(ball, here)}`;
     };
     const flightWind = (from, to) => {
       const w = S.wind;
-      if (!w || w.kmh == null) return '';
-      const gust = w.gust_kmh != null ? ` · ráfagas ${Math.round(Number(w.gust_kmh))} km/h` : '';
-      const rain = Number(w.precip_mm) > 0 || w.condition === 'lluvia' || w.condition === 'tormenta' ? ' · lluvia' : '';
       const plan = window.GolfletPlanCore;
-      if (w.from_deg == null || !from || !to || !plan || !plan.windComp || !plan.distFactor) {
-        const temp = w.temp_c != null ? ` · ${String(w.temp_c).replace('.', ',')}°C` : '';
-        return `<small>${Math.round(Number(w.kmh))} km/h${esc(temp)}. Sin dirección de viento. No ajusto la distancia.${esc(gust)}${esc(rain)}</small>`;
-      }
+      if (!w || w.kmh == null || w.from_deg == null || !from || !to || !plan || !plan.windComp || !plan.playsLikeYd) return '';
       const bearing = R().bearingDeg(from, to);
       const yards = yd(hav(from, to));
-      if (bearing == null || yards == null) return `<small>Sin rumbo del golpe. No ajusto la distancia.${esc(gust)}</small>`;
+      if (bearing == null || yards == null) return '';
       const comp = plan.windComp(bearing, { from_deg: Number(w.from_deg), kmh: Number(w.kmh) });
-      const delta = Math.round(yards * plan.distFactor(comp.head_mph) - yards);
-      const side = comp.cross_mph > 1 ? ' · desde la derecha' : comp.cross_mph < -1 ? ' · desde la izquierda' : '';
-      if (!delta) return `<small>El viento no cambia las yardas${esc(side)}${esc(gust)}${esc(rain)}</small>`;
-      return `<small>${delta > 0 ? '+' + delta + ' yd a favor' : delta + ' yd en contra'}${esc(side)}${esc(gust)}${esc(rain)}</small>`;
+      const delta = plan.playsLikeYd(yards, comp.head_mph);
+      if (!delta) return '';
+      return `<small class="tk-wind">Juega ${yards + delta} yd</small>`;
     };
 
     const windChip = () => {
-      if (S.wxState === 'none' || !S.wind || S.wind.kmh == null) {
+      if (!S.wind || S.wind.kmh == null) {
         if (S.wxState !== 'none') return '';
         const why = S.wxOpen ? `<div class="tk-wxwhy" id="play-wx-why"><p>${esc(S.wxWhy || 'Open-Meteo y MET Norway no devolvieron viento.')}</p><button type="button" id="play-wx-retry">Reintentar</button></div>` : '';
-        return `<button type="button" class="tk-chip tk-wx" id="play-wx" aria-expanded="${S.wxOpen ? 'true' : 'false'}">Clima</button>${why}`;
+        return `<button type="button" class="tk-chip tk-wx" id="play-wx" aria-expanded="${S.wxOpen ? 'true' : 'false'}">–</button>${why}`;
       }
       const temp = S.wind.temp_c != null ? `${Math.round(Number(S.wind.temp_c))}°C` : '';
+      const gust = S.wind.gust_kmh != null ? `ráfagas ${Math.round(Number(S.wind.gust_kmh))} km/h` : '';
       const rain = Number(S.wind.precip_mm) > 0 || S.wind.condition === 'lluvia' || S.wind.condition === 'tormenta' ? 'lluvia' : '';
       const from = S.track.tee || S.suggestedTee;
       const to = S.track.flag || cupLL();
       const bearing = from && to ? R().bearingDeg(from, to) : null;
       const turn = S.wind.from_deg != null && bearing != null && R().windArrow ? R().windArrow(S.wind.from_deg, bearing) : null;
+      const side = S.wind.from_deg != null && bearing != null && R().windSide ? R().windSide(S.wind.from_deg, bearing) : '';
+      const card = S.wind.from_deg != null && R().windCardinal ? R().windCardinal(S.wind.from_deg) : '';
+      const face = [side, card].filter(Boolean).join(' · ');
       const arrow = turn == null ? '' : `<span class="tk-wxarr" style="transform:rotate(${Math.round(turn)}deg)" aria-hidden="true"></span>`;
-      const bits = [`${Math.round(Number(S.wind.kmh))} km/h`, temp, rain].filter(Boolean).join(' · ');
+      const bits = [`${Math.round(Number(S.wind.kmh))} km/h`, gust, temp, rain].filter(Boolean).join(' · ');
       const when = S.wind.hhmm || '';
       const src = S.wind.source ? `${S.wind.source}${when ? ` ${when}` : ''}${S.wind.stale ? ' · última lectura' : ''}` : when;
-      return `<button type="button" class="tk-chip tk-wx" id="play-wx">${arrow}<b class="num">${esc(bits)}</b>${src ? `<small>${esc(src)}</small>` : ''}</button>`;
+      return `<button type="button" class="tk-chip tk-wx" id="play-wx">${arrow}${face ? `<b class="tk-wxface">${esc(face)}</b>` : ''}<b class="num">${esc(bits)}</b>${src ? `<small>${esc(src)}</small>` : ''}</button>`;
     };
 
     const paintDriver = () => {
@@ -851,8 +876,14 @@
         }
       }
       const shownClub = picked || clubChoices.find(c => c.id === S.suggest);
-      const tileName = shownClub ? clubLabel(shownClub.label) : 'Palo';
-      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(tileName)}">${faceImg(shownClub ? shownClub.id : '', shownClub ? shownClub.label : '')}<span>${esc(tileName)}</span></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => { const on = c.id === S.club ? ' on' : ''; const sug = c.id === S.suggest ? ' sug' : ''; const yards = tileYards(c); return `<li><button type="button" data-club="${esc(c.id)}" class="${(on + sug).trim()}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
+      const clubCell = (c, extra) => {
+        const yards = tileYards(c);
+        return `<li><button type="button" data-club="${esc(c.id)}" class="${extra}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}<b>${esc(gridName(c.label))}</b>${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`;
+      };
+      const tileName = shownClub ? gridName(shownClub.label) : 'Palo';
+      const tileAria = shownClub ? clubLabel(shownClub.label) : 'Palo';
+      const tileYd = shownClub ? tileYards(shownClub) : '';
+      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(tileAria)}">${faceImg(shownClub ? shownClub.id : '', shownClub ? shownClub.label : '')}<span><b>${esc(tileName)}</b>${tileYd ? `<small>${esc(tileYd)}</small>` : ''}</span></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => clubCell(c, ((c.id === S.club ? ' on' : '') + (c.id === S.suggest ? ' sug' : '')).trim())).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
@@ -889,14 +920,17 @@
         const end = R().knownPoint(s.end_lat, s.end_lng);
         const penalty = s.result === 'penalty' || Number(s.penalty_strokes) > 0;
         const finish = s.intent === 'conceded' ? 'Dada' : (s.result === 'holed' ? 'Embocado' : '');
-        const puttClub = club => !!(R().isPutterClub && R().isPutterClub(String(club || ''), clubLabel(club)));
-        const puttShot = !penalty && (puttClub(s.club) || (!s.club && (s.lie === 'green' || !!finish)));
+        const fromGuess = R().knownPoint(s.lat, s.lng) || prevKnown;
+        const endGuess = end || (finish ? cupLL() : null);
+        const spanM = fromGuess && endGuess ? hav(fromGuess, endGuess) : null;
+        const startedGreen = s.lie === 'green' || lieAt(fromGuess) === 'green' || lieAt(prevKnown) === 'green';
+        const puttShot = !penalty && s.intent !== 'recovery' && (clubIsPutt(s.club) || ((startedGreen || !!finish) && (spanM == null || spanM <= 55)));
         const fromPoint = (i === 0 || puttShot) && prevKnown ? prevKnown : R().knownPoint(s.lat, s.lng);
         const holePoint = finish && !end ? cupLL() : null;
         const toPoint = end || holePoint;
         const label = R().shotDistanceLabel ? R().shotDistanceLabel({
           lat: fromPoint?.lat, lng: fromPoint?.lng, end_lat: toPoint?.lat, end_lng: toPoint?.lng,
-          prev_lat: prevKnown?.lat, prev_lng: prevKnown?.lng,
+          prev_lat: prevKnown?.lat, prev_lng: prevKnown?.lng, club: s.club,
           lie: puttShot ? 'green' : (s.lie === 'green' ? null : s.lie), distance_m: finish ? null : s.distance_m, distance_kind: finish ? null : s.distance_kind, penalty,
         }) : { text: ydOf(s.distance_m), kind: 'yards' };
         if (toPoint && !penalty) prevKnown = toPoint;
@@ -955,7 +989,7 @@
         return cardYd ? `Salida · ${cardYd}` : 'Salida';
       })();
       const teeList = S.teeOpen ? `<div class="tk-teelist" id="play-tee-list" role="listbox">${choices.length ? choices.map(b => `<button type="button" role="option" data-tee="${esc(b.name)}" class="${b.name === S.teeName ? 'on' : ''}">${esc(b.name)}${b.yards != null ? ` · ${b.yards} yd` : ''}</button>`).join('') : '<p>Esta cancha no tiene salidas con yardas.</p>'}</div>` : '';
-      const teeBar = retro ? `<div class="tk-teeact">${teeList}<button type="button" class="tk-tee" id="play-tee" aria-expanded="${S.teeOpen ? 'true' : 'false'}" aria-label="Salida">${esc(teeFace)}</button><button type="button" id="play-move-tee" aria-pressed="${S.moveTee ? 'true' : 'false'}">${S.moveTee ? 'Listo' : 'Mover'}</button>${S.moveTee ? '<button type="button" id="play-tee-gps">Usar mi ubicación</button>' : ''}</div>` : '';
+      const teeBar = retro ? `<span class="tk-teechip">${teeList}<button type="button" class="tk-tee" id="play-tee" aria-expanded="${S.teeOpen ? 'true' : 'false'}" aria-label="Salida">${esc(teeFace)}</button><button type="button" id="play-move-tee" aria-pressed="${S.moveTee ? 'true' : 'false'}">${S.moveTee ? 'Listo' : 'Mover'}</button>${S.moveTee ? '<button type="button" id="play-tee-gps">Usar mi ubicación</button>' : ''}</span>` : '';
       const holeBits = [par ? `Par ${par}` : '', cardYd, verifiedFlag() && !verifiedTee() ? 'Sin salida verificada' : ''].filter(Boolean);
       const holeChip = retro ? `<div class="tk-hole" id="tk-hole"><b>Hoyo ${S.hole}</b>${H.unofficial ? `<span class="tk-unofficial">No oficial</span>` : ''}${holeBits.length ? `<span>${esc(holeBits.join(' · '))}</span>` : ''}</div>` : '';
       const read = cursorRead(here);
@@ -981,7 +1015,7 @@
         return `<button type="button" id="play-edit-${kind === 'end' ? 'move' : kind}">${text}</button>`;
       };
       const buenaOn = editingShot && editingShot.intent === 'recovery';
-      const editGrid = S.pickClub ? `<ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => { const yards = tileYards(c); const on = editingShot && sameClub(editingShot.club, c) ? ' on' : ''; return `<li><button type="button" data-club="${esc(c.id)}" class="${on.trim()}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`; }).join('')}</ul>` : '';
+      const editGrid = S.pickClub ? `<ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => clubCell(c, editingShot && sameClub(editingShot.club, c) ? 'on' : '')).join('')}</ul>` : '';
       const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>${esc(editBits.join(' · '))}</b><button type="button" id="play-edit-club">Cambiar palo</button>${editGrid}${pointBtn('start', 'Punto de inicio')}${pointBtn('end', 'Punto final')}${pointBtn('aim', 'Objetivo')}<button type="button" id="play-edit-insert">Insertar tiro</button><button type="button" id="play-edit-buena" aria-pressed="${buenaOn ? 'true' : 'false'}">A buena${buenaOn ? ' · activo' : ''}</button><button type="button" id="play-edit-x">Cerrar</button><button type="button" id="play-edit-del">Borrar tiro</button>${S.askDel ? '<p>¿Borrar este tiro?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? `<p>Mové el mapa hasta ${pointWord}.</p>` : ''}</div>` : '';
       const editSheet = '';
       const painted = el.querySelector('.tk-tiles:not([data-pending])');
@@ -1004,7 +1038,6 @@
         ${hs ? `<a class="tk-strat" id="strategy-compact" href="#/estrategia/${encodeURIComponent(S.strat.course_key || S.course?.course_key || '')}">${esc(hs.plan_title || 'Plan del hoyo')}</a>` : ''}
         ${shotEditor}
         <div class="tk-dock">
-          ${teeBar}
           ${editSheet}
           ${retro && greenAxis() ? `<p class="tk-axisnote">Eje verificado del green. No es el contorno ni el pin.</p>` : ''}
           ${retro && verifiedTee() && verifiedFlag() && !spanOk() ? `<p class="tk-opennote" id="rc-nogeo">La salida no cierra. No marco un rumbo.</p>` : ''}
@@ -1015,7 +1048,6 @@
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>
             <div class="tk-hn"><b>Hoyo ${S.hole}</b><span>${`Par ${par || '—'}${cardYd ? ` · ${cardYd}` : ''}${hcp != null && hcp !== '' && Number.isFinite(Number(hcp)) ? ` · S.I. ${hcp}` : ''}`}</span></div>
             <b class="tk-score" id="play-score">${savedRows.length || S.track.marks.filter(m => m.countsStroke).length}</b>
-            ${phase === 'tracking' ? `<div class="tk-penwrap"><button type="button" class="tk-round tk-pen" id="play-penalty" aria-haspopup="menu" aria-expanded="false" aria-controls="play-pen-menu" aria-label="Penalidad">P</button><div class="tk-penmenu" id="play-pen-menu" role="menu" hidden><button type="button" id="play-pen-stroke" role="menuitem">Penalidad +1</button>${marking ? '<button type="button" id="play-lost" role="menuitem">Pelota perdida / fuera de límites</button><button type="button" id="play-lost-prov" role="menuitem">Pelota perdida · jugué la provisional</button>' : ''}</div></div>` : ''}
             <button type="button" id="tknext" ${S.hole >= 18 ? 'disabled' : ''} aria-label="Hoyo siguiente">›</button>
           </div>
           ${S.teeSource === 'jugador' ? `<p class="tk-player" id="tk-player">Salida confirmada por vos. No es una medida.</p>` : ''}
@@ -1031,11 +1063,14 @@
               ${!S.done && !setPhase && phase !== 'relief' ? `<button type="button" class="tk-enter" id="play-hit" disabled aria-label="ENTER">ENTER</button>` : ''}
             </div>
             <div class="tk-rounds">
-              ${marking && S.track.marks.length ? `<button type="button" class="tk-round" id="play-undo" aria-label="Deshacer"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8.5 7.5H4.5V3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 8.2A8 8 0 1 1 6.4 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>` : ''}
+              ${marking && S.track.marks.length ? `<button type="button" class="tk-round" id="play-undo" aria-label="Deshacer"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8.5 7.5H4.5V3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 8.2A8 8 0 1 1 6.4 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>` : ''}
+              ${(phase === 'tracking' || S.done) ? `<div class="tk-penwrap"><button type="button" class="tk-round tk-pen" id="play-penalty" aria-haspopup="menu" aria-expanded="false" aria-controls="play-pen-menu" aria-label="Penalidad">P+1</button><div class="tk-penmenu" id="play-pen-menu" role="menu" hidden><button type="button" id="play-pen-stroke" role="menuitem">Penalidad +1</button>${marking ? '<button type="button" id="play-lost" role="menuitem">Pelota perdida / fuera de límites</button><button type="button" id="play-lost-prov" role="menuitem">Pelota perdida · jugué la provisional</button>' : ''}</div></div>` : ''}
               ${(marking || (!retro && phase === 'tracking')) && !S.done ? `<button type="button" class="tk-round" id="play-good" aria-label="A buena, golpe de recuperación">A buena</button>` : ''}
               ${!retro && phase === 'relief' ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
               ${retro && (phase === 'relief') ? `<button type="button" class="tk-ghost" id="play-reload">Otra vez</button><button type="button" class="tk-ghost" id="play-drop">Drop</button>` : ''}
               ${marking && !hasGreenPoly() && !originOnGreen() ? `<button type="button" class="tk-ghost tk-side" id="play-lie">En el green</button>` : ''}
+              ${marking && (hasGreenPoly() || originOnGreen()) ? `<button type="button" class="tk-round" id="play-flag-chip">Bandera</button>` : ''}
+              ${teeBar}
             </div>
           </div>
         </div>
@@ -1691,8 +1726,11 @@
         if (img) { const thumb = faceOf(club.value, label); img.src = thumb.src; img.dataset.kind = thumb.kind || ''; }
         if (tileBtn) {
           tileBtn.setAttribute('aria-label', clubLabel(label) || 'Palo');
-          const name = tileBtn.querySelector('span');
-          if (name) name.textContent = clubLabel(label) || 'Palo';
+          const name = tileBtn.querySelector('b');
+          const yards = tileBtn.querySelector('small');
+          if (name) name.textContent = gridName(label) || 'Palo';
+          const picked = clubChoices.find(c => c.id === club.value);
+          if (yards) yards.textContent = picked ? tileYards(picked) : '';
         }
       };
       const tile = el.querySelector('#play-club-tile');
@@ -1777,8 +1815,11 @@
       if (wxBtn) wxBtn.onclick = () => { if (S.wxState !== 'none') return; S.wxOpen = !S.wxOpen; render(); };
       const wxRetry = el.querySelector('#play-wx-retry');
       if (wxRetry) wxRetry.onclick = () => { if (S.loadWx) S.loadWx(true); };
+      const openFlag = () => { S.track = { ...S.track, phase: 'confirmFlag' }; S.frame = 'flag'; S.adjusted = false; S.panned = false; fitCam(); render(); };
       const flagBtn = el.querySelector('#play-flag');
-      if (flagBtn) flagBtn.onclick = () => { S.track = { ...S.track, phase: 'confirmFlag' }; S.frame = 'flag'; S.adjusted = false; S.panned = false; fitCam(); render(); };
+      if (flagBtn) flagBtn.onclick = openFlag;
+      const flagChip = el.querySelector('#play-flag-chip');
+      if (flagChip) flagChip.onclick = openFlag;
       const targetBtn = el.querySelector('#play-target');
       if (targetBtn) targetBtn.onclick = () => { S.panned = false; S.adjusted = false; S.frame = S.done ? 'overview' : 'play'; fitCam(); };
       const gpsBtn = el.querySelector('#play-gps');

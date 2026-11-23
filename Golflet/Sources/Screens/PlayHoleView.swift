@@ -36,7 +36,6 @@ struct PlayHoleView: View {
     @State private var track = TrackSession.State()
     @State private var chosenClub: String?
     @State private var shotsExpanded = false
-    @State private var sawDragHint = false
     @State private var showsClubs = false
     @State private var mapZoom = 0
     @State private var cameraNudge = 0
@@ -293,11 +292,11 @@ struct PlayHoleView: View {
             framesHole: holeClosed,
             zoom: mapZoom,
             shotMarks: shotPills,
+            aimLine: (!holeClosed && (track.phase == .tracking || track.phase == .penaltyWhere)) ? [cursor, pinCoord] : [],
             onCenter: { next in
                 if let mapCenter, abs(mapCenter.lat - next.lat) < 0.0000004, abs(mapCenter.lng - next.lng) < 0.0000004 {
                     return
                 }
-                sawDragHint = true
                 mapCenter = next
             },
             onTarget: { aimTarget = $0 },
@@ -350,8 +349,7 @@ struct PlayHoleView: View {
                             .padding(.vertical, 6)
                             .background(Color.white)
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(p.primary.opacity(0.18), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
+                            .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
                             .accessibilityIdentifier("play-stroke-\(stroke.n)")
                     }
                 }
@@ -403,34 +401,24 @@ struct PlayHoleView: View {
 
     private var closeCard: some View {
         let parts = closeParts
-        return VStack(spacing: 2) {
-            CaddieMark(height: 36)
-            Text(parts.line)
-                .font(GFont.ui(15, weight: .bold))
-                .foregroundStyle(Color.white)
-                .multilineTextAlignment(.center)
-            if let vs = parts.vs {
-                Text(vs)
-                    .font(GFont.ui(12, weight: .semibold))
-                    .foregroundStyle(Color.white)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 210)
-        .background(p.primary.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("play-aim-label")
+        let line = [parts.line, parts.vs].compactMap { $0 }.joined(separator: " · ")
+        return Text(line)
+            .font(GFont.ui(15, weight: .bold))
+            .foregroundStyle(Color.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(p.primary.opacity(0.94))
+            .clipShape(Capsule())
+            .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("play-aim-label")
     }
 
     private var closeParts: (line: String, vs: String?) {
         let strokes = activeTrack.strokeCount
-        let putterShots = activeTrack.marks.filter { mark in
-            mark.countsStroke && !mark.penalty && !mark.lost && isPutter(mark.club)
-        }
-        let putts = putterShots.isEmpty ? nil : putterShots.count
+        let putts = countedPutts(activeTrack.marks)
         let inCup = activeTrack.marks.contains(where: \.holed)
         let scored = TrackSession.scoredClose(strokes: strokes, putts: putts, inCup: inCup)
         let n = scored.strokes
@@ -462,8 +450,10 @@ struct PlayHoleView: View {
             guard mark.countsStroke, !mark.drop else { return nil }
             number += 1
             let meters = Double(PlayMath.meters(from: prev, to: here))
+            let pinMeters = Double(PlayMath.meters(from: prev, to: pinCoord))
+            let onGreen = !mark.recovery && pinMeters <= 30 && meters <= 55
             let dist: String
-            if isPutter(mark.club), let span = TrackSession.greenToHole(meters: meters), span != "En el hoyo" {
+            if (isPutter(mark.club) || onGreen), let span = TrackSession.greenToHole(meters: meters), span != "En el hoyo" {
                 dist = span
             } else {
                 dist = "\(PlayMath.yards(from: prev, to: here)) yd"
@@ -526,6 +516,18 @@ struct PlayHoleView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("play-hole-picker")
             Spacer(minLength: 4)
+            Button {
+                editingClosed = true
+                track = TrackSession.beginPenalty(track)
+            } label: {
+                Text("P+1")
+                    .font(GFont.ui(12, weight: .bold))
+                    .foregroundStyle(Color(hex: BrandHex.red))
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("play-penalty")
             Button { changeHole(hole + 1) } label: {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 16, weight: .bold))
@@ -566,8 +568,14 @@ struct PlayHoleView: View {
                 .animation(aimTitle == "En el hoyo" ? .easeInOut(duration: 0.45).repeatForever(autoreverses: true) : .default, value: aimTitle)
             if let detail = aimDetail, aimTitle != "En el hoyo" {
                 Text(detail)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Color(hex: BrandHex.navy))
+                    .multilineTextAlignment(.center)
+            }
+            if let wind = windPlayLine, aimTitle != "En el hoyo", !track.marks.contains(where: \.holed) {
+                Text(wind)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color(hex: BrandHex.navy).opacity(0.72))
                     .multilineTextAlignment(.center)
             }
         }
@@ -721,26 +729,35 @@ struct PlayHoleView: View {
             } label: {
                 HStack(spacing: 6) {
                     if let wind = nowWind {
-                        if let turn = windTurn {
-                            Image(systemName: "location.north.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .rotationEffect(.degrees(turn))
-                                .accessibilityHidden(true)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            if let turn = windTurn {
+                                Image(systemName: "location.north.fill")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundStyle(Color(hex: 0xE2B93B))
+                                    .rotationEffect(.degrees(turn))
+                                    .accessibilityHidden(true)
+                            }
+                            if let face = windFace(wind) {
+                                Text(face)
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                            Text(windBits(wind))
+                            Text(wind.source + (wind.hhmm.isEmpty ? "" : " \(wind.hhmm)") + (wind.stale ? " · última lectura" : ""))
+                                .font(.system(size: 10, weight: .medium))
+                                .opacity(0.75)
                         }
-                        Text(windBits(wind))
-                        Text(wind.source + (wind.hhmm.isEmpty ? "" : " \(wind.hhmm)") + (wind.stale ? " · última lectura" : ""))
-                            .font(.system(size: 10, weight: .medium))
-                            .opacity(0.75)
                     } else if windTried {
                         Text("–")
                     }
                 }
                 .font(GFont.ui(12, weight: .semibold))
                 .foregroundStyle(Color(hex: 0xF6F7F9))
+                .multilineTextAlignment(.trailing)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
+                .frame(maxWidth: 148, alignment: .trailing)
                 .background(Color(hex: 0x0B2545))
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("play-wind")
@@ -784,7 +801,7 @@ struct PlayHoleView: View {
                     markActions
                 }
                 if track.marks.contains(where: \.holed), !holeClosed {
-                    CaddieMark(height: 48)
+                    EmptyView()
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(aimTitle)
@@ -941,10 +958,7 @@ struct PlayHoleView: View {
     private var aimTitle: String {
         if moveTee { return "Arrastrá la salida o tocala en el mapa" }
         if track.marks.contains(where: \.holed) {
-            let putterShots = track.marks.filter { mark in
-                mark.countsStroke && !mark.penalty && !mark.lost && isPutter(mark.club)
-            }
-            let putts = putterShots.isEmpty ? nil : putterShots.count
+            let putts = countedPutts(track.marks)
             return TrackSession.holeClose(par: current?.par, strokes: track.strokeCount, putts: putts)
         }
         switch track.phase {
@@ -970,11 +984,7 @@ struct PlayHoleView: View {
             if let span = TrackSession.greenToHole(meters: meters), meters <= 25 {
                 return span == "En el hoyo" ? nil : "estimada en el mapa"
             }
-            let left = "\(PlayMath.yards(from: aimOrigin, to: pinCoord)) yd al hoyo"
-            if track.marks.isEmpty && !sawDragHint {
-                return "\(left)\nArrastrá el mapa hasta donde terminó el golpe"
-            }
-            return left
+            return "\(PlayMath.yards(from: cursor, to: pinCoord)) yd al hoyo"
         default:
             return nil
         }
@@ -1005,8 +1015,14 @@ struct PlayHoleView: View {
         return HoleWind.pushDegrees(fromDeg: from, bearingDeg: bearing)
     }
 
+    private func windFace(_ wind: WeatherNow) -> String? {
+        let bearing = HoleGeoMath.heading(from: teeCoord, to: pinCoord)
+        return "\(HoleWind.side(fromDeg: wind.fromDeg, bearingDeg: bearing)) · \(HoleWind.cardinal(fromDeg: wind.fromDeg))"
+    }
+
     private func windBits(_ wind: WeatherNow) -> String {
         var bits = ["\(Int(wind.kmh.rounded())) km/h"]
+        if let gust = wind.gustKmh { bits.append("ráfagas \(Int(gust.rounded())) km/h") }
         if let temp = wind.tempC { bits.append("\(Int(temp.rounded()))°C") }
         if let rain = wind.precipMm, rain > 0 { bits.append("lluvia") }
         return bits.joined(separator: " · ")
@@ -1103,19 +1119,21 @@ struct PlayHoleView: View {
                 cancelButton
             }
         } else {
-            HStack(spacing: 8) {
-                if track.phase == .tracking {
-                    Button("P") { track = TrackSession.beginPenalty(track) }
-                        .font(GType.headline)
-                        .foregroundStyle(p.onPrimary)
-                        .frame(width: 40, height: 40)
-                        .background(Circle().fill(p.accent))
-                        .accessibilityIdentifier("play-penalty")
-                } else {
-                    cancelButton
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    if track.phase != .tracking { cancelButton }
+                    clubButton
+                    enterButton
                 }
-                clubButton
-                enterButton
+                if track.phase == .tracking {
+                    HStack(spacing: 6) {
+                        if !track.marks.isEmpty {
+                            chipButton("Deshacer", id: "play-undo") { undoGroup() }
+                        }
+                        chipButton("P+1", id: "play-penalty", tint: Color(hex: BrandHex.red)) { track = TrackSession.beginPenalty(track) }
+                        chipButton("A buena", id: "play-good", label: "A buena, golpe de recuperación") { Task { await markRecovery() } }
+                    }
+                }
             }
         }
     }
@@ -1144,10 +1162,10 @@ struct PlayHoleView: View {
             Text("ENTER")
                 .font(GType.headline)
                 .foregroundStyle(p.onPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .padding(.horizontal, 12)
                 .background(p.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("play-hit")
@@ -1162,20 +1180,45 @@ struct PlayHoleView: View {
     }
 
     private var clubButton: some View {
-        Button { showsClubs = true } label: {
-            VStack(spacing: 1) {
-                Text(chosenClub ?? suggestedClub ?? "Palo")
-                    .font(GType.label)
-                    .foregroundStyle(p.ink)
-                    .lineLimit(1)
+        let name = chosenClub ?? suggestedClub ?? "Palo"
+        let picked = model.bag.first { $0.name == (chosenClub ?? suggestedClub) }
+        return Button { showsClubs = true } label: {
+            HStack(spacing: 8) {
+                ClubThumb(brand: picked?.brand, model: picked?.modelName, face: ClubGear.face(picked?.name ?? name))
+                    .frame(width: 28, height: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(gridName(name))
+                        .font(GFont.ui(15, weight: .bold))
+                        .foregroundStyle(p.ink)
+                        .lineLimit(1)
+                    if let picked, let yards = savedYards(picked) {
+                        Text(yards)
+                            .font(GFont.ui(11, weight: .semibold))
+                            .foregroundStyle(p.ink3)
+                    }
+                }
+                Spacer(minLength: 0)
             }
-            .frame(minWidth: 52, minHeight: 40)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
             .background(p.surface)
-            .clipShape(Capsule())
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("play-club")
+    }
+
+    private func chipButton(_ title: String, id: String, tint: Color = Color(hex: BrandHex.navy), label: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(GFont.ui(12, weight: .bold))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 36)
+            .background(Capsule().fill(Color.white))
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(id)
+            .accessibilityLabel(label ?? title)
     }
 
     private var suggestedClub: String? {
@@ -1186,7 +1229,7 @@ struct PlayHoleView: View {
 
     /// Same dark sheet as the web: a centered bag grid on `#070b10`, not a light page.
     private var clubCover: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
         return ZStack {
             Color(hex: 0x070B10).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 12) {
@@ -1205,30 +1248,27 @@ struct PlayHoleView: View {
                             showsClubs = false
                         } label: {
                             VStack(spacing: 2) {
-                                Text(shortClub(club.face))
-                                    .font(GFont.ui(15, weight: .bold))
+                                ClubThumb(brand: club.brand, model: club.modelName, face: club.face)
+                                    .frame(width: 22, height: 22)
+                                Text(gridName(club.name))
+                                    .font(GFont.ui(12, weight: .bold))
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
+                                    .minimumScaleFactor(0.6)
                                 if let yards = savedYards(club) {
                                     Text(yards)
                                         .font(GFont.ui(10, weight: .semibold))
-                                        .foregroundStyle(on ? Color.white.opacity(0.85) : Color(hex: 0x3E4C62))
+                                        .foregroundStyle(Color(hex: 0x3E4C62))
                                         .lineLimit(1)
                                 }
                             }
-                            .foregroundStyle(on ? Color.white : p.ink)
+                            .foregroundStyle(p.ink)
                             .frame(maxWidth: .infinity)
-                            .aspectRatio(1, contentMode: .fit)
-                            .frame(minHeight: 52)
-                            .background(on ? p.primary : Color.white)
+                            .frame(minHeight: 72)
+                            .background(Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(on ? Color.clear : Color(hex: 0xE6E2D8), lineWidth: 1)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(suggestedName == club.name ? Color(hex: 0xC8A86A) : Color.clear, lineWidth: 3)
+                                    .stroke(on ? Color(hex: 0xE2B93B) : (suggestedName == club.name ? Color(hex: 0xC8A86A) : Color(hex: 0xE6E2D8)), lineWidth: on || suggestedName == club.name ? 2 : 1)
                             )
                         }
                         .buttonStyle(.plain)
@@ -1263,17 +1303,48 @@ struct PlayHoleView: View {
         .accessibilityLabel("Palo")
     }
 
-    private func shortClub(_ label: String) -> String {
-        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return "—" }
-        let folded = trimmed.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR")).lowercased()
-        if folded == "pt" || folded.hasPrefix("putter") { return "Pt" }
-        if folded == "dr" || folded.hasPrefix("driver") { return "Dr" }
-        if folded.hasPrefix("hierro") {
-            let face = folded.split(separator: " ").last.map(String.init) ?? ""
-            if face.allSatisfy(\.isNumber), !face.isEmpty { return "\(face)i" }
+    private func gridName(_ raw: String) -> String {
+        let spoken = spokenClub(raw)
+        if let range = spoken.range(of: #"(\d+)\s*°"#, options: .regularExpression) {
+            let digits = spoken[range].filter(\.isNumber)
+            if !digits.isEmpty { return "\(digits)°" }
         }
-        return trimmed.count > 4 ? String(trimmed.prefix(4)) : trimmed
+        if spoken == "Pitching wedge" { return "PW" }
+        return spoken
+    }
+
+    private func countedPutts(_ marks: [TrackMark]) -> Int? {
+        var previous = activeTrack.tee
+        var know = false
+        var count = 0
+        for mark in marks where mark.countsStroke && !mark.penalty && !mark.lost {
+            know = true
+            let here = GPSCoord(lat: mark.at.lat, lng: mark.at.lng)
+            let from = previous.map { GPSCoord(lat: $0.lat, lng: $0.lng) } ?? here
+            let meters = Double(PlayMath.meters(from: from, to: here))
+            let pinMeters = Double(PlayMath.meters(from: from, to: pinCoord))
+            if !mark.recovery && (isPutter(mark.club) || (pinMeters <= 30 && meters <= 55)) {
+                count += 1
+            }
+            previous = mark.at
+        }
+        return know ? count : nil
+    }
+
+    /// Same estimate as plan-core: headwind shortens carry about 1% per mph.
+    private var windPlayLine: String? {
+        guard let wind = nowWind else { return nil }
+        let yards = PlayMath.yards(from: aimOrigin, to: cursor)
+        guard yards > 0 else { return nil }
+        let bearing = HoleGeoMath.heading(from: aimOrigin, to: cursor)
+        let rel = (wind.fromDeg - bearing) * .pi / 180
+        let mph = wind.kmh / 1.609344
+        let head = (mph * cos(rel) * 10).rounded() / 10
+        let raw = head >= 0 ? 1 - 0.01 * head : 1 + 0.005 * -head
+        let factor = min(1.3, max(0.6, raw))
+        let plays = Int((Double(yards) / factor - Double(yards)).rounded())
+        if plays == 0 { return nil }
+        return "Juega \(yards + plays) yd"
     }
 
     private var suggestedName: String? {
@@ -1282,25 +1353,6 @@ struct PlayHoleView: View {
 
     private var lostActions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                if !track.marks.isEmpty {
-                    Button("Deshacer") { undoGroup() }
-                        .font(GType.label)
-                        .foregroundStyle(p.ink)
-                        .padding(.horizontal, 12)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .background(Capsule().fill(p.surface2))
-                        .accessibilityIdentifier("play-undo")
-                }
-                Button("A buena") { Task { await markRecovery() } }
-                    .font(GType.label)
-                    .foregroundStyle(p.ink)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
-                    .background(Capsule().fill(p.surface2))
-                    .accessibilityIdentifier("play-good")
-                    .accessibilityLabel("A buena, golpe de recuperación")
-            }
             Button("Pelota perdida / fuera de límites") { markLost(provisional: false) }
                 .font(GType.label)
                 .foregroundStyle(p.ink)
@@ -1728,7 +1780,11 @@ struct PlayHoleView: View {
                 let meters = previous.map {
                     Double(PlayMath.meters(from: GPSCoord(lat: $0.lat, lng: $0.lng), to: GPSCoord(lat: mark.at.lat, lng: mark.at.lng)))
                 }
-                let base = puttSpan(club: mark.club, meters: meters, yards: yards)
+                let pinMeters = previous.map {
+                    Double(PlayMath.meters(from: GPSCoord(lat: $0.lat, lng: $0.lng), to: pinCoord))
+                }
+                let onGreen = !mark.recovery && (pinMeters ?? 999) <= 30 && (meters ?? 999) <= 55
+                let base = puttSpan(club: mark.club, meters: meters, yards: yards, onGreen: onGreen)
                 let tag = mark.holed ? (mark.conceded ? "Dada" : "Embocado") : ""
                 let span = tag.isEmpty ? base : (base.isEmpty ? tag : "\(base) · \(tag)")
                 return (index + 1, mark.club ?? "—", yards, span)
@@ -1741,8 +1797,8 @@ struct PlayHoleView: View {
         }
     }
 
-    private func puttSpan(club: String?, meters: Double?, yards: Int) -> String {
-        let putt = isPutter(club)
+    private func puttSpan(club: String?, meters: Double?, yards: Int, onGreen: Bool) -> String {
+        let putt = isPutter(club) || onGreen
         if putt, let meters, let label = TrackSession.greenToHole(meters: meters) {
             return label == "En el hoyo" ? "" : label
         }
@@ -1753,11 +1809,12 @@ struct PlayHoleView: View {
         if fromTee, let lat = shot.lat, let lng = shot.lng {
             let end = GPSCoord(lat: lat, lng: lng)
             let meters = Double(PlayMath.meters(from: teeCoord, to: end))
-            let putt = isPutter(shot.club) || shot.lie == "green"
+            let putt = isPutter(shot.club) || (shot.lie == "green" && meters <= 50)
             if putt, let label = TrackSession.greenToHole(meters: meters), label != "En el hoyo" { return label }
             if !putt { return "\(PlayMath.yards(from: teeCoord, to: end)) yd" }
         }
-        let putt = isPutter(shot.club) || shot.lie == "green"
+        let known = shot.distanceM.map(Double.init)
+        let putt = isPutter(shot.club) || (shot.lie == "green" && (known == nil || known! <= 50))
         if putt, let meters = shot.distanceM, meters > 0, let label = TrackSession.greenToHole(meters: Double(meters)), label != "En el hoyo" {
             return label
         }
@@ -2256,22 +2313,24 @@ struct PlayHoleView: View {
                                 Task { await retarget(shot, club: club.name) }
                             } label: {
                                 VStack(spacing: 2) {
-                                    Text(club.face)
+                                    ClubThumb(brand: club.brand, model: club.modelName, face: club.face)
+                                        .frame(width: 22, height: 22)
+                                    Text(gridName(club.name))
                                         .font(GType.headline)
                                         .foregroundStyle(p.ink)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.7)
-                                    if let yards = club.carry ?? club.total {
-                                        Text("\(yards) yd")
+                                    if let yards = savedYards(club) {
+                                        Text(yards)
                                             .font(GType.label)
                                             .foregroundStyle(p.ink3)
                                     }
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(shot.club == club.name ? Color.white : p.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: 0))
-                                .overlay(RoundedRectangle(cornerRadius: 0).stroke(shot.club == club.name ? Color(hex: BrandHex.red) : Color.clear, lineWidth: 2))
+                                .frame(maxWidth: .infinity, minHeight: 72)
+                                .padding(.vertical, 8)
+                                .background(Color.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(shot.club == club.name ? Color(hex: 0xE2B93B) : Color(hex: 0xE6E2D8), lineWidth: shot.club == club.name ? 2 : 1))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("play-edit-club-\(club.name)")
@@ -2360,7 +2419,6 @@ struct PlayHoleView: View {
         editingShot = nil
         movingShotID = nil
         shotsExpanded = false
-        sawDragHint = false
         aimTarget = nil
         mapCenter = nil
         waterAsk = false

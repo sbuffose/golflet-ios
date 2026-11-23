@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { currentWeather, type NowReading } from "../lib/weather-now";
-import { windArrow } from "../lib/play-rules";
+import { windArrow, windCardinal, windSide } from "../lib/play-rules";
 
 const openBody = {
   current: { time: "2026-11-22T18:15", wind_speed_10m: 12.3, wind_direction_10m: 241, wind_gusts_10m: 31.3, temperature_2m: 25.6, precipitation: 0 },
@@ -90,4 +90,14 @@ test("la flecha sale del tee hacia el green", () => {
   assert.equal(windArrow(180, 0), 0);
   assert.equal(windArrow(0, 0), 180);
   assert.equal(windArrow(null, 0), null);
+  assert.equal(windSide(0, 0), "en contra");
+  assert.equal(windSide(180, 0), "a favor");
+  assert.equal(windSide(90, 0), "cruzado de derecha");
+  assert.equal(windSide(270, 0), "de izquierda");
+  assert.equal(windSide(null, 0), null);
+  assert.equal(windCardinal(0), "N");
+  assert.equal(windCardinal(45), "NE");
+  assert.equal(windCardinal(180), "S");
+  assert.equal(windCardinal(225), "SO");
+  assert.equal(windCardinal(null), null);
 });

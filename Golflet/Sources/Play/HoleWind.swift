@@ -104,6 +104,23 @@ enum HoleWind {
         normalize(fromDeg + 180 - bearingDeg)
     }
 
+    static let cardinals = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"]
+
+    /// Where the wind comes from, in eight compass points.
+    static func cardinal(fromDeg: Double) -> String {
+        let index = Int((normalize(fromDeg) / 45).rounded()) % 8
+        return cardinals[index]
+    }
+
+    /// Crosswind from the right reads «cruzado de derecha». From the left, «de izquierda».
+    static func side(fromDeg: Double, bearingDeg: Double) -> String {
+        let delta = normalize(fromDeg - bearingDeg)
+        if delta < 45 || delta >= 315 { return "en contra" }
+        if delta >= 135 && delta < 225 { return "a favor" }
+        if delta >= 45 && delta < 135 { return "cruzado de derecha" }
+        return "de izquierda"
+    }
+
     /// Arrow points where the wind pushes the ball: up the screen is the direction of play.
     static func arrowDegrees(_ relative: Relative) -> Double {
         switch relative {

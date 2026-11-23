@@ -309,7 +309,9 @@ test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { ti
       const list = document.querySelector("#play-club-list") as HTMLElement;
       return {
         tile: tile.getBoundingClientRect().width,
+        tileH: tile.getBoundingClientRect().height,
         hit: hit.getBoundingClientRect().width,
+        hitH: hit.getBoundingClientRect().height,
         hitBg: getComputedStyle(hit).backgroundColor,
         list: list.hidden,
         clubs: [...list.querySelectorAll("button[data-club]")].map(el => el.getAttribute("aria-label") || "").join(" "),
@@ -317,7 +319,7 @@ test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { ti
         abbrev: /\b(Dr|CLUB)\b/.test(list.innerText),
       };
     });
-    assert.ok(bar.tile >= 64 && bar.tile <= 180 && bar.hit <= 72, JSON.stringify(bar));
+    assert.ok(bar.tile >= 140 && bar.hitH >= 52 && bar.hitH <= 60 && bar.tileH >= 52 && bar.tileH <= 60, JSON.stringify(bar));
     assert.equal(bar.hitBg, "rgb(11, 37, 69)");
     assert.equal(bar.list, false);
     assert.match(bar.clubs, /Driver/);

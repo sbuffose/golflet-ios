@@ -90,7 +90,7 @@ test("el track cierra las brechas de WhyGolf sin inventar números", { timeout: 
     assert.match(await page.$eval(".tk-hn", el => el.textContent || ""), /S\.I\. 8/);
     assert.match(await page.$eval(".tk-hn", el => el.textContent || ""), /380/);
     assert.equal(await oneLine(), true);
-    assert.equal(await page.$eval("#play-wx", el => (el.textContent || "").trim()), "Clima");
+    assert.equal(await page.$eval("#play-wx", el => (el.textContent || "").trim()), "–");
     await page.screenshot({ path: join(art, "web-375-whygolf-salida.png") });
 
     holeRow.tee = TEE;
@@ -241,16 +241,15 @@ test("el track cierra las brechas de WhyGolf sin inventar números", { timeout: 
     await page.click("#play-edit-club");
     await page.waitForSelector("#play-club-list button.on");
     const onClub = await page.$eval("#play-club-list button.on", el => getComputedStyle(el).boxShadow);
-    assert.match(onClub, /rgb\(200, 16, 46\)/);
+    assert.match(onClub, /rgb\(226, 185, 59\)/);
     await page.evaluate(() => {
       const btn = document.querySelector('#play-club-list button[data-club="PW"]');
       if (btn instanceof HTMLElement) btn.click();
     });
-    await page.waitForFunction(() => /Pitching wedge/.test(document.querySelector("#play-shot-3")?.textContent || "") && /yd/.test(document.querySelector("#play-shot-3")?.textContent || ""), { timeout: 8000 });
+    await page.waitForFunction(() => /Pitching wedge/.test(document.querySelector("#play-shot-3")?.textContent || "") && /\bft\b/.test(document.querySelector("#play-shot-3")?.textContent || ""), { timeout: 8000 });
     const after = await page.$eval("#play-shot-3", el => el.textContent || "");
-    assert.equal(/\b(ft|in)\b/.test(after), false);
     assert.match(after, /Pitching wedge/);
-    assert.match(after, /\d+ yd/);
+    assert.match(after, /\bft\b/);
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));
