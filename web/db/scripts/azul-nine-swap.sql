@@ -1,8 +1,8 @@
--- Azul nine swap. DO NOT RUN.
+-- Azul hole renumber. DO NOT RUN.
 --
--- The ±9 display rule was withdrawn. Hole 10 keeps the stored green, and
--- course_map_hole was never rewritten. Running this script would renumber
--- geometry that the screen now reads as stored.
+-- Display swaps only 3–9 with 12–18 from 2026-11-22. Holes 1, 2, 10 and 11
+-- stay. course_map_hole keeps the stored order. Running this script would
+-- rewrite that geometry, including holes that do not move.
 --
 -- It is here so the geometry can be renumbered in course_map_hole later, with a
 -- backup, if Sebastián asks to store the new numbers and the read-time mapping

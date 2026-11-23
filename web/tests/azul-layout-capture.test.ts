@@ -1,4 +1,4 @@
-/** 375px captures of Azul holes on their stored geometry, including hole 10. */
+/** 375px captures: display 3 is stored 12, display 12 is stored 3, and 10 stays. */
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
@@ -25,7 +25,15 @@ const map = {
   holes: current,
 };
 
-test("la Azul muestra los hoyos 1, 3, 10 y 12 con su geometría guardada", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+const hole3Shots = [
+  { id: "h3-1", hole: 3, shot_number: 1, lat: -34.48640, lng: -58.52676, end_lat: -34.48433, end_lng: -58.52808, result: null, club: "" },
+  { id: "h3-2", hole: 3, shot_number: 2, lat: -34.48433, lng: -58.52808, end_lat: -34.48322, end_lng: -58.52820, result: null, club: "" },
+  { id: "h3-3", hole: 3, shot_number: 3, lat: -34.48322, lng: -58.52820, end_lat: -34.48313, end_lng: -58.52820, result: null, club: "" },
+  { id: "h3-4", hole: 3, shot_number: 4, lat: -34.48313, lng: -58.52820, end_lat: -34.48313, end_lng: -58.52820, result: "holed", club: "" },
+];
+
+test("la Azul muestra los hoyos 3, 10 y 12 con el mapeo del 22 nov", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+  let roundShots = false;
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", "http://127.0.0.1");
     const path = decodeURIComponent(url.pathname);
@@ -39,7 +47,7 @@ test("la Azul muestra los hoyos 1, 3, 10 y 12 con su geometría guardada", { tim
       if (path === "/api/reconstructions" && req.method === "GET") return json({ rounds: [], reconstructions: [
         { id: "live-azul", date: "2026-11-22", current_hole: 1, club_code: "118", vm_course: "Azul", course: "Azul", round_id: null },
       ] });
-      if (path.endsWith("/shots")) return json({ shots: [] });
+      if (path.endsWith("/shots")) return json({ shots: roundShots ? hole3Shots : [] });
       if (path === "/api/bag") return json({ clubs: [] });
       return json({});
     }
@@ -55,11 +63,11 @@ test("la Azul muestra los hoyos 1, 3, 10 y 12 con su geometría guardada", { tim
   mkdirSync(art, { recursive: true });
   const teeLats = (n: number) => current.find(h => h.hole === n)!.tees.map(t => t.center!.lat);
   const greenLat = (n: number) => current.find(h => h.hole === n)!.green.center!.lat;
+  const storedGreen = (n: number) => azulBundledMap().holes.find(h => h.hole === n)!.green.center!;
   const expect = [
-    { hole: 1, label: "Par 5", yards: "485 yd", hcp: "S.I. 5", tees: teeLats(1), flag: greenLat(1) },
-    { hole: 3, label: "Par 4", yards: "345 yd", hcp: "S.I. 9", tees: teeLats(3), flag: greenLat(3) },
+    { hole: 3, label: "Par 4", yards: "409 yd", hcp: "S.I. 16", tees: teeLats(3), flag: greenLat(3) },
     { hole: 10, label: "Par 5", yards: "483 yd", hcp: "S.I. 4", tees: teeLats(10), flag: greenLat(10) },
-    { hole: 12, label: "Par 4", yards: "409 yd", hcp: "S.I. 16", tees: teeLats(12), flag: greenLat(12) },
+    { hole: 12, label: "Par 4", yards: "345 yd", hcp: "S.I. 9", tees: teeLats(12), flag: greenLat(12) },
   ];
   try {
     const page = await browser.newPage();
@@ -77,10 +85,18 @@ test("la Azul muestra los hoyos 1, 3, 10 y 12 con su geometría guardada", { tim
       assert.match(seen, new RegExp(row.yards));
       assert.match(seen, new RegExp(row.hcp));
       const ball = await page.$eval("#tkmap", el => Number(el.getAttribute("data-ball-lat")));
-      const flag = await page.$eval("#tkmap", el => Number(el.getAttribute("data-flag-lat")));
+      const flag = await page.$eval("#tkmap", el => ({ lat: Number(el.getAttribute("data-flag-lat")), lng: Number(el.getAttribute("data-flag-lng")) }));
+      const meters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+        const r = 6371000, p1 = a.lat * Math.PI / 180, p2 = b.lat * Math.PI / 180;
+        const dlat = (b.lat - a.lat) * Math.PI / 180, dlng = (b.lng - a.lng) * Math.PI / 180;
+        const h = Math.sin(dlat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dlng / 2) ** 2;
+        return 2 * r * Math.asin(Math.sqrt(h));
+      };
       assert.ok(row.tees.some(lat => Math.abs(ball - lat) < 1e-5), `hoyo ${row.hole} lat ${ball} fuera de sus salidas`);
-      assert.ok(Math.abs(flag - row.flag) < 1e-5, `hoyo ${row.hole} bandera ${flag} vs ${row.flag}`);
-      if (row.hole === 10) assert.ok(Math.abs(flag - greenLat(1)) > 0.001, "el hoyo 10 no usa el green del 1");
+      assert.ok(Math.abs(flag.lat - row.flag) < 1e-5, `hoyo ${row.hole} bandera ${flag.lat} vs ${row.flag}`);
+      if (row.hole === 10) assert.ok(meters(flag, storedGreen(1)) > 80, "el hoyo 10 no usa el green del 1");
+      if (row.hole === 3) assert.ok(meters(flag, storedGreen(3)) > 80, "el hoyo 3 usa el green guardado del 12");
+      if (row.hole === 12) assert.ok(meters(flag, storedGreen(12)) > 80, "el hoyo 12 usa el green guardado del 3");
       await page.screenshot({ path: join(art, `web-375-azul-hoyo-${row.hole}.png`) });
       if (row.hole === 10) {
         for (let i = 0; i < 4; i++) await page.click("#play-zoom-out");
@@ -95,6 +111,17 @@ test("la Azul muestra los hoyos 1, 3, 10 y 12 con su geometría guardada", { tim
         await page.screenshot({ path: join(art, "web-375-azul-hoyo-12-nuevo-lejos.png") });
       }
     }
+    roundShots = true;
+    await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-azul?hole=3&ronda=1`, { waitUntil: "networkidle0" });
+    await page.reload({ waitUntil: "networkidle0" });
+    await page.waitForFunction(() => {
+      const text = document.querySelector(".tk-hn")?.textContent || "";
+      const marks = document.querySelectorAll(".tk-mapill, .tk-shot-mark").length;
+      return text.includes("Hoyo 3") && text.includes("409 yd") && marks >= 4;
+    }, { timeout: 25000 });
+    const roundFlag = await page.$eval("#tkmap", el => Number(el.getAttribute("data-flag-lat")));
+    assert.ok(Math.abs(roundFlag - greenLat(3)) < 1e-5, "la ronda del hoyo 3 se dibuja sobre el green del 12 guardado");
+    await page.screenshot({ path: join(art, "web-375-azul-ronda-hoyo-3.png") });
   } finally {
     await browser.close();
     await new Promise<void>(r => server.close(() => r()));

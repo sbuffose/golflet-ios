@@ -34,7 +34,7 @@ enum JockeyPlans {
                 return plan(hole, course: "Azul")
             }.map { hole in
                 var next = hole
-                next.hole = next.hole <= 9 ? next.hole + 9 : next.hole - 9
+                next.hole = AzulCourse.nineSwap(next.hole)
                 return next
             }.sorted { $0.hole < $1.hole }
         )

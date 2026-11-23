@@ -4,6 +4,9 @@ import { gameMetrics, type GmHole, type GmRound, type GmShot, type LL } from "./
 import { effectiveGreens, flagsForLive, pinStateFor } from "./pins";
 import { gpsShotSql } from "./gps-shot";
 import { isUndefinedColumn } from "./scorecard-lease";
+import { isJockeyAzul } from "./azul-osm";
+import { azulCurrentLayout, azulNineSwap } from "./azul-layout";
+
 /** Per-hole info of one live round: par (our course card), green front/center/back (club GPS map + corrections), putts counter, own pin,
  *  and (t162u) the collaborative pin of the day + what the player's pin button does. */
 export async function liveHoles(live: any, me?: string) {
@@ -13,8 +16,10 @@ export async function liveHoles(live: any, me?: string) {
   const lh = await q(`select hole, putts, pin_lat, pin_lng, pin_accuracy_m, pin_at from live_hole where live_round_id=$1`, [live.id]);
   const L = new Map(lh.map((r: any) => [Number(r.hole), r]));
   const ps = me ? await pinStateFor(live, me) : new Map();
+  const current = isJockeyAzul(String(live.club_code || ""), String(live.course || live.vm_course || ""))
+    && azulCurrentLayout(String(live.date || "").slice(0, 10), null);
   return Array.from({ length: 18 }, (_, i) => i + 1).map(h => {
-    const stored = h;
+    const stored = current ? azulNineSwap(h) : h;
     const card = cards.get(stored), r: any = L.get(h), st: any = ps.get(h);
     const hcpRaw = card?.hcp ?? card?.hole_hcp;
     const hcp = hcpRaw == null || hcpRaw === "" ? null : Number(String(hcpRaw).split("/")[0]);
