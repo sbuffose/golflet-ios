@@ -28,6 +28,8 @@ exports.puttMeters = puttMeters;
 exports.isPutterClub = isPutterClub;
 exports.yardNumber = yardNumber;
 exports.yardLabel = yardLabel;
+exports.teeAgrees = teeAgrees;
+exports.matchingTee = matchingTee;
 exports.teeBoxes = teeBoxes;
 exports.shotDistanceLabel = shotDistanceLabel;
 exports.trackHoleSummary = trackHoleSummary;
@@ -320,8 +322,87 @@ function yardLabel(value) {
     const n = yardNumber(value);
     return n == null ? "" : `${n} yd`;
 }
-/** Named tees from the card, longest first. A point moves only when the hole has more than one tee center:
- *  the farthest from the green is the longest tee. One center is not assigned to a color. */
+function yardList(value) {
+    if (typeof value === "number" || typeof value === "string") {
+        const n = yardNumber(value);
+        return n == null ? [] : [n];
+    }
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+        return Object.values(value).map(yardNumber).filter((n) => n != null);
+    }
+    return [];
+}
+/** A measured tee matches a printed tee when the gap stays inside 20 yards, or 4% on a long hole. */
+function teeAgrees(meters, yards) {
+    if (!Number.isFinite(meters) || !Number.isFinite(yards) || yards <= 0)
+        return false;
+    return Math.abs(meters / 0.9144 - yards) <= Math.max(20, yards * 0.04);
+}
+function teeCenter(item) {
+    if (Array.isArray(item) && item.length >= 2)
+        return knownPoint(item[1], item[0]);
+    if (!item || typeof item !== "object")
+        return null;
+    const raw = item;
+    if (Array.isArray(raw.center))
+        return knownPoint(raw.center[1], raw.center[0]);
+    if (raw.center && typeof raw.center === "object") {
+        const c = raw.center;
+        return knownPoint(c.lat, c.lng);
+    }
+    return knownPoint(raw.lat, raw.lng);
+}
+/** The automatic start is a point of THIS hole whose distance matches the yardage on the card.
+ *  A center that fits a shorter tee, or another hole's tee, is not used. One center is not painted as a color. */
+function matchingTee(pin, yards, spots, foreign = []) {
+    const flag = pin ? knownPoint(pin.lat, pin.lng) : null;
+    const names = yardList(yards);
+    const uniq = [];
+    for (const spot of spots) {
+        const p = spot ? knownPoint(spot.lat, spot.lng) : null;
+        if (!p || uniq.some(u => metersBetween(u, p) < 8))
+            continue;
+        uniq.push(p);
+    }
+    if (!flag)
+        return null;
+    const spanned = uniq.filter(p => holeSpan(p, flag));
+    if (names.length < 2 || spanned.length < 2)
+        return spanned[0] || null;
+    const longest = Math.max(...names);
+    const ranked = spanned.map(p => {
+        const got = metersBetween(p, flag) / 0.9144;
+        let best = names[0], err = Infinity;
+        for (const y of names) {
+            const gap = Math.abs(got - y);
+            if (gap < err) {
+                err = gap;
+                best = y;
+            }
+        }
+        return { p, got, best, err, vsLong: Math.abs(got - longest) };
+    }).filter(row => names.length < 2 || row.best === longest || teeAgrees(metersBetween(row.p, flag), longest));
+    const kept = ranked.filter(row => {
+        if (names.length < 2)
+            return true;
+        for (const other of foreign) {
+            const op = knownPoint(other.point?.lat, other.point?.lng);
+            const of = knownPoint(other.pin?.lat, other.pin?.lng);
+            const otherNames = yardList(other.yards);
+            if (!op || !of || !otherNames.length || metersBetween(row.p, op) > 12)
+                continue;
+            const back = Math.max(...otherNames);
+            const theirs = Math.abs(metersBetween(row.p, of) / 0.9144 - back);
+            if (teeAgrees(metersBetween(row.p, of), back) && row.vsLong > theirs + 5)
+                return false;
+        }
+        return true;
+    });
+    kept.sort((a, b) => a.vsLong - b.vsLong || a.err - b.err);
+    return kept[0]?.p ?? null;
+}
+/** Named tees from the card, longest first. A center is that color only when the measured yards agree.
+ *  One center is not assigned to a color. A missing match stays empty so the player confirms the tee. */
 function teeBoxes(yards, polygons, green) {
     const named = [];
     if (yards && typeof yards === "object" && !Array.isArray(yards)) {
@@ -340,21 +421,23 @@ function teeBoxes(yards, polygons, green) {
     const centers = [];
     const list = Array.isArray(polygons) ? polygons : [];
     for (const item of list) {
-        const raw = item && typeof item === "object" ? item : null;
-        const point = knownPoint(raw?.center?.lat, raw?.center?.lng) || knownPoint(raw?.lat, raw?.lng);
-        if (point)
+        const point = teeCenter(item);
+        if (point && !centers.some(c => metersBetween(c, point) < 8))
             centers.push(point);
     }
     const pin = green && knownPoint(green.lat, green.lng);
-    if (pin && centers.length > 1)
-        centers.sort((a, b) => metersBetween(b, pin) - metersBetween(a, pin));
-    const assign = centers.length > 1;
+    const assign = !!(pin && centers.length > 1 && named.length > 1);
     if (!named.length) {
         return centers.map((c, i) => ({ name: centers.length === 1 ? "SALIDA" : `TEE ${i + 1}`, yards: null, lat: c.lat, lng: c.lng }));
     }
-    return named.map((row, i) => {
-        const spot = assign ? centers[i] : null;
-        return { name: row.name, yards: row.yards, lat: spot?.lat ?? null, lng: spot?.lng ?? null };
+    return named.map(row => {
+        if (!assign || !pin)
+            return { name: row.name, yards: row.yards, lat: null, lng: null };
+        const hit = centers
+            .map(c => ({ c, d: Math.abs(metersBetween(c, pin) / 0.9144 - row.yards) }))
+            .filter(x => teeAgrees(metersBetween(x.c, pin), row.yards))
+            .sort((a, b) => a.d - b.d)[0];
+        return { name: row.name, yards: row.yards, lat: hit?.c.lat ?? null, lng: hit?.c.lng ?? null };
     });
 }
 const EARTH_M = 6371008.8;

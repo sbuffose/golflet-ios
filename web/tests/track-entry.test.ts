@@ -200,13 +200,13 @@ test("an existing hole is kept, the next hole uses its own tee, and a bad hole i
     assert.equal(await page.$("#tkmap"), null);
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-keep?hole=4`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#tkmap");
-    await page.waitForSelector("#rc-nogeo");
+    await page.waitForFunction(() => (document.querySelector("#tkro")?.textContent || "").includes("Sin salida verificada"));
     seen = await read();
-    assert.match(seen.note, /No marco un rumbo/);
+    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /Sin salida verificada/);
     assert.equal(seen.bearing, "");
     assert.equal(Number(seen.aim).toFixed(1), "-36.6");
     assert.equal(await page.$eval("#play-set", el => (el as HTMLButtonElement).disabled), true);
-    assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-span")), "0");
+    assert.equal(await page.$eval("#tkmap", el => el.getAttribute("data-span")), "");
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-shot`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#play-hit");
     seen = await read();
@@ -284,9 +284,14 @@ test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { ti
     assert.ok(Math.abs(Number(h1.aim) - VIEJA_GREEN_AXIS[0].center.lat) < 1e-6);
     assert.match(h1.axis, /Eje verificado del green/);
     assert.match(await page.$eval("#tkro", el => el.textContent || ""), /Arrastrá para confirmar la salida/);
-    assert.equal(await page.$eval("#play-set", el => (el as HTMLButtonElement).disabled), false);
+    assert.equal(await page.$eval("#play-set", el => (el as HTMLButtonElement).disabled), true);
     assert.equal(await page.$eval("#play-cancel", el => el.textContent || ""), "CANCEL");
     await page.screenshot({ path: join(art, "vieja-h1-confirm-390.png") });
+    await page.mouse.move(180, 400);
+    await page.mouse.down();
+    await page.mouse.move(260, 340, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForFunction(() => { const b = document.querySelector("#play-set") as HTMLButtonElement | null; return !!b && !b.disabled; });
     await page.click("#play-set");
     await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-tee-source") === "jugador");
     assert.match(await page.$eval("#tk-player", el => el.textContent || ""), /No es una medida/);
@@ -325,11 +330,11 @@ test("Cancha Vieja muestra el green verificado cuando la salida no cierra", { ti
     const bad1 = await visit("live-bad", 1, "vieja-h1-unclosed-390.png");
     assert.equal(bad1.empty, false);
     assert.equal(bad1.bearing, "");
-    assert.equal(bad1.span, "0");
-    assert.match(bad1.note, /No marco un rumbo/);
+    assert.equal(bad1.span, "");
+    assert.match(await page.$eval("#tkro", el => el.textContent || ""), /Sin salida verificada/);
     assert.ok(Math.abs(Number(bad1.aim) - VIEJA_GREEN_AXIS[0].center.lat) < 1e-6);
     const bad2 = await visit("live-bad", 2, "vieja-h2-unclosed-390.png");
-    assert.equal(bad2.span, "0");
+    assert.equal(bad2.span, "");
     assert.equal(bad2.bearing, "");
     assert.ok(Math.abs(Number(bad2.aim) - VIEJA_GREEN_AXIS[1].center.lat) < 1e-6);
   } finally {

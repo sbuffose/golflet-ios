@@ -132,7 +132,10 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
       if (cmap !== "0" && cmap !== "1") return false;
       for (const id of ["#play-hit", "#play-set"]) {
         const button = document.querySelector(id) as HTMLButtonElement | null;
-        if (button && button.disabled) return false;
+        if (!button || !button.disabled) continue;
+        const askTee = (document.querySelector("#tkro")?.textContent || "").includes("Sin salida verificada");
+        if (id === "#play-set" && askTee) continue;
+        return false;
       }
       return true;
     }, { timeout: 25000 });

@@ -109,7 +109,33 @@
       return { point: center, kind: center ? 'green' : 'none' };
     };
     const pinCoord = () => flagRead().point;
-    const verifiedTee = () => asLL((cmapHole()?.tees || [])[0]?.center) || asLL(cmapHole()?.line?.[0]) || asLL(gpsHole()?.tee) || asLL(holeRec().tee) || asLL(cmapHole()?.tee);
+    const spotOf = p => asLL(p && p.center ? p.center : p);
+    const holeSpots = h => {
+      const out = [];
+      (h?.tees || []).forEach(t => { const p = spotOf(t); if (p) out.push(p); });
+      const line = asLL(h?.line?.[0]); if (line) out.push(line);
+      const tee = asLL(h?.tee); if (tee) out.push(tee);
+      return out;
+    };
+    const verifiedTee = () => {
+      const hole = cmapHole() || gpsHole() || {};
+      const rec = holeRec();
+      const yards = rec.yards != null ? rec.yards : (gpsHole()?.yards != null ? gpsHole().yards : hole.yards);
+      const spots = holeSpots(hole);
+      const gpsTee = asLL(gpsHole()?.tee); if (gpsTee) spots.push(gpsTee);
+      const recTee = asLL(rec.tee); if (recTee) spots.push(recTee);
+      const foreign = [];
+      ((S.cmap && S.cmap.holes) || (S.course && S.course.holes) || []).forEach(h => {
+        if (Number(h.hole || h.number) === Number(S.hole)) return;
+        const flag = asLL(h.green && (h.green.center || h.green.front)) || asLL(h.green);
+        if (!flag) return;
+        const card = (S.holes || []).find(x => Number(x.hole) === Number(h.hole || h.number));
+        const cardYards = card && card.yards != null ? card.yards : h.yards;
+        holeSpots(h).forEach(p => foreign.push({ point: p, pin: flag, yards: cardYards }));
+      });
+      if (R().matchingTee) return R().matchingTee(verifiedFlag(), yards, spots, foreign);
+      return spots[0] || null;
+    };
     const verifiedFlag = () => pinCoord();
     const axis = () => R().holeSpan(verifiedTee(), verifiedFlag());
     const spanOk = () => !!(verifiedTee() && verifiedFlag() && axis());
@@ -316,7 +342,7 @@
     };
     const setMapButtons = on => {
       const allow = !!on && !S.busy && !S.moving;
-      const teeNeedsDrag = verifiedTee() && verifiedFlag() && !spanOk() && !S.panned && (S.track.phase === 'confirmTee' || S.track.phase === 'confirmFlag');
+      const teeNeedsDrag = S.track.phase === 'confirmTee' && !S.panned && (!verifiedTee() || (!!verifiedFlag() && !spanOk()));
       for (const id of ['play-set', 'play-hit']) {
         const b = el.querySelector('#' + id);
         if (!b) continue;
@@ -1968,6 +1994,7 @@
       map.onpointerup = map.onpointercancel = e => {
         const tap = gesture && gesture.moved < 8 && e && e.type !== 'pointercancel';
         const draggedTee = S.moveTee && gesture && gesture.moved >= 8;
+        const dragged = !!(gesture && gesture.moved >= 8);
         if (e && e.pointerId != null) pts.delete(e.pointerId);
         if (pts.size >= 2) drag = 'pinch';
         else if (pts.size === 1) { drag = 'pan'; const only = [...pts.values()][0]; last = only ? { x: only.x, y: only.y } : last; }
@@ -1981,6 +2008,7 @@
         } else if (draggedTee && S.track.tee && Number.isFinite(S.track.tee.lat)) {
           writeSalida({ lat: S.track.tee.lat, lng: S.track.tee.lng, name: S.teeName, source: 'jugador' });
         }
+        if (dragged && map.getAttribute('data-map') === 'ready') setMapButtons(true);
       };
       map.onwheel = e => { e.preventDefault(); zoomBy(e.deltaY > 0 ? -0.35 : 0.35); };
       map.oncontextmenu = e => e.preventDefault();

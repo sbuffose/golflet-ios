@@ -104,8 +104,9 @@ function listedTees(raw: unknown): { center: { lat: number; lng: number } }[] {
   if (!Array.isArray(raw)) return [];
   const out: { center: { lat: number; lng: number } }[] = [];
   for (const item of raw) {
-    const c = item && typeof item === "object" && "center" in (item as object) ? (item as { center?: { lat?: unknown; lng?: unknown } }).center : item;
-    const lat = Number((c as { lat?: unknown } | null)?.lat), lng = Number((c as { lng?: unknown } | null)?.lng);
+    const c = item && typeof item === "object" && "center" in (item as object) ? (item as { center?: unknown }).center : item;
+    const pair = Array.isArray(c) ? { lng: Number(c[0]), lat: Number(c[1]) } : { lat: Number((c as { lat?: unknown } | null)?.lat), lng: Number((c as { lng?: unknown } | null)?.lng) };
+    const lat = pair.lat, lng = pair.lng;
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) continue;
     out.push({ center: { lat, lng } });
   }
