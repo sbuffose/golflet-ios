@@ -8,10 +8,16 @@ import test from "node:test";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
-const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".png": "image/png" };
+const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
 const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date());
-const TEE = { lat: -34.48596, lng: -58.53235 };
+const YD = 0.9144;
+const hav = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+  const R = 6371000, t = (x: number) => x * Math.PI / 180, dLa = t(b.lat - a.lat), dLo = t(b.lng - a.lng);
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(t(a.lat)) * Math.cos(t(b.lat)) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
 const GREEN = { lat: -34.48306, lng: -58.52882 };
+const TEE = { lat: GREEN.lat - (414 * YD) / ((6371000 * Math.PI) / 180), lng: GREEN.lng };
 const hole = { hole: 3, par: 4, hcp: 16, yards: { NEGRO: 414, AZUL: 409, BLANCO: 399, AMARILLO: 389 }, tee: TEE, green: { center: GREEN }, line: [TEE, GREEN], tees: [{ center: TEE }] };
 const course = { club_code: "118", course: "Azul", course_id: "118-azul", holes: [hole] };
 
@@ -63,8 +69,44 @@ test("el track de hoy muestra el viento y, si no hay datos, un guion", { timeout
       const text = document.querySelector("#play-wx")?.textContent || "";
       return text.includes("12 km/h") && text.includes("26°C") && text.includes("Open-Meteo") && text.includes("18:15");
     }, { timeout: 15000 });
-    const arrow = await page.$eval(".tk-wxarr", el => el.getAttribute("style") || "");
-    assert.match(arrow, /rotate\(/);
+    const arrow = await page.$eval(".tk-wxarr", el => {
+      const box = el.getBoundingClientRect();
+      return { style: el.getAttribute("style") || "", h: box.height, w: box.width };
+    });
+    assert.match(arrow.style, /rotate\(/);
+    assert.ok(arrow.h >= 30 && arrow.w >= 24, JSON.stringify(arrow));
+    const copy = await page.$eval(".tk-wxcopy .num", el => ({ text: (el.textContent || "").trim(), h: el.getBoundingClientRect().height }));
+    assert.match(copy.text, /12 km\/h · ráfagas 31 km\/h · 26°C/);
+    assert.ok(copy.h < 22, JSON.stringify(copy));
+    const placed = await page.evaluate(() => {
+      const map = document.querySelector("#tkmap");
+      const text = (document.querySelector("#tkro")?.textContent || "").replace(/\s+/g, " ");
+      const card = document.querySelector("#tkro")?.getBoundingClientRect();
+      const pin = document.querySelector(".tk-flagpin")?.getBoundingClientRect();
+      const ret = document.querySelector("#play-reticle")?.getBoundingClientRect();
+      const face = document.querySelector("#play-club-tile img") as HTMLImageElement | null;
+      return {
+        cursor: { lat: Number(map?.getAttribute("data-cursor-lat")), lng: Number(map?.getAttribute("data-cursor-lng")) },
+        ball: { lat: Number(map?.getAttribute("data-ball-lat")), lng: Number(map?.getAttribute("data-ball-lng")) },
+        flag: { lat: Number(map?.getAttribute("data-flag-lat")), lng: Number(map?.getAttribute("data-flag-lng")) },
+        text,
+        card: card ? { left: card.left, right: card.right, top: card.top, bottom: card.bottom } : null,
+        pin: pin ? { left: pin.left, right: pin.right, top: pin.top, bottom: pin.bottom } : null,
+        ret: ret ? { x: ret.left, y: ret.top } : null,
+        face: face ? face.naturalWidth : 0,
+      };
+    });
+    const shownLeft = Number((placed.text.match(/(\d+)\s*yd al hoyo/) || [])[1]);
+    const shownShot = Number((placed.text.match(/(\d+)\s*yd/) || [])[1]);
+    const remainYd = Math.round(hav(placed.cursor, placed.flag) / YD);
+    const shotYd = Math.round(hav(placed.ball, placed.cursor) / YD);
+    assert.ok(Math.abs(shownLeft - remainYd) <= 1, JSON.stringify({ placed, remainYd }));
+    assert.ok(Math.abs(shownShot - shotYd) <= 1, JSON.stringify({ placed, shotYd }));
+    assert.ok(Math.abs(shownShot + shownLeft - 414) <= 8, JSON.stringify({ shownShot, shownLeft }));
+    const midY = placed.ret && placed.pin ? (placed.ret.y + (placed.pin.top + placed.pin.bottom) / 2) / 2 : 0;
+    const covers = !!placed.card && !!placed.ret && placed.card.left <= placed.ret.x && placed.card.right >= placed.ret.x && placed.card.top <= midY && placed.card.bottom >= midY;
+    assert.equal(covers, false, JSON.stringify(placed));
+    assert.ok(placed.face > 0, JSON.stringify(placed.face));
     await page.screenshot({ path: join(art, "web-375-clima-viento.png") });
   } finally {
     await browser.close();

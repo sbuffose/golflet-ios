@@ -2903,10 +2903,12 @@ img.me-face{object-fit:cover;padding:0}
 .tk-cn{flex:1;text-align:center;font-size:14px;font-weight:650;text-shadow:0 1px 8px rgba(0,0,0,.55);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tk-chips{position:absolute;top:calc(58px + env(safe-area-inset-top));left:12px;right:auto;z-index:4;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:168px;pointer-events:none}
 .tk-chip{background:#0B2545;color:#F6F7F9;border-radius:14px;padding:6px 8px;font-size:12px;font-weight:650;font-style:normal}
-.tk-wx{display:inline-flex;flex-direction:column;align-items:flex-end;gap:2px;border:0;font:650 12px/1.15 Geist,system-ui,sans-serif;font-style:normal;pointer-events:auto;max-width:132px;text-align:right}
-.tk-wxarr{width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:18px solid #E2B93B;transform-origin:50% 72%;flex:none}
-.tk-wxface{font:700 13px/1.15 Geist,system-ui,sans-serif;color:#F6F7F9}
-.tk-wx small{font-size:10px;font-weight:550;opacity:.75}
+.tk-wx{display:inline-flex;flex-direction:row;align-items:center;gap:8px;border:0;font:650 12px/1.15 Geist,system-ui,sans-serif;font-style:normal;pointer-events:auto;max-width:min(300px,calc(100vw - 78px));text-align:left}
+.tk-wxarr{width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:36px solid #E2B93B;transform-origin:50% 78%;flex:none}
+.tk-wxcopy{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0}
+.tk-wxface{font:700 13px/1.15 Geist,system-ui,sans-serif;color:#F6F7F9;white-space:nowrap}
+.tk-wx .num{white-space:nowrap}
+.tk-wx small{font-size:10px;font-weight:550;opacity:.75;white-space:nowrap}
 .tk-wxwhy{pointer-events:auto;background:#fff;color:#0B2545;border-radius:12px;padding:8px 10px;max-width:168px;text-align:left;font-style:normal}
 .tk-wxwhy p{margin:0}
 .tk-wxwhy button{margin-top:8px;background:#C8102E;color:#fff;border:0;border-radius:999px;min-height:36px;padding:8px 12px;font:650 13px/1 Geist,system-ui,sans-serif;font-style:normal}
@@ -3087,7 +3089,7 @@ html[data-ts] .bagtable .baghdr,html[data-ts] .bagtable .bagrow{grid-template-co
 .tk-acts{align-items:flex-end}
 html.rc-map,html.rc-map body{overflow:hidden;height:100%;touch-action:none}
 html.rc-map .tk-map{touch-action:none}
-html.rc-map .tk-chips{left:auto;right:10px;top:calc(58px + env(safe-area-inset-top));align-items:flex-end}
+html.rc-map .tk-chips{left:auto;right:10px;top:calc(58px + env(safe-area-inset-top));align-items:flex-end;max-width:none}
 html.rc-map .tk-dock{position:absolute;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));background:transparent;color:#F6F7F9;max-height:none;overflow:visible;border-radius:0;box-shadow:none;padding:0;pointer-events:none;display:flex;flex-direction:column;align-items:stretch}
 html.rc-map .tk-nav,html.rc-map .tk-acts,html.rc-map .tk-play,html.rc-map .tk-rounds,html.rc-map .tk-club,html.rc-map .tk-msg,html.rc-map .tk-water,html.rc-map .tk-clublist,html.rc-map .tk-nextwide,html.rc-map .tk-nextblock,html.rc-map .tk-nextsub,html.rc-map .tk-sheet,html.rc-map .tk-penmenu,html.rc-map .tk-shots-rail,html.rc-map .tk-edit,html.rc-map .tk-teeact,html.rc-map .tk-sidebtns{pointer-events:auto}
 html.rc-map .tk-teeact{order:2;display:flex;flex-wrap:wrap;gap:6px;max-width:none;margin:0 0 6px}
@@ -3114,9 +3116,9 @@ html.rc-map .tk-clubtile small{font:600 11px/1.1 Geist,system-ui,sans-serif;colo
 html.rc-map .tk-clubface{width:36px;height:36px;object-fit:contain;display:block;pointer-events:none;flex:none}
 html.rc-map .tk-club{position:relative;background:transparent;padding:0;flex:1;min-width:0}
 html.rc-map .tk-club select{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;clip:rect(0 0 0 0);overflow:hidden;opacity:0;pointer-events:none}
-html.rc-map .tk-sheet{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:#070b10;padding:20px 14px}
+html.rc-map .tk-sheet{position:fixed;inset:0;z-index:80;display:flex;align-items:flex-end;justify-content:stretch;background:rgba(11,37,69,.28);padding:0}
 html.rc-map .tk-sheet[hidden]{display:none!important}
-html.rc-map .tk-sheetcard{position:relative;width:min(360px,100%);max-height:min(78vh,560px);overflow:auto;background:#F6F7F9;border-radius:20px;padding:16px 12px 14px;box-shadow:0 18px 48px rgba(0,0,0,.4)}
+html.rc-map .tk-sheetcard{position:relative;width:100%;max-height:min(78vh,640px);overflow:auto;background:#F6F7F9;border-radius:20px 20px 0 0;padding:16px 12px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -12px 32px rgba(11,37,69,.28)}
 html.rc-map .tk-sheetk{margin:0 44px 12px 4px;color:#0B2545;font:700 16px/1.2 Geist,system-ui,sans-serif}
 html.rc-map .tk-sheetx{position:absolute;right:8px;top:8px;width:44px;height:44px;border:0;border-radius:50%;background:#fff;color:#0B2545;font:700 18px/1 Geist,system-ui,sans-serif;z-index:2}
 html.rc-map .tk-clublist{position:relative;left:auto;bottom:auto;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none;max-height:none;overflow:visible;background:transparent;border-radius:0}
@@ -3153,7 +3155,7 @@ html.rc-map .tk-ro.tk-setup{left:50%;right:auto;transform:translateX(-50%);top:1
 html.rc-map .tk-ro.tk-done{top:48px;left:50%;right:auto;transform:translateX(-50%);max-width:calc(100% - 24px);padding:6px 12px;border-radius:999px;white-space:nowrap;z-index:5}
 html.rc-map .tk-ro.tk-done b{display:inline;font-size:13px;line-height:1.2;white-space:nowrap;color:#fff}
 html.rc-map .tk-ro.tk-done .cad,.html.rc-map .tk-ro.tk-done img{display:none}
-html.rc-map .tk-ro.tk-live{top:calc(42% - 12px);left:50%;right:auto;transform:translate(-50%,-100%);max-width:min(260px,calc(100% - 96px));text-align:center;background:#fff;color:#0B2545;z-index:4}
+html.rc-map .tk-ro.tk-live{top:42%;left:12px;right:auto;transform:translateY(-50%);max-width:min(168px,calc(50% - 28px));text-align:left;background:#fff;color:#0B2545;z-index:4}
 html.rc-map .tk-ro.tk-live b,html.rc-map .tk-ro.tk-live small,html.rc-map .tk-ro.tk-live .tk-left{color:#0B2545}
 html.rc-map .tk-ro.tk-live b.num{font-size:40px;display:block}
 html.rc-map .tk-ro.tk-live .tk-left{display:block;margin-top:2px;font-size:18px;font-weight:700;line-height:1.15}
@@ -3164,7 +3166,9 @@ html.rc-map .tk-ro b.num{font-size:28px;line-height:1}
 html.rc-map .tk-ro small{display:block;margin:2px 0 0;color:#fff;font-size:12px;font-weight:650;font-style:normal}
 html.rc-map .tk-notes{position:absolute;left:12px;top:60px;z-index:5;display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:158px;pointer-events:none}
 html.rc-map:has(.tk-ro.tk-done) .tk-notes{top:60px}
-html.rc-map:has(.tk-ro.tk-done) .tk-chips{top:calc(92px + env(safe-area-inset-top));z-index:6}
+html.rc-map:has(.tk-ro.tk-done) .tk-chips{top:auto;bottom:520px;right:8px;left:auto;z-index:6}
+html.rc-map:has(.tk-ro.tk-done) .tk-wx{max-width:156px}
+html.rc-map:has(.tk-ro.tk-done) .tk-wx .num{white-space:normal}
 html.rc-map .tk-scale{position:static;left:auto;top:auto;right:auto;bottom:auto;z-index:auto;width:auto;max-width:158px;margin:0;padding:4px 8px;background:rgba(11,37,69,.92);color:#fff;border-radius:10px;font-size:11px;line-height:1.25;text-align:left;text-shadow:none}
 html.rc-map .tk-nextblock{order:0;align-self:stretch;display:flex;flex-direction:column;gap:6px;margin:0 0 8px;padding:8px;background:#fff;border-radius:16px;box-shadow:0 4px 14px rgba(0,0,0,.28)}
 html.rc-map .tk-nextwide{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;margin:0;border:0;border-radius:14px;background:#0B2545;color:#fff;font:700 16px/1 Geist,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
@@ -3183,8 +3187,8 @@ html.rc-map .tk-player{margin:0 0 4px;color:#fff;font-size:12px;text-shadow:0 1p
 html.rc-map .tk-sum{background:transparent;color:#0B2545;margin:0 0 8px;padding:0;border-radius:0;box-shadow:none;font-size:14px;line-height:1.3}
 html.rc-map .tk-sum button{margin-top:0;min-height:44px;background:#fff;color:#0B2545;border-radius:12px;padding:8px 12px;font:650 14px/1 Geist,system-ui,sans-serif}
 html.rc-map .tk-shots-rail{left:10px;right:auto;top:calc(58px + env(safe-area-inset-top));bottom:auto;width:max-content;max-width:180px;max-height:34%;gap:4px;align-items:flex-start;z-index:6;background:transparent;box-shadow:none;padding:0;overflow:visible}
-html.rc-map:has(.tk-ro.tk-done) .tk-shots-rail{top:calc(96px + env(safe-area-inset-top));bottom:auto;max-height:36%;max-width:172px;overflow:auto}
-html.rc-map:has(.tk-ro.tk-done) .tk-shots-rail .tk-shot{max-width:172px;overflow:hidden;text-overflow:ellipsis}
+html.rc-map:has(.tk-ro.tk-done) .tk-shots-rail{top:calc(96px + env(safe-area-inset-top));bottom:auto;max-height:36%;max-width:210px;overflow:auto}
+html.rc-map:has(.tk-ro.tk-done) .tk-shots-rail .tk-shot{max-width:210px;overflow:hidden;text-overflow:ellipsis}
 html.rc-map .tk-ret:not(.on){opacity:0}
 html.rc-map .tk-edit{position:absolute;left:0;right:0;top:auto;bottom:64px;width:auto;max-height:48%;overflow:auto;z-index:12;display:flex;flex-wrap:wrap;gap:8px;padding:12px 12px 14px;background:#fff;color:#0B2545;border-radius:18px 18px 0 0;box-shadow:0 -8px 28px rgba(11,37,69,.28)}
 html.rc-map:has(#play-shot-editor) .tk-nextblock,html.rc-map:has(#play-shot-editor) .tk-acts,html.rc-map:has(#play-shot-editor) .tk-teeact{display:none}

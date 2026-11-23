@@ -747,16 +747,16 @@
         const remain = here && cup ? hav(here, cup) : null;
         const travel = flown == null ? '' : `${flown} yd`;
         const left = yd(remain) == null ? '' : `${yd(remain)} yd al hoyo`;
-        return aimChip(travel, left, ball, here);
+        return aimChip(travel, left, here, cup);
       }
       if (phase === 'confirmTee' || phase === 'confirmFlag' || phase === 'drop' || phase === 'penaltyWhere' || phase === 'relief') {
         return `<b>${esc(PROMPT[phase])}</b>${meters != null && phase !== 'confirmTee' ? `<small class="num">${(yd(meters) ?? '—')} yd al hoyo</small>` : ''}`;
       }
       if (inCup) return `<b class="tk-holeflash">En el hoyo</b>`;
-      return aimChip(flown == null ? '' : `${flown} yd`, meters == null ? '' : `${yd(meters)} yd al hoyo`, ball, here);
+      return aimChip(flown == null ? '' : `${flown} yd`, meters == null ? '' : `${yd(meters)} yd al hoyo`, here, cup);
     };
-    const aimChip = (travel, left, ball, here) => {
-      return `<b class="num">${travel || '—'}</b>${left ? `<span class="tk-left">${left}</span>` : ''}${flightWind(ball, here)}`;
+    const aimChip = (travel, left, here, cup) => {
+      return `<b class="num">${travel || '—'}</b>${left ? `<span class="tk-left">${left}</span>` : ''}${flightWind(here, cup)}`;
     };
     const flightWind = (from, to) => {
       const w = S.wind;
@@ -791,7 +791,7 @@
       const bits = [`${Math.round(Number(S.wind.kmh))} km/h`, gust, temp, rain].filter(Boolean).join(' · ');
       const when = S.wind.hhmm || '';
       const src = S.wind.source ? `${S.wind.source}${when ? ` ${when}` : ''}${S.wind.stale ? ' · última lectura' : ''}` : when;
-      return `<button type="button" class="tk-chip tk-wx" id="play-wx">${arrow}${face ? `<b class="tk-wxface">${esc(face)}</b>` : ''}<b class="num">${esc(bits)}</b>${src ? `<small>${esc(src)}</small>` : ''}</button>`;
+      return `<button type="button" class="tk-chip tk-wx" id="play-wx">${arrow}<span class="tk-wxcopy">${face ? `<b class="tk-wxface">${esc(face)}</b>` : ''}<b class="num">${esc(bits)}</b>${src ? `<small>${esc(src)}</small>` : ''}</span></button>`;
     };
 
     const paintDriver = () => {
@@ -827,7 +827,24 @@
       const thumb = gear && typeof gear.thumb === 'function' ? gear.thumb(row.brand || '', row.model || row.model_name || '', face) : { src: `/clubs/silhouettes/${face}.svg`, kind: 'silhouette' };
       return thumb && thumb.src ? thumb : { src: `/clubs/silhouettes/${face}.svg`, kind: 'silhouette' };
     };
-    const faceImg = (id, label) => { const thumb = faceOf(id, label); return `<img class="tk-clubface" src="${esc(thumb.src)}" alt="" data-kind="${esc(thumb.kind || '')}">`; };
+    const faceSvg = face => {
+      const shaft = 'M11 27c5-7 7-12 5-16';
+      const heads = {
+        driver: '<path d="M16 11c2-3 7-3 8 1s-4 5-8 3" fill="none" stroke="#0B2545" stroke-width="1.8"/>',
+        fairway: '<path d="M16 12c2-2 6-2 7 1s-3 4-7 2" fill="none" stroke="#0B2545" stroke-width="1.8"/>',
+        hybrid: '<path d="M15 13c2-2 6-1 6 2s-4 3-6 1" fill="none" stroke="#0B2545" stroke-width="1.8"/>',
+        iron: '<path d="M16 12l5 2-1 5-4-1z" fill="none" stroke="#0B2545" stroke-width="1.8" stroke-linejoin="round"/>',
+        wedge: '<path d="M15 13l6 1-2 5-4-1z" fill="none" stroke="#0B2545" stroke-width="1.8" stroke-linejoin="round"/>',
+        putter: '<path d="M14 14h8v3h-8z" fill="none" stroke="#0B2545" stroke-width="1.8"/>',
+      };
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="${shaft}" fill="none" stroke="#0B2545" stroke-width="1.8" stroke-linecap="round"/>${heads[face] || heads.iron}</svg>`;
+      return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    };
+    const faceImg = (id, label) => {
+      const thumb = faceOf(id, label);
+      const face = clubFace(id, label);
+      return `<img class="tk-clubface" src="${esc(thumb.src)}" alt="" data-kind="${esc(thumb.kind || '')}" data-face="${esc(face)}" data-fallback="${esc(faceSvg(face))}">`;
+    };
     const render = () => {
       stopCam();
       const rec = holeRec(), par = rec.par || gpsHole()?.par, hcp = rec.hcp || gpsHole()?.hcp;
@@ -878,12 +895,14 @@
       const shownClub = picked || clubChoices.find(c => c.id === S.suggest);
       const clubCell = (c, extra) => {
         const yards = tileYards(c);
-        return `<li><button type="button" data-club="${esc(c.id)}" class="${extra}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}<b>${esc(gridName(c.label))}</b>${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`;
+        const raw = String(extra || '');
+        const ring = /\bon\b/.test(raw) ? 'on' : (/\bsug\b/.test(raw) ? 'sug' : '');
+        return `<li><button type="button" data-club="${esc(c.id)}" class="${ring}" aria-label="${esc(clubLabel(c.label))}">${faceImg(c.id, c.label)}<b>${esc(gridName(c.label))}</b>${yards ? `<small>${esc(yards)}</small>` : ''}</button></li>`;
       };
       const tileName = shownClub ? gridName(shownClub.label) : 'Palo';
       const tileAria = shownClub ? clubLabel(shownClub.label) : 'Palo';
       const tileYd = shownClub ? tileYards(shownClub) : '';
-      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(tileAria)}">${faceImg(shownClub ? shownClub.id : '', shownClub ? shownClub.label : '')}<span><b>${esc(tileName)}</b>${tileYd ? `<small>${esc(tileYd)}</small>` : ''}</span></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => clubCell(c, ((c.id === S.club ? ' on' : '') + (c.id === S.suggest ? ' sug' : '')).trim())).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
+      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(tileAria)}">${faceImg(shownClub ? shownClub.id : '', shownClub ? shownClub.label : '')}<span><b>${esc(tileName)}</b>${tileYd ? `<small>${esc(tileYd)}</small>` : ''}</span></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => clubCell(c, c.id === S.club ? 'on' : (!S.club && c.id === S.suggest ? 'sug' : ''))).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
@@ -1047,7 +1066,7 @@
           <div class="tk-nav">
             <button type="button" id="tkprev" ${S.hole <= 1 ? 'disabled' : ''} aria-label="Hoyo anterior">‹</button>
             <div class="tk-hn"><b>Hoyo ${S.hole}</b><span>${`Par ${par || '—'}${cardYd ? ` · ${cardYd}` : ''}${hcp != null && hcp !== '' && Number.isFinite(Number(hcp)) ? ` · S.I. ${hcp}` : ''}`}</span></div>
-            <b class="tk-score" id="play-score">${savedRows.length || S.track.marks.filter(m => m.countsStroke).length}</b>
+            <b class="tk-score" id="play-score">${(savedRows.length || S.track.marks.filter(m => m.countsStroke).length) || '–'}</b>
             <button type="button" id="tknext" ${S.hole >= 18 ? 'disabled' : ''} aria-label="Hoyo siguiente">›</button>
           </div>
           ${S.teeSource === 'jugador' ? `<p class="tk-player" id="tk-player">Salida confirmada por vos. No es una medida.</p>` : ''}
@@ -1167,6 +1186,9 @@
       const cursor = fromCenter();
       map.dataset.cursorLat = cursor && Number.isFinite(cursor.lat) ? String(cursor.lat) : '';
       map.dataset.cursorLng = cursor && Number.isFinite(cursor.lng) ? String(cursor.lng) : '';
+      const pinHere = cupLL();
+      map.dataset.flagLat = pinHere && Number.isFinite(pinHere.lat) ? String(pinHere.lat) : '';
+      map.dataset.flagLng = pinHere && Number.isFinite(pinHere.lng) ? String(pinHere.lng) : '';
       map.dataset.phase = S.track.phase || '';
       map.dataset.teeSource = S.teeSource || '';
       map.dataset.teeName = S.teeName || '';
@@ -1715,6 +1737,16 @@
       if (S.alive) render();
     };
     const wire = () => {
+      el.querySelectorAll('.tk-clubface').forEach(img => {
+        img.onerror = () => {
+          const next = img.getAttribute('data-fallback') || '';
+          img.onerror = null;
+          if (next && img.getAttribute('src') !== next) {
+            img.dataset.kind = 'silhouette';
+            img.setAttribute('src', next);
+          }
+        };
+      });
       const map = mapBox();
       const club = el.querySelector('#play-club');
       if (club) club.onchange = () => {

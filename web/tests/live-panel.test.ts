@@ -108,8 +108,20 @@ test("el tiro vivo mide desde la mira y el panel cabe en una barra", { timeout: 
         leftSize: left ? parseFloat(getComputedStyle(left).fontSize) : 0,
       };
     });
-    assert.ok(card.left > 20 && card.right < 355 && (card.left + card.right) / 2 > 140 && (card.left + card.right) / 2 < 240, JSON.stringify(card));
+    assert.ok(card.left >= 8 && card.right <= 188, JSON.stringify(card));
     assert.ok(card.num >= 32 && card.leftSize >= 16, JSON.stringify(card));
+    const geo = await page.evaluate(() => {
+      const map = document.querySelector("#tkmap");
+      return {
+        cursor: { lat: Number(map?.getAttribute("data-cursor-lat")), lng: Number(map?.getAttribute("data-cursor-lng")) },
+        ball: { lat: Number(map?.getAttribute("data-ball-lat")), lng: Number(map?.getAttribute("data-ball-lng")) },
+        flag: { lat: Number(map?.getAttribute("data-flag-lat")), lng: Number(map?.getAttribute("data-flag-lng")) },
+      };
+    });
+    const remainYd = Math.round(meters(geo.cursor, geo.flag) / YD);
+    const shotYd = Math.round(meters(geo.ball, geo.cursor) / YD);
+    assert.ok(Math.abs(live.left - remainYd) <= 1, JSON.stringify({ live, remainYd, geo }));
+    assert.ok(Math.abs(live.shot - shotYd) <= 1, JSON.stringify({ live, shotYd, geo }));
     const title = await page.$eval(".tk-cn", el => {
       const b = el.getBoundingClientRect();
       return { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
@@ -126,7 +138,11 @@ test("el tiro vivo mide desde la mira y el panel cabe en una barra", { timeout: 
     }, { timeout: 15000 });
     const cardWind = await page.$eval("#tkro", el => el.textContent || "");
     assert.equal(/más|menos|en contra|a favor|Sin dirección|ráfagas/.test(cardWind), false, cardWind);
-    if (cardWind.includes("Juega")) assert.match(cardWind, /Juega \d+ yd/);
+    const juega = Number((cardWind.match(/Juega (\d+) yd/) || [])[1]);
+    if (juega) {
+      assert.ok(Math.abs(juega - live.left) < Math.abs(juega - live.shot), cardWind);
+      assert.ok(Math.abs(juega - live.left) <= Math.max(15, live.left * 0.2), cardWind);
+    }
     const windClear = await page.evaluate(() => {
       const wxNode = document.querySelector("#play-wx");
       const titleNode = document.querySelector(".tk-cn");
@@ -192,8 +208,19 @@ test("el tiro vivo mide desde la mira y el panel cabe en una barra", { timeout: 
     assert.ok(grid.some(t => /Hierro 7/.test(t) && /yd/.test(t)), JSON.stringify(grid));
     assert.ok(grid.some(t => /54°/.test(t)), JSON.stringify(grid));
     assert.equal(grid.some(t => /\b(Dr|7i|Pt)\b/.test(t)), false, JSON.stringify(grid));
+    const rings = await page.$$eval("#play-club-list button", els => els.filter(el => el.classList.contains("on") || el.classList.contains("sug")).map(el => el.getAttribute("data-club")));
+    assert.equal(rings.length, 1, JSON.stringify(rings));
     const ring = await page.$eval("#play-club-list button.on", el => getComputedStyle(el).boxShadow);
     assert.match(ring, /rgb\(226, 185, 59\)/);
+    const sheet = await page.$eval(".tk-sheetcard", el => {
+      const box = el.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom };
+    });
+    assert.ok(sheet.bottom >= 790 && sheet.top > 80, JSON.stringify(sheet));
+    const face = await page.$eval("#play-club-tile img", img => ({ w: img.naturalWidth, h: img.naturalHeight }));
+    assert.ok(face.w > 0 && face.h > 0, JSON.stringify(face));
+    const score = await page.$eval("#play-score", el => (el.textContent || "").trim());
+    assert.equal(score, "–");
     await page.screenshot({ path: join(art, "web-375-panel-grilla.png") });
     await page.click("#play-club-close");
 
@@ -225,10 +252,23 @@ test("el tiro vivo mide desde la mira y el panel cabe en una barra", { timeout: 
       const flag = document.querySelector(".tk-flagpin")!.getBoundingClientRect();
       const pills = [...document.querySelectorAll(".tk-mapill")].map(el => el.getBoundingClientRect());
       const pile = pills.filter(p => !(p.right < flag.left || flag.right < p.left || p.bottom < flag.top || flag.bottom < p.top));
+      const flagHit = !(flag.right < wx.left || wx.right < flag.left || flag.bottom < wx.top || wx.bottom < flag.top);
+      let shotHit = false;
+      for (const el of document.querySelectorAll(".tk-shots-rail button")) {
+        const p = el.getBoundingClientRect();
+        if (!(p.right < wx.left + 1 || wx.right < p.left || p.bottom < wx.top || wx.bottom < p.top)) shotHit = true;
+      }
+      let pillHit = false;
+      for (const p of pills) {
+        if (!(p.right < wx.left || wx.right < p.left || p.bottom < wx.top || wx.bottom < p.top)) pillHit = true;
+      }
       const wxText = (document.querySelector("#play-wx")?.textContent || "").replace(/\s+/g, " ").trim();
-      return { hits, pile: pile.length, wxText, wxTop: wx.top, wxBottom: wx.bottom, cardBottom: card.bottom };
+      return { hits, pile: pile.length, flagHit, shotHit, pillHit, wxText, wxTop: wx.top, wxBottom: wx.bottom, cardBottom: card.bottom, wxLeft: wx.left };
     });
     assert.equal(clear.hits, false, JSON.stringify(clear));
+    assert.equal(clear.flagHit, false, JSON.stringify(clear));
+    assert.equal(clear.shotHit, false, JSON.stringify(clear));
+    assert.equal(clear.pillHit, false, JSON.stringify(clear));
     assert.equal(clear.pile, 0, JSON.stringify(clear));
     assert.match(clear.wxText, /22°C/);
     const railPaint = await page.evaluate(() => {

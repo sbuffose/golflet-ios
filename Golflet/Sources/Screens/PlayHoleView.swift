@@ -727,24 +727,27 @@ struct PlayHoleView: View {
             Button {
                 if nowWind == nil { windOpen.toggle() }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     if let wind = nowWind {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            if let turn = windTurn {
-                                Image(systemName: "location.north.fill")
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundStyle(Color(hex: 0xE2B93B))
-                                    .rotationEffect(.degrees(turn))
-                                    .accessibilityHidden(true)
-                            }
+                        if let turn = windTurn {
+                            Image(systemName: "location.north.fill")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundStyle(Color(hex: 0xE2B93B))
+                                .rotationEffect(.degrees(turn))
+                                .accessibilityHidden(true)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
                             if let face = windFace(wind) {
                                 Text(face)
                                     .font(.system(size: 13, weight: .bold))
+                                    .lineLimit(1)
                             }
                             Text(windBits(wind))
+                                .lineLimit(1)
                             Text(wind.source + (wind.hhmm.isEmpty ? "" : " \(wind.hhmm)") + (wind.stale ? " · última lectura" : ""))
                                 .font(.system(size: 10, weight: .medium))
                                 .opacity(0.75)
+                                .lineLimit(1)
                         }
                     } else if windTried {
                         Text("–")
@@ -752,10 +755,10 @@ struct PlayHoleView: View {
                 }
                 .font(GFont.ui(12, weight: .semibold))
                 .foregroundStyle(Color(hex: 0xF6F7F9))
-                .multilineTextAlignment(.trailing)
+                .multilineTextAlignment(.leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .frame(maxWidth: 148, alignment: .trailing)
+                .fixedSize(horizontal: true, vertical: false)
                 .background(Color(hex: 0x0B2545))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
@@ -1227,11 +1230,11 @@ struct PlayHoleView: View {
         return TrackSession.suggest(yards: yards, bag: model.bag.map { ($0.name, $0.carry) })
     }
 
-    /// Same dark sheet as the web: a centered bag grid on `#070b10`, not a light page.
+    /// The bag rises from the bottom. One gold ring marks the chosen club.
     private var clubCover: some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
-        return ZStack {
-            Color(hex: 0x070B10).ignoresSafeArea()
+        return ZStack(alignment: .bottom) {
+            Color(hex: 0x0B2545).opacity(0.28).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 12) {
                 Text("Palo")
                     .font(GFont.ui(16, weight: .bold))
@@ -1268,7 +1271,7 @@ struct PlayHoleView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(on ? Color(hex: 0xE2B93B) : (suggestedName == club.name ? Color(hex: 0xC8A86A) : Color(hex: 0xE6E2D8)), lineWidth: on || suggestedName == club.name ? 2 : 1)
+                                    .stroke(on ? Color(hex: 0xE2B93B) : Color(hex: 0xE6E2D8), lineWidth: on ? 2 : 1)
                             )
                         }
                         .buttonStyle(.plain)
@@ -1279,9 +1282,9 @@ struct PlayHoleView: View {
             .padding(.horizontal, 12)
             .padding(.top, 16)
             .padding(.bottom, 14)
-            .frame(maxWidth: 360)
+            .frame(maxWidth: .infinity)
             .background(Color(hex: 0xF6F7F9))
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 20, style: .continuous))
             .overlay(alignment: .topTrailing) {
                 Button { showsClubs = false } label: {
                     Image(systemName: "xmark")
@@ -1295,8 +1298,7 @@ struct PlayHoleView: View {
                 .accessibilityLabel("Cerrar")
                 .padding(8)
             }
-            .padding(.horizontal, 14)
-            .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+            .shadow(color: Color(hex: 0x0B2545).opacity(0.28), radius: 16, y: -6)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("play-club-sheet")
@@ -1334,9 +1336,9 @@ struct PlayHoleView: View {
     /// Same estimate as plan-core: headwind shortens carry about 1% per mph.
     private var windPlayLine: String? {
         guard let wind = nowWind else { return nil }
-        let yards = PlayMath.yards(from: aimOrigin, to: cursor)
+        let yards = PlayMath.yards(from: cursor, to: pinCoord)
         guard yards > 0 else { return nil }
-        let bearing = HoleGeoMath.heading(from: aimOrigin, to: cursor)
+        let bearing = HoleGeoMath.heading(from: cursor, to: pinCoord)
         let rel = (wind.fromDeg - bearing) * .pi / 180
         let mph = wind.kmh / 1.609344
         let head = (mph * cos(rel) * 10).rounded() / 10
@@ -1471,7 +1473,7 @@ struct PlayHoleView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("play-hole-picker")
-            Text("\(track.strokeCount)")
+            Text(track.strokeCount > 0 ? "\(track.strokeCount)" : "–")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Color.white)
                 .frame(width: 36, height: 36)

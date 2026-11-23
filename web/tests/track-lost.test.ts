@@ -103,12 +103,13 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
       name: el.getAttribute("data-club") || "",
       sub: (el.querySelector("small")?.textContent || "").trim(),
       sug: el.classList.contains("sug"),
+      on: el.classList.contains("on"),
       text: el.textContent || "",
     })));
     assert.equal(tiles.some(tile => /Sugerido/i.test(tile.text)), false);
     assert.equal(tiles.find(tile => tile.name === "Pt")?.sub || "", "");
     assert.equal(tiles.find(tile => tile.name === "6i")?.sub, "165 yd");
-    assert.ok(tiles.some(tile => tile.sug));
+    assert.equal(tiles.filter(tile => tile.sug || tile.on).length, 1, JSON.stringify(tiles.filter(tile => tile.sug || tile.on)));
     await page.screenshot({ path: "/opt/cursor/artifacts/palos-390.png" });
     await page.click("#play-club-close");
     await page.mouse.move(195, 340);
