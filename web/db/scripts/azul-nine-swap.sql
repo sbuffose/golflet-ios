@@ -1,8 +1,8 @@
 -- Azul nine swap. DO NOT RUN.
 --
--- The web and iOS read path already presents stored hole N as N+9 (and N+9 as N)
--- from 2026-11-22. Running this script while that mapping is active would swap
--- the holes a second time and put them back on the old numbers.
+-- The ±9 display rule was withdrawn. Hole 10 keeps the stored green, and
+-- course_map_hole was never rewritten. Running this script would renumber
+-- geometry that the screen now reads as stored.
 --
 -- It is here so the geometry can be renumbered in course_map_hole later, with a
 -- backup, if Sebastián asks to store the new numbers and the read-time mapping

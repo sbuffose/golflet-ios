@@ -69,29 +69,30 @@ struct AzulHoleGeo: Identifiable, Hashable {
 
 enum AzulCourse {
     static let credit = "Mapa © OpenStreetMap contributors (ODbL) · Cancha Azul, Jockey Club"
-    /// The club swapped the two nines on this day. Stored JSON keeps the previous order.
+    /// Day the withdrawn ±9 display rule was introduced. It is not applied.
     static let nineSwapFrom = "2026-11-22"
     static let legacyDay = "2026-11-21"
 
     private static var cache: [Int: AzulHoleGeo]?
 
+    /// Withdrawn formula. Display does not call this.
     static func nineSwap(_ n: Int) -> Int {
         guard (1...18).contains(n) else { return n }
         return n <= 9 ? n + 9 : n - 9
     }
 
-    /// A missing date is the current layout, the one used while playing.
+    /// Stored geometry for every date, including a missing one. Hole 10 keeps its own green.
     static func currentLayout(playedOn: String?) -> Bool {
-        let day = String((playedOn ?? "").prefix(10))
-        guard day.count == 10 else { return true }
-        return day >= nineSwapFrom
+        _ = playedOn
+        _ = nineSwapFrom
+        return false
     }
 
     static func hole(_ n: Int, playedOn: String? = nil) -> AzulHoleGeo {
+        _ = playedOn
         let display = min(18, max(1, n))
-        let stored = currentLayout(playedOn: playedOn) ? nineSwap(display) : display
         let holes = all()
-        if var hit = holes[stored] {
+        if var hit = holes[display] {
             hit.number = display
             return hit
         }

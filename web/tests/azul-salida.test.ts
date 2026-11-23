@@ -1,4 +1,4 @@
-/** Hoyo 10 de la Azul vigente: la salida automática tiene que ser de ese hoyo, o no haber ninguna. */
+/** Par 5 whose listed tees do not measure the card. The automatic tee stays empty. */
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync } from "node:fs";

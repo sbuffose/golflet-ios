@@ -1,4 +1,4 @@
-/** Azul nine swap from 2026-11-22. Stored fixtures stay in the order used through 2026-10-04. */
+/** Azul holes keep the stored number. The ±9 rule from 2026-11-22 is withdrawn. */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -20,43 +20,43 @@ function withCard(playedOn: string) {
   return relabelAzulHoles(stored, playedOn);
 }
 
-test("la Azul vigente intercambia las dos vueltas y la tarjeta viaja con el hoyo", () => {
+test("cada hoyo de la Azul usa su geometría guardada, también desde el 22 nov 2026", () => {
   for (let n = 1; n <= 18; n++) assert.equal(azulNineSwap(azulNineSwap(n)), n);
   assert.equal(azulNineSwap(3), 12);
-  assert.equal(azulNineSwap(12), 3);
   assert.equal(AZUL_NINE_SWAP_FROM, "2026-11-22");
-  assert.equal(azulCurrentLayout("2026-11-22", null), true);
+  assert.equal(azulCurrentLayout("2026-11-22", null), false);
   assert.equal(azulCurrentLayout("2026-10-04", null), false);
   assert.equal(azulCurrentLayout(null, null), false);
-  assert.equal(azulCurrentLayout(null, "current"), true);
+  assert.equal(azulCurrentLayout(null, "current"), false);
   assert.equal(azulCurrentLayout("2026-11-22", "legacy"), false);
 
   const stored3 = azulBundledMap().holes.find(h => h.hole === 3)!;
+  const stored10 = azulBundledMap().holes.find(h => h.hole === 10)!;
+  const stored1 = azulBundledMap().holes.find(h => h.hole === 1)!;
   assert.ok(Math.abs((stored3.line[0]?.lat ?? 0) - -34.485959) < 1e-6);
+  assert.notEqual(stored10.line[0]?.lat, stored1.line[0]?.lat);
 
   const current = withCard("2026-11-22");
   const legacy = withCard("2026-10-04");
   const hole = (rows: typeof current, n: number) => byHole(rows, n) as (typeof current)[number];
 
-  assert.equal(hole(current, 12).yards, 345);
-  assert.equal(hole(current, 12).hcp, 9);
-  assert.equal(hole(current, 12).par, 4);
-  assert.equal(hole(current, 12).line[0]?.lat, stored3.line[0]?.lat);
-  assert.equal(hole(current, 3).yards, 409);
-  assert.equal(hole(current, 3).hcp, 16);
+  assert.equal(hole(current, 3).yards, 345);
+  assert.equal(hole(current, 3).hcp, 9);
   assert.equal(hole(current, 3).par, 4);
-  assert.equal(hole(current, 3).negro, 414);
-  assert.equal(hole(current, 1).par, 5);
-  assert.equal(hole(current, 1).hcp, 4);
-  assert.equal(hole(current, 1).yards, 483);
-  assert.equal(hole(current, 10).yards, 485);
-  assert.equal(hole(current, 10).negro, 488);
+  assert.equal(hole(current, 3).line[0]?.lat, stored3.line[0]?.lat);
+  assert.equal(hole(current, 12).yards, 409);
+  assert.equal(hole(current, 12).hcp, 16);
+  assert.equal(hole(current, 10).par, 5);
+  assert.equal(hole(current, 10).hcp, 4);
+  assert.equal(hole(current, 10).yards, 483);
+  assert.equal(hole(current, 10).line[0]?.lat, stored10.line[0]?.lat);
+  assert.notEqual(hole(current, 10).line[0]?.lat, stored1.line[0]?.lat);
+  assert.equal(hole(current, 1).yards, 485);
+  assert.equal(hole(current, 1).negro, 488);
 
-  assert.equal(hole(legacy, 3).yards, 345);
-  assert.equal(hole(legacy, 3).hcp, 9);
-  assert.equal(hole(legacy, 3).line[0]?.lat, stored3.line[0]?.lat);
+  assert.equal(hole(legacy, 3).yards, hole(current, 3).yards);
+  assert.equal(hole(legacy, 10).line[0]?.lat, hole(current, 10).line[0]?.lat);
   assert.equal(hole(legacy, 12).yards, 409);
-  assert.equal(azulBundledMap().holes.find(h => h.hole === 3)?.line[0]?.lat, stored3.line[0]?.lat);
 });
 
 test("las tarjetas importadas hasta el 4 oct 2026 siguen en el orden viejo", () => {
@@ -71,14 +71,15 @@ test("las tarjetas importadas hasta el 4 oct 2026 siguen en el orden viejo", () 
   assert.equal(round.holes.map(h => h.hole).join(","), Array.from({ length: 18 }, (_, i) => i + 1).join(","));
 });
 
-test("el plan de respaldo de la Azul se numera con la vuelta nueva y Colorada no", () => {
+test("el plan de respaldo de la Azul usa el número guardado y Colorada también", () => {
   const azul = jockeyFallback("1:Azul")!;
   const hole = (n: number) => azul.holes.find(h => h.hole === n)!;
   assert.deepEqual(azul.published_holes, Array.from({ length: 18 }, (_, i) => i + 1));
-  assert.match(hole(12).why || "", /345 yd/);
-  assert.match(hole(3).why || "", /409 yd/);
-  assert.equal(hole(16).plan_title, "Híbrido al centro y wedge al green");
-  assert.equal(hole(17).plan_title, "Hierro largo al centro");
+  assert.match(hole(3).why || "", /345 yd/);
+  assert.match(hole(12).why || "", /409 yd/);
+  assert.match(hole(10).why || "", /483 yd/);
+  assert.equal(hole(7).plan_title, "Híbrido al centro y wedge al green");
+  assert.equal(hole(8).plan_title, "Hierro largo al centro");
   const colorada = jockeyFallback("1:Colorada")!;
   assert.match(colorada.holes.find(h => h.hole === 1)?.why || "", /425 yd/);
   assert.equal(colorada.holes.find(h => h.hole === 3)?.hole, 3);

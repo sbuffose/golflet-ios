@@ -1,4 +1,4 @@
-/** 375px captures of the Azul holes after the nine swap. */
+/** 375px captures of Azul holes on their stored geometry, including hole 10. */
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
@@ -25,7 +25,7 @@ const map = {
   holes: current,
 };
 
-test("la Azul nueva muestra los hoyos 1, 3 y 12 a 375", { timeout: 90_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+test("la Azul muestra los hoyos 1, 3, 10 y 12 con su geometría guardada", { timeout: 120_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", "http://127.0.0.1");
     const path = decodeURIComponent(url.pathname);
@@ -53,11 +53,13 @@ test("la Azul nueva muestra los hoyos 1, 3 y 12 a 375", { timeout: 90_000, skip:
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
   const art = "/opt/cursor/artifacts";
   mkdirSync(art, { recursive: true });
-  const teeLat = (n: number) => current.find(h => h.hole === n)!.tees[0]!.center!.lat;
+  const teeLats = (n: number) => current.find(h => h.hole === n)!.tees.map(t => t.center!.lat);
+  const greenLat = (n: number) => current.find(h => h.hole === n)!.green.center!.lat;
   const expect = [
-    { hole: 1, label: "Par 5", yards: "483 yd", hcp: "S.I. 4", lat: teeLat(1) },
-    { hole: 3, label: "Par 4", yards: "409 yd", hcp: "S.I. 16", lat: teeLat(3) },
-    { hole: 12, label: "Par 4", yards: "345 yd", hcp: "S.I. 9", lat: teeLat(12) },
+    { hole: 1, label: "Par 5", yards: "485 yd", hcp: "S.I. 5", tees: teeLats(1), flag: greenLat(1) },
+    { hole: 3, label: "Par 4", yards: "345 yd", hcp: "S.I. 9", tees: teeLats(3), flag: greenLat(3) },
+    { hole: 10, label: "Par 5", yards: "483 yd", hcp: "S.I. 4", tees: teeLats(10), flag: greenLat(10) },
+    { hole: 12, label: "Par 4", yards: "409 yd", hcp: "S.I. 16", tees: teeLats(12), flag: greenLat(12) },
   ];
   try {
     const page = await browser.newPage();
@@ -75,8 +77,18 @@ test("la Azul nueva muestra los hoyos 1, 3 y 12 a 375", { timeout: 90_000, skip:
       assert.match(seen, new RegExp(row.yards));
       assert.match(seen, new RegExp(row.hcp));
       const ball = await page.$eval("#tkmap", el => Number(el.getAttribute("data-ball-lat")));
-      assert.ok(Math.abs(ball - row.lat) < 1e-5, `hoyo ${row.hole} lat ${ball} vs ${row.lat}`);
-      await page.screenshot({ path: join(art, `web-375-azul-hoyo-${row.hole}-nuevo.png`) });
+      const flag = await page.$eval("#tkmap", el => Number(el.getAttribute("data-flag-lat")));
+      assert.ok(row.tees.some(lat => Math.abs(ball - lat) < 1e-5), `hoyo ${row.hole} lat ${ball} fuera de sus salidas`);
+      assert.ok(Math.abs(flag - row.flag) < 1e-5, `hoyo ${row.hole} bandera ${flag} vs ${row.flag}`);
+      if (row.hole === 10) assert.ok(Math.abs(flag - greenLat(1)) > 0.001, "el hoyo 10 no usa el green del 1");
+      await page.screenshot({ path: join(art, `web-375-azul-hoyo-${row.hole}.png`) });
+      if (row.hole === 10) {
+        for (let i = 0; i < 4; i++) await page.click("#play-zoom-out");
+        await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-moving") === "0");
+        await page.screenshot({ path: join(art, "web-375-azul-hoyo-10-lejos.png") });
+        for (let i = 0; i < 4; i++) await page.click("#play-zoom-in");
+        await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-moving") === "0");
+      }
       if (row.hole === 12) {
         for (let i = 0; i < 6; i++) await page.click("#play-zoom-out");
         await page.waitForFunction(() => document.querySelector("#tkmap")?.getAttribute("data-moving") === "0");

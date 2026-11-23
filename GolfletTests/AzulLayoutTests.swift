@@ -21,14 +21,18 @@ final class AzulLayoutTests: XCTestCase {
         XCTAssertNil(AzulCourse.layout(forCourse: "Azul", hole: 99))
     }
 
-    func testAzulNinesSwapFrom22November() {
-        let current12 = AzulCourse.layout(forCourse: "Azul", hole: 12)
-        let legacy3 = AzulCourse.layout(forCourse: "Azul", hole: 3, playedOn: "2026-10-04")
-        let legacy12 = AzulCourse.layout(forCourse: "Azul", hole: 12, playedOn: AzulCourse.legacyDay)
-        XCTAssertEqual(current12?.number, 12)
-        XCTAssertEqual(current12?.line.first?.lat ?? 0, legacy3?.line.first?.lat ?? 1, accuracy: 0.0000001)
-        XCTAssertNotEqual(current12?.line.first?.lat, legacy12?.line.first?.lat)
+    func testAzulHolesKeepStoredGeometry() {
+        let hole10 = AzulCourse.layout(forCourse: "Azul", hole: 10, playedOn: "2026-11-22")
+        let hole10Legacy = AzulCourse.layout(forCourse: "Azul", hole: 10, playedOn: "2026-10-04")
+        let hole1 = AzulCourse.layout(forCourse: "Azul", hole: 1)
+        let hole12 = AzulCourse.layout(forCourse: "Azul", hole: 12, playedOn: AzulCourse.legacyDay)
+        let hole3 = AzulCourse.layout(forCourse: "Azul", hole: 3, playedOn: "2026-11-22")
+        XCTAssertEqual(hole10?.number, 10)
+        XCTAssertEqual(hole10?.line.first?.lat ?? 0, hole10Legacy?.line.first?.lat ?? 1, accuracy: 0.0000001)
+        XCTAssertNotEqual(hole10?.line.first?.lat, hole1?.line.first?.lat)
+        XCTAssertNotEqual(hole12?.line.first?.lat, hole3?.line.first?.lat)
+        XCTAssertFalse(AzulCourse.currentLayout(playedOn: nil))
+        XCTAssertFalse(AzulCourse.currentLayout(playedOn: "2026-11-22"))
         XCTAssertEqual(AzulCourse.nineSwap(AzulCourse.nineSwap(3)), 3)
-        XCTAssertEqual(AzulCourse.layout(forCourse: "Azul", hole: 1)?.line.first?.lat ?? 0, AzulCourse.layout(forCourse: "Azul", hole: 10, playedOn: "2026-10-04")?.line.first?.lat ?? 1, accuracy: 0.0000001)
     }
 }

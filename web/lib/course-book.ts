@@ -6,9 +6,6 @@ import { getGreenGuide } from "./green-guide";
 import { hourlyWind, FORECAST_DAYS, addDays, dayDiff } from "./weather-hourly";
 import { DEFAULT_MIN_PER_HOLE, holeSchedule, windAt } from "./plan-core";
 import { nowAR } from "./tee-times-core";
-import { isJockeyAzul } from "./azul-osm";
-import { azulNineSwap } from "./azul-layout";
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export async function courseBookData(clubCode: string, course: string, o: { date?: string | null; time?: string | null } = {}) {
@@ -19,9 +16,8 @@ export async function courseBookData(clubCode: string, course: string, o: { date
   const comp = await courseCompletenessFor(clubCode, course), relev = new Set((comp as any).override ? [] : comp.holes_en_relevamiento);
   const card = (n: number) => (c?.holes || []).find((h: any) => h.hole === n);
   const ydOf = (h: any) => { const y = h?.yards || {}; return y.AZUL ?? y.Azul ?? (Object.values(y) as number[])[0] ?? null; };
-  const current = isJockeyAzul(clubCode, course) && map?.layout === "current";
   const holes = Array.from({ length: 18 }, (_, i) => i + 1).map(n => {
-    const stored = current ? azulNineSwap(n) : n;
+    const stored = n;
     const row = card(stored), mh = map?.holes?.find((h: any) => h.hole === n);
     return { hole: n, order: n, par: row?.par ?? mh?.crosscheck?.card?.par ?? guide?.holes[stored]?.par ?? null,
       play_length_yd: ydOf(row) ?? mh?.play_length_yd ?? guide?.holes[stored]?.yd ?? null, bearing_true: mh?.bearing?.tee_to_green_true ?? null,
