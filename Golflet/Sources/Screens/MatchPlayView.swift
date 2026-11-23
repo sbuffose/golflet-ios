@@ -102,8 +102,8 @@ struct MatchPlayView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(p.primary)
-        .overlay {
+        .background {
+            p.primary
             if closed {
                 RoundedRectangle(cornerRadius: 0)
                     .stroke(p.accent, lineWidth: 2)

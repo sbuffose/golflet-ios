@@ -1714,10 +1714,14 @@ final class GolfletUITests: XCTestCase {
         done.launchArguments = ["-ui-testing", "-ui-testing-match-done"]
         done.launch()
         XCTAssertTrue(waitFor(done, "screen-partido-vivo"))
-        let won = done.staticTexts["Ganó Vos 3&2"]
-        XCTAssertTrue(won.waitForExistence(timeout: 8))
-        XCTAssertTrue(won.isHittable)
-        XCTAssertTrue(done.staticTexts["Ganó Joaquín L. 3&2"].exists)
+        let won = done.staticTexts.matching(NSPredicate(format: "label == %@", "Ganó Vos 3&2"))
+        XCTAssertTrue(won.element(boundBy: 0).waitForExistence(timeout: 8))
+        XCTAssertEqual(won.count, 2, "Vos gana 3&2 contra los otros dos")
+        XCTAssertTrue(won.element(boundBy: 0).isHittable)
+        XCTAssertTrue(won.element(boundBy: 1).isHittable)
+        let other = done.staticTexts["Ganó Joaquín L. 3&2"].firstMatch
+        XCTAssertTrue(other.waitForExistence(timeout: 8))
+        XCTAssertTrue(other.isHittable)
         XCTAssertFalse(first(done, "match-track").exists)
         let doneWidth = Int(done.windows.firstMatch.frame.width.rounded())
         saveShot("ios-\(doneWidth)-partido-terminado")
