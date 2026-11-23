@@ -2904,11 +2904,12 @@ img.me-face{object-fit:cover;padding:0}
 .tk-chips{position:absolute;top:calc(58px + env(safe-area-inset-top));left:12px;right:auto;z-index:4;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:168px;pointer-events:none}
 .tk-chip{background:#0B2545;color:#F6F7F9;border-radius:14px;padding:6px 8px;font-size:12px;font-weight:650;font-style:normal}
 .tk-wx{display:inline-flex;flex-direction:row;align-items:center;gap:8px;border:0;font:650 12px/1.15 Geist,system-ui,sans-serif;font-style:normal;pointer-events:auto;max-width:min(300px,calc(100vw - 78px));text-align:left}
-.tk-wxarr{width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:36px solid #E2B93B;transform-origin:50% 78%;flex:none}
+.tk-wxarr{width:36px;height:36px;flex:none;transform-origin:50% 50%;display:block}
 .tk-wxcopy{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0}
 .tk-wxface{font:700 13px/1.15 Geist,system-ui,sans-serif;color:#F6F7F9;white-space:nowrap}
 .tk-wx .num{white-space:nowrap}
 .tk-wx small{font-size:10px;font-weight:550;opacity:.75;white-space:nowrap}
+.tk-wxnote{opacity:1;color:#E2B93B;font-weight:650}
 .tk-wxwhy{pointer-events:auto;background:#fff;color:#0B2545;border-radius:12px;padding:8px 10px;max-width:168px;text-align:left;font-style:normal}
 .tk-wxwhy p{margin:0}
 .tk-wxwhy button{margin-top:8px;background:#C8102E;color:#fff;border:0;border-radius:999px;min-height:36px;padding:8px 12px;font:650 13px/1 Geist,system-ui,sans-serif;font-style:normal}

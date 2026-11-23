@@ -5,6 +5,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import test from "node:test";
+import { holeSpan, windArrow, windFace } from "../lib/play-rules";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
@@ -18,8 +19,11 @@ const hav = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) =
 };
 const GREEN = { lat: -34.48306, lng: -58.52882 };
 const TEE = { lat: GREEN.lat - (414 * YD) / ((6371000 * Math.PI) / 180), lng: GREEN.lng };
+const GREEN_EAST = { lat: -34.4812, lng: -58.522 };
+const TEE_EAST = { lat: GREEN_EAST.lat, lng: GREEN_EAST.lng - (520 * YD) / (6371000 * Math.cos(GREEN_EAST.lat * Math.PI / 180) * Math.PI / 180) };
 const hole = { hole: 3, par: 4, hcp: 16, yards: { NEGRO: 414, AZUL: 409, BLANCO: 399, AMARILLO: 389 }, tee: TEE, green: { center: GREEN }, line: [TEE, GREEN], tees: [{ center: TEE }] };
-const course = { club_code: "118", course: "Azul", course_id: "118-azul", holes: [hole] };
+const holeEast = { hole: 4, par: 5, hcp: 4, yards: { NEGRO: 520 }, tee: TEE_EAST, green: { center: GREEN_EAST }, line: [TEE_EAST, GREEN_EAST], tees: [{ center: TEE_EAST }] };
+const course = { club_code: "118", course: "Azul", course_id: "118-azul", holes: [hole, holeEast] };
 
 test("el track de hoy muestra el viento y, si no hay datos, un guion", { timeout: 90_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
   const server = createServer(async (req, res) => {
@@ -78,6 +82,26 @@ test("el track de hoy muestra el viento y, si no hay datos, un guion", { timeout
     const copy = await page.$eval(".tk-wxcopy .num", el => ({ text: (el.textContent || "").trim(), h: el.getBoundingClientRect().height }));
     assert.match(copy.text, /12 km\/h · ráfagas 31 km\/h · 26°C/);
     assert.ok(copy.h < 22, JSON.stringify(copy));
+    const north = holeSpan(TEE, GREEN);
+    assert.ok(north && Math.abs(north.bearing) < 1, JSON.stringify(north));
+    const northFace = windFace(241, north!.bearing);
+    const northTurn = Math.round(windArrow(241, north!.bearing) || 0);
+    const widget = await page.$eval("#play-wx", el => {
+      const face = el.querySelector(".tk-wxface");
+      return {
+        mode: el.getAttribute("data-wind"),
+        turn: el.getAttribute("data-turn"),
+        face: (face?.textContent || "").trim(),
+        faceH: face ? face.getBoundingClientRect().height : 0,
+        note: (el.querySelector(".tk-wxnote")?.textContent || "").trim(),
+      };
+    });
+    assert.equal(widget.mode, "hoyo");
+    assert.equal(widget.face, "A favor y cruzado de izquierda");
+    assert.equal(widget.face, northFace);
+    assert.equal(widget.turn, String(northTurn));
+    assert.equal(widget.note, "");
+    assert.ok(widget.faceH < 22, JSON.stringify(widget));
     const placed = await page.evaluate(() => {
       const map = document.querySelector("#tkmap");
       const text = (document.querySelector("#tkro")?.textContent || "").replace(/\s+/g, " ");
@@ -108,6 +132,34 @@ test("el track de hoy muestra el viento y, si no hay datos, un guion", { timeout
     assert.equal(covers, false, JSON.stringify(placed));
     assert.ok(placed.face > 0, JSON.stringify(placed.face));
     await page.screenshot({ path: join(art, "web-375-clima-viento.png") });
+    await page.click("#tknext");
+    await page.waitForFunction(() => (document.querySelector(".tk-hn")?.textContent || "").includes("Hoyo 4"), { timeout: 15000 });
+    const east = holeSpan(TEE_EAST, GREEN_EAST);
+    assert.ok(east && Math.abs(east.bearing - 90) < 1, JSON.stringify(east));
+    const eastFace = windFace(241, east!.bearing);
+    const eastTurn = Math.round(windArrow(241, east!.bearing) || 0);
+    await page.waitForFunction((face) => (document.querySelector(".tk-wxface")?.textContent || "").trim() === face, { timeout: 15000 }, eastFace);
+    const turned = await page.$eval("#play-wx", el => ({
+      mode: el.getAttribute("data-wind"),
+      turn: el.getAttribute("data-turn"),
+      face: (el.querySelector(".tk-wxface")?.textContent || "").trim(),
+      bits: (el.querySelector(".num")?.textContent || "").trim(),
+      src: (el.querySelector("small:not(.tk-wxnote)")?.textContent || "").trim(),
+      note: (el.querySelector(".tk-wxnote")?.textContent || "").trim(),
+      hole: (document.querySelector(".tk-hn")?.textContent || "").replace(/\s+/g, " ").trim(),
+    }));
+    assert.equal(turned.mode, "hoyo");
+    assert.equal(turned.face, "A favor y cruzado de derecha");
+    assert.equal(turned.face, eastFace);
+    assert.equal(turned.turn, String(eastTurn));
+    assert.notEqual(turned.turn, String(northTurn));
+    assert.match(turned.bits, /12 km\/h · ráfagas 31 km\/h · 26°C/);
+    assert.match(turned.src, /Open-Meteo/);
+    assert.match(turned.hole, /Par 5/);
+    assert.equal(turned.note, "");
+    await page.waitForFunction(() => document.querySelectorAll("#tkmap img").length > 2, { timeout: 8000 }).catch(() => {});
+    await new Promise(r => setTimeout(r, 400));
+    await page.screenshot({ path: join(art, "web-375-viento-rumbo.png") });
   } finally {
     await browser.close();
     server.close();

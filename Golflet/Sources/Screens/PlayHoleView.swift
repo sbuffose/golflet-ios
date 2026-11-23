@@ -737,17 +737,22 @@ struct PlayHoleView: View {
                                 .accessibilityHidden(true)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            if let face = windFace(wind) {
-                                Text(face)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .lineLimit(1)
-                            }
+                            Text(windFace(wind))
+                                .font(.system(size: 13, weight: .bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Text(windBits(wind))
                                 .lineLimit(1)
                             Text(wind.source + (wind.hhmm.isEmpty ? "" : " \(wind.hhmm)") + (wind.stale ? " · última lectura" : ""))
                                 .font(.system(size: 10, weight: .medium))
                                 .opacity(0.75)
                                 .lineLimit(1)
+                            if holeBearing == nil {
+                                Text(HoleWind.missingBearingNote)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Color(hex: 0xE2B93B))
+                                    .lineLimit(1)
+                            }
                         }
                     } else if windTried {
                         Text("–")
@@ -1012,15 +1017,30 @@ struct PlayHoleView: View {
         return club == "pt" || club == "putter"
     }
 
-    private var windTurn: Double? {
-        guard let from = nowWind?.fromDeg else { return nil }
-        let bearing = HoleGeoMath.heading(from: teeCoord, to: pinCoord)
-        return HoleWind.pushDegrees(fromDeg: from, bearingDeg: bearing)
+    /// Tee and green from the hole record, or a tee the player already placed.
+    /// A missing end, or a span that is not one hole, is not a bearing.
+    private var holeBearing: Double? {
+        let pin = holeRecord?.dayPin?.coord ?? current?.green.center ?? current?.green.front ?? current?.green.back
+        let tee = chosenTee ?? current?.tee
+        guard let pin, let tee else { return nil }
+        let meters = Double(PlayMath.meters(from: tee, to: pin))
+        guard meters >= 40, meters <= 700 else { return nil }
+        return HoleGeoMath.heading(from: tee, to: pin)
     }
 
-    private func windFace(_ wind: WeatherNow) -> String? {
-        let bearing = HoleGeoMath.heading(from: teeCoord, to: pinCoord)
-        return "\(HoleWind.side(fromDeg: wind.fromDeg, bearingDeg: bearing)) · \(HoleWind.cardinal(fromDeg: wind.fromDeg))"
+    private var windTurn: Double? {
+        guard let from = nowWind?.fromDeg else { return nil }
+        if let bearing = holeBearing {
+            return HoleWind.pushDegrees(fromDeg: from, bearingDeg: bearing)
+        }
+        return HoleWind.absoluteDegrees(fromDeg: from)
+    }
+
+    private func windFace(_ wind: WeatherNow) -> String {
+        if let bearing = holeBearing {
+            return HoleWind.face(fromDeg: wind.fromDeg, bearingDeg: bearing)
+        }
+        return HoleWind.absoluteFace(fromDeg: wind.fromDeg)
     }
 
     private func windBits(_ wind: WeatherNow) -> String {

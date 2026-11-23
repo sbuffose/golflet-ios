@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { currentWeather, type NowReading } from "../lib/weather-now";
-import { windArrow, windCardinal, windSide } from "../lib/play-rules";
+import { windAbsolute, windArrow, windCardinal, windFace, windSide } from "../lib/play-rules";
 
 const openBody = {
   current: { time: "2026-11-22T18:15", wind_speed_10m: 12.3, wind_direction_10m: 241, wind_gusts_10m: 31.3, temperature_2m: 25.6, precipitation: 0 },
@@ -95,6 +95,22 @@ test("la flecha sale del tee hacia el green", () => {
   assert.equal(windSide(90, 0), "cruzado de derecha");
   assert.equal(windSide(270, 0), "de izquierda");
   assert.equal(windSide(null, 0), null);
+  assert.equal(windFace(0, 0), "En contra");
+  assert.equal(windFace(180, 0), "A favor");
+  assert.equal(windFace(90, 0), "Cruzado de derecha");
+  assert.equal(windFace(270, 0), "Cruzado de izquierda");
+  assert.equal(windFace(45, 0), "En contra y cruzado de derecha");
+  assert.equal(windFace(135, 0), "A favor y cruzado de derecha");
+  assert.equal(windFace(225, 0), "A favor y cruzado de izquierda");
+  assert.equal(windFace(315, 0), "En contra y cruzado de izquierda");
+  assert.equal(windFace(241, 0), "A favor y cruzado de izquierda");
+  assert.equal(windFace(241, 90), "A favor y cruzado de derecha");
+  assert.equal(windFace(null, 0), null);
+  assert.equal(windFace(180, null), null);
+  const abs = windAbsolute(241);
+  assert.equal(abs?.face, "Desde el SO");
+  assert.equal(abs?.turn, 61);
+  assert.equal(windAbsolute(null), null);
   assert.equal(windCardinal(0), "N");
   assert.equal(windCardinal(45), "NE");
   assert.equal(windCardinal(180), "S");

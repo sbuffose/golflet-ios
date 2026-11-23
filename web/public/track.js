@@ -780,18 +780,20 @@
       const temp = S.wind.temp_c != null ? `${Math.round(Number(S.wind.temp_c))}°C` : '';
       const gust = S.wind.gust_kmh != null ? `ráfagas ${Math.round(Number(S.wind.gust_kmh))} km/h` : '';
       const rain = Number(S.wind.precip_mm) > 0 || S.wind.condition === 'lluvia' || S.wind.condition === 'tormenta' ? 'lluvia' : '';
-      const from = S.track.tee || S.suggestedTee;
-      const to = S.track.flag || cupLL();
-      const bearing = from && to ? R().bearingDeg(from, to) : null;
-      const turn = S.wind.from_deg != null && bearing != null && R().windArrow ? R().windArrow(S.wind.from_deg, bearing) : null;
-      const side = S.wind.from_deg != null && bearing != null && R().windSide ? R().windSide(S.wind.from_deg, bearing) : '';
-      const card = S.wind.from_deg != null && R().windCardinal ? R().windCardinal(S.wind.from_deg) : '';
-      const face = [side, card].filter(Boolean).join(' · ');
-      const arrow = turn == null ? '' : `<span class="tk-wxarr" style="transform:rotate(${Math.round(turn)}deg)" aria-hidden="true"></span>`;
+      const flag = S.track.flag || verifiedFlag();
+      const played = S.track.tee && flag && R().holeSpan && R().holeSpan(S.track.tee, flag) ? S.track.tee : null;
+      const tee = played || (spanOk() ? verifiedTee() : null);
+      const span = tee && flag && R().holeSpan ? R().holeSpan(tee, flag) : null;
+      const bearing = span ? span.bearing : null;
+      const abs = S.wind.from_deg != null && R().windAbsolute ? R().windAbsolute(S.wind.from_deg) : null;
+      const turn = bearing != null && R().windArrow ? R().windArrow(S.wind.from_deg, bearing) : (abs ? abs.turn : null);
+      const face = bearing != null && R().windFace ? (R().windFace(S.wind.from_deg, bearing) || '') : (abs ? abs.face : '');
+      const note = bearing == null && abs ? 'Sin rumbo del hoyo' : '';
+      const arrow = turn == null ? '' : `<svg class="tk-wxarr" viewBox="0 0 36 36" width="36" height="36" style="transform:rotate(${Math.round(turn)}deg)" aria-hidden="true"><path d="M18 30V12" fill="none" stroke="#E2B93B" stroke-width="3.2" stroke-linecap="round"/><path d="M10 16.5 18 6.5 26 16.5" fill="none" stroke="#E2B93B" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
       const bits = [`${Math.round(Number(S.wind.kmh))} km/h`, gust, temp, rain].filter(Boolean).join(' · ');
       const when = S.wind.hhmm || '';
       const src = S.wind.source ? `${S.wind.source}${when ? ` ${when}` : ''}${S.wind.stale ? ' · última lectura' : ''}` : when;
-      return `<button type="button" class="tk-chip tk-wx" id="play-wx">${arrow}<span class="tk-wxcopy">${face ? `<b class="tk-wxface">${esc(face)}</b>` : ''}<b class="num">${esc(bits)}</b>${src ? `<small>${esc(src)}</small>` : ''}</span></button>`;
+      return `<button type="button" class="tk-chip tk-wx" id="play-wx" data-wind="${bearing == null ? 'absoluto' : 'hoyo'}" data-turn="${turn == null ? '' : Math.round(turn)}">${arrow}<span class="tk-wxcopy">${face ? `<b class="tk-wxface">${esc(face)}</b>` : ''}<b class="num">${esc(bits)}</b>${src ? `<small>${esc(src)}</small>` : ''}${note ? `<small class="tk-wxnote">${esc(note)}</small>` : ''}</span></button>`;
     };
 
     const paintDriver = () => {

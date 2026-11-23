@@ -134,7 +134,7 @@ test("el tiro vivo mide desde la mira y el panel cabe en una barra", { timeout: 
     assert.equal(titleHitsFlag, false, JSON.stringify({ title, flag }));
     await page.waitForFunction(() => {
       const text = document.querySelector("#play-wx")?.textContent || "";
-      return text.includes("a favor") && text.includes("18 km/h") && text.includes("ráfagas 7") && text.includes("22°C");
+      return text.includes("A favor") && text.includes("18 km/h") && text.includes("ráfagas 7") && text.includes("22°C");
     }, { timeout: 15000 });
     const cardWind = await page.$eval("#tkro", el => el.textContent || "");
     assert.equal(/más|menos|en contra|a favor|Sin dirección|ráfagas/.test(cardWind), false, cardWind);

@@ -121,6 +121,28 @@ enum HoleWind {
         return "de izquierda"
     }
 
+    /// Track label. Up the screen is the tee-to-flag line. A mix names both parts.
+    static func face(fromDeg: Double, bearingDeg: Double) -> String {
+        let rel = normalize(fromDeg - bearingDeg)
+        let side = rel > 0 && rel < 180 ? "derecha" : "izquierda"
+        if rel <= 22.5 || rel >= 337.5 { return "En contra" }
+        if rel >= 157.5 && rel <= 202.5 { return "A favor" }
+        if (rel > 67.5 && rel < 112.5) || (rel > 247.5 && rel < 292.5) { return "Cruzado de \(side)" }
+        if rel < 90 || rel > 270 { return "En contra y cruzado de \(side)" }
+        return "A favor y cruzado de \(side)"
+    }
+
+    /// North stays up. Used only when the hole has no verified tee-to-green bearing.
+    static func absoluteDegrees(fromDeg: Double) -> Double {
+        normalize(fromDeg + 180)
+    }
+
+    static func absoluteFace(fromDeg: Double) -> String {
+        "Desde el \(cardinal(fromDeg: fromDeg))"
+    }
+
+    static let missingBearingNote = "Sin rumbo del hoyo"
+
     /// Arrow points where the wind pushes the ball: up the screen is the direction of play.
     static func arrowDegrees(_ relative: Relative) -> Double {
         switch relative {

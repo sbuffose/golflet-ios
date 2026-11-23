@@ -19,6 +19,8 @@ exports.windRelative = windRelative;
 exports.windArrow = windArrow;
 exports.windCardinal = windCardinal;
 exports.windSide = windSide;
+exports.windFace = windFace;
+exports.windAbsolute = windAbsolute;
 exports.windPlay = windPlay;
 exports.onCup = onCup;
 exports.puttFeet = puttFeet;
@@ -250,6 +252,33 @@ function windSide(fromDeg, bearing) {
     if (delta >= 45 && delta < 135)
         return "cruzado de derecha";
     return "de izquierda";
+}
+/**
+ * Clear face for the track chip. The tee-to-flag line is up.
+ * A pure crosswind stays one phrase. A mix names both parts.
+ * Wind from the player's right is «Cruzado de derecha».
+ */
+function windFace(fromDeg, bearing) {
+    if (fromDeg == null || bearing == null || !Number.isFinite(+fromDeg) || !Number.isFinite(+bearing))
+        return null;
+    const rel = norm(+fromDeg - +bearing);
+    const side = rel > 0 && rel < 180 ? "derecha" : "izquierda";
+    if (rel <= 22.5 || rel >= 337.5)
+        return "En contra";
+    if (rel >= 157.5 && rel <= 202.5)
+        return "A favor";
+    if ((rel > 67.5 && rel < 112.5) || (rel > 247.5 && rel < 292.5))
+        return `Cruzado de ${side}`;
+    if (rel < 90 || rel > 270)
+        return `En contra y cruzado de ${side}`;
+    return `A favor y cruzado de ${side}`;
+}
+/** North-up arrow when the hole has no verified bearing. The face says where the wind comes from. */
+function windAbsolute(fromDeg) {
+    const card = windCardinal(fromDeg);
+    if (fromDeg == null || !Number.isFinite(+fromDeg) || !card)
+        return null;
+    return { turn: norm(+fromDeg + 180), face: `Desde el ${card}` };
 }
 function windPlay(hole, fromDeg, bearing, speedKmh) {
     if (bearing == null || !Number.isFinite(+bearing)) {
