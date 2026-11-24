@@ -52,5 +52,10 @@ final class AzulLayoutTests: XCTestCase {
         XCTAssertEqual(AzulCourse.nineSwap(11), 11)
         XCTAssertEqual(AzulCourse.nineSwap(3), 12)
         XCTAssertEqual(AzulCourse.nineSwap(9), 18)
+        XCTAssertEqual(AzulCourse.hole(3, playedOn: "2026-11-22").par, 4)
+        XCTAssertEqual(AzulCourse.hole(7, playedOn: "2026-11-22").par, 4)
+        XCTAssertEqual(AzulCourse.hole(8, playedOn: "2026-11-22").par, 5)
+        XCTAssertEqual(AzulCourse.hole(16, playedOn: "2026-11-22").par, 3)
+        XCTAssertEqual(AzulCourse.hole(17, playedOn: "2026-11-22").par, 4)
     }
 }

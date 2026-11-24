@@ -865,6 +865,13 @@ struct PlayHoleView: View {
                 }
                 distances
                 holeNav
+                if let note = current?.yardsNote, !note.isEmpty {
+                    Text(note)
+                        .font(GFont.ui(11, weight: .semibold))
+                        .foregroundStyle(p.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("play-yard-note")
+                }
                 if let movingID = movingShotID, let moving = shots.first(where: { $0.id == movingID }) {
                     Text("Mové el mapa y tocá Guardar punto.")
                         .font(GType.label)
@@ -1257,13 +1264,13 @@ struct PlayHoleView: View {
         return ZStack(alignment: .bottom) {
             Color(hex: 0x0B2545).opacity(0.28).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 12) {
-                Text("Palo")
+                Text(clubSheetTitle)
                     .font(GFont.ui(16, weight: .bold))
                     .foregroundStyle(p.ink)
                     .padding(.leading, 4)
                     .padding(.trailing, 44)
                     .accessibilityIdentifier("play-club-sheet")
-                    .accessibilityLabel("Palo")
+                    .accessibilityLabel(clubSheetTitle)
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(model.bag, id: \.name) { club in
                         let on = chosenClub == club.name
@@ -1327,7 +1334,11 @@ struct PlayHoleView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("play-club-sheet")
-        .accessibilityLabel("Palo")
+        .accessibilityLabel(clubSheetTitle)
+    }
+
+    private var clubSheetTitle: String {
+        buenaPick ? "Palo del golpe a buena" : "Palo"
     }
 
     private func gridName(_ raw: String) -> String {

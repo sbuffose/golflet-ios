@@ -512,7 +512,8 @@ enum PlayParser {
             yards: yards,
             green: GPSGreen(front: coord(green["front"]), center: coord(green["center"]), back: coord(green["back"])),
             tee: coord(tee),
-            tees: tees
+            tees: tees,
+            yardsNote: blob["yards_note"] as? String
         )
     }
 

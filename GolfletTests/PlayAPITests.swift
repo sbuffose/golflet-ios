@@ -75,6 +75,20 @@ final class PlayAPITests: XCTestCase {
         ])
         XCTAssertEqual(paced?.minutesPerHole, 14)
 
+        let noted = PlayParser.courseDetail([
+            "course_id": "118-jockey-azul",
+            "holes": [[
+                "hole": 17,
+                "par": 4,
+                "hcp": 2,
+                "yards": ["AZUL": 411, "AMARILLO": 391],
+                "yards_note": "El handbook marca 391. La tarjeta dice 500 en el amarillo del hoyo 8 físico."
+            ]]
+        ])
+        XCTAssertEqual(noted?.holes.first?.yards["AZUL"], 411)
+        XCTAssertEqual(noted?.holes.first?.yards["AMARILLO"], 391)
+        XCTAssertEqual(noted?.holes.first?.yardsNote, "El handbook marca 391. La tarjeta dice 500 en el amarillo del hoyo 8 físico.")
+
         let pending = PlayParser.recap([
             "id": "r1",
             "status": "pending_ai",
