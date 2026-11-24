@@ -847,6 +847,20 @@
       const face = clubFace(id, label);
       return `<img class="tk-clubface" src="${esc(thumb.src)}" alt="" data-kind="${esc(thumb.kind || '')}" data-face="${esc(face)}" data-fallback="${esc(faceSvg(face))}">`;
     };
+    let clubChoices = [];
+    const bagRow = id => (S.bag || []).find(b => b && (b.id === id || b.code === id || b.club === id || b.label === id));
+    const carryOf = id => {
+      const row = bagRow(id);
+      const n = row && (row.total || row.carry);
+      return n ? String(n) : '';
+    };
+    const tileYards = c => {
+      if (!c) return '';
+      if (R().isPutterClub && R().isPutterClub(c.id, c.label)) return '';
+      const row = bagRow(c.id);
+      const n = row && (row.carry || row.total);
+      return n ? `${n} yd` : '';
+    };
     const render = () => {
       stopCam();
       const rec = holeRec(), par = rec.par || gpsHole()?.par, hcp = rec.hcp || gpsHole()?.hcp;
@@ -858,25 +872,13 @@
       const marks = S.track.marks.length ? S.track.marks : S.shots.filter(s => s.hole === S.hole).map((s, i) => ({ id: s.id || i, club: s.club, countsStroke: s.result !== 'penalty', holed: s.result === 'holed', penalty: s.result === 'penalty' || s.result === 'water', drop: false }));
       const bag = R().bagClubs ? R().bagClubs(S.bag) : [];
       const showClub = (retro ? phase === 'tracking' && !S.done : phase === 'tracking');
-      const clubChoices = [];
+      clubChoices = [];
       if (showClub || S.editN || S.pickClub) {
         if (!(bag.some(c => R().isPutterClub && R().isPutterClub(c.id, c.label)))) clubChoices.push({ id: putterChoice(), label: 'Putter' });
         bag.forEach(c => clubChoices.push({ id: c.id, label: c.label }));
       }
       const clubBlank = S.club ? '' : '<option value="">Elegir palo</option>';
       const picked = clubChoices.find(c => c.id === S.club);
-      const bagRow = id => (S.bag || []).find(b => b && (b.id === id || b.code === id || b.club === id || b.label === id));
-      const carryOf = id => {
-        const row = bagRow(id);
-        const n = row && (row.total || row.carry);
-        return n ? String(n) : '';
-      };
-      const tileYards = c => {
-        if (R().isPutterClub && R().isPutterClub(c.id, c.label)) return '';
-        const row = bagRow(c.id);
-        const n = row && (row.carry || row.total);
-        return n ? `${n} yd` : '';
-      };
       S.suggest = '';
       if (showClub && !putting() && !S.done) {
         const aim = fromCenter();
@@ -904,7 +906,12 @@
       const tileName = shownClub ? gridName(shownClub.label) : 'Palo';
       const tileAria = shownClub ? clubLabel(shownClub.label) : 'Palo';
       const tileYd = shownClub ? tileYards(shownClub) : '';
-      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(tileAria)}">${faceImg(shownClub ? shownClub.id : '', shownClub ? shownClub.label : '')}<span><b>${esc(tileName)}</b>${tileYd ? `<small>${esc(tileYd)}</small>` : ''}</span></button><div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubChoices.map(c => clubCell(c, c.id === S.club ? 'on' : (!S.club && c.id === S.suggest ? 'sug' : ''))).join('')}</ul></div></div><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
+      const clubButtons = clubChoices.map(c => clubCell(c, c.id === S.club ? 'on' : (!S.club && c.id === S.suggest ? 'sug' : ''))).join('');
+      // The sheet sits outside the dock. The dock ignores pointer events, and a fixed
+      // child of that dock does not receive the finger on iPhone: the tap falls through
+      // and the marked club never changes.
+      const clubSheet = showClub ? `<div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubButtons}</ul></div></div>` : '';
+      const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(tileAria)}">${faceImg(shownClub ? shownClub.id : '', shownClub ? shownClub.label : '')}<span><b>${esc(tileName)}</b>${tileYd ? `<small>${esc(tileYd)}</small>` : ''}</span></button><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
       const name = esc(S.live?.course || S.live?.vm_course || S.course?.course || 'Golflet');
@@ -1095,6 +1102,7 @@
             </div>
           </div>
         </div>
+        ${clubSheet}
       </div>`;
       const freshMap = el.querySelector('#tkmap');
       if (paintedHTML && freshMap) freshMap.insertAdjacentHTML('afterbegin', paintedHTML);
@@ -1761,26 +1769,72 @@
         if (tileBtn) {
           tileBtn.setAttribute('aria-label', clubLabel(label) || 'Palo');
           const name = tileBtn.querySelector('b');
-          const yards = tileBtn.querySelector('small');
-          if (name) name.textContent = gridName(label) || 'Palo';
           const picked = clubChoices.find(c => c.id === club.value);
-          if (yards) yards.textContent = picked ? tileYards(picked) : '';
+          const yd = picked ? tileYards(picked) : '';
+          if (name) name.textContent = gridName(label) || 'Palo';
+          const span = tileBtn.querySelector('span');
+          let yards = tileBtn.querySelector('small');
+          if (yd) {
+            if (!yards && span) { yards = document.createElement('small'); span.appendChild(yards); }
+            if (yards) yards.textContent = yd;
+          } else if (yards) yards.remove();
         }
       };
       const tile = el.querySelector('#play-club-tile');
       const sheet = el.querySelector('#play-club-sheet');
       const bagList = sheet ? sheet.querySelector('.tk-clublist') : null;
       const list = el.querySelector('#play-shot-editor .tk-clublist') || el.querySelector('#play-club-list');
-      if (tile && bagList) tile.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); bagList.hidden = !bagList.hidden; if (sheet) sheet.hidden = bagList.hidden; };
-      const shut = el.querySelector('#play-club-close');
-      if (shut && bagList) shut.onclick = ev => { ev.preventDefault(); bagList.hidden = true; if (sheet) sheet.hidden = true; };
-      if (S.pickClub && bagList && sheet && !el.querySelector('#play-shot-editor .tk-clublist')) { bagList.hidden = false; sheet.hidden = false; }
-      if (list) list.querySelectorAll('button').forEach(btn => { btn.onclick = () => {
-        const id = btn.getAttribute('data-club') || '';
+      let tileGuard = 0;
+      const setSheet = open => {
+        if (bagList) bagList.hidden = !open;
+        if (sheet) sheet.hidden = !open;
+      };
+      const chooseClub = (id, via) => {
+        tileGuard = Date.now() + 450;
+        if (club) club.dataset.input = via;
+        if (list) list.querySelectorAll('button').forEach(b => {
+          const mine = b.getAttribute('data-club') === id;
+          b.classList.toggle('on', mine);
+          if (mine) b.classList.remove('sug');
+        });
         if (S.editN) { S.pickClub = false; patchShot({ club: id }); return; }
-        if (club) { club.value = id; if (club.onchange) club.onchange(); }
-        list.hidden = true; if (sheet) sheet.hidden = true;
-      }; });
+        if (club) {
+          club.value = id;
+          try { if (club.onchange) club.onchange(); } catch (err) { /* the choice still stands */ }
+        }
+        setSheet(false);
+      };
+      // iPhone drops the click when the page keeps touch-action:none. The finger
+      // is the selection; the click only covers a mouse.
+      const armPress = (btn, action) => {
+        let fromTouch = false;
+        let start = null;
+        btn.addEventListener('touchstart', ev => {
+          const t = ev.changedTouches && ev.changedTouches[0];
+          start = t ? { x: t.clientX, y: t.clientY } : null;
+        }, { passive: true });
+        btn.addEventListener('touchend', ev => {
+          if (ev.touches && ev.touches.length) return;
+          const t = ev.changedTouches && ev.changedTouches[0];
+          if (!t || !start || Math.hypot(t.clientX - start.x, t.clientY - start.y) > 12) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          fromTouch = true;
+          setTimeout(() => { fromTouch = false; }, 450);
+          action('touch');
+        }, { passive: false });
+        btn.addEventListener('click', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (fromTouch) { fromTouch = false; return; }
+          action('click');
+        });
+      };
+      if (tile && sheet) armPress(tile, () => { if (Date.now() < tileGuard) return; setSheet(sheet.hidden); });
+      const shut = el.querySelector('#play-club-close');
+      if (shut) armPress(shut, () => setSheet(false));
+      if (S.pickClub && bagList && sheet && !el.querySelector('#play-shot-editor .tk-clublist')) setSheet(true);
+      if (list) list.querySelectorAll('button').forEach(btn => armPress(btn, via => chooseClub(btn.getAttribute('data-club') || '', via)));
       const lieBtn = el.querySelector('#play-lie');
       if (lieBtn) lieBtn.onclick = () => {
         const ball = ballLL();

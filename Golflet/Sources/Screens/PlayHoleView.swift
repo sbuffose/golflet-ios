@@ -1270,12 +1270,12 @@ struct PlayHoleView: View {
                             chosenClub = club.name
                             showsClubs = false
                         } label: {
-                            VStack(spacing: 2) {
+                            VStack(spacing: 3) {
                                 ClubThumb(brand: club.brand, model: club.modelName, face: club.face)
-                                    .frame(width: 22, height: 22)
+                                    .frame(width: 56, height: 56)
                                 Text(gridName(club.name))
                                     .font(GFont.ui(12, weight: .bold))
-                                    .lineLimit(1)
+                                    .lineLimit(2)
                                     .minimumScaleFactor(0.6)
                                 if let yards = savedYards(club) {
                                     Text(yards)
@@ -1285,8 +1285,8 @@ struct PlayHoleView: View {
                                 }
                             }
                             .foregroundStyle(p.ink)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 72)
+                            .frame(maxWidth: .infinity, minHeight: 118)
+                            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .background(Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(

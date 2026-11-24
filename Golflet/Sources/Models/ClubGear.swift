@@ -136,7 +136,7 @@ struct ClubSilhouette: View {
                 path.move(to: CGPoint(x: w * 0.48, y: h * 0.56))
                 path.addLine(to: CGPoint(x: w * 0.48, y: h * 0.82))
             }
-            context.stroke(path, with: .color(Color(hex: 0x0B2545)), lineWidth: 1.6)
+            context.stroke(path, with: .color(Color(hex: 0x0B2545)), lineWidth: max(2, min(size.width, size.height) * 0.055))
         }
     }
 }
