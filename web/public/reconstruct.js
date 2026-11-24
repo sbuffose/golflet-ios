@@ -242,6 +242,9 @@
             lng: shot.from?.lng ?? null,
             end_lat: shot.land?.lat ?? null,
             end_lng: shot.land?.lng ?? null,
+            lie: shot.lie || null,
+            distance_m: shot.distance_m ?? null,
+            distance_kind: shot.distance_kind || null,
           };
           const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`, { method: "POST", body: JSON.stringify(body) });
           if (!mine()) return null;
