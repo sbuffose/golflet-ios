@@ -28,14 +28,20 @@ enum JockeyPlans {
             id: "118-jockey-azul",
             key: "1:Azul",
             overview: "Cancha corta y técnica. El rough castiga y varios greens caen hacia adelante. Pensá el palo de salida hoyo por hoyo.",
-            holes: azulYards.map { hole in
-                if hole.n == 7 { return azul7 }
-                if hole.n == 8 { return azul8 }
-                return plan(hole, course: "Azul")
-            }.map { hole in
-                var next = hole
-                next.hole = AzulCourse.nineSwap(next.hole)
-                return next
+            holes: azulYards.map { physical in
+                let display = AzulCourse.nineSwap(physical.n)
+                let shown = azulYards.first { $0.n == display } ?? physical
+                if physical.n == 7 {
+                    var hole = azul7
+                    hole.hole = display
+                    return hole
+                }
+                if physical.n == 8 {
+                    var hole = azul8
+                    hole.hole = display
+                    return hole
+                }
+                return plan(Yard(n: display, par: shown.par, hcp: shown.hcp, yards: physical.yards), course: "Azul")
             }.sorted { $0.hole < $1.hole }
         )
     }

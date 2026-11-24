@@ -19,7 +19,7 @@ import { DEFAULT_MIN_PER_HOLE, MIN_GPS_SHOTS, WIND_MODEL, cleanShots, dispersion
 export const PLAN_MAX_DAYS = 60;
 import { hourlyWind, addDays, dayDiff, FORECAST_DAYS } from "./weather-hourly";
 import { isJockeyAzul } from "./azul-osm";
-import { azulNineSwap } from "./azul-layout";
+import { azulNineSwap, azulMenIndex, azulPhysicalYards } from "./azul-layout";
 export { hourlyWind, FORECAST_DAYS };
 
 /* ---------- courses with a detailed map ---------- */
@@ -43,9 +43,12 @@ async function guideMeta(clubCode: string, course: string) {
   const ydOf = (h: any) => { const y = h?.yards || {}; return y.AZUL ?? y.Azul ?? (Object.values(y) as number[])[0] ?? null; };
   const current = isJockeyAzul(clubCode, course);
   const holes = Array.from({ length: 18 }, (_, i) => i + 1).map(n => {
-    const stored = current ? azulNineSwap(n) : n, row = card(stored);
-    const hcp = Number(row?.hcp ?? row?.hole_hcp);
-    return { hole: n, par: row?.par ?? g.holes[stored]?.par ?? null, hcp: Number.isInteger(hcp) ? hcp : null, play_length_yd: ydOf(row) ?? g.holes[stored]?.yd ?? null, bearing: null };
+    const physical = current ? azulNineSwap(n) : n;
+    const shown = current ? card(n) : card(physical);
+    const row = card(physical);
+    const yards = azulPhysicalYards(row?.yards, physical);
+    const hcp = azulMenIndex(shown);
+    return { hole: n, par: shown?.par ?? g.holes[physical]?.par ?? null, hcp, play_length_yd: yards.yards.AZUL ?? yards.yards.NEGRO ?? ydOf(row) ?? g.holes[physical]?.yd ?? null, bearing: null };
   });
   return { id: null, club_code: g.club_code, course: c?.course ?? g.course, club_name: c?.club_name ?? null, club_id: c?.club_id ?? null, loc: g.location ? { lat: g.location.lat, lng: g.location.lng } : null, holes, numbering_unconfirmed: false, guide_only: true };
 }
@@ -55,14 +58,14 @@ async function mapMeta(clubCode: string, course: string) {
   const hs = await q(`select hole, data->'green'->'center' gc, data->'bearing' bearing, data->'play_length_yd' len, crosscheck from course_map_hole where course_map_id=$1 order by hole`, [m.id]);
   const gcs = hs.map((h: any) => h.gc).filter(Boolean); const loc = gcs.length ? { lng: gcs.reduce((a: number, g: any) => a + g[0], 0) / gcs.length, lat: gcs.reduce((a: number, g: any) => a + g[1], 0) / gcs.length } : null;
   const current = isJockeyAzul(m.club_code, m.course);
-  // Par, yards and stroke index travel with the physical hole. Stored rows keep the pre-2026-11-22 numbers.
+  // From 2026-11-22, par and S.I. are the card row of the displayed number. Yards stay on the physical hole.
   let cardH: any[] = []; try { const [cc] = await q(`select c.holes from course c join club k on k.id=c.club_id where k.code=$1 and lower(c.name)=lower($2) limit 1`, [clubCode, course]); cardH = Array.isArray(cc?.holes) ? cc.holes : []; } catch { cardH = []; }
   const cardOf = (n: number) => cardH.find((z: any) => Number(z?.hole) === n);
-  const hcpOf = (n: number) => { const v = Number(cardOf(n)?.hcp ?? cardOf(n)?.hole_hcp); return Number.isInteger(v) && v >= 1 && v <= 18 ? v : null; };
-  const ydOf = (n: number) => { const y = cardOf(n)?.yards || {}; const v = y.AZUL ?? y.Azul ?? y.NEGRO ?? y.Negro; return v == null ? null : Number(v); };
   const holes = hs.map((h: any) => {
     const stored = Number(h.hole), display = current ? azulNineSwap(stored) : stored;
-    return { hole: display, par: cardOf(stored)?.par ?? h.crosscheck?.card?.par ?? h.crosscheck?.par ?? null, hcp: hcpOf(stored), play_length_yd: ydOf(stored) ?? h.len ?? null, bearing: h.bearing };
+    const shown = cardOf(display);
+    const yards = azulPhysicalYards(cardOf(stored)?.yards, stored);
+    return { hole: display, par: shown?.par ?? h.crosscheck?.card?.par ?? h.crosscheck?.par ?? null, hcp: azulMenIndex(shown), play_length_yd: yards.yards.AZUL ?? yards.yards.NEGRO ?? h.len ?? null, bearing: h.bearing };
   }).sort((a: { hole: number }, b: { hole: number }) => a.hole - b.hole);
   return { ...m, loc, holes, numbering_unconfirmed: false };
 }

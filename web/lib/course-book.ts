@@ -7,7 +7,7 @@ import { hourlyWind, FORECAST_DAYS, addDays, dayDiff } from "./weather-hourly";
 import { DEFAULT_MIN_PER_HOLE, holeSchedule, windAt } from "./plan-core";
 import { nowAR } from "./tee-times-core";
 import { isJockeyAzul } from "./azul-osm";
-import { azulNineSwap } from "./azul-layout";
+import { azulNineSwap, azulPhysicalYards } from "./azul-layout";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -21,10 +21,14 @@ export async function courseBookData(clubCode: string, course: string, o: { date
   const ydOf = (h: any) => { const y = h?.yards || {}; return y.AZUL ?? y.Azul ?? (Object.values(y) as number[])[0] ?? null; };
   const current = isJockeyAzul(clubCode, course) && map?.layout === "current";
   const holes = Array.from({ length: 18 }, (_, i) => i + 1).map(n => {
-    const stored = current ? azulNineSwap(n) : n;
-    const row = card(stored), mh = map?.holes?.find((h: any) => h.hole === n);
-    return { hole: n, order: n, par: row?.par ?? mh?.crosscheck?.card?.par ?? guide?.holes[stored]?.par ?? null,
-      play_length_yd: ydOf(row) ?? mh?.play_length_yd ?? guide?.holes[stored]?.yd ?? null, bearing_true: mh?.bearing?.tee_to_green_true ?? null,
+    const physical = current ? azulNineSwap(n) : n;
+    const shown = card(n), row = card(physical), mh = map?.holes?.find((h: any) => h.hole === n);
+    const yards = azulPhysicalYards(row?.yards, physical);
+    const parRow = current ? shown : row;
+    return { hole: n, order: n, par: parRow?.par ?? mh?.crosscheck?.card?.par ?? guide?.holes[physical]?.par ?? null,
+      play_length_yd: yards.yards.AZUL ?? yards.yards.NEGRO ?? ydOf(row) ?? mh?.play_length_yd ?? guide?.holes[physical]?.yd ?? null,
+      ...(yards.note ? { yards_note: yards.note } : {}),
+      bearing_true: mh?.bearing?.tee_to_green_true ?? null,
       eta: null, wind: null, effect: null, shots: [], ...(relev.has(n) ? { relevamiento: true } : {}) };
   });
   // t214u: forecast wind (Open-Meteo, same source/cache as the strategy libreta) for the chosen day and start time; no shots, no ± yd.

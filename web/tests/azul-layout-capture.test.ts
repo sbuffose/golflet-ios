@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import test from "node:test";
 import { azulBundledMap } from "../lib/azul-osm";
-import { relabelAzulHoles } from "../lib/azul-layout";
+import { azulPresentHoles, relabelAzulHoles } from "../lib/azul-layout";
 
 const CHROME = ["/usr/local/bin/google-chrome", "/usr/bin/google-chrome"].find(p => existsSync(p));
 const ROOT = new URL("../public/", import.meta.url);
@@ -14,10 +14,10 @@ const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javasc
 type CardHole = { hole: number; par: number; hole_hcp: number; yards: { AZUL: number } };
 const courses = JSON.parse(readFileSync(new URL("../../Golflet/Resources/Fixtures/courses.json", import.meta.url), "utf8")) as { club_code: string; course: string; holes: CardHole[] }[];
 const card = courses.find(c => c.club_code === "118" && c.course === "Azul")!;
-const current = relabelAzulHoles(azulBundledMap().holes.map(h => {
+const current = azulPresentHoles(relabelAzulHoles(azulBundledMap().holes.map(h => {
   const row = card.holes.find(c => c.hole === h.hole)!;
-  return { ...h, par: row.par, hcp: row.hole_hcp, yards: row.yards.AZUL };
-}), "2026-11-22");
+  return { ...h, par: row.par, hcp: row.hole_hcp, yards: row.yards };
+}), "2026-11-22"), card.holes, "2026-11-22").map(h => ({ ...h, yards: h.yards.AZUL }));
 const map = {
   club_code: "118",
   course: "Azul",
@@ -65,9 +65,11 @@ test("la Azul muestra los hoyos 3, 10 y 12 con el mapeo del 22 nov", { timeout: 
   const greenLat = (n: number) => current.find(h => h.hole === n)!.green.center!.lat;
   const storedGreen = (n: number) => azulBundledMap().holes.find(h => h.hole === n)!.green.center!;
   const expect = [
-    { hole: 3, label: "Par 4", yards: "409 yd", hcp: "S.I. 16", tees: teeLats(3), flag: greenLat(3) },
+    { hole: 3, label: "Par 4", yards: "409 yd", hcp: "S.I. 9", tees: teeLats(3), flag: greenLat(3) },
+    { hole: 7, label: "Par 4", yards: "377 yd", hcp: "S.I. 13", tees: teeLats(7), flag: greenLat(7) },
     { hole: 10, label: "Par 5", yards: "483 yd", hcp: "S.I. 4", tees: teeLats(10), flag: greenLat(10) },
-    { hole: 12, label: "Par 4", yards: "345 yd", hcp: "S.I. 9", tees: teeLats(12), flag: greenLat(12) },
+    { hole: 12, label: "Par 4", yards: "345 yd", hcp: "S.I. 16", tees: teeLats(12), flag: greenLat(12) },
+    { hole: 17, label: "Par 4", yards: "411 yd", hcp: "S.I. 2", tees: teeLats(17), flag: greenLat(17), note: "handbook marca 391" },
   ];
   try {
     const page = await browser.newPage();
@@ -84,6 +86,13 @@ test("la Azul muestra los hoyos 3, 10 y 12 con el mapeo del 22 nov", { timeout: 
       assert.match(seen, new RegExp(row.label));
       assert.match(seen, new RegExp(row.yards));
       assert.match(seen, new RegExp(row.hcp));
+      if ("note" in row && row.note) {
+        const note = await page.$eval("#tk-yardnote", el => el.textContent || "");
+        assert.match(note, new RegExp(row.note));
+      } else {
+        const note = await page.$("#tk-yardnote");
+        assert.equal(note, null);
+      }
       const ball = await page.$eval("#tkmap", el => Number(el.getAttribute("data-ball-lat")));
       const flag = await page.$eval("#tkmap", el => ({ lat: Number(el.getAttribute("data-flag-lat")), lng: Number(el.getAttribute("data-flag-lng")) }));
       const meters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
@@ -96,7 +105,9 @@ test("la Azul muestra los hoyos 3, 10 y 12 con el mapeo del 22 nov", { timeout: 
       assert.ok(Math.abs(flag.lat - row.flag) < 1e-5, `hoyo ${row.hole} bandera ${flag.lat} vs ${row.flag}`);
       if (row.hole === 10) assert.ok(meters(flag, storedGreen(1)) > 80, "el hoyo 10 no usa el green del 1");
       if (row.hole === 3) assert.ok(meters(flag, storedGreen(3)) > 80, "el hoyo 3 usa el green guardado del 12");
+      if (row.hole === 7) assert.ok(meters(flag, storedGreen(7)) > 80, "el hoyo 7 usa el green guardado del 16");
       if (row.hole === 12) assert.ok(meters(flag, storedGreen(12)) > 80, "el hoyo 12 usa el green guardado del 3");
+      if (row.hole === 17) assert.ok(meters(flag, storedGreen(17)) > 80, "el hoyo 17 usa el green guardado del 8");
       await page.screenshot({ path: join(art, `web-375-azul-hoyo-${row.hole}.png`) });
       if (row.hole === 10) {
         for (let i = 0; i < 4; i++) await page.click("#play-zoom-out");

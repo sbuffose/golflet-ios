@@ -127,17 +127,18 @@ function pack(id: string, key: string, overview: string, holes: { hole: number; 
 }
 
 function azul() {
-  const built = pack(
+  return pack(
     "118-jockey-azul",
     "1:Azul",
     "Cancha corta y técnica. El rough castiga y varios greens caen hacia adelante. Pensá el palo de salida hoyo por hoyo.",
-    AZUL_YARDS.map(h => ({ hole: h.n, data: h.n === 7 ? azul7 : h.n === 8 ? azul8 : plan(h, "Azul") })),
+    AZUL_YARDS.map(physical => {
+      const display = azulNineSwap(physical.n);
+      const shown = AZUL_YARDS.find(row => row.n === display) || physical;
+      if (physical.n === 7) return { hole: display, data: azul7 };
+      if (physical.n === 8) return { hole: display, data: azul8 };
+      return { hole: display, data: plan({ ...physical, par: shown.par, hcp: shown.hcp }, "Azul") };
+    }).sort((a, b) => a.hole - b.hole),
   );
-  return {
-    ...built,
-    holes: built.holes.map(h => ({ ...h, hole: azulNineSwap(h.hole) })).sort((a, b) => a.hole - b.hole),
-    published_holes: built.published_holes.map(azulNineSwap).sort((a, b) => a - b),
-  };
 }
 
 function colorada() {

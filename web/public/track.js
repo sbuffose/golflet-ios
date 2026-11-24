@@ -864,6 +864,7 @@
     const render = () => {
       stopCam();
       const rec = holeRec(), par = rec.par || gpsHole()?.par, hcp = rec.hcp || gpsHole()?.hcp;
+      const yardNote = rec.yards_note || gpsHole()?.yards_note || '';
       const pickedTee = teeChoices().find(b => b.name && b.name === S.teeName);
       const cardYd = pickedTee && pickedTee.yards != null ? `${pickedTee.yards} yd` : (R().yardLabel ? R().yardLabel(rec.yards != null ? rec.yards : gpsHole()?.yards) : '');
       const phase = S.track.phase;
@@ -1078,6 +1079,7 @@
             <b class="tk-score" id="play-score">${(savedRows.length || S.track.marks.filter(m => m.countsStroke).length) || '–'}</b>
             <button type="button" id="tknext" ${S.hole >= 18 ? 'disabled' : ''} aria-label="Hoyo siguiente">›</button>
           </div>
+          ${yardNote ? `<p class="tk-yardnote" id="tk-yardnote">${esc(yardNote)}</p>` : ''}
           ${S.teeSource === 'jugador' ? `<p class="tk-player" id="tk-player">Salida confirmada por vos. No es una medida.</p>` : ''}
           ${S.flagSource === 'jugador' ? `<p class="tk-player" id="tk-flag-player">Hoyo confirmado por vos. No es una medida.</p>` : ''}
           ${S.msg ? `<p class="tk-msg" id="${S.msg.startsWith('Hoyo cerrado') ? 'play-conceded' : 'tk-msg'}">${esc(S.msg)}</p>` : ''}

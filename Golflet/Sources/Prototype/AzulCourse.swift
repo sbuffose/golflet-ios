@@ -75,6 +75,9 @@ enum AzulCourse {
 
     private static var cache: [Int: AzulHoleGeo]?
 
+    /// Official card par by the number shown from 2026-11-22. Yards stay on the physical hole.
+    private static let displayPar = [5, 5, 4, 4, 3, 4, 4, 5, 4, 5, 3, 4, 4, 3, 4, 3, 4, 4]
+
     /// Display hole to stored hole. 1, 2, 10 and 11 stay. 3↔12 through 9↔18.
     static func nineSwap(_ n: Int) -> Int {
         guard (1...18).contains(n) else { return n }
@@ -96,6 +99,7 @@ enum AzulCourse {
         let holes = all()
         if var hit = holes[stored] {
             hit.number = display
+            if currentLayout(playedOn: playedOn) { hit.par = Self.displayPar[display - 1] }
             return hit
         }
         return AzulHoleGeo(

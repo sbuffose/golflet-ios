@@ -2,8 +2,11 @@
  *  used through 2026-11-21. From 2026-11-22 the display swaps only 3–9 with 12–18:
  *  display 3 is stored 12, display 4 is stored 13, through display 9 = stored 18,
  *  and the other way around. Holes 1, 2, 10 and 11 stay. course_map_hole is not rewritten.
- *  Par, yards and stroke index travel with the physical hole. The official card
- *  still lists the stored order, so its stroke index is not applied by display number. */
+ *  The Golfistics card dated 2026-11-22 already lists par and the men's stroke index
+ *  by the number shown that day. Its tee yards stay in the physical order (card 16
+ *  AZUL 377 is the old 16). Geometry and yards follow the physical hole. Par and
+ *  stroke index follow the displayed number. The card's AMARILLO 500 on physical
+ *  hole 8 is shown as 391. Nothing here writes the database. */
 
 export const AZUL_NINE_SWAP_FROM = "2026-11-22";
 
@@ -40,4 +43,70 @@ export function relabelAzulHoles<T extends { hole?: number }>(holes: T[], played
       return { ...h, hole: azulNineSwap(n) };
     })
     .sort((a, b) => Number(a.hole) - Number(b.hole));
+}
+
+export const AZUL_AMARILLO_NOTE = "El handbook marca 391. La tarjeta dice 500 en el amarillo del hoyo 8 físico.";
+
+type AzulCardRow = { hole?: number; par?: unknown; hcp?: unknown; hole_hcp?: unknown; hcp_raw?: unknown; yards?: unknown };
+
+/** Men's stroke index: the first number of a "9/11" pair. */
+export function azulMenIndex(row: AzulCardRow | null | undefined): number | null {
+  const raw = row?.hcp ?? row?.hole_hcp ?? row?.hcp_raw;
+  if (raw == null || raw === "") return null;
+  const n = Number(String(raw).split("/")[0]);
+  return Number.isInteger(n) && n >= 1 && n <= 18 ? n : null;
+}
+
+export function azulYardRecord(value: unknown): Record<string, number> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const out: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    const n = Number(raw);
+    if (Number.isFinite(n)) out[key] = n;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Physical hole 8's printed AMARILLO 500 is 391. The source row is left untouched. */
+export function azulPhysicalYards(yards: unknown, physicalHole: number): { yards: Record<string, number>; note: string | null } {
+  const out = { ...(azulYardRecord(yards) || {}) };
+  if (physicalHole === 8 && out.AMARILLO === 500) {
+    out.AMARILLO = 391;
+    return { yards: out, note: AZUL_AMARILLO_NOTE };
+  }
+  return { yards: out, note: null };
+}
+
+/** A par 3 of 377 yd is the card yards read by the wrong number. */
+export function azulYardsFitPar(par: number, yards: number): boolean {
+  if (!Number.isFinite(par) || !Number.isFinite(yards) || yards <= 0) return false;
+  if (par <= 3) return yards < 260;
+  if (par === 4) return yards >= 250 && yards <= 500;
+  return yards >= 390 && yards <= 650;
+}
+
+/** After the geometry relabel: par and S.I. from the displayed card row, yards from the physical row. */
+export function azulPresentHoles<T extends { hole?: number; par?: unknown; hcp?: unknown; yards?: unknown; yards_note?: string | null }>(
+  holes: T[],
+  card: AzulCardRow[],
+  playedOn?: string | null,
+  layout?: string | null,
+): T[] {
+  const current = azulCurrentLayout(playedOn, layout);
+  const cardOf = (n: number) => card.find(row => Number(row.hole) === n);
+  return holes.map(hole => {
+    const display = Number(hole.hole);
+    const physical = current ? azulNineSwap(display) : display;
+    const shown = cardOf(current ? display : physical);
+    const record = azulYardRecord(hole.yards) || azulYardRecord(cardOf(physical)?.yards);
+    const fixed = record ? azulPhysicalYards(record, physical) : null;
+    const hcp = azulMenIndex(shown);
+    return {
+      ...hole,
+      ...(shown?.par != null && shown.par !== "" ? { par: Number(shown.par) } : {}),
+      ...(hcp != null ? { hcp } : {}),
+      ...(fixed ? { yards: fixed.yards } : {}),
+      ...(fixed?.note ? { yards_note: fixed.note } : {}),
+    };
+  });
 }
