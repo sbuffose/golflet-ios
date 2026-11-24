@@ -1282,9 +1282,12 @@ struct PlayHoleView: View {
                                 Task { await markRecovery() }
                             }
                         } label: {
-                            VStack(spacing: 3) {
-                                ClubThumb(brand: club.brand, model: club.modelName, face: club.face)
-                                    .frame(width: 56, height: 56)
+                            VStack(spacing: 2) {
+                                ClubThumb(brand: club.brand, model: club.modelName, face: ClubGear.face(club.name))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(minHeight: 96)
+                                    .padding(.horizontal, 4)
+                                    .padding(.top, 6)
                                 Text(gridName(club.name))
                                     .font(GFont.ui(12, weight: .bold))
                                     .lineLimit(2)
@@ -1297,7 +1300,7 @@ struct PlayHoleView: View {
                                 }
                             }
                             .foregroundStyle(p.ink)
-                            .frame(maxWidth: .infinity, minHeight: 118)
+                            .frame(maxWidth: .infinity, minHeight: 148)
                             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .background(Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -2356,8 +2359,11 @@ struct PlayHoleView: View {
                                 Task { await retarget(shot, club: club.name) }
                             } label: {
                                 VStack(spacing: 2) {
-                                    ClubThumb(brand: club.brand, model: club.modelName, face: club.face)
-                                        .frame(width: 56, height: 56)
+                                    ClubThumb(brand: club.brand, model: club.modelName, face: ClubGear.face(club.name))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(minHeight: 96)
+                                        .padding(.horizontal, 4)
+                                        .padding(.top, 6)
                                     Text(gridName(club.name))
                                         .font(GType.headline)
                                         .foregroundStyle(p.ink)
@@ -2369,7 +2375,7 @@ struct PlayHoleView: View {
                                             .foregroundStyle(p.ink3)
                                     }
                                 }
-                                .frame(maxWidth: .infinity, minHeight: 118)
+                                .frame(maxWidth: .infinity, minHeight: 148)
                                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .padding(.vertical, 8)
                                 .background(Color.white)

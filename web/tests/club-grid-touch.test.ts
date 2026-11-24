@@ -19,12 +19,33 @@ const GREEN = { lat: -34.48305197, lng: -58.52881 };
 const TEE = { lat: GREEN.lat - (414 * 0.9144) / ((6371000 * Math.PI) / 180), lng: GREEN.lng };
 const bag = [
   { club: "Putter" },
-  { club: "Driver", carry: 285, brand: "Titleist", model: "GT2" },
+  { club: "Driver", carry: 285 },
   { club: "Madera 3", carry: 230 },
   { club: "Híbrido 4", carry: 210 },
   { club: "Hierro 7", carry: 155 },
   { club: "PW", carry: 120 },
 ];
+const equipment = {
+  clubs: [
+    { code: "Pt", label: "Putter", enabled: true },
+    { code: "Dr", label: "Driver", brand: "Titleist", model: "GT2", enabled: true },
+    { code: "3W", label: "Madera 3", brand: "Titleist", model: "GT2", enabled: true },
+    { code: "4H", label: "Híbrido 4", enabled: true },
+    { code: "7i", label: "Hierro 7", enabled: true },
+    { code: "PW", label: "Pitching wedge", enabled: true },
+  ],
+};
+const catalog = {
+  types: [
+    { code: "Pt", label: "Putter", category: "putter", bag: null },
+    { code: "Dr", label: "Driver", category: "driver", bag: "Driver" },
+    { code: "3W", label: "Madera 3", category: "fairway", bag: "Madera 3" },
+    { code: "4H", label: "Híbrido 4", category: "hybrid", bag: "Híbrido 4" },
+    { code: "7i", label: "Hierro 7", category: "iron", bag: "Hierro 7" },
+    { code: "PW", label: "Pitching wedge", category: "wedge", bag: "PW" },
+  ],
+  categories: [],
+};
 const course = {
   club_code: "118", course: "Azul", course_id: "118-azul",
   holes: [{ hole: 3, par: 4, hcp: 9, yards: 409, green: { center: GREEN }, tee: TEE, line: [TEE, GREEN] }],
@@ -38,6 +59,8 @@ test("un toque en la grilla elige el palo", { timeout: 90_000, skip: CHROME ? fa
     if (url.pathname.startsWith("/api/")) {
       if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [], bag });
       if (url.pathname === "/api/bag") return json(bag);
+      if (url.pathname === "/api/my-clubs/items" || url.pathname === "/api/my-clubs") return json(equipment);
+      if (url.pathname === "/api/my-clubs/catalog") return json(catalog);
       if (url.pathname.startsWith("/api/gps/courses")) return json({ course, courses: [course] });
       if (url.pathname.startsWith("/api/course-maps/")) return json(course);
       if (url.pathname === "/api/reconstructions" && req.method === "GET") return json({ rounds: [], reconstructions: [
@@ -59,7 +82,7 @@ test("un toque en la grilla elige el palo", { timeout: 90_000, skip: CHROME ? fa
   mkdirSync(art, { recursive: true });
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 375, height: 812, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-touch?hole=3`, { waitUntil: "networkidle0" });
     await page.waitForSelector("#play-club-tile", { timeout: 20000 });
     const tileBox = await page.$eval("#play-club-tile", el => {
@@ -110,13 +133,15 @@ test("un toque en la grilla elige el palo", { timeout: 90_000, skip: CHROME ? fa
     const putter = grid.cards.find(c => c.id === "Putter");
     const driver = grid.cards.find(c => c.id === "Driver");
     const iron = grid.cards.find(c => c.id === "Hierro 7");
-    assert.ok(putter && putter.yards === "" && putter.face === "putter" && putter.kind === "silhouette", JSON.stringify(putter));
+    assert.ok(putter && putter.yards === "" && putter.face === "putter" && putter.kind === "silhouette" && /silhouettes\/putter\.svg/.test(putter.src), JSON.stringify(putter));
     assert.ok(driver && driver.kind === "photo" && driver.src.includes("titleist-gt2-driver"), JSON.stringify(driver));
-    assert.ok(iron && /155 yd/.test(iron.yards) && iron.kind === "silhouette" && iron.face === "iron", JSON.stringify(iron));
-    assert.ok(grid.cards.every(c => c.w >= 48 && c.h >= 48 && c.cardH >= 110), JSON.stringify(grid.cards));
+    const wood = grid.cards.find(c => c.id === "Madera 3");
+    assert.ok(wood && wood.kind === "photo" && wood.src.includes("titleist-gt2-fairway"), JSON.stringify(wood));
+    assert.ok(iron && /155 yd/.test(iron.yards) && iron.kind === "silhouette" && iron.face === "iron" && /silhouettes\/iron\.svg/.test(iron.src), JSON.stringify(iron));
+    assert.ok(grid.cards.every(c => c.w >= 64 && c.h >= 90 && c.h >= c.cardH * 0.55 && c.cardH >= 140), JSON.stringify(grid.cards));
     assert.equal(grid.cards.some(c => /\b(Dr|7i|Pt)\b/.test(c.text)), false, JSON.stringify(grid.cards));
     assert.equal(driver?.on, true);
-    await page.screenshot({ path: join(art, "web-375-palo-grilla.png") });
+    await page.screenshot({ path: join(art, "web-390-palo-grilla.png") });
 
     const ironBox = await page.$eval('#play-club-list button[data-club="Hierro 7"]', el => {
       const r = el.getBoundingClientRect();
@@ -154,6 +179,24 @@ test("un toque en la grilla elige el palo", { timeout: 90_000, skip: CHROME ? fa
     assert.match(picked.src, /silhouettes\/iron\.svg/);
     assert.equal(picked.kind, "silhouette");
     await page.screenshot({ path: join(art, "web-375-palo-elegido.png") });
+
+    await page.goto(`http://127.0.0.1:${port}/#/bolsa`, { waitUntil: "networkidle0" });
+    await page.waitForSelector(".eq-thumb", { timeout: 8000 });
+    const bagFaces = await page.evaluate(() => {
+      return [...document.querySelectorAll(".eq-row")].map(row => {
+        const img = row.querySelector("img");
+        return {
+          name: (row.querySelector(".t")?.textContent || "").trim(),
+          src: img?.getAttribute("src") || "",
+          kind: img?.getAttribute("data-kind") || "",
+        };
+      });
+    });
+    const bagDriver = bagFaces.find(row => row.name === "Driver");
+    const bagIron = bagFaces.find(row => row.name === "Hierro 7");
+    assert.ok(bagDriver && bagDriver.kind === "photo" && bagDriver.src.includes("titleist-gt2-driver"), JSON.stringify(bagFaces));
+    assert.ok(bagIron && bagIron.kind === "silhouette" && /silhouettes\/iron\.svg/.test(bagIron.src), JSON.stringify(bagFaces));
+    await page.screenshot({ path: join(art, "web-390-mi-bolsa.png"), fullPage: true });
   } finally {
     await browser.close();
     server.close();
@@ -174,6 +217,8 @@ test("un toque elige el palo de un A buena y de un tiro que se edita", { timeout
       const body = raw ? JSON.parse(raw) : {};
       if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [], bag });
       if (url.pathname === "/api/bag") return json(bag);
+      if (url.pathname === "/api/my-clubs/items" || url.pathname === "/api/my-clubs") return json(equipment);
+      if (url.pathname === "/api/my-clubs/catalog") return json(catalog);
       if (url.pathname.startsWith("/api/gps/courses")) return json({ course, courses: [course] });
       if (url.pathname.startsWith("/api/course-maps/")) return json(course);
       if (url.pathname === "/api/reconstructions" && req.method === "GET") return json({ rounds: [], reconstructions: [

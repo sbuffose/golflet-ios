@@ -825,9 +825,11 @@
     const faceOf = (id, label) => {
       const row = (S.bag || []).find(b => b && (b.id === id || b.code === id || b.club === id || b.label === id || b.name === id)) || {};
       const gear = window.GolfletGear;
-      const face = clubFace(id, label);
+      const stamped = /^(driver|fairway|hybrid|iron|wedge|putter)$/.test(String(row.category || '')) ? row.category : '';
+      const face = stamped || clubFace(id, label);
       const thumb = gear && typeof gear.thumb === 'function' ? gear.thumb(row.brand || '', row.model || row.model_name || '', face) : { src: `/clubs/silhouettes/${face}.svg`, kind: 'silhouette' };
-      return thumb && thumb.src ? thumb : { src: `/clubs/silhouettes/${face}.svg`, kind: 'silhouette' };
+      const out = thumb && thumb.src ? thumb : { src: `/clubs/silhouettes/${face}.svg`, kind: 'silhouette' };
+      return { src: out.src, kind: out.kind || '', face };
     };
     const faceSvg = face => {
       const shaft = 'M11 27c5-7 7-12 5-16';
@@ -844,8 +846,10 @@
     };
     const faceImg = (id, label) => {
       const thumb = faceOf(id, label);
-      const face = clubFace(id, label);
-      return `<img class="tk-clubface" src="${esc(thumb.src)}" alt="" data-kind="${esc(thumb.kind || '')}" data-face="${esc(face)}" data-fallback="${esc(faceSvg(face))}">`;
+      const face = thumb.face || clubFace(id, label);
+      const sil = `/clubs/silhouettes/${face}.svg`;
+      const fallback = thumb.kind === 'photo' ? sil : faceSvg(face);
+      return `<img class="tk-clubface" src="${esc(thumb.src)}" alt="" data-kind="${esc(thumb.kind || '')}" data-face="${esc(face)}" data-fallback="${esc(fallback)}" data-last="${esc(faceSvg(face))}">`;
     };
     let clubChoices = [];
     const bagRow = id => (S.bag || []).find(b => b && (b.id === id || b.code === id || b.club === id || b.label === id));
@@ -1754,10 +1758,17 @@
       el.querySelectorAll('.tk-clubface').forEach(img => {
         img.onerror = () => {
           const next = img.getAttribute('data-fallback') || '';
-          img.onerror = null;
-          if (next && img.getAttribute('src') !== next) {
+          const last = img.getAttribute('data-last') || '';
+          const src = img.getAttribute('src') || '';
+          if (next && src !== next) {
             img.dataset.kind = 'silhouette';
             img.setAttribute('src', next);
+            return;
+          }
+          img.onerror = null;
+          if (last && src !== last) {
+            img.dataset.kind = 'silhouette';
+            img.setAttribute('src', last);
           }
         };
       });

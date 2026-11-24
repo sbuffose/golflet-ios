@@ -108,35 +108,97 @@ struct ClubSilhouette: View {
 
     var body: some View {
         Canvas { context, size in
-            var path = Path()
+            let ink = Color(hex: 0x0B2545)
             let w = size.width, h = size.height
+            let shaft = CGRect(x: w * 0.46, y: h * 0.72, width: max(2, w * 0.08), height: h * 0.24)
+            context.fill(Path(roundedRect: shaft, cornerRadius: 1.5), with: .color(ink))
             switch kind {
             case "driver":
-                path.move(to: CGPoint(x: w * 0.28, y: h * 0.78))
-                path.addQuadCurve(to: CGPoint(x: w * 0.72, y: h * 0.28), control: CGPoint(x: w * 0.55, y: h * 0.42))
-                path.addEllipse(in: CGRect(x: w * 0.48, y: h * 0.16, width: w * 0.28, height: h * 0.22))
+                context.fill(Self.head(w, h, top: 0.02, width: 0.92, height: 0.62, bulge: 0.16), with: .color(ink))
             case "fairway":
-                path.move(to: CGPoint(x: w * 0.32, y: h * 0.78))
-                path.addQuadCurve(to: CGPoint(x: w * 0.68, y: h * 0.34), control: CGPoint(x: w * 0.55, y: h * 0.48))
-                path.addEllipse(in: CGRect(x: w * 0.5, y: h * 0.22, width: w * 0.22, height: h * 0.18))
+                context.fill(Self.head(w, h, top: 0.08, width: 0.8, height: 0.52, bulge: 0.14), with: .color(ink))
             case "hybrid":
-                path.move(to: CGPoint(x: w * 0.34, y: h * 0.78))
-                path.addQuadCurve(to: CGPoint(x: w * 0.62, y: h * 0.4), control: CGPoint(x: w * 0.52, y: h * 0.52))
-                path.addEllipse(in: CGRect(x: w * 0.48, y: h * 0.28, width: w * 0.2, height: h * 0.16))
+                context.fill(Self.head(w, h, top: 0.14, width: 0.66, height: 0.44, bulge: 0.1), with: .color(ink))
             case "wedge":
-                path.addRoundedRect(in: CGRect(x: w * 0.28, y: h * 0.42, width: w * 0.4, height: h * 0.16), cornerSize: CGSize(width: 3, height: 3))
-                path.move(to: CGPoint(x: w * 0.48, y: h * 0.58))
-                path.addLine(to: CGPoint(x: w * 0.48, y: h * 0.82))
+                let blade = CGRect(x: w * 0.08, y: h * 0.16, width: w * 0.84, height: h * 0.5)
+                context.fill(Path(roundedRect: blade, cornerRadius: 4), with: .color(ink))
+                let cavity = CGRect(x: w * 0.22, y: h * 0.26, width: w * 0.56, height: h * 0.22)
+                context.fill(Path(roundedRect: cavity, cornerRadius: 2), with: .color(Color(hex: 0xF6F7F9)))
+                let sole = CGRect(x: w * 0.06, y: h * 0.62, width: w * 0.88, height: h * 0.08)
+                context.fill(Path(roundedRect: sole, cornerRadius: 2), with: .color(ink))
             case "putter":
-                path.addRoundedRect(in: CGRect(x: w * 0.22, y: h * 0.3, width: w * 0.5, height: h * 0.12), cornerSize: CGSize(width: 2, height: 2))
-                path.move(to: CGPoint(x: w * 0.5, y: h * 0.42))
-                path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.82))
+                let mallet = CGRect(x: w * 0.06, y: h * 0.16, width: w * 0.88, height: h * 0.28)
+                context.fill(Path(roundedRect: mallet, cornerRadius: 4), with: .color(ink))
             default:
-                path.addRoundedRect(in: CGRect(x: w * 0.34, y: h * 0.36, width: w * 0.28, height: h * 0.2), cornerSize: CGSize(width: 3, height: 3))
-                path.move(to: CGPoint(x: w * 0.48, y: h * 0.56))
-                path.addLine(to: CGPoint(x: w * 0.48, y: h * 0.82))
+                let blade = CGRect(x: w * 0.16, y: h * 0.12, width: w * 0.68, height: h * 0.56)
+                context.fill(Path(roundedRect: blade, cornerRadius: 4), with: .color(ink))
+                let cavity = CGRect(x: w * 0.28, y: h * 0.24, width: w * 0.44, height: h * 0.24)
+                context.fill(Path(roundedRect: cavity, cornerRadius: 2), with: .color(Color(hex: 0xF6F7F9)))
             }
-            context.stroke(path, with: .color(Color(hex: 0x0B2545)), lineWidth: max(2, min(size.width, size.height) * 0.055))
         }
+        .accessibilityHidden(true)
+    }
+
+    private static func head(_ w: CGFloat, _ h: CGFloat, top: CGFloat, width: CGFloat, height: CGFloat, bulge: CGFloat) -> Path {
+        let x = (1 - width) / 2 * w
+        let y = top * h
+        let bw = width * w
+        let bh = height * h
+        var path = Path()
+        path.move(to: CGPoint(x: x + bw * 0.2, y: y + bh))
+        path.addQuadCurve(to: CGPoint(x: x + bw * 0.15, y: y + bh * 0.35), control: CGPoint(x: x - bw * bulge, y: y + bh * 0.75))
+        path.addQuadCurve(to: CGPoint(x: x + bw * 0.72, y: y + bh * 0.08), control: CGPoint(x: x + bw * 0.28, y: y - bh * 0.08))
+        path.addQuadCurve(to: CGPoint(x: x + bw, y: y + bh * 0.55), control: CGPoint(x: x + bw * 1.08, y: y + bh * 0.2))
+        path.addQuadCurve(to: CGPoint(x: x + bw * 0.55, y: y + bh), control: CGPoint(x: x + bw * 0.95, y: y + bh * 0.95))
+        path.closeSubpath()
+        return path
+    }
+}
+
+extension ClubGear {
+    /// Same names the web uses to copy a confirmed model from Mi bolsa onto a yardage row.
+    static func attach(bag: [BagClub], equipment: [BagClub]) -> [BagClub] {
+        bag.map { row in
+            guard let hit = equipment.first(where: { sameClub($0, row) }) else { return row }
+            var next = row
+            let brand = hit.brand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let model = hit.modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let ownBrand = next.brand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let ownModel = next.modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if ownBrand.isEmpty, !brand.isEmpty { next.brand = brand }
+            if ownModel.isEmpty, !model.isEmpty { next.modelName = model }
+            return next
+        }
+    }
+
+    private static func sameClub(_ gear: BagClub, _ row: BagClub) -> Bool {
+        let left = names(gear)
+        let right = names(row)
+        return left.contains { right.contains($0) }
+    }
+
+    private static func names(_ club: BagClub) -> Set<String> {
+        var values = [club.name, club.code ?? "", club.displayName ?? ""].map(fold)
+        values.removeAll { $0.isEmpty }
+        let aliases: [String: [String]] = [
+            "dr": ["driver"], "3w": ["madera 3"], "5w": ["madera 5"], "7w": ["madera 7"], "9w": ["madera 9"],
+            "hy": ["hibrido"], "2h": ["hibrido 2"], "3h": ["hibrido 3"], "4h": ["hibrido 4"], "5h": ["hibrido 5"], "6h": ["hibrido 6"],
+            "2i": ["hierro 2"], "3i": ["hierro 3"], "4i": ["hierro 4"], "5i": ["hierro 5"], "6i": ["hierro 6"],
+            "7i": ["hierro 7"], "8i": ["hierro 8"], "9i": ["hierro 9"],
+            "pw": ["pw", "pitching wedge"], "gw": ["gw", "gap wedge"], "sw": ["sw", "sand wedge"], "lw": ["lw", "lob wedge"],
+            "pt": ["putter", "pt"],
+        ]
+        var set = Set(values)
+        for (code, names) in aliases where set.contains(code) || names.contains(where: { set.contains($0) }) {
+            set.insert(code)
+            names.forEach { set.insert($0) }
+        }
+        return set
+    }
+
+    private static func fold(_ value: String) -> String {
+        value.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_AR"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
 }

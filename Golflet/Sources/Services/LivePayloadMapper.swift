@@ -112,6 +112,19 @@ enum LivePayloadMapper {
         return .needsClub(GroupsParser.needsClub(from: json, fallback: "Elegí tu club para seguir."))
     }
 
+    static func parseEquipment(_ raw: Any?) -> [BagClub] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            let code = item["code"] as? String
+            let label = (item["label"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = (label?.isEmpty == false ? label : nil) ?? code
+            guard let name, !name.isEmpty else { return nil }
+            let brand = (item["brand"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = (item["model"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return BagClub(name: name, carry: nil, total: nil, brand: brand?.isEmpty == false ? brand : nil, modelName: model?.isEmpty == false ? model : nil, code: code)
+        }
+    }
+
     static func parseBag(_ raw: Any?) -> [BagClub] {
         guard let items = raw as? [[String: Any]] else {
             return DefaultBag.clubs.map { BagClub(name: $0, carry: nil, total: nil) }

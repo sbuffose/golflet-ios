@@ -1571,7 +1571,12 @@ async function loadJugar(id){
   if (!$('#jugbody')) return;
   if (window.GolfletTrack) {
     if (LV?.watch != null && navigator.geolocation) navigator.geolocation.clearWatch(LV.watch);
-    window.GolfletTrack.mount(el, { id, live: LV.live, shots: LV.shots || [], holes: LV.holes || [], api, esc, toast, cid, bag: G.bag || [] });
+    let playBag = G.bag || [];
+    try {
+      const gear = await api('/api/my-clubs/items');
+      if (window.GolfletGear && typeof window.GolfletGear.attach === 'function') playBag = window.GolfletGear.attach(playBag, gear.clubs || []);
+    } catch (e) {}
+    window.GolfletTrack.mount(el, { id, live: LV.live, shots: LV.shots || [], holes: LV.holes || [], api, esc, toast, cid, bag: playBag });
     return;
   }
   drawJugar(); jugPace(); jugWatch();

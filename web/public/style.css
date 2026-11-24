@@ -3125,11 +3125,11 @@ html.rc-map .tk-sheetx{position:absolute;right:8px;top:8px;width:44px;height:44p
 html.rc-map .tk-clublist{position:relative;left:auto;bottom:auto;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none;max-height:none;overflow:visible;background:transparent;border-radius:0}
 html.rc-map .tk-clublist[hidden]{display:none!important}
 html.rc-map .tk-clublist li{display:flex;min-width:0}
-html.rc-map .tk-clublist button{background:#fff;color:#0B2545;border:1px solid #E6E2D8;border-radius:12px;width:100%;aspect-ratio:auto;min-height:118px;height:100%;text-align:center;padding:8px 4px 6px;font:700 12px/1.15 Geist,system-ui,sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;touch-action:manipulation}
+html.rc-map .tk-clublist button{background:#fff;color:#0B2545;border:1px solid #E6E2D8;border-radius:12px;width:100%;aspect-ratio:auto;min-height:148px;height:100%;text-align:center;padding:6px 4px 8px;font:700 12px/1.15 Geist,system-ui,sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;touch-action:manipulation}
 html.rc-map .tk-clublist button b{font:700 12px/1.15 Geist,system-ui,sans-serif;color:#0B2545;white-space:normal}
 html.rc-map .tk-clublist button.on,html.rc-map .tk-clublist button.on.sug{background:#fff;color:#0B2545;box-shadow:inset 0 0 0 2px #E2B93B}
 html.rc-map .tk-clublist button.sug{box-shadow:inset 0 0 0 3px #C8A86A}
-html.rc-map .tk-clublist .tk-clubface{width:56px;height:56px}
+html.rc-map .tk-clublist .tk-clubface{width:calc(100% - 4px);height:auto;flex:1 1 auto;min-height:96px;max-height:128px;align-self:stretch;object-fit:contain;background:#fff}
 html.rc-map .tk-clublist button i,html.rc-map .tk-clublist button small{font-style:normal;font-size:10px;font-weight:650;letter-spacing:0;line-height:1.1;color:#3E4C62}
 html.rc-map .tk-penwrap{position:relative}
 html.rc-map .tk-penmenu{position:absolute;left:0;bottom:52px;z-index:40;display:flex;flex-direction:column;gap:6px;width:min(280px,calc(100vw - 96px));padding:8px;background:#fff;color:#0B2545;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.35)}

@@ -231,6 +231,9 @@ final class AppModel {
                     bag = local
                 }
             }
+            if let gear = try? await api.bagGear() {
+                bag = ClubGear.attach(bag: bag, equipment: gear)
+            }
             await flushOffline()
             recurring = try? await api.recurringMistakes()
             if let courses = try? await api.gpsCourses(lat: nil, lng: nil) {
@@ -601,7 +604,9 @@ final class AppModel {
         notes.saveBag(bag)
         Task { [bag] in
             do {
-                self.bag = try await api.saveBag(bag)
+                let saved = try await api.saveBag(bag)
+                let gear = (try? await api.bagGear()) ?? []
+                self.bag = ClubGear.attach(bag: saved, equipment: gear)
             } catch {
                 errorMessage = error.localizedDescription
             }

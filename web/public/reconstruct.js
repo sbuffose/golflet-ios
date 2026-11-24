@@ -323,9 +323,14 @@
         if (local.length > shots.length) shots = local;
       }
       try {
-        const pack = await api("/api/bag");
+        const [pack, gear] = await Promise.all([
+          api("/api/bag").catch(() => null),
+          api("/api/my-clubs/items").catch(() => null),
+        ]);
         const rows = Array.isArray(pack) ? pack : (Array.isArray(pack?.clubs) ? pack.clubs : (Array.isArray(pack?.bag) ? pack.bag : null));
         if (Array.isArray(rows)) bag = rows;
+        const items = Array.isArray(gear?.clubs) ? gear.clubs : [];
+        if (items.length && window.GolfletGear && typeof window.GolfletGear.attach === "function") bag = window.GolfletGear.attach(bag, items);
       } catch (e) {}
     } catch (e) {
       if (!mine()) return;

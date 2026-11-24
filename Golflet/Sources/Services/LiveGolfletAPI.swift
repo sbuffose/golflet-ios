@@ -161,6 +161,11 @@ struct LiveGolfletAPI: GolfletAPI {
         return LivePayloadMapper.parseBag(json["bag"])
     }
 
+    func bagGear() async throws -> [BagClub] {
+        let json = try await request("GET", "/api/my-clubs")
+        return LivePayloadMapper.parseEquipment(json["clubs"])
+    }
+
     func renameClub(code: String, label: String) async throws {
         _ = try await request("PATCH", "/api/my-clubs/items/\(code.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? code)", body: ["label": label])
     }

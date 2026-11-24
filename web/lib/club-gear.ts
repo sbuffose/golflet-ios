@@ -134,3 +134,72 @@ export function silhouetteSrc(category?: Category | null): string {
   const name = category && ["driver", "fairway", "hybrid", "iron", "wedge", "putter"].includes(category) ? category : "iron";
   return `/clubs/silhouettes/${name}.svg`;
 }
+
+const FACES = ["driver", "fairway", "hybrid", "iron", "wedge", "putter"] as const;
+/** Yardage-table names for each equipment code. The bag stores "PW"; Mi bolsa stores code PW and label "Pitching wedge". */
+const TYPE_NAMES: { code: string; category: Category; names: string[] }[] = [
+  { code: "dr", category: "driver", names: ["driver"] },
+  { code: "3w", category: "fairway", names: ["madera 3"] },
+  { code: "5w", category: "fairway", names: ["madera 5"] },
+  { code: "7w", category: "fairway", names: ["madera 7"] },
+  { code: "9w", category: "fairway", names: ["madera 9"] },
+  { code: "hy", category: "hybrid", names: ["hibrido"] },
+  { code: "2h", category: "hybrid", names: ["hibrido 2"] },
+  { code: "3h", category: "hybrid", names: ["hibrido 3"] },
+  { code: "4h", category: "hybrid", names: ["hibrido 4"] },
+  { code: "5h", category: "hybrid", names: ["hibrido 5"] },
+  { code: "6h", category: "hybrid", names: ["hibrido 6"] },
+  { code: "2i", category: "iron", names: ["hierro 2"] },
+  { code: "3i", category: "iron", names: ["hierro 3"] },
+  { code: "4i", category: "iron", names: ["hierro 4"] },
+  { code: "5i", category: "iron", names: ["hierro 5"] },
+  { code: "6i", category: "iron", names: ["hierro 6"] },
+  { code: "7i", category: "iron", names: ["hierro 7"] },
+  { code: "8i", category: "iron", names: ["hierro 8"] },
+  { code: "9i", category: "iron", names: ["hierro 9"] },
+  { code: "pw", category: "wedge", names: ["pw", "pitching wedge"] },
+  { code: "gw", category: "wedge", names: ["gw", "gap wedge"] },
+  { code: "sw", category: "wedge", names: ["sw", "sand wedge"] },
+  { code: "lw", category: "wedge", names: ["lw", "lob wedge"] },
+  { code: "pt", category: "putter", names: ["putter", "pt"] },
+];
+
+const foldName = (value: unknown) => String(value ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+function expandedNames(values: unknown[]): { names: Set<string>; category: Category | null } {
+  const names = new Set(values.map(foldName).filter(Boolean));
+  let category: Category | null = null;
+  for (const type of TYPE_NAMES) {
+    if (names.has(type.code) || type.names.some(name => names.has(name))) {
+      names.add(type.code);
+      type.names.forEach(name => names.add(name));
+      category = category || type.category;
+    }
+  }
+  return { names, category };
+}
+
+type GearStamp = { brand?: string; model?: string; category?: Category; code?: string };
+
+/** Copy Mi bolsa brand and model onto the yardage rows the track already has. A row that already names a model keeps it. */
+export function attachEquipment<T>(bag: T[] | null | undefined, equipment: unknown): Array<T & GearStamp> {
+  const rows = Array.isArray(bag) ? bag : [];
+  const gear = Array.isArray(equipment) ? equipment : [];
+  const indexed = gear.map(item => {
+    const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const named = expandedNames([row.code, row.label, row.bag, row.club, row.name]);
+    const given = FACES.includes(row.category as Category) ? row.category as Category : null;
+    return { row, names: named.names, category: given || named.category };
+  });
+  return rows.map(item => {
+    if (!item || typeof item !== "object") return item as T & GearStamp;
+    const row = item as Record<string, unknown>;
+    const want = expandedNames([row.club, row.code, row.label, row.name, row.id]).names;
+    const hit = indexed.find(entry => [...want].some(name => entry.names.has(name)));
+    if (!hit) return item;
+    const brand = String(row.brand || hit.row.brand || "").trim();
+    const model = String(row.model || row.model_name || hit.row.model || hit.row.model_name || "").trim();
+    const category = FACES.includes(row.category as Category) ? row.category : hit.category;
+    return { ...row, ...(brand ? { brand } : {}), ...(model ? { model } : {}), ...(category ? { category } : {}) } as T & GearStamp;
+  });
+}

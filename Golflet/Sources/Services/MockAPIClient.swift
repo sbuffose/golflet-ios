@@ -319,6 +319,8 @@ struct MockAPIClient: GolfletAPI {
 
     func saveBag(_ items: [BagClub]) async throws -> [BagClub] { items }
 
+    func bagGear() async throws -> [BagClub] { [] }
+
     func renameClub(code: String, label: String) async throws {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 12 else { throw GolfletError.server("El nombre entra en 12 caracteres.") }
