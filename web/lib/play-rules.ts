@@ -140,6 +140,50 @@ export function frameHole(
   return { mode: "overview", z: overviewZ, cx: fx, cy: fy, bearing: span.bearing, aimLat: b.lat, aimLng: b.lng };
 }
 
+/**
+ * Flag adjust: the green polygon fills the width left after the side inset
+ * and stays inside the band between the top card and the bottom buttons.
+ * The screen anchor is 42% of the height, so the center is shifted into that band.
+ * Bearing stays north-up. The tile request is unchanged; this is a visual zoom.
+ */
+export function frameGreenPolygon(
+  polygon: Array<{ lat: number; lng: number }>,
+  view: { width: number; height: number },
+  band: { top: number; bottom: number; side: number },
+): HoleFrame | null {
+  const pts = polygon.map(p => {
+    const known = knownPoint(p.lat, p.lng);
+    if (!known) return null;
+    const [x, y] = projectLL(known.lat, known.lng);
+    return { x, y };
+  }).filter((p): p is { x: number; y: number } => !!p);
+  if (pts.length < 3) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of pts) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const bw = maxX - minX, bh = maxY - minY;
+  if (!(bw > 0) || !(bh > 0)) return null;
+  const width = Math.max(1, view?.width || 390);
+  const height = Math.max(1, view?.height || 844);
+  const side = Math.max(0, band?.side || 0);
+  const top = Math.max(0, band?.top || 0);
+  const bottom = Math.max(0, band?.bottom || 0);
+  const boxW = Math.max(80, width - side * 2);
+  const boxH = Math.max(80, height - top - bottom);
+  const z = clampNum(Math.min(Math.log2(boxW / (bw * 256)), Math.log2(boxH / (bh * 256))), 16, VISUAL_ZOOM_MAX);
+  const n = 2 ** z;
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+  const usableMid = top + boxH / 2;
+  const cy = midY - (usableMid - height * 0.42) / (n * 256);
+  const aim = unprojectLL(midX, midY);
+  return { mode: "flag", z, cx: midX, cy, bearing: 0, aimLat: aim.lat, aimLng: aim.lng };
+}
+
 export function screenOf(lat: number, lng: number, cam: { z: number; cx: number; cy: number; bearing: number | null }, view: { width: number; height: number }): [number, number] | null {
   const p = knownPoint(lat, lng);
   if (!p) return null;

@@ -91,6 +91,8 @@ struct HoleSatelliteMap: UIViewRepresentable {
     var focusID: String
     /// Closed hole: the camera sits on the green and the tee stays down-screen, the same overview the web uses.
     var framesHole: Bool = false
+    /// Flag adjust: fit the green ring so it fills the width between the side insets.
+    var fitsGreen: Bool = false
     var zoom: Int = 0
     var shotMarks: [HoleShotMark] = []
     /// Dotted segment from the reticle to the flag while the shot is live.
@@ -132,15 +134,32 @@ struct HoleSatelliteMap: UIViewRepresentable {
             map.removeAnnotations(map.annotations)
             addRings(map)
         }
-        let cameraKey = "\(focusID)|\(framesHole)|\(zoom)"
+        let cameraKey = "\(focusID)|\(framesHole)|\(fitsGreen)|\(zoom)|\(Int(map.bounds.width))"
         if context.coordinator.cameraKey != cameraKey {
             context.coordinator.cameraKey = cameraKey
-            let holeMeters = max(40.0, Double(PlayMath.meters(from: tee, to: pin)))
-            // Web overview (`frameHole` mode overview) keeps the green at the reticle and the tee down-screen.
-            let distance = max(2, (framesHole ? max(360, holeMeters * 1.15) : max(90, holeMeters * 0.72)) * pow(0.78, Double(zoom)))
-            let look = framesHole ? pin : focus
-            let camera = MKMapCamera(lookingAtCenter: look.cl, fromDistance: distance, pitch: 0, heading: heading)
-            map.setCamera(camera, animated: animateCamera && !holeChanged)
+            if fitsGreen, let green = rings.first(where: { $0.kind == "g" && $0.points.count >= 3 }), map.bounds.width > 40 {
+                var rect = MKMapRect.null
+                for point in green.points {
+                    let mapped = MKMapPoint(point.cl)
+                    rect = rect.union(MKMapRect(x: mapped.x, y: mapped.y, width: 1, height: 1))
+                }
+                let zoomScale = pow(0.78, Double(zoom))
+                if abs(zoomScale - 1) > 0.001, rect.width > 2, rect.height > 2 {
+                    let dx = min(rect.width * 0.45, max(-rect.width, rect.width * (1 - zoomScale) / 2))
+                    let dy = min(rect.height * 0.45, max(-rect.height, rect.height * (1 - zoomScale) / 2))
+                    rect = rect.insetBy(dx: dx, dy: dy)
+                }
+                let side = map.bounds.width * 0.10
+                let pad = UIEdgeInsets(top: 200, left: side, bottom: 230, right: side)
+                map.setVisibleMapRect(rect, edgePadding: pad, animated: animateCamera && !holeChanged)
+            } else {
+                let holeMeters = max(40.0, Double(PlayMath.meters(from: tee, to: pin)))
+                // Web overview (`frameHole` mode overview) keeps the green at the reticle and the tee down-screen.
+                let distance = max(2, (framesHole ? max(360, holeMeters * 1.15) : max(90, holeMeters * 0.72)) * pow(0.78, Double(zoom)))
+                let look = framesHole ? pin : focus
+                let camera = MKMapCamera(lookingAtCenter: look.cl, fromDistance: distance, pitch: 0, heading: heading)
+                map.setCamera(camera, animated: animateCamera && !holeChanged)
+            }
         }
         refreshShots(map)
         refreshAim(map)

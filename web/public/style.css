@@ -3153,7 +3153,14 @@ html.rc-map #play-reload,html.rc-map #play-drop{min-height:44px;border-radius:12
 html.rc-map #play-drop{background:#C8102E;color:#fff}
 html.rc-map .tk-side,html.rc-map #play-recovery{position:static;width:auto;min-width:44px;height:44px;min-height:44px;border-radius:999px;padding:0 12px;white-space:nowrap;font:650 13px/1 Geist,system-ui,sans-serif;background:#fff;color:#0B2545;box-shadow:0 4px 12px rgba(0,0,0,.28)}
 html.rc-map .tk-ro{top:60px;left:auto;right:12px;transform:none;background:rgba(11,37,69,.94);color:#fff;border-radius:16px;box-shadow:0 6px 16px rgba(0,0,0,.4);text-shadow:none;white-space:normal;max-width:168px;overflow:visible;padding:6px 12px 8px}
-html.rc-map .tk-ro.tk-setup{left:50%;right:auto;transform:translateX(-50%);top:112px}
+html.rc-map .tk-ro.tk-setup{left:12px;right:auto;transform:none;top:calc(env(safe-area-inset-top) + 96px);max-width:210px;padding:6px 10px 7px;text-align:left;border-radius:14px;z-index:6}
+html.rc-map:has(.tk-hole) .tk-hole{left:12px;right:auto;transform:none;top:calc(env(safe-area-inset-top) + 52px);max-width:214px;z-index:6;overflow:hidden}
+html.rc-map:has(.tk-hole) .tk-chips{top:calc(env(safe-area-inset-top) + 52px);right:8px;left:auto;max-width:150px;align-items:flex-end;z-index:6}
+html.rc-map:has(.tk-hole) .tk-wx{max-width:150px;overflow:hidden}
+html.rc-map:has(.tk-hole) .tk-wxface,html.rc-map:has(.tk-hole) .tk-wx small,html.rc-map:has(.tk-hole) .tk-wx .num{white-space:normal}
+html.rc-map .tk-ro.tk-setup b{font-size:13px;white-space:nowrap}
+html.rc-map .tk-ro.tk-setup b.num{font-size:18px;line-height:1.1}
+html.rc-map .tk-ro.tk-setup small{font-size:11px;margin-top:1px;white-space:normal}
 html.rc-map .tk-ro.tk-done{top:48px;left:50%;right:auto;transform:translateX(-50%);max-width:calc(100% - 24px);padding:6px 12px;border-radius:999px;white-space:nowrap;z-index:5}
 html.rc-map .tk-ro.tk-done b{display:inline;font-size:13px;line-height:1.2;white-space:nowrap;color:#fff}
 html.rc-map .tk-ro.tk-done .cad,.html.rc-map .tk-ro.tk-done img{display:none}

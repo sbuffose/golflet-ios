@@ -84,8 +84,10 @@ struct PlayHoleView: View {
             reticle
                 .allowsHitTesting(false)
             if !holeClosed {
-                liveReadout
-                    .allowsHitTesting(false)
+                if track.phase != .confirmFlag {
+                    liveReadout
+                        .allowsHitTesting(false)
+                }
                 sideColumn
             }
             if holeClosed {
@@ -93,12 +95,21 @@ struct PlayHoleView: View {
             } else {
             VStack(spacing: 8) {
                 topBar
-                HStack(alignment: .top) {
-                    shotRail
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if track.phase == .confirmFlag {
+                            holeFlagChip
+                            flagAdjustCard
+                        } else {
+                            shotRail
+                        }
+                    }
+                    .frame(maxWidth: 210, alignment: .leading)
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 6) {
                         if showsWind {
                             windChip
+                                .frame(maxWidth: 140, alignment: .trailing)
                         }
                         if liveRound.modality == "match" || liveRound.modality == "fourball" {
                             matchChip
@@ -291,6 +302,7 @@ struct PlayHoleView: View {
             focus: focusPoint,
             focusID: focusID,
             framesHole: holeClosed,
+            fitsGreen: track.phase == .confirmFlag,
             zoom: mapZoom,
             shotMarks: shotPills,
             aimLine: (!holeClosed && (track.phase == .tracking || track.phase == .penaltyWhere)) ? [cursor, pinCoord] : [],
@@ -644,8 +656,64 @@ struct PlayHoleView: View {
         mapCenter = here
     }
 
+    /// Stroke order. A stored shot_number can repeat; A buena still takes the next number.
+    private var orderedHoleShots: [Shot] {
+        let rows = visibleShots.filter { $0.hole == hole }
+        return rows.enumerated().sorted { a, b in
+            if a.element.shotNumber != b.element.shotNumber { return a.element.shotNumber < b.element.shotNumber }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+
+    private func strokeNumber(_ shot: Shot, in rows: [Shot]) -> Int {
+        (rows.firstIndex { $0.id == shot.id } ?? 0) + 1
+    }
+
+    private var holeFlagChip: some View {
+        let yards = teeChoices.first { $0.name == teeName }?.yards ?? current?.yards.values.max()
+        var parts = ["Par \(current?.par ?? 0)"]
+        if let yards { parts.append("\(yards) yd") }
+        let detail = parts.joined(separator: " · ")
+        return HStack(spacing: 6) {
+            Text("Hoyo \(hole)")
+                .font(.system(size: 14, weight: .bold))
+            Text(detail)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(Color(hex: 0xF6F7F9))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(Color(hex: 0x0B2545).opacity(0.92))
+        .clipShape(Capsule())
+        .accessibilityIdentifier("play-hole-chip")
+    }
+
+    private var flagAdjustCard: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("Ajustá la bandera")
+                .font(.system(size: 13, weight: .bold))
+            Text("\(PlayMath.yards(from: teeCoord, to: cursor)) yd")
+                .font(.system(size: 18, weight: .bold))
+            Text("desde la salida")
+                .font(.system(size: 11, weight: .semibold))
+            if holeRecord?.dayPin == nil {
+                Text("Referencia del green, no un pin medido")
+                    .font(.system(size: 11, weight: .semibold))
+                    .opacity(0.8)
+            }
+        }
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: 210, alignment: .leading)
+        .background(Color(hex: 0x0B2545).opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityIdentifier("play-flag-card")
+    }
+
     private var shotRail: some View {
-        let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
+        let rows = orderedHoleShots
         let shown = rows.count > 3 && !shotsExpanded ? Array(rows.suffix(3)) : rows
         return VStack(alignment: .leading, spacing: 4) {
             if rows.count > 3 {
@@ -659,7 +727,7 @@ struct PlayHoleView: View {
                     .accessibilityIdentifier("play-shots-more")
             }
             ForEach(shown, id: \.id) { shot in
-                Text("\(shot.shotNumber). \(shotLabel(shot.club))")
+                Text("\(strokeNumber(shot, in: rows)). \(shotLabel(shot.club))\(shot.intent == "recovery" ? " A buena" : "")")
                     .font(GFont.ui(11, weight: .semibold))
                     .foregroundStyle(p.ink)
                     .lineLimit(1)
@@ -928,7 +996,11 @@ struct PlayHoleView: View {
         SavedRoundShots.load(roundID: liveRound.id).forEach(keep)
         if !receivedShots { openingShots.forEach(keep) }
         visibleShots.forEach(keep)
-        return byID.values.sorted { $0.shotNumber < $1.shotNumber }
+        return byID.values.sorted { a, b in
+            if a.shotNumber != b.shotNumber { return a.shotNumber < b.shotNumber }
+            if a.takenAt != b.takenAt { return (a.takenAt ?? .distantPast) < (b.takenAt ?? .distantPast) }
+            return a.id < b.id
+        }
     }
 
     private var restoredTrack: TrackSession.State? {
@@ -1517,7 +1589,10 @@ struct PlayHoleView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("play-hole-picker")
-            Text(track.strokeCount > 0 ? "\(track.strokeCount)" : "–")
+            Text({
+                let scored = track.strokeCount > 0 ? track.strokeCount : orderedHoleShots.count
+                return scored > 0 ? "\(scored)" : "–"
+            }())
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Color.white)
                 .frame(width: 36, height: 36)
@@ -1836,10 +1911,10 @@ struct PlayHoleView: View {
                 return (index + 1, mark.club ?? "—", yards, span)
             }
         }
-        let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
+        let rows = orderedHoleShots
         return rows.enumerated().map { index, shot in
             let previous = index > 0 ? rows[index - 1] : nil
-            return (shot.shotNumber, shot.club ?? "—", shot.distanceYd ?? 0, shotDistanceText(shot, previous: previous))
+            return (index + 1, shot.club ?? "—", shot.distanceYd ?? 0, shotDistanceText(shot, previous: previous))
         }
     }
 
@@ -1881,7 +1956,7 @@ struct PlayHoleView: View {
     }
 
     private var holeShots: some View {
-        let rows = visibleShots.filter { $0.hole == hole }.sorted { $0.shotNumber < $1.shotNumber }
+        let rows = orderedHoleShots
         return VStack(alignment: .leading, spacing: 10) {
             Text("Golpes")
                 .font(GType.section)
@@ -1896,7 +1971,7 @@ struct PlayHoleView: View {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, shot in
                             Button { editingShot = shot; askDeleteShot = false; movingShotID = nil } label: {
                             HStack {
-                                Text("\(shot.shotNumber)")
+                                Text("\(strokeNumber(shot, in: rows))")
                                     .font(GType.label)
                                     .tabular()
                                     .foregroundStyle(p.ink3)
@@ -2313,7 +2388,7 @@ struct PlayHoleView: View {
     }
 
     private func shotEditTitle(_ shot: Shot) -> String {
-        var bits = ["Golpe \(shot.shotNumber)"]
+        var bits = ["Golpe \(strokeNumber(shot, in: orderedHoleShots))"]
         if let club = shot.club, !club.isEmpty { bits.append(club) }
         let dist = shotDistanceText(shot, previous: nil)
         if dist != "—" { bits.append(dist) }
@@ -2515,7 +2590,7 @@ struct PlayHoleView: View {
     }
 
     private func undoLast() {
-        guard let last = visibleShots.filter({ $0.hole == hole }).max(by: { $0.shotNumber < $1.shotNumber }) else { return }
+        guard let last = orderedHoleShots.last else { return }
         if let client = last.clientId {
             droppedClientIDs.insert(client)
             ShotQueue.remove(clientIds: [client])
