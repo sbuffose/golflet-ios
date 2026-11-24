@@ -136,6 +136,12 @@ struct HomeView: View {
             .golfletChrome()
             .environment(model)
         }
+        .confirmationDialog(model.todayPrompt, isPresented: Binding(get: { !model.todayAsk.isEmpty }, set: { if !$0 { model.todayAsk = [] } }), titleVisibility: .visible) {
+            ForEach(model.todayAsk, id: \.self) { course in
+                Button(course) { Task { await model.openTodayTrack(course: course) } }
+            }
+            Button("Cancelar", role: .cancel) { model.todayAsk = [] }
+        }
         .onChange(of: model.celebrateCards) { _, value in
             guard let value else { return }
             Task { await countUpCards(to: value) }
@@ -146,6 +152,18 @@ struct HomeView: View {
         showsHomeProfesores = false
         showsAgregarProfesor = false
         model.presentedProfesor = profesor
+    }
+
+    private var todayRound: Round? {
+        model.rounds.first { !$0.official && ($0.cardStatus == "En juego" || $0.cardStatus == "Tarjeta pendiente") }
+    }
+
+    private var showsTodayTrack: Bool {
+        if todayRound != nil { return true }
+        guard let tee = model.nextTeeTime else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: -3 * 3600) ?? .current
+        return calendar.isDateInToday(tee.startsAt)
     }
 
     private func header(scroll: ScrollViewProxy) -> some View {
@@ -211,7 +229,10 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("home-open-jugar")
-            Button { model.showsReconstruct = true } label: {
+            Button {
+                model.todayTrack = nil
+                model.showsReconstruct = true
+            } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Cargar una vuelta ya jugada")
                         .font(GType.headline)
@@ -306,12 +327,17 @@ struct HomeView: View {
                             onCreate: { model.presentCreateGroup() },
                             compact: true
                         )
-                        Button { model.showsPlay = true } label: {
+                        Button {
+                            if showsTodayTrack { Task { await model.openTodayTrack(course: nil) } }
+                            else { model.showsPlay = true }
+                        } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: "location.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .accessibilityHidden(true)
-                                Text("Jugar")
+                                if !showsTodayTrack {
+                                    Image(systemName: "location.fill")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .accessibilityHidden(true)
+                                }
+                                Text(showsTodayTrack ? (todayRound == nil ? "Trackear" : "Seguir vuelta") : "Jugar")
                                     .font(GType.label)
                             }
                             .foregroundStyle(p.onPrimary)
@@ -321,8 +347,8 @@ struct HomeView: View {
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Jugar")
-                        .accessibilityIdentifier("play-start")
+                        .accessibilityLabel(showsTodayTrack ? (todayRound == nil ? "Trackear la vuelta de hoy" : "Seguir la vuelta de hoy") : "Jugar")
+                        .accessibilityIdentifier(showsTodayTrack ? "today-track" : "play-start")
                         Button { showsHcpImpact = true } label: {
                             Text("Cambios")
                                 .font(GFont.ui(13, weight: .regular))
@@ -342,6 +368,12 @@ struct HomeView: View {
                     hiStat("Mejor", snap.bestGross.map(String.init) ?? "–", .roundList(.bestGross(yearOnly: false)))
                     hiStat("Prom.", snap.yearAverage.map { FormatAR.one($0) } ?? "–", .roundList(.average(yearOnly: false)))
                     hiStat("Impacto", impactText, nil)
+                }
+                if let round = todayRound {
+                    Text("\(round.displayCourse) · En juego · Tarjeta pendiente")
+                        .font(GType.label)
+                        .foregroundStyle(p.onPrimary.opacity(0.85))
+                        .lineLimit(1)
                 }
             }
         }
@@ -1191,7 +1223,12 @@ struct RoundRow: View {
             }
             return parts.joined(separator: " · ")
         }
-        if !round.official { return "No oficial · \(round.displayCourse)\(round.tee.isEmpty ? "" : " · \(round.tee)")" }
+        if !round.official {
+            let tee = round.tee.isEmpty ? "" : " · \(round.tee)"
+            if round.cardStatus == "En juego" { return "En juego · Tarjeta pendiente · \(round.displayCourse)\(tee)" }
+            if round.cardStatus == "Tarjeta pendiente" { return "Tarjeta pendiente · \(round.displayCourse)\(tee)" }
+            return "No oficial · \(round.displayCourse)\(tee)"
+        }
         var parts = [round.displayCourse]
         if !round.tee.isEmpty, round.tee.caseInsensitiveCompare(round.course) != .orderedSame {
             parts.append(round.tee)
@@ -1812,7 +1849,7 @@ struct HomeGroupsSheet: View {
                                     GroupPhotoView(
                                         url: group.photoURL,
                                         initials: GroupsParser.initials(group.name),
-                                        size: 44
+                                        size: 40
                                     )
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(group.name)
@@ -1825,7 +1862,7 @@ struct HomeGroupsSheet: View {
                                         let people = group.members.filter { !$0.isPending }
                                         if !people.isEmpty {
                                             HStack(spacing: 8) {
-                                                MemberFaceStack(members: people, size: 28)
+                                                MemberFaceStack(members: people, size: 38)
                                                 Text(memberNames(people))
                                                     .font(GType.label)
                                                     .foregroundStyle(p.ink2)

@@ -1659,6 +1659,74 @@ final class GolfletUITests: XCTestCase {
         }
     }
 
+    func testCapturePartido() {
+        let up = XCUIApplication()
+        up.launchArguments = ["-ui-testing", "-ui-testing-match-up"]
+        up.launch()
+        XCTAssertTrue(waitFor(up, "screen-partido-vivo"), "No se abrió el partido")
+        let ahead = up.staticTexts["Vos 2 arriba"]
+        XCTAssertTrue(ahead.waitForExistence(timeout: 8))
+        XCTAssertTrue(ahead.isHittable)
+        XCTAssertTrue(up.staticTexts["Joaquín L. 1 arriba"].exists)
+        XCTAssertEqual(up.staticTexts.matching(NSPredicate(format: "label == %@", "All square")).count, 1)
+        XCTAssertTrue(first(up, "match-track").exists)
+        XCTAssertFalse(up.staticTexts["0/3 partidos terminados"].exists)
+        let width = Int(up.windows.firstMatch.frame.width.rounded())
+        saveShot("ios-\(width)-partido-arriba")
+        let track = first(up, "match-track")
+        if track.isHittable { track.tap() } else { track.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertTrue(waitFor(up, "tk-unofficial", timeout: 8), "El track no quedó como no oficial")
+        saveShot("ios-\(width)-partido-track")
+        let save = first(up, "rc-save")
+        XCTAssertTrue(save.waitForExistence(timeout: 8))
+        for _ in 0..<4 where !save.isHittable { up.swipeUp() }
+        save.tap()
+        save.tap()
+        let back = first(up, "reconstruct-back")
+        if back.isHittable { back.tap() } else { back.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        let follow = first(up, "match-track")
+        XCTAssertTrue(follow.waitForExistence(timeout: 8))
+        XCTAssertEqual(follow.label, "Seguir track · 2 golpes")
+        let other = first(up, "match-score-1-6")
+        if other.isHittable { other.tap() } else { other.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        XCTAssertEqual(first(up, "match-track").label, "Seguir track · 2 golpes")
+        saveShot("ios-\(width)-partido-seguir")
+        if follow.isHittable { follow.tap() } else { follow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        let kept = up.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hoyo 1 ·"))
+        XCTAssertTrue(kept.element(boundBy: 1).waitForExistence(timeout: 8))
+        XCTAssertGreaterThanOrEqual(kept.count, 2)
+        up.terminate()
+
+        let square = XCUIApplication()
+        square.launchArguments = ["-ui-testing", "-ui-testing-match-square"]
+        square.launch()
+        XCTAssertTrue(waitFor(square, "screen-partido-vivo"))
+        let evens = square.staticTexts.matching(NSPredicate(format: "label == %@", "All square"))
+        let even = evens.element(boundBy: 0)
+        XCTAssertTrue(even.waitForExistence(timeout: 8))
+        XCTAssertTrue(even.isHittable)
+        XCTAssertEqual(evens.count, 3)
+        let squareWidth = Int(square.windows.firstMatch.frame.width.rounded())
+        saveShot("ios-\(squareWidth)-partido-square")
+        square.terminate()
+
+        let done = XCUIApplication()
+        done.launchArguments = ["-ui-testing", "-ui-testing-match-done"]
+        done.launch()
+        XCTAssertTrue(waitFor(done, "screen-partido-vivo"))
+        let won = done.staticTexts.matching(NSPredicate(format: "label == %@", "Ganó Vos 3&2"))
+        XCTAssertTrue(won.element(boundBy: 0).waitForExistence(timeout: 8))
+        XCTAssertEqual(won.count, 2, "Vos gana 3&2 contra los otros dos")
+        XCTAssertTrue(won.element(boundBy: 0).isHittable)
+        XCTAssertTrue(won.element(boundBy: 1).isHittable)
+        let joaquin = done.staticTexts["Ganó Joaquín L. 3&2"].firstMatch
+        XCTAssertTrue(joaquin.waitForExistence(timeout: 8))
+        XCTAssertTrue(joaquin.isHittable)
+        XCTAssertFalse(first(done, "match-track").exists)
+        let doneWidth = Int(done.windows.firstMatch.frame.width.rounded())
+        saveShot("ios-\(doneWidth)-partido-terminado")
+    }
+
     func testCaptureGolpesHoyo() {
         let placed = XCUIApplication()
         openGolpes(placed, arguments: ["-ui-testing", "-ui-testing-strokes"])

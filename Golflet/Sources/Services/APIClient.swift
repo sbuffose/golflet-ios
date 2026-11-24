@@ -19,12 +19,13 @@ protocol GolfletAPI: Sendable {
     func saveHoleMark(roundId: String, mark: HoleMark) async throws -> HoleMarkSave
     func holeMarks(roundId: String) async throws -> [HoleMark]
     func saveBag(_ items: [BagClub]) async throws -> [BagClub]
+    func bagGear() async throws -> [BagClub]
     func renameClub(code: String, label: String) async throws
     func saveIronSet(brand: String, model: String) async throws -> String
     func pollSyncProgress(progressID: String) async -> SyncAPIProgress?
 
     func gpsCourses(lat: Double?, lng: Double?) async throws -> GPSCourseList
-    func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail
+    func gpsCourse(id: String, lat: Double?, lng: Double?, playedOn: String?) async throws -> GPSCourseDetail
     func createLiveRound(courseId: String?, tee: String?, players: Int, modality: String) async throws -> LiveRound
     func liveRound(id: String) async throws -> LiveRoundDetail
     func patchLiveRound(id: String, body: [String: Any]) async throws -> LiveRound
@@ -101,11 +102,25 @@ protocol GolfletAPI: Sendable {
     func updateReconstructionShot(liveRoundId: String, shotId: String, shot: ReconstructionDraft) async throws -> ReconstructionShot
     func deleteReconstructionShot(liveRoundId: String, shotId: String) async throws
     func courseCenters(courseId: String) async throws -> [Int: ReconstructionPoint]
-    func courseMap(club: String, course: String) async throws -> [String: Any]
+    func courseMap(club: String, course: String, playedOn: String?) async throws -> [String: Any]
     func roundWeather(roundId: String) async throws -> RoundWeather?
+    func weatherNow(lat: Double, lng: Double, retry: Bool) async throws -> WeatherNow?
+    func openTodayRound(course: String?, teeId: String?) async throws -> TodayTrack
+    func confirmProvisionalLink(liveId: String, roundId: String) async throws
 }
 
 extension GolfletAPI {
+    /// Playing now uses the current Azul layout. A reconstruction passes the round day instead.
+    func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail {
+        try await gpsCourse(id: id, lat: lat, lng: lng, playedOn: nil)
+    }
+
+    func weatherNow(lat: Double, lng: Double, retry: Bool) async throws -> WeatherNow? { nil }
+
+    func courseMap(club: String, course: String) async throws -> [String: Any] {
+        try await courseMap(club: club, course: course, playedOn: nil)
+    }
+
     func chooseBookingCourse(id: String, course: String) async throws {}
 
     func createGroup(name: String, photoJPEG: Data?) async throws -> GolfletGroup {

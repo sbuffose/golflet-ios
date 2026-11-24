@@ -4,18 +4,29 @@ import { gameMetrics, type GmHole, type GmRound, type GmShot, type LL } from "./
 import { effectiveGreens, flagsForLive, pinStateFor } from "./pins";
 import { gpsShotSql } from "./gps-shot";
 import { isUndefinedColumn } from "./scorecard-lease";
+import { isJockeyAzul } from "./azul-osm";
+import { azulCurrentLayout, azulMenIndex, azulNineSwap, azulPhysicalYards } from "./azul-layout";
 
 /** Per-hole info of one live round: par (our course card), green front/center/back (club GPS map + corrections), putts counter, own pin,
  *  and (t162u) the collaborative pin of the day + what the player's pin button does. */
 export async function liveHoles(live: any, me?: string) {
   const [c] = live.club_id && live.course ? await q(`select holes from course where club_id=$1 and lower(name)=lower($2)`, [live.club_id, live.course]) : [];
-  const pars = new Map<number, number>((c?.holes || []).map((h: any) => [Number(h.hole), Number(h.par)]));
+  const cards = new Map<number, any>((c?.holes || []).map((h: any) => [Number(h.hole), h]));
   const greens = await effectiveGreens(live.club_code, live.vm_course);
   const lh = await q(`select hole, putts, pin_lat, pin_lng, pin_accuracy_m, pin_at from live_hole where live_round_id=$1`, [live.id]);
   const L = new Map(lh.map((r: any) => [Number(r.hole), r]));
   const ps = me ? await pinStateFor(live, me) : new Map();
-  return Array.from({ length: 18 }, (_, i) => i + 1).map(h => { const r: any = L.get(h), st: any = ps.get(h);
-    return { hole: h, par: pars.get(h) ?? null, green: greens.get(h) ?? null, putts: r?.putts ?? null,
+  const current = isJockeyAzul(String(live.club_code || ""), String(live.course || live.vm_course || ""))
+    && azulCurrentLayout(String(live.date || "").slice(0, 10), null);
+  return Array.from({ length: 18 }, (_, i) => i + 1).map(h => {
+    const physical = current ? azulNineSwap(h) : h;
+    const score = cards.get(current ? h : physical);
+    const yards = azulPhysicalYards(cards.get(physical)?.yards, physical);
+    const r: any = L.get(h), st: any = ps.get(h);
+    const hcp = azulMenIndex(score);
+    return { hole: h, par: score?.par != null ? Number(score.par) : null, hcp, yards: Object.keys(yards.yards).length ? yards.yards : null,
+      ...(yards.note ? { yards_note: yards.note } : {}),
+      green: greens.get(physical) ?? null, putts: r?.putts ?? null,
       pin: r?.pin_lat != null ? { lat: r.pin_lat, lng: r.pin_lng, accuracy_m: r.pin_accuracy_m, at: r.pin_at, source: "player_marked" } : null,
       day_pin: st?.day_pin ?? null, pin_action: st?.pin_action ?? "none" }; });
 }

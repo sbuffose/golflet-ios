@@ -14,6 +14,7 @@ struct MatchSetupView: View {
     @Environment(\.palette) private var p
     let booking: TeeTime
     @State private var pickedCourse: String? = nil
+    @State private var showsLive = false
 
     private var sameClub: [Course] {
         let code = booking.clubCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -110,6 +111,14 @@ struct MatchSetupView: View {
                         si: card.si,
                         rows: strokeRows
                     )
+                    if ready, players.count == 2 || players.count == 3 {
+                        Button("Empezar partido") { showsLive = true }
+                            .font(GType.headline)
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(p.primary, in: RoundedRectangle(cornerRadius: 12))
+                            .accessibilityIdentifier("empezar-partido")
+                    }
                 }
                 .padding(16)
                 .padding(.bottom, 32)
@@ -117,6 +126,20 @@ struct MatchSetupView: View {
         }
         .accessibilityIdentifier("screen-armar-partido")
         .safeAreaInset(edge: .top) { MetricBackBar() }
+        .sheet(isPresented: $showsLive) {
+            NavigationStack {
+                MatchPlayView(
+                    course: courseTitle,
+                    players: players,
+                    bases: playingBases,
+                    si: card.si,
+                    allowance: MatchStrokes.defaultAllowance(players: players.count),
+                    scoringLabel: "Con hándicap"
+                )
+            }
+            .golfletChrome()
+            .environment(model)
+        }
     }
 
     private var courseQuestion: some View {

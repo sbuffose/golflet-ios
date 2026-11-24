@@ -6,22 +6,29 @@ import { getGreenGuide } from "./green-guide";
 import { hourlyWind, FORECAST_DAYS, addDays, dayDiff } from "./weather-hourly";
 import { DEFAULT_MIN_PER_HOLE, holeSchedule, windAt } from "./plan-core";
 import { nowAR } from "./tee-times-core";
+import { isJockeyAzul } from "./azul-osm";
+import { azulNineSwap, azulPhysicalYards } from "./azul-layout";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export async function courseBookData(clubCode: string, course: string, o: { date?: string | null; time?: string | null } = {}) {
   const [c] = await q(`select k.code club_code, k.name club_name, c.name course, c.holes from course c join club k on k.id=c.club_id where k.code=$1 and lower(c.name)=lower($2)`, [clubCode, course]);
   const guide = getGreenGuide(clubCode, course);
-  const map = await getCourseMap(clubCode, course);
+  const map = await getCourseMap(clubCode, course, o.date ? { playedOn: o.date } : { layout: "current" });
   if (!c && !map && !guide) return null;
   const comp = await courseCompletenessFor(clubCode, course), relev = new Set((comp as any).override ? [] : comp.holes_en_relevamiento);
   const card = (n: number) => (c?.holes || []).find((h: any) => h.hole === n);
   const ydOf = (h: any) => { const y = h?.yards || {}; return y.AZUL ?? y.Azul ?? (Object.values(y) as number[])[0] ?? null; };
-  const unconfirmed = /azul/i.test(course) && clubCode === "118";
+  const current = isJockeyAzul(clubCode, course) && map?.layout === "current";
   const holes = Array.from({ length: 18 }, (_, i) => i + 1).map(n => {
-    const mh = map?.holes?.find((h: any) => h.hole === n), swapped = unconfirmed && ((n >= 3 && n <= 8) || (n >= 12 && n <= 17));
-    return { hole: n, order: n, par: swapped ? null : card(n)?.par ?? mh?.crosscheck?.card?.par ?? guide?.holes[n]?.par ?? null,
-      play_length_yd: mh?.play_length_yd ?? ydOf(card(n)) ?? guide?.holes[n]?.yd ?? null, bearing_true: mh?.bearing?.tee_to_green_true ?? null,
+    const physical = current ? azulNineSwap(n) : n;
+    const shown = card(n), row = card(physical), mh = map?.holes?.find((h: any) => h.hole === n);
+    const yards = azulPhysicalYards(row?.yards, physical);
+    const parRow = current ? shown : row;
+    return { hole: n, order: n, par: parRow?.par ?? mh?.crosscheck?.card?.par ?? guide?.holes[physical]?.par ?? null,
+      play_length_yd: yards.yards.AZUL ?? yards.yards.NEGRO ?? ydOf(row) ?? mh?.play_length_yd ?? guide?.holes[physical]?.yd ?? null,
+      ...(yards.note ? { yards_note: yards.note } : {}),
+      bearing_true: mh?.bearing?.tee_to_green_true ?? null,
       eta: null, wind: null, effect: null, shots: [], ...(relev.has(n) ? { relevamiento: true } : {}) };
   });
   // t214u: forecast wind (Open-Meteo, same source/cache as the strategy libreta) for the chosen day and start time; no shots, no ± yd.
@@ -48,7 +55,7 @@ export async function courseBookData(clubCode: string, course: string, o: { date
     mode: "cancha" as const,
     plan: date ? { date, ...(time ? { tee_time: time, start_hole: 1, min_per_hole: DEFAULT_MIN_PER_HOLE } : {}) } : null,
     forecast: { ...forecast, provider: "Open-Meteo", note: "Pronóstico de Open-Meteo (viento a 10 m). Uso gratuito no comercial." },
-    course: { club_code: clubCode, course: c?.course ?? map?.course ?? guide?.course ?? course, club_name: c?.club_name ?? null, numbering_unconfirmed: unconfirmed, map: !!map, green_guide: !!guide,
+    course: { club_code: clubCode, course: c?.course ?? map?.course ?? guide?.course ?? course, club_name: c?.club_name ?? null, numbering_unconfirmed: false, map: !!map, green_guide: !!guide,
       completeness: { status: comp.status, label: comp.label, ready: comp.ready, core_holes: comp.core_holes, of: comp.of, holes_en_relevamiento: [...relev], missing: comp.missing, ...((comp as any).override ? { override: (comp as any).override } : {}) } },
     holes, _map: map, _guide: guide,
   };

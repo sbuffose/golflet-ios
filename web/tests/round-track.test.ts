@@ -552,9 +552,9 @@ test("a stored shot with no point stays unknown and the next shot does not start
     });
     assert.equal(seen.script, true);
     assert.match(seen.rail, /Hierro 7 · Sin ubicación/);
-    assert.match(seen.rail, /PW · Sin ubicación/);
-    assert.match(seen.rail, /SW · Sin ubicación/);
-    assert.match(seen.rail, /GW · Sin ubicación/);
+    assert.match(seen.rail, /Pitching wedge · Sin ubicación/);
+    assert.match(seen.rail, /Sand wedge · Sin ubicación/);
+    assert.match(seen.rail, /Gap wedge · Sin ubicación/);
     assert.match(seen.rail, /9i|Hierro 9/);
     assert.equal(/\d{6,}/.test(seen.rail + seen.read), false);
     assert.equal(seen.rail.includes("7837291"), false);

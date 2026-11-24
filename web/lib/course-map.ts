@@ -4,6 +4,7 @@ import { q } from "./db";
 import { holeWind, courseCompleteness, markersToEntrance, type Completeness } from "./course-map-core";
 import { getGreenGuide } from "./green-guide";
 import { azulBundledMap, isJockeyAzul } from "./azul-osm";
+import { azulCurrentLayout, azulNineSwap, AZUL_NINE_SWAP_FROM, relabelAzulHoles } from "./azul-layout";
 import { coloradaBundledMap, coloradaLine, isJockeyColorada } from "./colorada-osm";
 import { mergeTrace, readAcceptedTraces } from "./course-trace";
 
@@ -36,13 +37,19 @@ export async function listCourseMaps() {
             from course_map m left join club c on c.code=m.club_code order by m.club_code, m.course`);
 }
 
-export async function getCourseMap(clubCode: string, course: string, o: { hole?: number | null; windFrom?: number | null; windKmh?: number | null } = {}) {
+export async function getCourseMap(clubCode: string, course: string, o: { hole?: number | null; windFrom?: number | null; windKmh?: number | null; playedOn?: string | null; layout?: string | null } = {}) {
+  const azulNow = isJockeyAzul(clubCode, course) && azulCurrentLayout(o.playedOn, o.layout);
+  const storedHole = o.hole != null && azulNow ? azulNineSwap(o.hole) : o.hole;
+  const present = <T extends { holes: any[]; layout?: string; layout_from?: string }>(map: T): T => {
+    if (!isJockeyAzul(clubCode, course)) return map;
+    return { ...map, layout: azulNow ? "current" : "legacy", layout_from: AZUL_NINE_SWAP_FROM, holes: relabelAzulHoles(map.holes, o.playedOn, azulNow ? "current" : "legacy") };
+  };
   const [m] = await q(`select id, club_code, course, extracted_at, imported_at, sources, boundary, summary from course_map where club_code=$1 and lower(course)=lower($2)`, [clubCode, course]);
   if (!m) {
     if (isJockeyAzul(clubCode, course)) {
-      const bundled = azulBundledMap(o.hole);
+      const bundled = azulBundledMap(storedHole);
       const traces = await readAcceptedTraces(clubCode, course);
-      return { ...bundled, imagery: imageryConfig(), holes: bundled.holes.map(h => mergeTrace(h, traces.find((t: any) => Number(t.hole) === h.hole) || null)) };
+      return present({ ...bundled, imagery: imageryConfig(), holes: bundled.holes.map(h => mergeTrace(h, traces.find((t: any) => Number(t.hole) === h.hole) || null)) });
     }
     if (isJockeyColorada(clubCode, course)) {
       const bundled = coloradaBundledMap(o.hole);
@@ -51,17 +58,17 @@ export async function getCourseMap(clubCode: string, course: string, o: { hole?:
     }
     return null;
   }
-  const holes = await q(`select hole, data, crosscheck, coverage from course_map_hole where course_map_id=$1 ${o.hole ? "and hole=$2" : ""} order by hole`, o.hole ? [m.id, o.hole] : [m.id]);
+  const holes = await q(`select hole, data, crosscheck, coverage from course_map_hole where course_map_id=$1 ${storedHole ? "and hole=$2" : ""} order by hole`, storedHole ? [m.id, storedHole] : [m.id]);
   const traces = await readAcceptedTraces(m.club_code, m.course);
   const wind = o.windFrom != null && o.windKmh != null, gg = getGreenGuide(m.club_code, m.course);
   const { id, ...meta } = m;
-  return {
+  return present({
     ...meta, imagery: imageryConfig(), completeness: await courseCompletenessFor(m.club_code, m.course),
     green_surfaces: await greenSurfaceHoles(m.club_code, m.course),   // t181u: holes whose green has a REAL slope survey (usually none)
     attribution: [m.sources?.osm?.attribution, m.sources?.trace?.attribution, m.sources?.dem?.attribution].filter(Boolean),
-    holes: holes.map(h => withGuide(fillColorada(m.club_code, m.course, mergeTrace({ ...h.data, crosscheck: h.crosscheck, coverage: h.coverage, ...(wind ? { wind: holeWind(h.data, o.windFrom!, o.windKmh!) } : {}) }, traces.find((t: any) => Number(t.hole) === h.hole) || null)), h.hole, gg)),
+    holes: holes.map(h => withGuide(fillColorada(m.club_code, m.course, mergeTrace({ ...h.data, hole: Number(h.hole), crosscheck: h.crosscheck, coverage: h.coverage, ...(wind ? { wind: holeWind(h.data, o.windFrom!, o.windKmh!) } : {}) }, traces.find((t: any) => Number(t.hole) === h.hole) || null)), h.hole, gg)),
     marker_ref: gg?.marker_ref?.to === "entrada" ? { to: "entrada", label: "a la entrada del green", source: gg.marker_ref.source } : { to: "centro", label: "al centro del green", source: "mapa" },
-  };
+  });
 }
 
 /** t198u: completeness of one course (map coverage + club guide). Courses with neither → en relevamiento. */

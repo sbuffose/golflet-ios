@@ -9,6 +9,7 @@ import {
   LOOKBACK_DAYS, MAX_SYNCS_PER_RUN, SYNC_BUSY_MESSAGE, applyAttempt, artParts, artTeeInstant, blankJob, nextAttempt, outcomeAfterRead,
   planDue, reconcileJob, sameSchedule, scorecardPresentation, shouldStop, syncDisposition, syncKey, type Attempt, type FetchJob, type FetchStatus, type RoundHit, type TeeSnap,
 } from "./scorecard-fetch-core";
+import { linkProvisionals } from "./provisional-round";
 
 export class ScorecardSchemaError extends Error {
   constructor() {
@@ -533,7 +534,11 @@ async function finishJob(sql: Sql, job: FetchJob, rounds: RoundHit[], read: { ok
   const updated = applyAttempt(job, now, outcomeAfterRead(job, rounds, read));
   const wrote = await saveOwned(sql, updated, token);
   if (!wrote) { report.fenced++; return; }
-  if (updated.status === "complete") report.completed++;
+  if (updated.status === "complete") {
+    report.completed++;
+    try { await linkProvisionals(job.userId, sql); }
+    catch { /* a database without the provisional columns still finishes the card */ }
+  }
   else if (updated.status === "awaiting_card") report.waiting++;
   else if (updated.status === "error") report.errors++;
   else if (updated.status === "stopped") report.stopped++;

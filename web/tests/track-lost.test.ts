@@ -91,7 +91,7 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     const sheetBox = await page.$eval("#play-club-sheet", el => {
       const box = el.getBoundingClientRect();
       const style = getComputedStyle(el);
-      const names = [...el.querySelectorAll("button[data-club] b")].map(node => node.textContent || "");
+      const names = [...el.querySelectorAll("button[data-club]")].map(node => node.getAttribute("data-club") || "");
       const behind = document.querySelector("#play-hit") as HTMLElement | null;
       return { display: style.display, w: box.width, h: box.height, names, hit: behind ? behind.getBoundingClientRect().top : 0 };
     });
@@ -100,15 +100,16 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     assert.ok(sheetBox.names.length >= 12, sheetBox.names.join(","));
     assert.equal(sheetBox.names.some(name => /^\d{2,}/.test(name.trim())), false);
     const tiles = await page.$$eval("#play-club-list button[data-club]", els => els.map(el => ({
-      name: (el.querySelector("b")?.textContent || "").trim(),
+      name: el.getAttribute("data-club") || "",
       sub: (el.querySelector("small")?.textContent || "").trim(),
       sug: el.classList.contains("sug"),
+      on: el.classList.contains("on"),
       text: el.textContent || "",
     })));
     assert.equal(tiles.some(tile => /Sugerido/i.test(tile.text)), false);
     assert.equal(tiles.find(tile => tile.name === "Pt")?.sub || "", "");
     assert.equal(tiles.find(tile => tile.name === "6i")?.sub, "165 yd");
-    assert.ok(tiles.some(tile => tile.sug));
+    assert.equal(tiles.filter(tile => tile.sug || tile.on).length, 1, JSON.stringify(tiles.filter(tile => tile.sug || tile.on)));
     await page.screenshot({ path: "/opt/cursor/artifacts/palos-390.png" });
     await page.click("#play-club-close");
     await page.mouse.move(195, 340);
@@ -159,7 +160,7 @@ test("pelota perdida con provisional, el cuarto golpe y deshacer", { timeout: 12
     assert.deepEqual(deleted.slice().sort(), ["s1", "s2", "s3", "s4"]);
 
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-vieja?hole=1&ronda=r-none`, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => (document.querySelector(".tk-chip")?.textContent || "").includes("Clima no disponible"), { timeout: 15000 });
+    await page.waitForFunction(() => (document.querySelector(".tk-chip")?.textContent || "").trim() === "–", { timeout: 15000 });
     await page.screenshot({ path: "/opt/cursor/artifacts/clima-sin-datos-390.png" });
     await page.evaluate(() => { location.hash = "#/reconstruir/live-vieja?hole=1&ronda=r-wind"; });
     await page.waitForFunction(() => {

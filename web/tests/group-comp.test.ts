@@ -59,8 +59,8 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
     }
     if (url.pathname === "/api/groups") return json({
       groups: [
-        { id: "g-scratch", name: "Scratch", is_admin: true, accepted: 1, pending: 0, photo_url: "/fixture/tall.svg", faces: [] },
-        { id: "g-ancha", name: "Ancha", is_admin: false, accepted: 2, pending: 0, photo_url: "/fixture/wide.svg", faces: [] },
+        { id: "g-scratch", name: "Scratch", is_admin: true, accepted: 1, pending: 0, photo_url: "/fixture/tall.svg", faces: [{ id: "m-sebas", name: "Sebas Fixture", initials: "SF", photo_url: "/fixture/tall.svg" }] },
+        { id: "g-familia", name: "Familia", is_admin: false, accepted: 2, pending: 0, photo_url: null, faces: [{ id: "m-ana", name: "Ana Pérez", initials: "AP", photo_url: "/fixture/wide.svg" }, { id: "m-luis", name: "Luis Gómez", initials: "LG", photo_url: null }] },
         { id: "g-roto", name: "Roto", is_admin: false, accepted: 1, pending: 0, photo_url: "/fixture/no-existe.jpg", faces: [] },
       ],
       invitations: [],
@@ -261,6 +261,46 @@ test("la competencia del grupo reemplaza la tabla y compara el período anterior
       return (el.textContent || "").includes("R") && !!img && getComputedStyle(img).display === "none";
     }));
     assert.equal(avatars[0].letter.includes("S"), true);
+    const members = await page.$$eval(".gg-faces", rows => rows.map(row => {
+      const faces = [...row.querySelectorAll(".gg-av")].map(el => {
+        const box = el.getBoundingClientRect();
+        const img = el.querySelector("img");
+        const ib = img ? img.getBoundingClientRect() : null;
+        return { w: box.width, h: box.height, l: box.left, r: box.right, t: box.top, b: box.bottom, iw: ib?.width || 0, ih: ib?.height || 0, fit: img ? getComputedStyle(img).objectFit : "" };
+      });
+      const name = row.querySelector(".gg-names")?.getBoundingClientRect();
+      return { faces, nameLeft: name?.left ?? 0, nameTop: name?.top ?? 0, nameBottom: name?.bottom ?? 0 };
+    }));
+    assert.equal(members.length, 2);
+    for (const row of members) {
+      for (const face of row.faces) {
+        assert.ok(face.w >= 36 && face.w <= 40 && face.h >= 36 && face.h <= 40, JSON.stringify(face));
+        assert.ok(face.iw <= 40 && face.ih <= 40, JSON.stringify(face));
+        if (face.iw) assert.equal(face.fit, "cover");
+      }
+      const first = row.faces[0];
+      assert.ok(row.nameLeft >= first.r - 2 && row.nameTop < first.b && row.nameBottom > first.t, JSON.stringify(row));
+    }
+    assert.ok(members[1].faces[1].l < members[1].faces[0].r - 6, JSON.stringify(members[1].faces));
+    const frame = await page.evaluate(() => {
+      const card = document.querySelector(".card.gg-list")?.getBoundingClientRect();
+      const bar = document.querySelector("#tabbar")?.getBoundingClientRect();
+      const view = document.querySelector("#view")?.getBoundingClientRect();
+      return {
+        scroll: document.documentElement.scrollWidth,
+        inner: window.innerWidth,
+        cardLeft: card?.left ?? 0,
+        cardRight: card?.right ?? 0,
+        viewLeft: view?.left ?? 0,
+        viewRight: view?.right ?? 0,
+        barLeft: bar?.left ?? -1,
+        barRight: bar?.right ?? 0,
+      };
+    });
+    assert.ok(frame.scroll <= frame.inner + 1, JSON.stringify(frame));
+    assert.ok(frame.cardLeft <= frame.viewLeft + 20 && frame.cardRight >= frame.inner - 24 && frame.cardRight <= frame.inner + 1, JSON.stringify(frame));
+    assert.ok(frame.barLeft <= 1 && frame.barRight >= frame.inner - 1, JSON.stringify(frame));
+    await page.screenshot({ path: `${ART}/web-375-amigos-grupos.png` });
     await page.screenshot({ path: `${ART}/web-375-grupo-foto.png` });
     await page.goto(`http://127.0.0.1:${port}/#/grupo/g-scratch?range=3m`, { waitUntil: "networkidle0" });
     await page.waitForSelector(".gg-you");

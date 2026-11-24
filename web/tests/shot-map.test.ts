@@ -132,7 +132,10 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
       if (cmap !== "0" && cmap !== "1") return false;
       for (const id of ["#play-hit", "#play-set"]) {
         const button = document.querySelector(id) as HTMLButtonElement | null;
-        if (button && button.disabled) return false;
+        if (!button || !button.disabled) continue;
+        const askTee = (document.querySelector("#tkro")?.textContent || "").includes("Sin salida verificada");
+        if (id === "#play-set" && askTee) continue;
+        return false;
       }
       return true;
     }, { timeout: 25000 });
@@ -196,7 +199,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     await page.click("#play-drop");
     await page.waitForFunction(() => document.querySelector("#play-reticle")?.getAttribute("data-cursor") === "drop");
     await page.screenshot({ path: "/opt/cursor/artifacts/track-390-drop.png" });
-    assert.equal(await page.$eval("#play-reticle b", el => el.textContent), "3");
+    assert.equal(await page.$eval("#play-reticle b", el => el.textContent), "X");
     await pan(page, 90, -20);
     const dropAt = await cursor(page);
     assert.ok(apart(dropAt.lat, dropAt.lng, penalty.end_lat, penalty.end_lng));
@@ -498,7 +501,7 @@ test("penalty, drop and the next shot keep separate origins", { timeout: 120_000
     }));
     assert.equal(resumedClub.value, "SW");
     assert.equal(resumedClub.blank, "");
-    assert.equal(await page.$eval("#play-club", el => (el as HTMLSelectElement).selectedOptions[0]?.textContent), "SW");
+    assert.equal(await page.$eval("#play-club", el => (el as HTMLSelectElement).selectedOptions[0]?.textContent), "Sand wedge");
     assert.equal(resumedClub.text.includes("Después"), false);
 
     await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-stale`, { waitUntil: "networkidle0" });
