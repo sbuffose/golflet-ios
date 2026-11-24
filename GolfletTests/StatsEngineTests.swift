@@ -3,7 +3,7 @@ import XCTest
 
 final class StatsEngineTests: XCTestCase {
     func testBundledFixturesLoad() throws {
-        XCTAssertEqual(try FixtureLoader.array("rounds").count, 97)
+        XCTAssertEqual(try FixtureLoader.array("rounds").count, 24)
         XCTAssertEqual(try FixtureLoader.array("other_course").count, 1)
         XCTAssertEqual(try FixtureLoader.array("courses").count, 2)
         XCTAssertEqual(try FixtureLoader.array("tees").count, 14)
@@ -13,41 +13,41 @@ final class StatsEngineTests: XCTestCase {
     func testEighteenHoleAveragesMatchSeed() async throws {
         let snap = try await MockAPIClient().bootstrap()
         XCTAssertEqual(snap.clubs.map(\.accountId), ["118"])
-        XCTAssertEqual(snap.clubs.map(\.cardCount).reduce(0, +), 97)
+        XCTAssertEqual(snap.clubs.map(\.cardCount).reduce(0, +), 24)
         let rounds = snap.rounds
-        XCTAssertEqual(rounds.count, 97)
+        XCTAssertEqual(rounds.count, 24)
         XCTAssertEqual(rounds.filter(\.isOtherCourse).count, 0)
 
         let seed = rounds.filter { !$0.isOtherCourse }
-        XCTAssertEqual(seed.count, 97)
+        XCTAssertEqual(seed.count, 24)
         let seedValid = StatsEngine.eighteenHoleValid(seed)
-        XCTAssertEqual(seedValid.count, 86)
-        XCTAssertEqual(StatsEngine.average(seedValid.compactMap(\.gross)) ?? 0, 79.9, accuracy: 0.05)
+        XCTAssertEqual(seedValid.count, 20)
+        XCTAssertEqual(StatsEngine.average(seedValid.compactMap(\.gross)) ?? 0, 90.5, accuracy: 0.05)
 
         let valid = StatsEngine.eighteenHoleValid(rounds)
-        XCTAssertEqual(valid.count, 86)
+        XCTAssertEqual(valid.count, 20)
         XCTAssertFalse(valid.contains(where: \.isOtherCourse))
-        XCTAssertEqual(StatsEngine.average(valid.compactMap(\.gross)) ?? 0, 79.9, accuracy: 0.05)
+        XCTAssertEqual(StatsEngine.average(valid.compactMap(\.gross)) ?? 0, 90.5, accuracy: 0.05)
 
         let home = StatsEngine.home(rounds: rounds, now: date("2026-10-27"))
-        XCTAssertEqual(home.cards, 97)
-        XCTAssertEqual(home.bestGross, 72)
-        XCTAssertEqual(home.yearRoundCount, 19)
-        XCTAssertEqual(home.yearBestGross, 73)
-        XCTAssertEqual(home.yearBirdies, 42)
-        XCTAssertEqual(home.yearAverage ?? 0, 78.7, accuracy: 0.05)
-        XCTAssertEqual(home.handicapIndex, 3.1, accuracy: 0.001)
-        XCTAssertEqual(home.trendDelta, -7.9, accuracy: 0.05)
-        XCTAssertEqual(home.trendSinceLabel, "desde feb. 2013")
-        XCTAssertEqual(home.lastRound?.roundId, "118:100002:15300")
+        XCTAssertEqual(home.cards, 24)
+        XCTAssertEqual(home.bestGross, 86)
+        XCTAssertEqual(home.yearRoundCount, 4)
+        XCTAssertEqual(home.yearBestGross, 86)
+        XCTAssertEqual(home.yearBirdies, 1)
+        XCTAssertEqual(home.yearAverage ?? 0, 88.5, accuracy: 0.05)
+        XCTAssertEqual(home.handicapIndex, 18.0, accuracy: 0.001)
+        XCTAssertEqual(home.trendDelta, 0.0, accuracy: 0.05)
+        XCTAssertEqual(home.trendSinceLabel, "")
+        XCTAssertEqual(home.lastRound?.roundId, "118:100002:demo-last")
 
         let summary = StatsEngine.summary(rounds: rounds, filter: .all)
-        XCTAssertEqual(summary.validRoundCount, 86)
-        XCTAssertEqual(summary.best?.gross, 72)
-        XCTAssertEqual(summary.best?.date, date("2025-03-30"))
-        XCTAssertEqual(summary.worstSince2021?.gross, 92)
-        XCTAssertEqual(summary.since2025Count, 42)
-        XCTAssertEqual(summary.since2025Average ?? 0, 78.7, accuracy: 0.05)
+        XCTAssertEqual(summary.validRoundCount, 20)
+        XCTAssertEqual(summary.best?.gross, 86)
+        XCTAssertEqual(summary.best?.date, date("2026-10-01"))
+        XCTAssertEqual(summary.worstSince2021?.gross, 95)
+        XCTAssertEqual(summary.since2025Count, 13)
+        XCTAssertEqual(summary.since2025Average ?? 0, 90.23077, accuracy: 0.05)
 
         let colorada = StatsEngine.course(
             named: "Colorada",
@@ -55,11 +55,11 @@ final class StatsEngineTests: XCTestCase {
             courses: snap.courses,
             tees: snap.tees
         )
-        XCTAssertEqual(colorada.validCount, 48)
-        XCTAssertEqual(colorada.averageGross ?? 0, 80.3, accuracy: 0.05)
-        XCTAssertEqual(colorada.bestGross, 73)
-        XCTAssertEqual(colorada.averageNet ?? 0, 74.9, accuracy: 0.05)
-        XCTAssertEqual(colorada.since2025Average ?? 0, 79.1, accuracy: 0.05)
+        XCTAssertEqual(colorada.validCount, 10)
+        XCTAssertEqual(colorada.averageGross ?? 0, 89.9, accuracy: 0.05)
+        XCTAssertEqual(colorada.bestGross, 86)
+        XCTAssertEqual(colorada.averageNet ?? 0, 71.9, accuracy: 0.05)
+        XCTAssertEqual(colorada.since2025Average ?? 0, 89.14286, accuracy: 0.05)
     }
 
     func testHardestHolesColorada() async throws {
@@ -67,7 +67,7 @@ final class StatsEngineTests: XCTestCase {
         let hardest = StatsEngine.hardestHoles(from: stats, filter: .all)
         XCTAssertEqual(hardest.first?.1.number, 1)
         XCTAssertEqual(hardest.first?.0.course, "Colorada")
-        XCTAssertEqual(hardest.first?.1.averageToPar ?? 0, 0.98, accuracy: 0.001)
+        XCTAssertEqual(hardest.first?.1.averageToPar ?? 0, 0.80, accuracy: 0.001)
     }
 
     func testPerRoundMeanAndMedian() {
@@ -92,7 +92,7 @@ final class StatsEngineTests: XCTestCase {
     func testCourseFilterAzul() async throws {
         let rounds = try await MockAPIClient().bootstrap().rounds
         let summary = StatsEngine.summary(rounds: rounds, filter: .azul)
-        XCTAssertTrue(summary.validRoundCount < 86)
+        XCTAssertTrue(summary.validRoundCount < 20)
         XCTAssertEqual(summary.best?.course, "Azul")
     }
 

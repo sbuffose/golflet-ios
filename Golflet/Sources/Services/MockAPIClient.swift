@@ -349,10 +349,10 @@ struct MockAPIClient: GolfletAPI {
                 lastSyncStatus: "ok",
                 lastSyncMessage: "Datos de demostración",
                 lastSyncAt: Self.demoSyncedAt,
-                cardCount: 97,
+                cardCount: 24,
                 source: "site",
-                roundsStored: 97,
-                roundsWithHoles: 97
+                roundsStored: 24,
+                roundsWithHoles: 24
             )
         ]
     }
@@ -370,10 +370,10 @@ struct MockAPIClient: GolfletAPI {
         SyncResult(
             ok: true,
             message: message,
-            cardCount: 97,
+            cardCount: 24,
             newCards: newCards,
             clubs: [
-                SyncClubResult(accountId: demoCode, clubName: demoName, ok: true, newRounds: newCards > 0 ? 97 : 0, listTotal: 97)
+                SyncClubResult(accountId: demoCode, clubName: demoName, ok: true, newRounds: newCards > 0 ? 24 : 0, listTotal: 24)
             ]
         )
     }
@@ -491,7 +491,7 @@ struct MockAPIClient: GolfletAPI {
         let paced = ProcessInfo.processInfo.arguments.contains("-ui-testing-sync-pace")
         let pause: UInt64 = paced ? 900_000_000 : (fast ? 80_000_000 : 350_000_000)
         let clubs: [(name: String, code: String, logo: String?, initials: String, listed: Int, cards: Int)] = [
-            (demoName, demoCode, "/clubs/118@2x.png", "JC", 97, 97),
+            (demoName, demoCode, "/clubs/118@2x.png", "JC", 24, 24),
             ("Mar del Plata Golf Club", mdpCode, "/clubs/209@2x.png", "MP", 12, 12)
         ]
         var steps: [SyncAPIProgress] = [
