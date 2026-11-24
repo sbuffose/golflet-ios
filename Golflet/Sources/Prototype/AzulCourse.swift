@@ -69,14 +69,41 @@ struct AzulHoleGeo: Identifiable, Hashable {
 
 enum AzulCourse {
     static let credit = "Mapa © OpenStreetMap contributors (ODbL) · Cancha Azul, Jockey Club"
+    /// Day the 3–9 / 12–18 display swap starts. Stored JSON keeps the previous order.
+    static let nineSwapFrom = "2026-11-22"
+    static let legacyDay = "2026-11-21"
 
     private static var cache: [Int: AzulHoleGeo]?
 
-    static func hole(_ n: Int) -> AzulHoleGeo {
+    /// Official card par by the number shown from 2026-11-22. Yards stay on the physical hole.
+    private static let displayPar = [5, 5, 4, 4, 3, 4, 4, 5, 4, 5, 3, 4, 4, 3, 4, 3, 4, 4]
+
+    /// Display hole to stored hole. 1, 2, 10 and 11 stay. 3↔12 through 9↔18.
+    static func nineSwap(_ n: Int) -> Int {
+        guard (1...18).contains(n) else { return n }
+        if (3...9).contains(n) { return n + 9 }
+        if (12...18).contains(n) { return n - 9 }
+        return n
+    }
+
+    /// A missing date is the layout used while playing. Hole 10 keeps its own green.
+    static func currentLayout(playedOn: String?) -> Bool {
+        let day = String((playedOn ?? "").prefix(10))
+        guard day.count == 10 else { return true }
+        return day >= nineSwapFrom
+    }
+
+    static func hole(_ n: Int, playedOn: String? = nil) -> AzulHoleGeo {
+        let display = min(18, max(1, n))
+        let stored = currentLayout(playedOn: playedOn) ? nineSwap(display) : display
         let holes = all()
-        if let hit = holes[min(18, max(1, n))] { return hit }
+        if var hit = holes[stored] {
+            hit.number = display
+            if currentLayout(playedOn: playedOn) { hit.par = Self.displayPar[display - 1] }
+            return hit
+        }
         return AzulHoleGeo(
-            number: n,
+            number: display,
             par: 4,
             meters: 350,
             line: [AzulCoord(lat: -34.4854, lng: -58.5324), AzulCoord(lat: -34.4831, lng: -58.5288)],
@@ -88,9 +115,12 @@ enum AzulCourse {
     static let coloradaCredit = "Salida © OpenStreetMap contributors (ODbL) · Cancha Colorada, Jockey Club. El centro del green es Golfistics, no el pin."
 
     /// Satellite when this course has a verified tee and green. Azul uses the OSM green. Colorada uses the OSM tee and the Golfistics green center. Anything else stays empty.
-    static func layout(forCourse name: String, hole number: Int) -> AzulHoleGeo? {
-        if isJockeyAzul(name), let geo = all()[number], geo.green.count >= 3 || geo.line.count >= 2 {
-            return geo
+    static func layout(forCourse name: String, hole number: Int, playedOn: String? = nil) -> AzulHoleGeo? {
+        if isJockeyAzul(name) {
+            guard (1...18).contains(number) else { return nil }
+            let geo = hole(number, playedOn: playedOn)
+            if geo.green.count >= 3 || geo.line.count >= 2 { return geo }
+            return nil
         }
         if isJockeyColorada(name) {
             return colorada(number)

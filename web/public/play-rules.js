@@ -12,17 +12,32 @@ exports.holeSpan = holeSpan;
 exports.unprojectLL = unprojectLL;
 exports.frameAdvance = frameAdvance;
 exports.frameHole = frameHole;
+exports.frameGreenPolygon = frameGreenPolygon;
 exports.screenOf = screenOf;
 exports.worldTile = worldTile;
 exports.bearingDeg = bearingDeg;
 exports.windRelative = windRelative;
+exports.windArrow = windArrow;
+exports.windCardinal = windCardinal;
+exports.windSide = windSide;
+exports.windFace = windFace;
+exports.windAbsolute = windAbsolute;
 exports.windPlay = windPlay;
 exports.onCup = onCup;
 exports.puttFeet = puttFeet;
+exports.greenToHole = greenToHole;
+exports.inTheCup = inTheCup;
+exports.shortPutt = shortPutt;
+exports.scoredClose = scoredClose;
 exports.puttMeters = puttMeters;
 exports.isPutterClub = isPutterClub;
+exports.shotCountsAsPutt = shotCountsAsPutt;
+exports.countedPutts = countedPutts;
 exports.yardNumber = yardNumber;
 exports.yardLabel = yardLabel;
+exports.teeAgrees = teeAgrees;
+exports.matchingTee = matchingTee;
+exports.teeBoxes = teeBoxes;
 exports.shotDistanceLabel = shotDistanceLabel;
 exports.trackHoleSummary = trackHoleSummary;
 exports.deriveHoleCard = deriveHoleCard;
@@ -101,8 +116,8 @@ function holeSpan(tee, flag) {
         return null;
     return { meters, bearing };
 }
-/** Visual zoom may scale the last real tile by up to three levels. The tile request stays on a real zoom. */
-exports.VISUAL_ZOOM_MAX = exports.IMAGERY_ZOOM_MAX + 3;
+/** Visual zoom scales the last real tile. The tile request stays on a real zoom so the picture does not go blank. */
+exports.VISUAL_ZOOM_MAX = exports.IMAGERY_ZOOM_MAX + 6;
 const clampNum = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 function pointFrame(p, mode, z = exports.IMAGERY_ZOOM_MAX) {
     const [cx, cy] = projectLL(p.lat, p.lng);
@@ -172,6 +187,52 @@ function frameHole(tee, flag, mode, view, ball) {
         return frameAdvance(ball ? knownPoint(ball.lat, ball.lng) || a : a, b, view);
     return { mode: "overview", z: overviewZ, cx: fx, cy: fy, bearing: span.bearing, aimLat: b.lat, aimLng: b.lng };
 }
+/**
+ * Flag adjust: the green polygon fills the width left after the side inset
+ * and stays inside the band between the top card and the bottom buttons.
+ * The screen anchor is 42% of the height, so the center is shifted into that band.
+ * Bearing stays north-up. The tile request is unchanged; this is a visual zoom.
+ */
+function frameGreenPolygon(polygon, view, band) {
+    const pts = polygon.map(p => {
+        const known = knownPoint(p.lat, p.lng);
+        if (!known)
+            return null;
+        const [x, y] = projectLL(known.lat, known.lng);
+        return { x, y };
+    }).filter((p) => !!p);
+    if (pts.length < 3)
+        return null;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of pts) {
+        if (p.x < minX)
+            minX = p.x;
+        if (p.x > maxX)
+            maxX = p.x;
+        if (p.y < minY)
+            minY = p.y;
+        if (p.y > maxY)
+            maxY = p.y;
+    }
+    const bw = maxX - minX, bh = maxY - minY;
+    if (!(bw > 0) || !(bh > 0))
+        return null;
+    const width = Math.max(1, view?.width || 390);
+    const height = Math.max(1, view?.height || 844);
+    const side = Math.max(0, band?.side || 0);
+    const top = Math.max(0, band?.top || 0);
+    const bottom = Math.max(0, band?.bottom || 0);
+    const boxW = Math.max(80, width - side * 2);
+    const boxH = Math.max(80, height - top - bottom);
+    const z = clampNum(Math.min(Math.log2(boxW / (bw * 256)), Math.log2(boxH / (bh * 256))), 16, exports.VISUAL_ZOOM_MAX);
+    const n = 2 ** z;
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    const usableMid = top + boxH / 2;
+    const cy = midY - (usableMid - height * 0.42) / (n * 256);
+    const aim = unprojectLL(midX, midY);
+    return { mode: "flag", z, cx: midX, cy, bearing: 0, aimLat: aim.lat, aimLng: aim.lng };
+}
 function screenOf(lat, lng, cam, view) {
     const p = knownPoint(lat, lng);
     if (!p)
@@ -213,6 +274,59 @@ function windRelative(fromDeg, bearing) {
         return "favor";
     return "cruzado";
 }
+/** Degrees clockwise from the direction of play. 0 points toward the green: the wind is pushing that way. */
+function windArrow(fromDeg, bearing) {
+    if (fromDeg == null || bearing == null || !Number.isFinite(+fromDeg) || !Number.isFinite(+bearing))
+        return null;
+    return norm(+fromDeg + 180 - +bearing);
+}
+const WIND_CARDINAL = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
+/** Where the wind comes from, in eight Spanish compass points. */
+function windCardinal(fromDeg) {
+    if (fromDeg == null || !Number.isFinite(+fromDeg))
+        return null;
+    return WIND_CARDINAL[Math.round(norm(+fromDeg) / 45) % 8];
+}
+/** Short face of the wind along the hole. Crosswind from the right is «de derecha». */
+function windSide(fromDeg, bearing) {
+    if (fromDeg == null || bearing == null || !Number.isFinite(+fromDeg) || !Number.isFinite(+bearing))
+        return null;
+    const delta = norm(+fromDeg - +bearing);
+    if (delta < 45 || delta >= 315)
+        return "en contra";
+    if (delta >= 135 && delta < 225)
+        return "a favor";
+    if (delta >= 45 && delta < 135)
+        return "cruzado de derecha";
+    return "de izquierda";
+}
+/**
+ * Clear face for the track chip. The tee-to-flag line is up.
+ * A pure crosswind stays one phrase. A mix names both parts.
+ * Wind from the player's right is «Cruzado de derecha».
+ */
+function windFace(fromDeg, bearing) {
+    if (fromDeg == null || bearing == null || !Number.isFinite(+fromDeg) || !Number.isFinite(+bearing))
+        return null;
+    const rel = norm(+fromDeg - +bearing);
+    const side = rel > 0 && rel < 180 ? "derecha" : "izquierda";
+    if (rel <= 22.5 || rel >= 337.5)
+        return "En contra";
+    if (rel >= 157.5 && rel <= 202.5)
+        return "A favor";
+    if ((rel > 67.5 && rel < 112.5) || (rel > 247.5 && rel < 292.5))
+        return `Cruzado de ${side}`;
+    if (rel < 90 || rel > 270)
+        return `En contra y cruzado de ${side}`;
+    return `A favor y cruzado de ${side}`;
+}
+/** North-up arrow when the hole has no verified bearing. The face says where the wind comes from. */
+function windAbsolute(fromDeg) {
+    const card = windCardinal(fromDeg);
+    if (fromDeg == null || !Number.isFinite(+fromDeg) || !card)
+        return null;
+    return { turn: norm(+fromDeg + 180), face: `Desde el ${card}` };
+}
 function windPlay(hole, fromDeg, bearing, speedKmh) {
     if (bearing == null || !Number.isFinite(+bearing)) {
         return { relative: "unavailable", text: `Hoyo ${hole} · Sin rumbo verificado del tee al green. No clasifico el viento.` };
@@ -233,6 +347,39 @@ function puttFeet(meters) {
         return null;
     return Math.round(meters * 3.28084);
 }
+const M_PER_FT = 0.3048;
+const M_PER_IN = 0.0254;
+/** On the green the hole is in feet, or in inches under 3 ft. Under one inch is the cup. */
+function greenToHole(meters) {
+    if (!Number.isFinite(meters) || meters < 0)
+        return null;
+    const inches = Math.round(meters / M_PER_IN);
+    if (inches < 1)
+        return { text: "En el hoyo", unit: "cup", n: 0 };
+    if (meters / M_PER_FT < 3 - 1e-6)
+        return { text: `${inches} in`, unit: "in", n: inches };
+    const feet = Math.round(meters / M_PER_FT);
+    return { text: `${feet} ft`, unit: "ft", n: feet };
+}
+/** The ball is in the cup. Any greater distance is still a shot in play. */
+function inTheCup(meters) {
+    return greenToHole(meters)?.unit === "cup";
+}
+/** Under 3 ft, and not already in the cup, the player can hole or concede the next stroke. */
+function shortPutt(meters) {
+    return greenToHole(meters)?.unit === "in";
+}
+/**
+ * Closing while the ball is still out adds the putt that has not been played.
+ * A missing putt count becomes that one stroke. It never lowers the total.
+ */
+function scoredClose(strokes, putts, inCup) {
+    const n = Math.max(0, Math.round(Number(strokes) || 0));
+    if (inCup)
+        return { strokes: n, putts };
+    const known = putts == null || !Number.isFinite(putts) ? 0 : Math.max(0, Math.round(putts));
+    return { strokes: n + 1, putts: known + 1 };
+}
 /** A putt the player types. Comma or dot. The map estimate is not rewritten to match it. */
 function puttMeters(value) {
     let n;
@@ -251,7 +398,34 @@ function puttMeters(value) {
     return Math.round(n * 10) / 10;
 }
 function isPutterClub(id, label = "") {
-    return /^(pt|putter)$/i.test(id.trim()) || /^putter\b/i.test(String(label || "").trim());
+    const face = id.trim();
+    const name = String(label || "").trim();
+    return /^(pt|putt|putter)$/i.test(face) || /^putter\b/i.test(name) || /^putter\b/i.test(face);
+}
+/** A putter stroke, or a stroke that started on the green. Recovery and penalties are not putts. */
+function shotCountsAsPutt(shot) {
+    if (shot.penalty || shot.recovery || shot.intent === "recovery")
+        return false;
+    const result = String(shot.result || "");
+    if (result === "penalty" || result === "lost")
+        return false;
+    const club = String(shot.club || "");
+    if (isPutterClub(club, club))
+        return true;
+    return shot.lie === "green" || shot.originGreen === true;
+}
+/**
+ * Putts already stored on the shots. Null only when none of the strokes say
+ * the club or whether they started on the green. Zero is a real count.
+ */
+function countedPutts(shots) {
+    const playable = shots.filter(s => !s.penalty && s.result !== "penalty" && s.result !== "lost");
+    if (!playable.length)
+        return null;
+    const know = playable.some(s => String(s.club || "").trim() || s.lie || s.originGreen === true || s.originGreen === false);
+    if (!know)
+        return null;
+    return playable.filter(shotCountsAsPutt).length;
 }
 /** A scorecard stores yards as a number or as a tee map ({ BLANCO: 445 }). Never stringify the object. */
 function yardNumber(value) {
@@ -275,6 +449,124 @@ function yardLabel(value) {
     const n = yardNumber(value);
     return n == null ? "" : `${n} yd`;
 }
+function yardList(value) {
+    if (typeof value === "number" || typeof value === "string") {
+        const n = yardNumber(value);
+        return n == null ? [] : [n];
+    }
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+        return Object.values(value).map(yardNumber).filter((n) => n != null);
+    }
+    return [];
+}
+/** A measured tee matches a printed tee when the gap stays inside 20 yards, or 4% on a long hole. */
+function teeAgrees(meters, yards) {
+    if (!Number.isFinite(meters) || !Number.isFinite(yards) || yards <= 0)
+        return false;
+    return Math.abs(meters / 0.9144 - yards) <= Math.max(20, yards * 0.04);
+}
+function teeCenter(item) {
+    if (Array.isArray(item) && item.length >= 2)
+        return knownPoint(item[1], item[0]);
+    if (!item || typeof item !== "object")
+        return null;
+    const raw = item;
+    if (Array.isArray(raw.center))
+        return knownPoint(raw.center[1], raw.center[0]);
+    if (raw.center && typeof raw.center === "object") {
+        const c = raw.center;
+        return knownPoint(c.lat, c.lng);
+    }
+    return knownPoint(raw.lat, raw.lng);
+}
+/** The automatic start is a point of THIS hole whose distance matches the yardage on the card.
+ *  A center that fits a shorter tee, or another hole's tee, is not used. One center is not painted as a color. */
+function matchingTee(pin, yards, spots, foreign = []) {
+    const flag = pin ? knownPoint(pin.lat, pin.lng) : null;
+    const names = yardList(yards);
+    const uniq = [];
+    for (const spot of spots) {
+        const p = spot ? knownPoint(spot.lat, spot.lng) : null;
+        if (!p || uniq.some(u => metersBetween(u, p) < 8))
+            continue;
+        uniq.push(p);
+    }
+    if (!flag)
+        return null;
+    const spanned = uniq.filter(p => holeSpan(p, flag));
+    if (names.length < 2 || spanned.length < 2)
+        return spanned[0] || null;
+    const longest = Math.max(...names);
+    const ranked = spanned.map(p => {
+        const got = metersBetween(p, flag) / 0.9144;
+        let best = names[0], err = Infinity;
+        for (const y of names) {
+            const gap = Math.abs(got - y);
+            if (gap < err) {
+                err = gap;
+                best = y;
+            }
+        }
+        return { p, got, best, err, vsLong: Math.abs(got - longest) };
+    }).filter(row => names.length < 2 || row.best === longest || teeAgrees(metersBetween(row.p, flag), longest));
+    const kept = ranked.filter(row => {
+        if (names.length < 2)
+            return true;
+        for (const other of foreign) {
+            const op = knownPoint(other.point?.lat, other.point?.lng);
+            const of = knownPoint(other.pin?.lat, other.pin?.lng);
+            const otherNames = yardList(other.yards);
+            if (!op || !of || !otherNames.length || metersBetween(row.p, op) > 12)
+                continue;
+            const back = Math.max(...otherNames);
+            const theirs = Math.abs(metersBetween(row.p, of) / 0.9144 - back);
+            if (teeAgrees(metersBetween(row.p, of), back) && row.vsLong > theirs + 5)
+                return false;
+        }
+        return true;
+    });
+    kept.sort((a, b) => a.vsLong - b.vsLong || a.err - b.err);
+    return kept[0]?.p ?? null;
+}
+/** Named tees from the card, longest first. A center is that color only when the measured yards agree.
+ *  One center is not assigned to a color. A missing match stays empty so the player confirms the tee. */
+function teeBoxes(yards, polygons, green) {
+    const named = [];
+    if (yards && typeof yards === "object" && !Array.isArray(yards)) {
+        for (const [name, value] of Object.entries(yards)) {
+            const n = yardNumber(value);
+            if (n != null && name.trim())
+                named.push({ name: name.trim().toUpperCase(), yards: n });
+        }
+    }
+    else {
+        const n = yardNumber(yards);
+        if (n != null)
+            named.push({ name: "SALIDA", yards: n });
+    }
+    named.sort((a, b) => b.yards - a.yards || a.name.localeCompare(b.name));
+    const centers = [];
+    const list = Array.isArray(polygons) ? polygons : [];
+    for (const item of list) {
+        const point = teeCenter(item);
+        if (point && !centers.some(c => metersBetween(c, point) < 8))
+            centers.push(point);
+    }
+    const pin = green && knownPoint(green.lat, green.lng);
+    const assign = !!(pin && centers.length > 1 && named.length > 1);
+    if (!named.length) {
+        return centers.map((c, i) => ({ name: centers.length === 1 ? "SALIDA" : `TEE ${i + 1}`, yards: null, lat: c.lat, lng: c.lng }));
+    }
+    return named.map(row => {
+        if (!assign || !pin)
+            return { name: row.name, yards: row.yards, lat: null, lng: null };
+        const hit = centers
+            .map(c => ({ c, d: Math.abs(metersBetween(c, pin) / 0.9144 - row.yards) }))
+            .filter(x => teeAgrees(metersBetween(x.c, pin), row.yards))
+            .sort((a, b) => a.d - b.d)[0];
+        return { name: row.name, yards: row.yards, lat: hit?.c.lat ?? null, lng: hit?.c.lng ?? null };
+    });
+}
 const EARTH_M = 6371008.8;
 function metersBetween(a, b) {
     const rad = (d) => d * Math.PI / 180;
@@ -282,7 +574,6 @@ function metersBetween(a, b) {
     const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
     return 2 * EARTH_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
-const fmtM = (m) => (Math.round(m * 10) / 10).toFixed(1).replace(".", ",");
 /**
  * Yards are the tee-or-origin to the endpoint. A putt is an origin on the green, or a distance the player typed.
  * A long shot whose stored lie is the landing is not a putt. The card length is never the shot.
@@ -307,15 +598,19 @@ function shotDistanceLabel(shot) {
     if (shot.distance_kind === "manual") {
         const typed = puttMeters(shot.distance_m);
         if (typed == null)
-            return { text: "Sin metros", yards: null, meters: null, kind: "manual" };
-        return { text: `${fmtM(typed)} m a mano`, yards: null, meters: typed, kind: "manual" };
+            return { text: "Sin distancia", yards: null, meters: null, kind: "manual" };
+        const typedSpan = greenToHole(typed);
+        return { text: `${typedSpan && typedSpan.unit !== "cup" ? typedSpan.text : "En el hoyo"} a mano`, yards: null, meters: typed, kind: "manual" };
     }
-    const originGreen = shot.lie === "green" && (flown == null || flown <= 50);
+    const namedPutter = isPutterClub(String(shot.club || ""), String(shot.club || ""));
+    const originGreen = (shot.lie === "green" && (flown == null || flown <= 50)) || namedPutter;
     if (originGreen) {
-        const meters = flown != null ? Math.round(flown * 10) / 10 : (typeof shot.distance_m === "number" && shot.distance_m > 0 && shot.distance_m <= 50 ? Math.round(shot.distance_m * 10) / 10 : null);
-        if (meters == null)
+        const precise = flown != null ? flown : (typeof shot.distance_m === "number" && shot.distance_m > 0 && shot.distance_m <= 50 ? shot.distance_m : null);
+        if (precise == null)
             return { text: "Sin ubicación", yards: null, meters: null, kind: "missing" };
-        return { text: `${fmtM(meters)} m`, yards: null, meters, kind: "putt" };
+        const span = greenToHole(precise);
+        const meters = Math.round(precise * 10) / 10;
+        return { text: span && span.unit !== "cup" ? span.text : "En el hoyo", yards: null, meters, kind: "putt" };
     }
     if (flown != null) {
         const yards = Math.round(flown / 0.9144);
@@ -399,7 +694,7 @@ function deriveHoleCard(par, shots) {
     return { putts, drive, gir };
 }
 const VS_PAR = { [-2]: "Águila", [-1]: "Birdie", 0: "Par", 1: "Bogey", 2: "Doble bogey", 3: "Triple bogey" };
-/** Closed-hole line. Putts stay unconfirmed when no shot is a putter or started on the green. */
+/** Closed-hole line. An unknown putt count does not change the stroke total. */
 function holeCloseText(par, strokes, putts) {
     const n = Math.max(0, Math.round(strokes));
     const puttLine = putts == null ? "Putts sin confirmar" : `${putts} ${putts === 1 ? "putt" : "putts"}`;

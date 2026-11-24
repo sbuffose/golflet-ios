@@ -18,6 +18,8 @@ import { DEFAULT_MIN_PER_HOLE, MIN_GPS_SHOTS, WIND_MODEL, cleanShots, dispersion
 
 export const PLAN_MAX_DAYS = 60;
 import { hourlyWind, addDays, dayDiff, FORECAST_DAYS } from "./weather-hourly";
+import { isJockeyAzul } from "./azul-osm";
+import { azulNineSwap, azulMenIndex, azulPhysicalYards } from "./azul-layout";
 export { hourlyWind, FORECAST_DAYS };
 
 /* ---------- courses with a detailed map ---------- */
@@ -39,7 +41,15 @@ async function guideMeta(clubCode: string, course: string) {
   const [c] = await q(`select k.code club_code, k.name club_name, k.id club_id, c.name course, c.holes from course c join club k on k.id=c.club_id where k.code=$1 and lower(c.name)=lower($2)`, [clubCode, course]);
   const card = (n: number) => (c?.holes || []).find((h: any) => h.hole === n);
   const ydOf = (h: any) => { const y = h?.yards || {}; return y.AZUL ?? y.Azul ?? (Object.values(y) as number[])[0] ?? null; };
-  const holes = Array.from({ length: 18 }, (_, i) => i + 1).map(n => ({ hole: n, par: card(n)?.par ?? g.holes[n]?.par ?? null, hcp: Number.isFinite(card(n)?.hcp) ? card(n).hcp : null, play_length_yd: ydOf(card(n)) ?? g.holes[n]?.yd ?? null, bearing: null }));
+  const current = isJockeyAzul(clubCode, course);
+  const holes = Array.from({ length: 18 }, (_, i) => i + 1).map(n => {
+    const physical = current ? azulNineSwap(n) : n;
+    const shown = current ? card(n) : card(physical);
+    const row = card(physical);
+    const yards = azulPhysicalYards(row?.yards, physical);
+    const hcp = azulMenIndex(shown);
+    return { hole: n, par: shown?.par ?? g.holes[physical]?.par ?? null, hcp, play_length_yd: yards.yards.AZUL ?? yards.yards.NEGRO ?? ydOf(row) ?? g.holes[physical]?.yd ?? null, bearing: null };
+  });
   return { id: null, club_code: g.club_code, course: c?.course ?? g.course, club_name: c?.club_name ?? null, club_id: c?.club_id ?? null, loc: g.location ? { lat: g.location.lat, lng: g.location.lng } : null, holes, numbering_unconfirmed: false, guide_only: true };
 }
 async function mapMeta(clubCode: string, course: string) {
@@ -47,13 +57,17 @@ async function mapMeta(clubCode: string, course: string) {
   if (!m) return guideMeta(clubCode, course);
   const hs = await q(`select hole, data->'green'->'center' gc, data->'bearing' bearing, data->'play_length_yd' len, crosscheck from course_map_hole where course_map_id=$1 order by hole`, [m.id]);
   const gcs = hs.map((h: any) => h.gc).filter(Boolean); const loc = gcs.length ? { lng: gcs.reduce((a: number, g: any) => a + g[0], 0) / gcs.length, lat: gcs.reduce((a: number, g: any) => a + g[1], 0) / gcs.length } : null;
-  const unconfirmed = /azul/i.test(m.course) && m.club_code === "118";
-  // t258u: stroke index (S.I.) from our course card, when synced
+  const current = isJockeyAzul(m.club_code, m.course);
+  // From 2026-11-22, par and S.I. are the card row of the displayed number. Yards stay on the physical hole.
   let cardH: any[] = []; try { const [cc] = await q(`select c.holes from course c join club k on k.id=c.club_id where k.code=$1 and lower(c.name)=lower($2) limit 1`, [clubCode, course]); cardH = Array.isArray(cc?.holes) ? cc.holes : []; } catch { cardH = []; }
-  const hcpOf = (n: number) => { const v = Number(cardH.find((z: any) => z?.hole === n)?.hcp); return Number.isInteger(v) && v >= 1 && v <= 18 ? v : null; };   // OSM 3–8 ↔ 12–17 vs the club card: numbering not confirmed (§60)
-  const holes = hs.map((h: any) => { const swapped = unconfirmed && ((h.hole >= 3 && h.hole <= 8) || (h.hole >= 12 && h.hole <= 17));
-    return { hole: h.hole, par: swapped ? null : h.crosscheck?.card?.par ?? h.crosscheck?.par ?? null, hcp: swapped ? null : hcpOf(h.hole), play_length_yd: h.len ?? null, bearing: h.bearing }; });
-  return { ...m, loc, holes, numbering_unconfirmed: unconfirmed };
+  const cardOf = (n: number) => cardH.find((z: any) => Number(z?.hole) === n);
+  const holes = hs.map((h: any) => {
+    const stored = Number(h.hole), display = current ? azulNineSwap(stored) : stored;
+    const shown = cardOf(display);
+    const yards = azulPhysicalYards(cardOf(stored)?.yards, stored);
+    return { hole: display, par: shown?.par ?? h.crosscheck?.card?.par ?? h.crosscheck?.par ?? null, hcp: azulMenIndex(shown), play_length_yd: yards.yards.AZUL ?? yards.yards.NEGRO ?? h.len ?? null, bearing: h.bearing };
+  }).sort((a: { hole: number }, b: { hole: number }) => a.hole - b.hole);
+  return { ...m, loc, holes, numbering_unconfirmed: false };
 }
 
 /* ---------- own pace (live rounds), else the §50 estimate, else 14 min ---------- */

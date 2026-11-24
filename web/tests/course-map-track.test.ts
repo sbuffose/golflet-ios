@@ -75,16 +75,16 @@ test("Cancha Vieja abre con la salida del mapa y el hoyo 7 pide confirmarla", { 
     const framed = await page.evaluate(() => {
       const map = document.querySelector("#tkmap");
       const hit = document.querySelector("#play-hit") as HTMLElement | null;
-      return { bearing: map?.getAttribute("data-bearing") || "", span: map?.getAttribute("data-span") || "", hit: hit ? hit.getBoundingClientRect().width : 0 };
+      return { bearing: map?.getAttribute("data-bearing") || "", span: map?.getAttribute("data-span") || "", hit: hit ? hit.getBoundingClientRect().height : 0 };
     });
     assert.equal(framed.span, "1");
     assert.notEqual(framed.bearing, "");
-    assert.ok(framed.hit > 0 && framed.hit <= 72);
+    assert.ok(framed.hit >= 52 && framed.hit <= 60, String(framed.hit));
     await page.screenshot({ path: join(art, "vieja-h1-map-390.png") });
     await page.click("#play-club-tile");
     await page.waitForSelector("#play-club-list button");
     const pill = await page.$eval("#play-club-list button", el => ({ h: el.getBoundingClientRect().height, t: el.textContent || "" }));
-    assert.ok(pill.h >= 48 && pill.h <= 96, `sheet ${pill.h}`);
+    assert.ok(pill.h >= 100 && pill.h <= 180, `sheet ${pill.h}`);
     assert.equal(/^\d+\./.test(pill.t.trim()), false);
     await page.screenshot({ path: join(art, "vieja-h1-clubs-390.png") });
     await page.screenshot({ path: join(art, "track-390-club-list.png") });

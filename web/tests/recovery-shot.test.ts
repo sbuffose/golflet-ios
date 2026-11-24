@@ -140,7 +140,7 @@ test("A buena stays in the shot list and the next shot starts there", { timeout:
     await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("A buena"));
     const list = await page.$eval("#rc-shots", el => el.textContent || "");
     const body = await page.evaluate(() => document.body.innerText);
-    assert.match(list, /PW/);
+    assert.match(list, /Pitching wedge/);
     assert.match(list, /A buena/);
     assert.equal(body.includes("Hoyo cerrado"), false);
     assert.equal(await page.$("#play-conceded"), null);

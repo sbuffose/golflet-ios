@@ -161,6 +161,11 @@ struct LiveGolfletAPI: GolfletAPI {
         return LivePayloadMapper.parseBag(json["bag"])
     }
 
+    func bagGear() async throws -> [BagClub] {
+        let json = try await request("GET", "/api/my-clubs")
+        return LivePayloadMapper.parseEquipment(json["clubs"])
+    }
+
     func renameClub(code: String, label: String) async throws {
         _ = try await request("PATCH", "/api/my-clubs/items/\(code.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? code)", body: ["label": label])
     }
@@ -183,11 +188,16 @@ struct LiveGolfletAPI: GolfletAPI {
         return PlayParser.courses(try await request("GET", "/api/gps/courses\(suffix)"))
     }
 
-    func gpsCourse(id: String, lat: Double?, lng: Double?) async throws -> GPSCourseDetail {
+    func gpsCourse(id: String, lat: Double?, lng: Double?, playedOn: String?) async throws -> GPSCourseDetail {
         var query: [String] = []
         if let lat, let lng {
             query.append("lat=\(lat)")
             query.append("lng=\(lng)")
+        }
+        if let playedOn, !playedOn.isEmpty {
+            query.append("played_on=\(playedOn.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? playedOn)")
+        } else {
+            query.append("layout=current")
         }
         let suffix = query.isEmpty ? "" : "?\(query.joined(separator: "&"))"
         guard let detail = PlayParser.courseDetail(try await request("GET", "/api/gps/courses/\(id)\(suffix)")) else {
@@ -277,6 +287,23 @@ struct LiveGolfletAPI: GolfletAPI {
         let json = try await request("GET", "/api/club-stats/\(encoded)")
         guard let detail = PlayParser.clubDetail(json) else { throw GolfletError.decoding("club-stats") }
         return detail
+    }
+
+    func weatherNow(lat: Double, lng: Double, retry: Bool) async throws -> WeatherNow? {
+        let q = String(format: "lat=%.5f&lng=%.5f%@", lat, lng, retry ? "&retry=1" : "")
+        let json = try await request("GET", "/api/weather/now?\(q)")
+        guard let kmh = JSONFlex.double(from: json["kmh"]), let from = JSONFlex.double(from: json["from_deg"]) else { return nil }
+        return WeatherNow(
+            at: json["at"] as? String ?? "",
+            hhmm: json["hhmm"] as? String ?? "",
+            kmh: kmh,
+            gustKmh: JSONFlex.double(from: json["gust_kmh"]),
+            fromDeg: from,
+            tempC: JSONFlex.double(from: json["temp_c"]),
+            precipMm: JSONFlex.double(from: json["precip_mm"]),
+            source: json["source"] as? String ?? "Open-Meteo",
+            stale: json["stale"] as? Bool ?? false
+        )
     }
 
     func roundWeather(roundId: String) async throws -> RoundWeather? {

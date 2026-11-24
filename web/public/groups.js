@@ -22,16 +22,17 @@
   const hid = (m, k) => (m.hidden || []).includes(CAT(k));
   const NS = '<span class="gg-ns">No compartido</span>';
   const photo = (g, cls = 'gg-av') => {
+    const klass = typeof cls === 'string' && cls ? cls : 'gg-av';
     const letter = H.esc((g.initials || String(g.name || '?').trim().slice(0, 1) || '?').toUpperCase());
-    if (!g.photo_url) return `<div class="${cls}">${letter}</div>`;
-    return `<div class="${cls}"><img class="gg-img" src="${H.esc(g.photo_url)}" alt="" onerror="this.style.display='none'">${letter}</div>`;
+    if (!g.photo_url) return `<span class="${klass}">${letter}</span>`;
+    return `<span class="${klass}"><img class="gg-img" src="${H.esc(g.photo_url)}" alt="" onerror="this.style.display='none'">${letter}</span>`;
   };
   const faceLine = g => {
     const list = Array.isArray(g.faces) ? g.faces : [];
     if (!list.length) return '';
     const names = list.map(f => f.name).filter(Boolean);
     const label = names.length <= 1 ? (names[0] || '') : names.length === 2 ? `${names[0]} y ${names[1]}` : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
-    return `<span class="gg-faces">${list.slice(0, 4).map(photo).join('')}</span><span class="gg-names">${H.esc(label)}</span>`;
+    return `<span class="gg-faces">${list.slice(0, 4).map(f => photo(f)).join('')}<span class="gg-names">${H.esc(label)}</span></span>`;
   };
   const val = (m, k) => { const t = MT[k][2]; if (t === 'h') return m.handicap_index ?? null;
     if (t === 't') return m.types?.[k]?.total ?? null; if (t === 'p') return m.par?.[k]?.avg ?? null;

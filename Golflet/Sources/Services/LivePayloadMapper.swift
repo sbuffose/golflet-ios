@@ -28,7 +28,7 @@ enum LivePayloadMapper {
         rounds = stampHandicap(rounds, history: hiHistory, fallback: playerHI)
         let mappedCourses = parseCourses(json["courses"])
         rounds += parseUnofficial(json["unofficial_rounds"])
-        return AppSnapshot(
+        var snap = AppSnapshot(
             user: user,
             profile: PlayerProfile(
                 displayName: display,
@@ -49,6 +49,18 @@ enum LivePayloadMapper {
             teeTimes: TeeTimesParser.list(from: json),
             profesores: ProfesoresParser.list(from: json)
         )
+        snap.linkAsks = parseLinkAsks(json["link_asks"])
+        return snap
+    }
+
+    private static func parseLinkAsks(_ raw: Any?) -> [LinkAsk] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            let lives = (item["liveIds"] as? [Any] ?? []).compactMap { $0 as? String }
+            let rounds = (item["roundIds"] as? [Any] ?? []).compactMap { $0 as? String }
+            guard !lives.isEmpty, !rounds.isEmpty else { return nil }
+            return LinkAsk(date: item["date"] as? String ?? "", course: item["course"] as? String ?? "", liveIds: lives, roundIds: rounds)
+        }
     }
 
     static func parseClubs(_ raw: Any?) -> [LinkedClub] {
@@ -98,6 +110,19 @@ enum LivePayloadMapper {
         let code = (json["code"] as? String) ?? ""
         guard code == "NEEDS_CLUB" || (status == 409 && code.contains("CLUB")) else { return nil }
         return .needsClub(GroupsParser.needsClub(from: json, fallback: "Elegí tu club para seguir."))
+    }
+
+    static func parseEquipment(_ raw: Any?) -> [BagClub] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            let code = item["code"] as? String
+            let label = (item["label"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = (label?.isEmpty == false ? label : nil) ?? code
+            guard let name, !name.isEmpty else { return nil }
+            let brand = (item["brand"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = (item["model"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return BagClub(name: name, carry: nil, total: nil, brand: brand?.isEmpty == false ? brand : nil, modelName: model?.isEmpty == false ? model : nil, code: code)
+        }
     }
 
     static func parseBag(_ raw: Any?) -> [BagClub] {
@@ -227,11 +252,13 @@ enum LivePayloadMapper {
         return items.compactMap { item in
             guard let id = item["id"] as? String, let date = parseDay(item["date"] as? String) else { return nil }
             let course = item["course"] as? String ?? ""
+            let pending = item["pending_label"] as? String
+            let status = (pending == "En juego" || pending == "Tarjeta pendiente") ? pending! : "No oficial"
             return Round(
                 roundId: id,
                 date: date,
                 weekday: "",
-                tournament: "No oficial",
+                tournament: status,
                 clubName: "",
                 clubCode: item["club_code"] as? String ?? "",
                 course: course,
@@ -239,7 +266,7 @@ enum LivePayloadMapper {
                 courseRating: 0,
                 slope: 0,
                 handicapIndex: 0,
-                cardStatus: "No oficial",
+                cardStatus: status,
                 counts: ScoreCounts(birdies: 0, pars: 0, bogeys: 0, doubles: 0, triples: 0, worse: 0, eagles: 0),
                 holes: [],
                 holesPlayed: 0,
@@ -267,7 +294,7 @@ enum LivePayloadMapper {
         let courseKey = item["course_key"] as? String ?? course
         let out = holes.filter { $0.number <= 9 }.compactMap(\.strokes).reduce(0, +)
         let inn = holes.filter { $0.number > 9 }.compactMap(\.strokes).reduce(0, +)
-        return Round(
+        var round = Round(
             roundId: id,
             date: date,
             weekday: item["weekday"] as? String ?? "",
@@ -325,6 +352,10 @@ enum LivePayloadMapper {
             isCompetition: JSONFlex.bool(from: item["is_competition"] ?? item["competition"]) ?? false,
             official: JSONFlex.bool(from: item["official"]) ?? true
         )
+        if let raw = item["track_diff"] as? [Any] {
+            round.trackDiff = raw.compactMap { JSONFlex.int(from: $0) }
+        }
+        return round
     }
 
     private static func parseHoles(_ raw: Any?) -> [HoleScore] {

@@ -39,6 +39,8 @@ export type ManualRoundInput = {
   clubId: number | null;
   roundId: string | null;
   tee?: string | null;
+  /** Today's round is still being played, so it stays open until the card arrives. */
+  inPlay?: boolean;
 };
 
 const dayOk = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -58,9 +60,9 @@ export async function createManualRound(input: ManualRoundInput, sql?: Sql) {
   const tee = String(input.tee || "").trim().slice(0, 40) || null;
   const official = !!roundId;
   const [row] = await db(`insert into live_round (user_id, club_code, vm_course, club_id, course, date, tee, current_hole, origin, ended_at, round_id, official)
-    values ($1,$2,$3,$4,$5,$6,$7,1,'manual',now(),$8,$9)
+    values ($1,$2,$3,$4,$5,$6,$7,1,'manual', case when $10 then null else now() end, $8,$9)
     returning id, date::text as date, course, tee, club_code, vm_course, round_id, origin, official`, [
-    input.userId, input.clubCode, input.vmCourse, input.clubId, input.course, input.date, tee, roundId, official,
+    input.userId, input.clubCode, input.vmCourse, input.clubId, input.course, input.date, tee, roundId, official, !!input.inPlay,
   ]);
   return {
     id: String(row.id),

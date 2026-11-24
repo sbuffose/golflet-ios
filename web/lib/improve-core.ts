@@ -49,7 +49,7 @@ function firstPutt(p: ShotIn | undefined, pin?: { lat: number; lng: number; sour
     return { first_putt_yd: Math.round(Math.hypot(dx, dy) * YD_PER_M * 10) / 10, first_putt_flag: pin.source ?? ("player_marked" as const) }; }
   return p.to_green_m == null ? { first_putt_yd: null, first_putt_flag: null } : { first_putt_yd: Math.round(p.to_green_m * YD_PER_M * 10) / 10, first_putt_flag: "green_center" as const };
 }
-export const DIST_BINS_YD: [number, number, string][] = [[0, 3, "0–3 yd"], [3, 7, "3–7 yd"], [7, 15, "7–15 yd"], [15, 999, "15 yd o más"]];
+export const DIST_BINS_YD: [number, number, string][] = [[0, 3, "0–9 ft"], [3, 7, "9–21 ft"], [7, 15, "21–45 ft"], [15, 999, "45 ft o más"]];
 export const DIST_BINS: [number, number, string][] = [[0, 2, "0–2 m"], [2, 5, "2–5 m"], [5, 10, "5–10 m"], [10, 15, "10–15 m"], [15, 999, "15 m o más"]];
 
 /** Putting: notes (putts per round typed after the round) + GPS holes (putts per hole, first-putt distance). */

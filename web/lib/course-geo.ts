@@ -100,6 +100,19 @@ async function courseMapHoles(clubCode: string, names: Array<string | null | und
   return out;
 }
 
+function listedTees(raw: unknown): { center: { lat: number; lng: number } }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { center: { lat: number; lng: number } }[] = [];
+  for (const item of raw) {
+    const c = item && typeof item === "object" && "center" in (item as object) ? (item as { center?: unknown }).center : item;
+    const pair = Array.isArray(c) ? { lng: Number(c[0]), lat: Number(c[1]) } : { lat: Number((c as { lat?: unknown } | null)?.lat), lng: Number((c as { lng?: unknown } | null)?.lng) };
+    const lat = pair.lat, lng = pair.lng;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) continue;
+    out.push({ center: { lat, lng } });
+  }
+  return out;
+}
+
 /** Full geometry for every hole. course_map_hole is the tee, the green and the line when that row exists.
  *  Golfistics and OSM fill only the holes the map does not have. */
 export async function courseGeometry(clubCode: string, vmCourse: string) {
@@ -120,7 +133,7 @@ export async function courseGeometry(clubCode: string, vmCourse: string) {
     if (extra && !x?.tee) bundledTee = true;
     return { hole: h.hole, par: card?.par ?? null, hcp: card?.hcp ?? null, yards: card?.yards ?? {},
       green: { front: h.front, center: h.center, back: h.back },
-      tee: x?.tee ?? extra?.tee ?? null, line: x?.line ?? extra?.line ?? null, hazards: x?.hazards ?? [] };
+      tee: x?.tee ?? extra?.tee ?? null, line: x?.line ?? extra?.line ?? null, tees: listedTees(x?.tees), hazards: x?.hazards ?? [] };
   });
   const mapped = await courseMapHoles(clubCode, [ourName, vmCourse, nm.course_label]);
   let fromMap = false;
@@ -129,7 +142,8 @@ export async function courseGeometry(clubCode: string, vmCourse: string) {
     if (!data) return h;
     const next = overlayCourseMapHole(h, data);
     if (next !== h) fromMap = true;
-    return next;
+    const mappedTees = listedTees(data?.tees);
+    return { ...next, tees: mappedTees.length ? mappedTees : h.tees || [] };
   });
   return {
     course_id: slug(clubCode, vmCourse), ...nm, vm_course: vmCourse,

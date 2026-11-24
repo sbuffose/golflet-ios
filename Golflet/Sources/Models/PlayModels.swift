@@ -40,6 +40,8 @@ struct GPSHole: Hashable, Sendable, Identifiable {
     var yards: [String: Int]
     var green: GPSGreen
     var tee: GPSCoord?
+    var tees: [GPSCoord] = []
+    var yardsNote: String? = nil
 }
 
 struct GPSCourseDetail: Hashable, Sendable, Identifiable {
@@ -307,6 +309,18 @@ struct ShotRestore: Hashable, Sendable {
     var mishit: Bool
     var distanceKind: String?
     var clientId: String
+}
+
+struct WeatherNow: Hashable, Sendable {
+    var at: String
+    var hhmm: String
+    var kmh: Double
+    var gustKmh: Double?
+    var fromDeg: Double
+    var tempC: Double?
+    var precipMm: Double?
+    var source: String
+    var stale: Bool
 }
 
 struct RoundWeather: Hashable, Sendable {

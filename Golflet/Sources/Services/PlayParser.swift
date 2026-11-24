@@ -498,13 +498,22 @@ enum PlayParser {
                 if let y = JSONFlex.int(from: value) { yards[key] = y }
             }
         }
+        var tees: [GPSCoord] = []
+        if let list = blob["tees"] as? [Any] {
+            for item in list {
+                let row = item as? [String: Any]
+                if let point = coord(row?["center"]) ?? coord(row) { tees.append(point) }
+            }
+        }
         return GPSHole(
             number: number,
             par: JSONFlex.int(from: blob["par"]) ?? 4,
             hcp: JSONFlex.int(from: blob["hcp"]),
             yards: yards,
             green: GPSGreen(front: coord(green["front"]), center: coord(green["center"]), back: coord(green["back"])),
-            tee: coord(tee)
+            tee: coord(tee),
+            tees: tees,
+            yardsNote: blob["yards_note"] as? String
         )
     }
 
