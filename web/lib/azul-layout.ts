@@ -5,8 +5,9 @@
  *  The Golfistics card dated 2026-11-22 already lists par and the men's stroke index
  *  by the number shown that day. Its tee yards stay in the physical order (card 16
  *  AZUL 377 is the old 16). Geometry and yards follow the physical hole. Par and
- *  stroke index follow the displayed number. The card's AMARILLO 500 on physical
- *  hole 8 is shown as 391. Nothing here writes the database. */
+ *  stroke index follow the displayed number. On physical hole 8 the card prints
+ *  AZUL 411 and AMARILLO 500. The handbook is 427 and 391, and BLANCO 417 already
+ *  matches, so only those two tees change on screen. Nothing here writes the database. */
 
 export const AZUL_NINE_SWAP_FROM = "2026-11-22";
 
@@ -45,7 +46,7 @@ export function relabelAzulHoles<T extends { hole?: number }>(holes: T[], played
     .sort((a, b) => Number(a.hole) - Number(b.hole));
 }
 
-export const AZUL_AMARILLO_NOTE = "El handbook marca 391. La tarjeta dice 500 en el amarillo del hoyo 8 físico.";
+export const AZUL_AMARILLO_NOTE = "El handbook marca 427 en el azul y 391 en el amarillo. La tarjeta dice 411 y 500 en el hoyo 8 físico.";
 
 type AzulCardRow = { hole?: number; par?: unknown; hcp?: unknown; hole_hcp?: unknown; hcp_raw?: unknown; yards?: unknown };
 
@@ -67,14 +68,15 @@ export function azulYardRecord(value: unknown): Record<string, number> | null {
   return Object.keys(out).length ? out : null;
 }
 
-/** Physical hole 8's printed AMARILLO 500 is 391. The source row is left untouched. */
+/** Physical hole 8's printed AZUL 411 and AMARILLO 500 are 427 and 391. The source row is left untouched. */
 export function azulPhysicalYards(yards: unknown, physicalHole: number): { yards: Record<string, number>; note: string | null } {
   const out = { ...(azulYardRecord(yards) || {}) };
-  if (physicalHole === 8 && out.AMARILLO === 500) {
-    out.AMARILLO = 391;
-    return { yards: out, note: AZUL_AMARILLO_NOTE };
-  }
-  return { yards: out, note: null };
+  if (physicalHole !== 8) return { yards: out, note: null };
+  const azul = out.AZUL === 411;
+  const amarillo = out.AMARILLO === 500;
+  if (azul) out.AZUL = 427;
+  if (amarillo) out.AMARILLO = 391;
+  return { yards: out, note: azul || amarillo ? AZUL_AMARILLO_NOTE : null };
 }
 
 /** A par 3 of 377 yd is the card yards read by the wrong number. */

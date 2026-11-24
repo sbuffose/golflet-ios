@@ -69,7 +69,7 @@ test("la Azul muestra los hoyos 3, 10 y 12 con el mapeo del 22 nov", { timeout: 
     { hole: 7, label: "Par 4", yards: "377 yd", hcp: "S.I. 13", tees: teeLats(7), flag: greenLat(7) },
     { hole: 10, label: "Par 5", yards: "483 yd", hcp: "S.I. 4", tees: teeLats(10), flag: greenLat(10) },
     { hole: 12, label: "Par 4", yards: "345 yd", hcp: "S.I. 16", tees: teeLats(12), flag: greenLat(12) },
-    { hole: 17, label: "Par 4", yards: "411 yd", hcp: "S.I. 2", tees: teeLats(17), flag: greenLat(17), note: "handbook marca 391" },
+    { hole: 17, label: "Par 4", yards: "427 yd", hcp: "S.I. 2", tees: teeLats(17), flag: greenLat(17), note: "427 en el azul" },
   ];
   try {
     const page = await browser.newPage();

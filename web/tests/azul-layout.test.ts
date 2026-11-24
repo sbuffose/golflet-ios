@@ -94,7 +94,7 @@ test("par y S.I. salen del número mostrado y las yardas del hoyo físico", () =
     { hole: 7, physical: 16, par: 4, hcp: 13, azul: 377 },
     { hole: 8, physical: 17, par: 5, hcp: 7, azul: 490 },
     { hole: 16, physical: 7, par: 3, hcp: 10, azul: 168 },
-    { hole: 17, physical: 8, par: 4, hcp: 2, azul: 411 },
+    { hole: 17, physical: 8, par: 4, hcp: 2, azul: 427 },
   ];
   for (const row of expect) {
     const shown = hole(row.hole);
@@ -109,11 +109,48 @@ test("par y S.I. salen del número mostrado y las yardas del hoyo físico", () =
   assert.notEqual(hole(7).yards.AZUL, 168);
   assert.equal(hole(16).yards.AZUL, 168);
   assert.ok(!azulYardsFitPar(3, 377));
+  assert.equal(card.holes.find(h => h.hole === 8)?.yards.AZUL, 411);
+  assert.equal(card.holes.find(h => h.hole === 8)?.yards.BLANCO, 417);
   assert.equal(card.holes.find(h => h.hole === 8)?.yards.AMARILLO, 500);
+  assert.equal(hole(17).yards.AZUL, 427);
+  assert.equal(hole(17).yards.BLANCO, 417);
   assert.equal(hole(17).yards.AMARILLO, 391);
   assert.equal(hole(17).yards_note, AZUL_AMARILLO_NOTE);
   assert.equal(hole(8).yards.AMARILLO, 470);
   assert.equal(hole(8).yards_note, undefined);
+  const handbook: Record<number, { AZUL: number; BLANCO: number; AMARILLO: number }> = {
+    1: { AZUL: 485, BLANCO: 446, AMARILLO: 403 },
+    2: { AZUL: 474, BLANCO: 474, AMARILLO: 459 },
+    3: { AZUL: 345, BLANCO: 330, AMARILLO: 316 },
+    4: { AZUL: 340, BLANCO: 328, AMARILLO: 298 },
+    5: { AZUL: 122, BLANCO: 114, AMARILLO: 102 },
+    6: { AZUL: 327, BLANCO: 305, AMARILLO: 288 },
+    7: { AZUL: 168, BLANCO: 152, AMARILLO: 115 },
+    8: { AZUL: 427, BLANCO: 417, AMARILLO: 391 },
+    9: { AZUL: 407, BLANCO: 399, AMARILLO: 391 },
+    10: { AZUL: 483, BLANCO: 473, AMARILLO: 442 },
+    11: { AZUL: 186, BLANCO: 176, AMARILLO: 166 },
+    12: { AZUL: 409, BLANCO: 399, AMARILLO: 389 },
+    13: { AZUL: 393, BLANCO: 385, AMARILLO: 385 },
+    14: { AZUL: 150, BLANCO: 140, AMARILLO: 124 },
+    15: { AZUL: 343, BLANCO: 335, AMARILLO: 335 },
+    16: { AZUL: 377, BLANCO: 367, AMARILLO: 352 },
+    17: { AZUL: 490, BLANCO: 482, AMARILLO: 470 },
+    18: { AZUL: 452, BLANCO: 427, AMARILLO: 417 },
+  };
+  for (let n = 1; n <= 18; n++) {
+    const physical = azulNineSwap(n);
+    const book = handbook[physical];
+    assert.equal(hole(n).yards.AZUL, book.AZUL, `hoyo ${n} AZUL`);
+    assert.equal(hole(n).yards.BLANCO, book.BLANCO, `hoyo ${n} BLANCO`);
+    assert.equal(hole(n).yards.AMARILLO, book.AMARILLO, `hoyo ${n} AMARILLO`);
+  }
+  const legacy = withCard("2026-10-04");
+  const old8 = byHole(legacy, 8) as (typeof current)[number];
+  assert.equal(old8.yards.AZUL, 427);
+  assert.equal(old8.yards.BLANCO, 417);
+  assert.equal(old8.yards.AMARILLO, 391);
+  assert.equal(old8.yards_note, AZUL_AMARILLO_NOTE);
   for (const n of [1, 2, 10, 11]) assert.equal(hole(n).hcp, card.holes.find(h => h.hole === n)!.hole_hcp);
   for (let n = 1; n <= 18; n++) assert.ok(azulYardsFitPar(Number(hole(n).par), hole(n).yards.AZUL), `hoyo ${n}`);
 });
