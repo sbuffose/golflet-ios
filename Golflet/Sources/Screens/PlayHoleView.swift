@@ -44,6 +44,7 @@ struct PlayHoleView: View {
     @State private var askDeleteShot = false
     @State private var movingShotID: String?
     @State private var recovery = false
+    @State private var buenaPick = false
     @State private var waterAsk = false
     @State private var droppedClientIDs: Set<String> = []
     @State private var nowWind: WeatherNow?
@@ -1269,6 +1270,10 @@ struct PlayHoleView: View {
                         Button {
                             chosenClub = club.name
                             showsClubs = false
+                            if buenaPick {
+                                buenaPick = false
+                                Task { await markRecovery() }
+                            }
                         } label: {
                             VStack(spacing: 3) {
                                 ClubThumb(brand: club.brand, model: club.modelName, face: club.face)
@@ -1306,7 +1311,7 @@ struct PlayHoleView: View {
             .background(Color(hex: 0xF6F7F9))
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 20, style: .continuous))
             .overlay(alignment: .topTrailing) {
-                Button { showsClubs = false } label: {
+                Button { showsClubs = false; buenaPick = false } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(p.ink)
@@ -1387,6 +1392,11 @@ struct PlayHoleView: View {
     }
 
     private func markRecovery() async {
+        if chosenClub == nil {
+            buenaPick = true
+            showsClubs = true
+            return
+        }
         let point = TrackPoint(lat: cursor.lat, lng: cursor.lng)
         let outcome = TrackSession.enter(track, at: point, club: chosenClub, onCup: false, putting: false)
         guard outcome.recorded else { return }
@@ -2336,11 +2346,11 @@ struct PlayHoleView: View {
                             } label: {
                                 VStack(spacing: 2) {
                                     ClubThumb(brand: club.brand, model: club.modelName, face: club.face)
-                                        .frame(width: 22, height: 22)
+                                        .frame(width: 56, height: 56)
                                     Text(gridName(club.name))
                                         .font(GType.headline)
                                         .foregroundStyle(p.ink)
-                                        .lineLimit(1)
+                                        .lineLimit(2)
                                         .minimumScaleFactor(0.7)
                                     if let yards = savedYards(club) {
                                         Text(yards)
@@ -2348,7 +2358,8 @@ struct PlayHoleView: View {
                                             .foregroundStyle(p.ink3)
                                     }
                                 }
-                                .frame(maxWidth: .infinity, minHeight: 72)
+                                .frame(maxWidth: .infinity, minHeight: 118)
+                                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .padding(.vertical, 8)
                                 .background(Color.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

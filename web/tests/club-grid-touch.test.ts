@@ -1,5 +1,7 @@
-/** t741: a finger on a club card selects it. Click alone is not the test. */
+/** t741: a finger on a club card selects it. Click alone is not the test.
+ *  t744: the same finger chooses the club of an A buena shot, and of a shot being edited. */
 import assert from "node:assert/strict";
+import { countsForClub } from "../lib/shots-calc";
 import { createServer } from "node:http";
 import { mkdirSync, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -25,7 +27,7 @@ const bag = [
 ];
 const course = {
   club_code: "118", course: "Azul", course_id: "118-azul",
-  holes: [{ hole: 3, par: 4, hcp: 16, yards: 414, green: { center: GREEN }, tee: TEE, line: [TEE, GREEN] }],
+  holes: [{ hole: 3, par: 4, hcp: 9, yards: 409, green: { center: GREEN }, tee: TEE, line: [TEE, GREEN] }],
 };
 
 test("un toque en la grilla elige el palo", { timeout: 90_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
@@ -152,6 +154,114 @@ test("un toque en la grilla elige el palo", { timeout: 90_000, skip: CHROME ? fa
     assert.match(picked.src, /silhouettes\/iron\.svg/);
     assert.equal(picked.kind, "silhouette");
     await page.screenshot({ path: join(art, "web-375-palo-elegido.png") });
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("un toque elige el palo de un A buena y de un tiro que se edita", { timeout: 90_000, skip: CHROME ? false : "chrome is not installed" }, async () => {
+  const shots: Record<string, unknown>[] = [];
+  const posts: Record<string, unknown>[] = [];
+  const patches: Record<string, unknown>[] = [];
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (!(req.headers.host || "").startsWith("127.0.0.1")) { res.writeHead(500); res.end("refused"); return; }
+    const json = (body: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (url.pathname.startsWith("/api/")) {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      const body = raw ? JSON.parse(raw) : {};
+      if (url.pathname === "/api/data") return json({ user: { name: "TEST-ONLY", pending_first_sync: false }, player: { name: "TEST-ONLY" }, hi_history: [], clubs: [], courses: [], rounds: [], bag });
+      if (url.pathname === "/api/bag") return json(bag);
+      if (url.pathname.startsWith("/api/gps/courses")) return json({ course, courses: [course] });
+      if (url.pathname.startsWith("/api/course-maps/")) return json(course);
+      if (url.pathname === "/api/reconstructions" && req.method === "GET") return json({ rounds: [], reconstructions: [
+        { id: "live-buena", date: today, current_hole: 3, club_code: "118", vm_course: "Azul", course: "Azul", round_id: "r-buena" },
+      ] });
+      if (url.pathname.endsWith("/shots") && req.method === "POST") {
+        posts.push(body);
+        shots.push({ id: "s1", shot_number: 1, hole: body.hole, club: body.club, intent: body.intent, lat: body.lat, lng: body.lng, end_lat: body.end_lat, end_lng: body.end_lng, result: body.result });
+        return json({ shots });
+      }
+      if (url.pathname.endsWith("/shots") && req.method === "PATCH") {
+        patches.push(body);
+        const row = shots.find(s => s.id === body.shot_id);
+        if (row) { row.club = body.club; row.intent = body.intent; }
+        return json({ shots });
+      }
+      if (url.pathname.endsWith("/shots")) return json({ shots });
+      if (url.pathname === "/api/weather/now") return json({ kmh: 12, from_deg: 180, temp_c: 20, source: "Open-Meteo", hhmm: "12:00" });
+      return json({});
+    }
+    const file = url.pathname === "/" ? "/index.html" : url.pathname;
+    try { const buf = await readFile(new URL(file.slice(1), ROOT)); res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" }); res.end(buf); }
+    catch { res.writeHead(404); res.end("missing"); }
+  });
+  await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const { default: puppeteer } = await import("puppeteer-core");
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  const art = "/opt/cursor/artifacts";
+  mkdirSync(art, { recursive: true });
+  const tap = async (page: { $eval: Function; touchscreen: { tap: Function } }, sel: string) => {
+    const box = await page.$eval(sel, (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    await page.touchscreen.tap(box.x, box.y);
+  };
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 375, height: 812, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    await page.goto(`http://127.0.0.1:${port}/#/reconstruir/live-buena?hole=3`, { waitUntil: "networkidle0" });
+    await page.waitForSelector("#play-good", { timeout: 20000 });
+    await tap(page, "#play-good");
+    await page.waitForFunction(() => {
+      const title = document.querySelector(".tk-sheetk");
+      const sheet = document.querySelector("#play-club-sheet");
+      return !!title && (title.textContent || "").includes("a buena") && !!sheet && !sheet.hasAttribute("hidden");
+    }, { timeout: 8000 });
+    assert.equal(posts.length, 0);
+    const iron = await page.$eval('#play-club-list button[data-club="Hierro 7"]', el => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    const hit = await page.evaluate((x, y) => {
+      const node = document.elementFromPoint(x, y);
+      const btn = node && node.closest("button[data-club]");
+      return btn ? btn.getAttribute("data-club") : "";
+    }, iron.x, iron.y);
+    assert.equal(hit, "Hierro 7");
+    await page.touchscreen.tap(iron.x, iron.y);
+    await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("A buena"), { timeout: 8000 });
+    const rail = await page.$eval("#rc-shots", el => el.textContent || "");
+    assert.match(rail, /Hierro 7/);
+    assert.match(rail, /A buena/);
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].club, "Hierro 7");
+    assert.equal(posts[0].intent, "recovery");
+    assert.equal(countsForClub({ club: "Hierro 7", intent: "recovery", distance_m: 40, source: "gps", distance_kind: "measured" }), false);
+    assert.equal(countsForClub({ club: "Hierro 7", intent: null, distance_m: 140, source: "gps", distance_kind: "measured" }), true);
+    await page.screenshot({ path: join(art, "web-375-abuena-palo.png") });
+
+    await tap(page, "#play-shot-1");
+    await page.waitForSelector("#play-edit-club");
+    await tap(page, "#play-edit-club");
+    await page.waitForFunction(() => {
+      const sheet = document.querySelector("#play-club-sheet");
+      return !!sheet && !sheet.hasAttribute("hidden") && !(document.querySelector(".tk-sheetk")?.textContent || "").includes("a buena");
+    }, { timeout: 8000 });
+    await tap(page, '#play-club-list button[data-club="Madera 3"]');
+    await page.waitForFunction(() => (document.querySelector("#rc-shots")?.textContent || "").includes("Madera 3"), { timeout: 8000 });
+    const edited = await page.$eval("#rc-shots", el => el.textContent || "");
+    assert.match(edited, /Madera 3/);
+    assert.match(edited, /A buena/);
+    assert.equal(patches.length, 1);
+    assert.equal(patches[0].club, "Madera 3");
+    assert.equal(patches[0].intent, "recovery");
+    assert.equal(countsForClub({ club: "Madera 3", intent: "recovery", distance_m: 40, source: "gps", distance_kind: "measured" }), false);
+    await page.screenshot({ path: join(art, "web-375-abuena-editado.png") });
   } finally {
     await browser.close();
     server.close();

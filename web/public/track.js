@@ -101,7 +101,7 @@
       more: false, history: false, saved: H.shots || [],
       alive: true, done: false, reopen: false, editN: 0, pickClub: false, moveShot: false, editPoint: '', aimLL: null, askDel: false, suggestedTee: null, suggestedPin: null, flagKind: 'none', adjusted: false, clubChosen: false, cmapTried: false,
       playerLie: '', lieBall: null, holeIntent: false, clubAuto: '', clubBefore: '', puttDraft: '', moving: false, holdCam: false, undoing: false, tileCap: 0, greenTiles: true,
-      driverTee: null, teeSource: '', teeName: '', moveTee: false, teeOpen: false, flagSource: '', wx: null, wxState: '', wxOpen: false, wxWhy: '', lostPair: null, provisionalNext: false, recovery: false, suggest: '', roundId: H.roundId || '',
+      driverTee: null, teeSource: '', teeName: '', moveTee: false, teeOpen: false, flagSource: '', wx: null, wxState: '', wxOpen: false, wxWhy: '', lostPair: null, provisionalNext: false, recovery: false, buenaPick: false, suggest: '', roundId: H.roundId || '',
     };
 
     const holeRec = () => S.holes.find(h => h.hole === S.hole || h.number === S.hole) || S.holes[S.hole - 1] || {};
@@ -907,11 +907,14 @@
       const tileName = shownClub ? gridName(shownClub.label) : 'Palo';
       const tileAria = shownClub ? clubLabel(shownClub.label) : 'Palo';
       const tileYd = shownClub ? tileYards(shownClub) : '';
-      const clubButtons = clubChoices.map(c => clubCell(c, c.id === S.club ? 'on' : (!S.club && c.id === S.suggest ? 'sug' : ''))).join('');
+      const editRow = S.editN ? (S.saved || []).filter(s => Number(s.hole) === Number(S.hole))[S.editN - 1] : null;
+      const clubButtons = clubChoices.map(c => clubCell(c, (editRow ? sameClub(editRow.club, c) : c.id === S.club) ? 'on' : (!editRow && !S.club && c.id === S.suggest ? 'sug' : ''))).join('');
       // The sheet sits outside the dock. The dock ignores pointer events, and a fixed
       // child of that dock does not receive the finger on iPhone: the tap falls through
-      // and the marked club never changes.
-      const clubSheet = showClub ? `<div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">Palo</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubButtons}</ul></div></div>` : '';
+      // and the marked club never changes. Editing a shot, including A buena, uses this
+      // same sheet. A second list inside the editor never saw the finger.
+      const sheetTitle = S.buenaPick ? 'Palo del golpe a buena' : 'Palo';
+      const clubSheet = (showClub || S.pickClub || S.buenaPick || S.editN) ? `<div class="tk-sheet" id="play-club-sheet" hidden role="dialog" aria-modal="true" aria-label="Palos"><div class="tk-sheetcard"><button type="button" class="tk-sheetx" id="play-club-close" aria-label="Cerrar">✕</button><p class="tk-sheetk">${esc(sheetTitle)}</p><ul class="tk-clublist" id="play-club-list" role="listbox" hidden>${clubButtons}</ul></div></div>` : '';
       const clubTile = showClub ? `<div class="tk-club"><button type="button" class="tk-clubtile" id="play-club-tile" aria-haspopup="dialog" aria-label="${esc(tileAria)}">${faceImg(shownClub ? shownClub.id : '', shownClub ? shownClub.label : '')}<span><b>${esc(tileName)}</b>${tileYd ? `<small>${esc(tileYd)}</small>` : ''}</span></button><select id="play-club" aria-label="Palo">${clubBlank}${clubChoices.map(c => `<option value="${esc(c.id)}" ${S.club === c.id ? 'selected' : ''}>${esc(clubLabel(c.label))}</option>`).join('')}</select></div>` : '';
       const hs = retro ? null : S.strat?.holes?.find(x => x.hole === S.hole);
       const here = fromCenter();
@@ -1044,8 +1047,7 @@
         return `<button type="button" id="play-edit-${kind === 'end' ? 'move' : kind}">${text}</button>`;
       };
       const buenaOn = editingShot && editingShot.intent === 'recovery';
-      const editGrid = S.pickClub ? `<ul class="tk-clublist" id="play-club-list" role="listbox">${clubChoices.map(c => clubCell(c, editingShot && sameClub(editingShot.club, c) ? 'on' : '')).join('')}</ul>` : '';
-      const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>${esc(editBits.join(' · '))}</b><button type="button" id="play-edit-club">Cambiar palo</button>${editGrid}${pointBtn('start', 'Punto de inicio')}${pointBtn('end', 'Punto final')}${pointBtn('aim', 'Objetivo')}<button type="button" id="play-edit-insert">Insertar tiro</button><button type="button" id="play-edit-buena" aria-pressed="${buenaOn ? 'true' : 'false'}">A buena${buenaOn ? ' · activo' : ''}</button><button type="button" id="play-edit-x">Cerrar</button><button type="button" id="play-edit-del">Borrar tiro</button>${S.askDel ? '<p>¿Borrar este tiro?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? `<p>Mové el mapa hasta ${pointWord}.</p>` : ''}</div>` : '';
+      const shotEditor = editingShot ? `<div class="tk-edit" id="play-shot-editor" role="dialog" aria-label="Editar golpe"><b>${esc(editBits.join(' · '))}</b><button type="button" id="play-edit-club">Cambiar palo</button>${pointBtn('start', 'Punto de inicio')}${pointBtn('end', 'Punto final')}${pointBtn('aim', 'Objetivo')}<button type="button" id="play-edit-insert">Insertar tiro</button><button type="button" id="play-edit-buena" aria-pressed="${buenaOn ? 'true' : 'false'}">A buena${buenaOn ? ' · activo' : ''}</button><button type="button" id="play-edit-x">Cerrar</button><button type="button" id="play-edit-del">Borrar tiro</button>${S.askDel ? '<p>¿Borrar este tiro?</p><button type="button" id="play-edit-yes">Sí, borrar</button>' : ''}${S.moveShot ? `<p>Mové el mapa hasta ${pointWord}.</p>` : ''}</div>` : '';
       const editSheet = '';
       const painted = el.querySelector('.tk-tiles:not([data-pending])');
       const paintedHole = el.querySelector('#tkmap')?.dataset.hole || '';
@@ -1615,7 +1617,7 @@
       if (n < 1 || n > 18 || S.busy) return;
       if (retro) {
         if (!S.alive) return;
-        S.hole = n; S.panned = false; S.msg = ''; S.penaltyShotId = null; S.history = false; S.done = false; S.reopen = false; S.editN = 0; S.pickClub = false; S.moveShot = false; S.editPoint = ''; S.aimLL = null; S.askDel = false; S.teeSource = ''; S.teeName = ''; S.moveTee = false; S.teeOpen = false; S.flagSource = '';
+        S.hole = n; S.panned = false; S.msg = ''; S.penaltyShotId = null; S.history = false; S.done = false; S.reopen = false; S.editN = 0; S.pickClub = false; S.buenaPick = false; S.moveShot = false; S.editPoint = ''; S.aimLL = null; S.askDel = false; S.teeSource = ''; S.teeName = ''; S.moveTee = false; S.teeOpen = false; S.flagSource = '';
         S.clubChosen = false;
         S.club = '';
         S.playerLie = ''; S.lieBall = null; S.holeIntent = false; S.puttDraft = ''; S.clubAuto = ''; S.clubBefore = '';
@@ -1743,7 +1745,7 @@
         if (!S.alive) return;
         if (Array.isArray(shots)) S.saved = shots;
         armRetro();
-        S.pickClub = false; S.moveShot = false; S.editPoint = ''; S.msg = '';
+        S.pickClub = false; S.buenaPick = false; S.moveShot = false; S.editPoint = ''; S.msg = '';
       } catch (e) { if (S.alive) S.msg = e.message || 'No se pudo guardar el golpe.'; }
       S.busy = false;
       if (S.alive) render();
@@ -1785,7 +1787,7 @@
       const tile = el.querySelector('#play-club-tile');
       const sheet = el.querySelector('#play-club-sheet');
       const bagList = sheet ? sheet.querySelector('.tk-clublist') : null;
-      const list = el.querySelector('#play-shot-editor .tk-clublist') || el.querySelector('#play-club-list');
+      const list = el.querySelector('#play-club-list');
       let tileGuard = 0;
       const setSheet = open => {
         if (bagList) bagList.hidden = !open;
@@ -1799,12 +1801,18 @@
           b.classList.toggle('on', mine);
           if (mine) b.classList.remove('sug');
         });
-        if (S.editN) { S.pickClub = false; patchShot({ club: id }); return; }
+        const punch = S.buenaPick && !S.editN;
+        S.buenaPick = false;
+        S.pickClub = false;
+        if (S.editN) { patchShot({ club: id }); return; }
+        S.club = id;
+        S.clubChosen = true;
         if (club) {
           club.value = id;
           try { if (club.onchange) club.onchange(); } catch (err) { /* the choice still stands */ }
         }
         setSheet(false);
+        if (punch) markRecovery();
       };
       // iPhone drops the click when the page keeps touch-action:none. The finger
       // is the selection; the click only covers a mouse.
@@ -1832,10 +1840,10 @@
           action('click');
         });
       };
-      if (tile && sheet) armPress(tile, () => { if (Date.now() < tileGuard) return; setSheet(sheet.hidden); });
+      if (tile && sheet) armPress(tile, () => { if (Date.now() < tileGuard) return; S.buenaPick = false; setSheet(sheet.hidden); });
       const shut = el.querySelector('#play-club-close');
-      if (shut) armPress(shut, () => setSheet(false));
-      if (S.pickClub && bagList && sheet && !el.querySelector('#play-shot-editor .tk-clublist')) setSheet(true);
+      if (shut) armPress(shut, () => { S.buenaPick = false; S.pickClub = false; setSheet(false); });
+      if ((S.pickClub || S.buenaPick) && bagList && sheet) setSheet(true);
       if (list) list.querySelectorAll('button').forEach(btn => armPress(btn, via => chooseClub(btn.getAttribute('data-club') || '', via)));
       const lieBtn = el.querySelector('#play-lie');
       if (lieBtn) lieBtn.onclick = () => {
@@ -1867,7 +1875,12 @@
         render();
       };
       const goodBtn = el.querySelector('#play-good');
-      if (goodBtn) goodBtn.onclick = () => { markRecovery(); };
+      if (goodBtn) armPress(goodBtn, () => {
+        if (S.club && S.clubChosen) { markRecovery(); return; }
+        S.buenaPick = true;
+        S.pickClub = true;
+        render();
+      });
       const postLost = async provisional => {
         const here = fromCenter();
         const from = S.track.ball || S.track.tee;
@@ -1953,10 +1966,10 @@
       };
       const undo = el.querySelector('#play-undo'); if (undo) undo.onclick = () => undoLast();
       const editHole = el.querySelector('#play-edit-hole');
-      if (editHole) editHole.onclick = () => { S.reopen = true; S.done = false; S.editN = 0; S.pickClub = false; S.moveShot = false; S.editPoint = ''; S.askDel = false; S.msg = ''; render(); };
+      if (editHole) editHole.onclick = () => { S.reopen = true; S.done = false; S.editN = 0; S.pickClub = false; S.buenaPick = false; S.moveShot = false; S.editPoint = ''; S.askDel = false; S.msg = ''; render(); };
       el.querySelectorAll('[data-shot]').forEach(b => { b.onclick = () => { S.editN = Number(b.getAttribute('data-shot')) || 0; S.askDel = false; S.moveShot = false; S.editPoint = ''; S.pickClub = false; render(); }; });
       const clubEdit = el.querySelector('#play-edit-club');
-      if (clubEdit) clubEdit.onclick = () => { S.pickClub = true; S.askDel = false; render(); };
+      if (clubEdit) armPress(clubEdit, () => { S.buenaPick = false; S.pickClub = true; S.askDel = false; render(); });
       const savePoint = kind => {
         if (!(S.moveShot && S.editPoint === kind)) { S.editPoint = kind; S.moveShot = true; S.askDel = false; render(); return; }
         const here = fromCenter();
@@ -2006,7 +2019,7 @@
         }).catch(e => { if (!S.alive) return; S.busy = false; S.msg = e.message || 'No se pudo borrar el golpe.'; render(); });
       };
       const shutEdit = el.querySelector('#play-edit-x');
-      if (shutEdit) shutEdit.onclick = () => { S.editN = 0; S.pickClub = false; S.moveShot = false; S.editPoint = ''; S.askDel = false; render(); };
+      if (shutEdit) shutEdit.onclick = () => { S.editN = 0; S.pickClub = false; S.buenaPick = false; S.moveShot = false; S.editPoint = ''; S.askDel = false; render(); };
       const nextHole = el.querySelector('#play-next'); if (nextHole) nextHole.onclick = () => goHole(Math.min(18, S.hole + 1));
       const close = el.querySelector('#rc-close'); if (close) close.onclick = () => { if (H.back) location.hash = H.back; };
       const retry = el.querySelector('#tk-retry'); if (retry) retry.onclick = () => {
