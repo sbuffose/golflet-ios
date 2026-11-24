@@ -26,6 +26,7 @@ enum ClubGear {
         Photo(brand: "Titleist", model: "GT2", category: "driver", file: "titleist-gt2-driver.jpg"),
         Photo(brand: "Titleist", model: "GT2", category: "fairway", file: "titleist-gt2-fairway.jpg"),
         Photo(brand: "Titleist", model: "T150", category: "iron", file: "titleist-t150-iron.jpg"),
+        Photo(brand: "Titleist", model: "Vokey SM10", category: "wedge", file: "titleist-vokey-sm10.jpg"),
     ]
 
     static let players: [Player] = [
@@ -120,15 +121,17 @@ struct ClubSilhouette: View {
             case "hybrid":
                 context.fill(Self.head(w, h, top: 0.14, width: 0.66, height: 0.44, bulge: 0.1), with: .color(ink))
             case "wedge":
-                let blade = CGRect(x: w * 0.08, y: h * 0.16, width: w * 0.84, height: h * 0.5)
-                context.fill(Path(roundedRect: blade, cornerRadius: 4), with: .color(ink))
-                let cavity = CGRect(x: w * 0.22, y: h * 0.26, width: w * 0.56, height: h * 0.22)
+                let blade = CGRect(x: w * 0.14, y: h * 0.14, width: w * 0.7, height: h * 0.42)
+                context.fill(Path(roundedRect: blade, cornerRadius: 3), with: .color(ink))
+                let cavity = CGRect(x: w * 0.26, y: h * 0.22, width: w * 0.46, height: h * 0.18)
                 context.fill(Path(roundedRect: cavity, cornerRadius: 2), with: .color(Color(hex: 0xF6F7F9)))
-                let sole = CGRect(x: w * 0.06, y: h * 0.62, width: w * 0.88, height: h * 0.08)
-                context.fill(Path(roundedRect: sole, cornerRadius: 2), with: .color(ink))
+                let sole = CGRect(x: w * 0.08, y: h * 0.52, width: w * 0.84, height: h * 0.1)
+                context.fill(Path(roundedRect: sole, cornerRadius: 3), with: .color(ink))
             case "putter":
-                let mallet = CGRect(x: w * 0.06, y: h * 0.16, width: w * 0.88, height: h * 0.28)
-                context.fill(Path(roundedRect: mallet, cornerRadius: 4), with: .color(ink))
+                let mallet = CGRect(x: w * 0.06, y: h * 0.14, width: w * 0.88, height: h * 0.26)
+                context.fill(Path(roundedRect: mallet, cornerRadius: 5), with: .color(ink))
+                let sight = CGRect(x: w * 0.46, y: h * 0.18, width: max(2, w * 0.08), height: h * 0.16)
+                context.fill(Path(roundedRect: sight, cornerRadius: 1), with: .color(Color(hex: 0xF6F7F9)))
             default:
                 let blade = CGRect(x: w * 0.16, y: h * 0.12, width: w * 0.68, height: h * 0.56)
                 context.fill(Path(roundedRect: blade, cornerRadius: 4), with: .color(ink))

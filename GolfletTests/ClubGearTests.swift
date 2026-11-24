@@ -8,6 +8,8 @@ final class ClubGearTests: XCTestCase {
         XCTAssertNil(ClubGear.photo(brand: "Titleist", model: "GT2", face: "hybrid"))
         XCTAssertNil(ClubGear.photo(brand: "Titleist", model: "GT3", face: "driver"))
         XCTAssertEqual(ClubGear.photo(brand: "Titleist", model: "T150", face: "iron")?.file, "titleist-t150-iron.jpg")
+        XCTAssertEqual(ClubGear.photo(brand: "Titleist", model: "Vokey SM10", face: "wedge")?.file, "titleist-vokey-sm10.jpg")
+        XCTAssertNil(ClubGear.photo(brand: "Scotty Cameron", model: "Phantom", face: "putter"))
         XCTAssertNil(ClubGear.photo(brand: "Titleist", model: nil, face: "hybrid"))
     }
 

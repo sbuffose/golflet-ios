@@ -290,7 +290,8 @@ test("a putt starts after the approach, in feet or inches, and the hole closes o
     }
     assert.match(await page.$eval("#tkro", el => el.textContent || ""), /estimada en el mapa/);
     await ready(page);
-    await page.click("#play-hit");
+    await page.waitForSelector("#play-mark");
+    await page.click("#play-mark");
     await page.waitForFunction(() => document.querySelectorAll(".tk-shot-n").length === 3);
     assert.equal(posts[2].result ?? null, null);
     assert.equal(posts[2].distance_kind, "estimated");

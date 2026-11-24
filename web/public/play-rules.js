@@ -31,6 +31,7 @@ exports.shortPutt = shortPutt;
 exports.scoredClose = scoredClose;
 exports.puttMeters = puttMeters;
 exports.isPutterClub = isPutterClub;
+exports.puttFollowsMiss = puttFollowsMiss;
 exports.shotCountsAsPutt = shotCountsAsPutt;
 exports.countedPutts = countedPutts;
 exports.yardNumber = yardNumber;
@@ -401,6 +402,18 @@ function isPutterClub(id, label = "") {
     const face = id.trim();
     const name = String(label || "").trim();
     return /^(pt|putt|putter)$/i.test(face) || /^putter\b/i.test(name) || /^putter\b/i.test(face);
+}
+/** The stroke after a putt that stayed out is another putt, ready to hole.
+ *  A holed putt, a concession, a recovery and a penalty do not start that step. */
+function puttFollowsMiss(shots) {
+    const playable = (shots || []).filter(s => !s.penalty && s.result !== "penalty" && s.result !== "lost");
+    const last = playable[playable.length - 1];
+    if (!last)
+        return false;
+    if (last.result === "holed" || last.intent === "conceded" || last.intent === "recovery" || last.recovery)
+        return false;
+    const club = String(last.club || "");
+    return isPutterClub(club, club);
 }
 /** A putter stroke, or a stroke that started on the green. Recovery and penalties are not putts. */
 function shotCountsAsPutt(shot) {

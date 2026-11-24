@@ -43,6 +43,7 @@ struct PlayHoleView: View {
     @State private var editingShot: Shot?
     @State private var askDeleteShot = false
     @State private var movingShotID: String?
+    @State private var movingEnd = true
     @State private var recovery = false
     @State private var buenaPick = false
     @State private var waterAsk = false
@@ -183,6 +184,9 @@ struct PlayHoleView: View {
         }
         .onChange(of: location.headingDeg) { _, _ in
             refreshLiveActivity()
+        }
+        .onChange(of: track.strokeCount) { _, _ in
+            if followUpPutt, !isPutter(chosenClub) { chosenClub = putterName }
         }
         .alert(
             "¿Pasamos al hoyo \(pendingAdvance ?? (hole + 1))?",
@@ -354,16 +358,20 @@ struct PlayHoleView: View {
             HStack(alignment: .bottom, spacing: 8) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(closedStrokes, id: \.n) { stroke in
-                        Text("\(stroke.n). \(stroke.club) · \(stroke.span)")
-                            .font(GFont.ui(12, weight: .semibold))
-                            .foregroundStyle(p.ink)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.white)
-                            .clipShape(Capsule())
-                            .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
-                            .accessibilityIdentifier("play-stroke-\(stroke.n)")
+                        Button { editStroke(stroke.n) } label: {
+                            Text("\(stroke.n). \(stroke.club) · \(stroke.span)")
+                                .font(GFont.ui(12, weight: .semibold))
+                                .foregroundStyle(p.ink)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.white)
+                                .clipShape(Capsule())
+                                .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("play-stroke-\(stroke.n)")
+                        .accessibilityLabel("Editar golpe \(stroke.n)")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -727,14 +735,20 @@ struct PlayHoleView: View {
                     .accessibilityIdentifier("play-shots-more")
             }
             ForEach(shown, id: \.id) { shot in
-                Text("\(strokeNumber(shot, in: rows)). \(shotLabel(shot.club))\(shot.intent == "recovery" ? " A buena" : "")")
-                    .font(GFont.ui(11, weight: .semibold))
-                    .foregroundStyle(p.ink)
-                    .lineLimit(1)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.94))
-                    .clipShape(Capsule())
+                let number = strokeNumber(shot, in: rows)
+                Button { editStroke(number) } label: {
+                    Text("\(number). \(shotLabel(shot.club))\(shot.intent == "recovery" ? " A buena" : "")")
+                        .font(GFont.ui(11, weight: .semibold))
+                        .foregroundStyle(p.ink)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.94))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("play-shot-\(number)")
+                .accessibilityLabel("Editar golpe \(number)")
             }
             ForEach(track.marks.filter(\.drop)) { mark in
                 Text("Drop")
@@ -898,15 +912,19 @@ struct PlayHoleView: View {
                 if holeClosed, !closedStrokes.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(closedStrokes, id: \.n) { stroke in
-                            Text("\(stroke.n). \(stroke.club) · \(stroke.span)")
-                                .font(GType.headline)
-                                .foregroundStyle(p.ink)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(p.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                .accessibilityIdentifier("play-stroke-\(stroke.n)")
+                            Button { editStroke(stroke.n) } label: {
+                                Text("\(stroke.n). \(stroke.club) · \(stroke.span)")
+                                    .font(GType.headline)
+                                    .foregroundStyle(p.ink)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(p.surface)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("play-stroke-\(stroke.n)")
+                            .accessibilityLabel("Editar golpe \(stroke.n)")
                         }
                     }
                     .accessibilityElement(children: .contain)
@@ -941,7 +959,7 @@ struct PlayHoleView: View {
                         .accessibilityIdentifier("play-yard-note")
                 }
                 if let movingID = movingShotID, let moving = shots.first(where: { $0.id == movingID }) {
-                    Text("Mové el mapa y tocá Guardar punto.")
+                    Text(movingEnd ? "Mové el mapa hasta el punto final." : "Mové el mapa hasta el inicio.")
                         .font(GType.label)
                         .foregroundStyle(p.ink2)
                     Button("Guardar punto") { Task { await moveShot(moving) } }
@@ -1055,8 +1073,8 @@ struct PlayHoleView: View {
         case .tracking, .penaltyWhere, .drop:
             let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
             if TrackSession.inTheCup(meters: meters) { return "En el hoyo" }
-            if let span = TrackSession.greenToHole(meters: meters), meters <= 25 {
-                return span == "En el hoyo" ? span : span
+            if readingPutt, let span = TrackSession.greenToHole(meters: meters), span != "En el hoyo" {
+                return span
             }
             return "\(PlayMath.yards(from: aimOrigin, to: cursor)) yd"
         default:
@@ -1069,8 +1087,8 @@ struct PlayHoleView: View {
         switch track.phase {
         case .tracking, .penaltyWhere:
             let meters = Double(PlayMath.meters(from: cursor, to: pinCoord))
-            if let span = TrackSession.greenToHole(meters: meters), meters <= 25 {
-                return span == "En el hoyo" ? nil : "estimada en el mapa"
+            if readingPutt, let span = TrackSession.greenToHole(meters: meters) {
+                return span == "En el hoyo" ? nil : "al hoyo"
             }
             return "\(PlayMath.yards(from: cursor, to: pinCoord)) yd al hoyo"
         default:
@@ -1235,6 +1253,9 @@ struct PlayHoleView: View {
                         }
                         chipButton("P+1", id: "play-penalty", tint: Color(hex: BrandHex.red)) { track = TrackSession.beginPenalty(track) }
                         chipButton("A buena", id: "play-good", label: "A buena, golpe de recuperación") { Task { await markRecovery() } }
+                        if followUpPutt {
+                            chipButton("Marcar", id: "play-mark", label: "Marcar dónde quedó el putt") { Task { await confirmEnter() } }
+                        }
                     }
                 }
             }
@@ -1258,11 +1279,37 @@ struct PlayHoleView: View {
         .accessibilityIdentifier("play-set")
     }
 
+    private var putterName: String {
+        model.bag.first { isPutter($0.name) }?.name ?? "Putter"
+    }
+
+    /// After a putt that stayed out, the next stroke is a putter and one tap holes it.
+    private var followUpPutt: Bool {
+        guard track.phase == .tracking, !track.marks.contains(where: \.holed) else { return false }
+        guard let last = track.marks.last(where: { $0.countsStroke && !$0.drop && !$0.penalty }) else { return false }
+        return !last.holed && !last.recovery && !last.lost && isPutter(last.club)
+    }
+
+    private var readingPutt: Bool {
+        if followUpPutt || isPutter(chosenClub) { return true }
+        let origin = track.ball.map { GPSCoord(lat: $0.lat, lng: $0.lng) } ?? teeCoord
+        return HoleGeoMath.lie(course: course, hole: hole, at: origin) == .green
+    }
+
+    private func editStroke(_ number: Int) {
+        let rows = orderedHoleShots
+        guard number >= 1, number <= rows.count else { return }
+        editingShot = rows[number - 1]
+        askDeleteShot = false
+        movingShotID = nil
+    }
+
     private var enterButton: some View {
         Button {
-            Task { await confirmEnter() }
+            if followUpPutt { chosenClub = putterName }
+            Task { followUpPutt ? await finishPutt(conceded: false) : await confirmEnter() }
         } label: {
-            Text("ENTER")
+            Text(followUpPutt ? "Embocar" : "ENTER")
                 .font(GType.headline)
                 .foregroundStyle(p.onPrimary)
                 .frame(maxWidth: .infinity, minHeight: 56)
@@ -1272,7 +1319,7 @@ struct PlayHoleView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("play-hit")
-        .accessibilityLabel("ENTER")
+        .accessibilityLabel(followUpPutt ? "Embocar" : "ENTER")
     }
 
     private var cancelButton: some View {
@@ -2067,6 +2114,7 @@ struct PlayHoleView: View {
     }
 
     private func isPutt(_ shot: Shot) -> Bool {
+        if shot.intent == "recovery" || shot.intent == "conceded" { return false }
         let club = (shot.club ?? "").lowercased()
         return club == "pt" || club == "putter" || shot.lie == "green"
     }
@@ -2404,11 +2452,13 @@ struct PlayHoleView: View {
                         .foregroundStyle(p.ink)
                     Button("Punto de inicio") {
                         movingShotID = shot.id
+                        movingEnd = false
                         editingShot = nil
                     }
                     .accessibilityIdentifier("play-edit-start")
                     Button("Punto final") {
                         movingShotID = shot.id
+                        movingEnd = true
                         editingShot = nil
                     }
                     .accessibilityIdentifier("play-edit-move")
@@ -2488,6 +2538,7 @@ struct PlayHoleView: View {
         do {
             let saved = try await model.api.patchShot(id: shot.id, body: ["club": club])
             if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
+            paintMark(shot: saved, club: club)
             editingShot = nil
         } catch {
             message = error.localizedDescription
@@ -2505,6 +2556,7 @@ struct PlayHoleView: View {
         do {
             let saved = try await model.api.patchShot(id: shot.id, body: ["intent": next])
             if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
+            paintMark(shot: saved, recovery: saved.intent == "recovery")
             editingShot = saved
         } catch {
             message = error.localizedDescription
@@ -2512,19 +2564,66 @@ struct PlayHoleView: View {
     }
 
     private func moveShot(_ shot: Shot) async {
+        let rows = orderedHoleShots
+        guard let index = rows.firstIndex(where: { $0.id == shot.id }) else { return }
+        let target: Shot
+        if movingEnd {
+            target = shot
+        } else if index > 0 {
+            target = rows[index - 1]
+        } else {
+            message = "El primer golpe sale de la salida."
+            return
+        }
         do {
-            let saved = try await model.api.patchShot(id: shot.id, body: ["lat": cursor.lat, "lng": cursor.lng])
-            if let index = shots.firstIndex(where: { $0.id == saved.id }) { shots[index] = saved }
+            let saved = try await model.api.patchShot(id: target.id, body: ["lat": cursor.lat, "lng": cursor.lng])
+            if let found = shots.firstIndex(where: { $0.id == saved.id }) { shots[found] = saved }
+            paintMark(shot: saved, at: TrackPoint(lat: cursor.lat, lng: cursor.lng))
             movingShotID = nil
         } catch {
             message = error.localizedDescription
         }
     }
 
+    private func paintMark(shot: Shot, club: String? = nil, recovery: Bool? = nil, at: TrackPoint? = nil) {
+        let rows = orderedHoleShots
+        guard let n = rows.firstIndex(where: { $0.id == shot.id }) else { return }
+        var state = activeTrack
+        let indexes = state.marks.indices.filter { state.marks[$0].countsStroke && !state.marks[$0].drop }
+        guard n < indexes.count else { return }
+        if let club { state.marks[indexes[n]].club = club }
+        if let recovery { state.marks[indexes[n]].recovery = recovery }
+        if let at { state.marks[indexes[n]].at = at }
+        track = state
+    }
+
+    private func renumberHole(_ number: Int) {
+        let indexes = shots.indices.filter { shots[$0].hole == number }.sorted {
+            if shots[$0].shotNumber != shots[$1].shotNumber { return shots[$0].shotNumber < shots[$1].shotNumber }
+            return $0 < $1
+        }
+        for (offset, index) in indexes.enumerated() {
+            shots[index].shotNumber = offset + 1
+        }
+    }
+
     private func deleteShot(_ shot: Shot) async {
         do {
             try await model.api.deleteShot(id: shot.id)
+            let number = strokeNumber(shot, in: orderedHoleShots)
             shots.removeAll { $0.id == shot.id }
+            SavedRoundShots.replace(roundID: liveRound.id, shots: shots)
+            var state = activeTrack
+            let indexes = state.marks.indices.filter { state.marks[$0].countsStroke && !state.marks[$0].drop }
+            if number >= 1, number - 1 < indexes.count {
+                state.marks.remove(at: indexes[number - 1])
+            }
+            if let ball = state.marks.last(where: { $0.countsStroke && !$0.penalty && !$0.lost })?.at {
+                state.ball = ball
+            }
+            track = state
+            renumberHole(hole)
+            if !state.marks.contains(where: \.holed) { editingClosed = false }
             editingShot = nil
             askDeleteShot = false
         } catch {

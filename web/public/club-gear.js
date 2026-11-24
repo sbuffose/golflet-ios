@@ -3,7 +3,8 @@
   var PHOTOS = [
     { brand: "Titleist", model: "GT2", category: "driver", src: "/clubs/models/titleist-gt2-driver.jpg", alt: "Titleist GT2 Driver" },
     { brand: "Titleist", model: "GT2", category: "fairway", src: "/clubs/models/titleist-gt2-fairway.jpg", alt: "Titleist GT2 Fairway" },
-    { brand: "Titleist", model: "T150", category: "iron", src: "/clubs/models/titleist-t150-iron.jpg", alt: "Titleist T150, catálogo 2023" }
+    { brand: "Titleist", model: "T150", category: "iron", src: "/clubs/models/titleist-t150-iron.jpg", alt: "Titleist T150, catálogo 2023" },
+    { brand: "Titleist", model: "Vokey SM10", category: "wedge", src: "/clubs/models/titleist-vokey-sm10.jpg", alt: "Titleist Newsroom, Vokey Design SM10" }
   ];
   var PLAYERS = [
     { id: "zalatoris", brand: "Titleist", model: "GT2", category: "driver", name: "Will Zalatoris", tour: "PGA Tour", sourceUrl: "https://golfwrx.com/752701/will-zalatoris-witb-2025-january/", whenLabel: "14 ene 2025" },

@@ -14,6 +14,8 @@ test("a GT2 driver photo is not the fairway, and an unknown hybrid stays a silho
   assert.equal(gearPhoto("Titleist", "GT3", "driver"), null);
   assert.equal(gearPhoto("Titleist", "T100", "iron"), null);
   assert.equal(gearPhoto("Titleist", "T150", "wedge")?.src, "/clubs/models/titleist-t150-iron.jpg");
+  assert.equal(gearPhoto("Titleist", "Vokey SM10", "wedge")?.src, "/clubs/models/titleist-vokey-sm10.jpg");
+  assert.equal(gearPhoto("Scotty Cameron", "Phantom", "putter"), null);
   assert.equal(gearPhoto(null, null, "putter"), null);
 });
 
@@ -54,7 +56,7 @@ test("the yardage bag picks up the model confirmed in Mi bolsa", () => {
 
 test("the browser gear file names the same photos and players", () => {
   const js = readFileSync(new URL("../public/club-gear.js", import.meta.url), "utf8");
-  for (const src of ["/clubs/models/titleist-gt2-driver.jpg", "/clubs/models/titleist-gt2-fairway.jpg", "/clubs/models/titleist-t150-iron.jpg"]) {
+  for (const src of ["/clubs/models/titleist-gt2-driver.jpg", "/clubs/models/titleist-gt2-fairway.jpg", "/clubs/models/titleist-t150-iron.jpg", "/clubs/models/titleist-vokey-sm10.jpg"]) {
     assert.match(js, new RegExp(src.replace(/[.]/g, "\\.")));
   }
   for (const name of ["Will Zalatoris", "Cameron Young", "Bud Cauley"]) assert.match(js, new RegExp(name));

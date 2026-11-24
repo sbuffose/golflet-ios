@@ -343,6 +343,17 @@ export function isPutterClub(id: string, label = ""): boolean {
   return /^(pt|putt|putter)$/i.test(face) || /^putter\b/i.test(name) || /^putter\b/i.test(face);
 }
 
+/** The stroke after a putt that stayed out is another putt, ready to hole.
+ *  A holed putt, a concession, a recovery and a penalty do not start that step. */
+export function puttFollowsMiss(shots: PuttShot[]): boolean {
+  const playable = (shots || []).filter(s => !s.penalty && s.result !== "penalty" && s.result !== "lost");
+  const last = playable[playable.length - 1];
+  if (!last) return false;
+  if (last.result === "holed" || last.intent === "conceded" || last.intent === "recovery" || last.recovery) return false;
+  const club = String(last.club || "");
+  return isPutterClub(club, club);
+}
+
 export type PuttShot = {
   club?: unknown;
   lie?: unknown;

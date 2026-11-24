@@ -45,5 +45,13 @@ export const PATCH = handle(async (req: Request, ctx: Ctx) => {
 export const DELETE = handle(async (req: Request, ctx: Ctx) => {
   const user = await requireUser(req); const { id } = await ctx.params; const s = await own(user.id, id);
   const [gone] = await q(`delete from shot where id=$1 returning id, live_round_id, hole, shot_number, lat, lng, accuracy_m, club, lie, result, direction, length, intent, mishit, distance_kind`, [id]);
+  if (gone) {
+    await q(`update shot s set shot_number = n.rn
+      from (
+        select id, row_number() over (order by shot_number, taken_at nulls last, id) as rn
+        from shot where live_round_id=$1 and hole=$2
+      ) n
+      where s.id = n.id and s.shot_number is distinct from n.rn`, [gone.live_round_id, gone.hole]);
+  }
   return json({ ok: true, shot: gone, shots: await shotsWithDistances(await ownLive(user.id, s.live_round_id)) });
 });

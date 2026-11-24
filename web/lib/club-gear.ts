@@ -51,6 +51,13 @@ export const GEAR_PHOTOS: GearPhoto[] = [
     sourceTitle: "Titleist T150, catálogo 2023",
     checked: GEAR_CHECKED,
   },
+  {
+    brand: "Titleist", model: "Vokey SM10", category: "wedge",
+    src: "/clubs/models/titleist-vokey-sm10.jpg",
+    sourceUrl: "https://mediacenter.titleist.com/en-US/233293-titleist-introduces-new-vokey-design-sm10-wedges/",
+    sourceTitle: "Titleist Newsroom, Vokey Design SM10",
+    checked: "2026-11-24",
+  },
 ];
 
 export const GEAR_PLAYERS: GearPlayer[] = [

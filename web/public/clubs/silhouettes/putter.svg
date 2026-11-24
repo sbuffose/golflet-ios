@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 96" role="img" aria-label="putter">
-  <path fill="#0B2545" d="M30.8 94V46h2.4V94z"/>
-  <path fill="#0B2545" d="M6 18h52c2.4 0 3.6 2.6 2.6 4.8L58 40c-.8 1.8-2.2 2.6-4 2.6H10c-1.8 0-3.2-.8-4-2.6L3.4 22.8C2.4 20.6 3.6 18 6 18z"/>
-  <path fill="#F6F7F9" d="M12 24h40v4H12z"/>
+  <path fill="#0B2545" d="M30.6 94V40h2.8V94z"/>
+  <path fill="#0B2545" d="M6 14h52c2.6 0 4.4 2 4.4 4.6v14.2c0 4.2-3.2 7.2-8.2 7.2H9.8C4.8 40 1.6 37 1.6 32.8V18.6C1.6 16 3.4 14 6 14z"/>
+  <path fill="#F6F7F9" d="M30 18h4v16h-4z"/>
+  <circle fill="#F6F7F9" cx="18" cy="26" r="1.7"/>
+  <circle fill="#F6F7F9" cx="46" cy="26" r="1.7"/>
+  <path fill="#F6F7F9" d="M10 34h44v2.2H10z"/>
 </svg>

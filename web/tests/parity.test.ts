@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createRequire } from "node:module";
 import { createWithLedger, normalizeIdempotencyKey, presentCreatedGroup } from "../lib/group-create";
-import { HI_UNIDENTIFIED, hiAttribution, hiCardLine, holeCloseText, matchRoundCourse, monthColumns, MONTHS_VISIBLE, officialIndex, onCup, puttFeet, greenToHole, inTheCup, shortPutt, scoredClose, strategyChoice, trackCancel, trackDrop, trackEnter, trackNew, trackPenalty, trackReload, trackSet, windPlay, windRelative, coursePickerGroups } from "../lib/play-rules";
+import { HI_UNIDENTIFIED, hiAttribution, hiCardLine, holeCloseText, matchRoundCourse, monthColumns, MONTHS_VISIBLE, officialIndex, onCup, puttFeet, greenToHole, inTheCup, shortPutt, puttFollowsMiss, scoredClose, strategyChoice, trackCancel, trackDrop, trackEnter, trackNew, trackPenalty, trackReload, trackSet, windPlay, windRelative, coursePickerGroups } from "../lib/play-rules";
 
 const js = createRequire(import.meta.url)("../public/play-rules.js") as typeof import("../lib/play-rules");
 
@@ -148,6 +148,11 @@ test("la mira confirma tee, bandera y el hoyo solo en la copa", () => {
   assert.equal(inTheCup(0.2794), false);
   assert.equal(shortPutt(0.2794), true);
   assert.equal(shortPutt(1.8288), false);
+  assert.equal(puttFollowsMiss([{ club: "Putter", result: null }]), true);
+  assert.equal(puttFollowsMiss([{ club: "Putter", result: "holed" }]), false);
+  assert.equal(puttFollowsMiss([{ club: "Putter", intent: "recovery" }]), false);
+  assert.equal(puttFollowsMiss([{ club: "Lob wedge", lie: "green" }]), false);
+  assert.equal(js.puttFollowsMiss([{ club: "Putter", result: null }]), true);
   const forced = scoredClose(3, null, false);
   assert.equal(forced.strokes, 4);
   assert.equal(forced.putts, 1);
