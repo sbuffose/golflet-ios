@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
     return [{ source: "/recuperar", destination: "https://app.golfistics.com/golf/golfisticsapp_login.php", permanent: false }];
   },
   async rewrites() {
-    return { beforeFiles: [{ source: "/", destination: "/index.html" }, { source: "/login", destination: "/login.html" }] };
+    return { beforeFiles: [{ source: "/", destination: "/index.html" }, { source: "/login", destination: "/login.html" }, { source: "/profe-preview", destination: "/profe-preview/index.html" }] };
   },
   async headers() {
     return [
