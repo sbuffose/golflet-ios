@@ -55,7 +55,7 @@
       id: m.id || uid(), tipo: m.tipo || "linea", pts: (m.pts || []).map(p => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 })),
       color: m.color || "#C8102E", sw: Number(m.sw) || 3, texto: m.texto || "", etiqueta: !!m.etiqueta, snap: m.snap || "",
       pin: m.pin || "frame", f0: m.f0 ?? 0, f1: m.f1 ?? m.f0 ?? 0, t0: m.t0 ?? 0, t1: m.t1 ?? m.t0 ?? 0,
-      side: m.side || "a", grados: m.grados, media: m.media || "diagram",
+      side: m.side || "a", grados: m.grados, media: m.media || "diagram", auto: !!m.auto,
     };
   }
 
@@ -91,6 +91,13 @@
     let redo = [];
     let pick = null;
     let syncing = false;
+    let menu = null;
+    let menuOpen = false;
+    let pinOpen = false;
+    let tapAt = 0;
+    let tapSide = "";
+    let tapX = 0;
+    let tapY = 0;
     const built = [];
 
     host.innerHTML = "";
@@ -114,7 +121,7 @@
         <div class="fit"><div class="world"><canvas class="media diagram"></canvas><video class="media video" playsinline preload="metadata"></video><img class="media image" alt=""><svg class="ink" viewBox="0 0 100 100" preserveAspectRatio="none"></svg></div></div>
         <div class="loupe" hidden><canvas width="168" height="168"></canvas><span class="snap"></span></div>
         <div class="drop"><p>Elegí una foto o un video</p><p class="note">Queda en este aparato. No se sube.</p><button type="button" class="btn" data-open="${side}">Abrir archivo</button><p class="note">O soltalo acá.</p></div>
-      </div>${panesSpec.length === 2 ? `<div class="sidebar"><button type="button" data-side-step="-1" aria-label="Cuadro anterior">−</button><span class="sideclock"></span><button type="button" data-side-step="1" aria-label="Cuadro siguiente">+</button></div>` : ""}`;
+      </div>${panesSpec.length === 2 ? `<div class="sidebar"><button type="button" data-side-step="-1" aria-label="Cuadro anterior">−</button><button type="button" class="sideclock" data-act="solo" aria-label="Ver este lado"></button><button type="button" data-side-step="1" aria-label="Cuadro siguiente">+</button></div>` : ""}`;
       panesEl.append(pane);
       const stage = pane.querySelector(".stage");
       data.root = pane;
@@ -132,6 +139,52 @@
       built.push(data);
     });
 
+    const two = built.length === 2;
+    const vista = opts.vista === "sobre" ? "sobre" : "lado";
+    const compareMode = opts.compare || "antes";
+    const pinButtons = (hidden) => `<div class="seg pins"${hidden ? " hidden" : ""} role="group" aria-label="Duración">
+      <button type="button" data-pin="frame" class="on">Este cuadro</button>
+      <button type="button" data-pin="range">Tramo</button>
+      <button type="button" data-pin="all">Todo</button>
+    </div>`;
+    const keyButtons = `<div class="seg keys">
+      <button type="button" data-open="a">Abrir A</button>
+      <button type="button" data-open="b">Abrir B</button>
+      <button type="button" data-act="marcar" data-key="address">Marcar address</button>
+      <button type="button" data-act="marcar" data-key="top">Marcar arriba</button>
+      <button type="button" data-act="marcar" data-key="impact">Marcar impacto</button>
+      <button type="button" data-act="ir" data-key="address" hidden>Address</button>
+      <button type="button" data-act="ir" data-key="top" hidden>Arriba</button>
+      <button type="button" data-act="ir" data-key="impact" hidden>Impacto</button>
+      <button type="button" data-act="sync">Sincronizar</button>
+    </div>`;
+    if (two) {
+      const top = document.createElement("div");
+      top.className = "topbar";
+      top.innerHTML = `<span class="mode-now">${vista === "sobre" ? "Superpuesto" : "Lado a lado"}</span>
+        <button type="button" data-pick="a">A</button>
+        <button type="button" data-pick="b">B</button>
+        <button type="button" data-act="juntos" hidden>Los dos</button>
+        <button type="button" data-act="menu" aria-expanded="false">Más</button>
+        ${opts.overlay ? `<label class="op top-op">Opacidad <input id="op" type="range" min="0.15" max="0.9" step="0.05" value="${opts.opacity ?? 0.45}"></label>` : ""}`;
+      menu = document.createElement("div");
+      menu.className = "menu";
+      menu.hidden = true;
+      menu.innerHTML = `<div class="seg">
+          <button type="button" data-vista="lado" class="${vista === "lado" ? "on" : ""}">Lado a lado</button>
+          <button type="button" data-vista="sobre" class="${vista === "sobre" ? "on" : ""}">Superpuesto</button>
+        </div>
+        <div class="seg">
+          <button type="button" data-compare="antes" class="${compareMode === "antes" ? "on" : ""}">Antes y después</button>
+          <button type="button" data-compare="profe" class="demo${compareMode === "profe" ? " on" : ""}">Clip de Martín</button>
+          <button type="button" data-compare="referencia"${compareMode === "referencia" ? ' class="on"' : ""}>Referencia</button>
+        </div>
+        ${pinButtons(false)}
+        ${keyButtons}`;
+      top.append(menu);
+      stack.insertBefore(top, panesEl);
+    }
+
     const transport = document.createElement("div");
     transport.className = "transport";
     transport.innerHTML = `<div class="seg">
@@ -148,25 +201,7 @@
       <button type="button" data-act="volver" hidden>Volver</button>
     </div>
     <label class="op scrub"><span id="reloj">Cuadro</span><input id="scrub" type="range" min="0" max="23" step="1" value="0"></label>
-    <div class="seg pins" role="group" aria-label="Duración">
-      <button type="button" data-pin="frame" class="on">Este cuadro</button>
-      <button type="button" data-pin="range">Tramo</button>
-      <button type="button" data-pin="all">Todo</button>
-    </div>
-    ${built.length === 2 ? `<div class="seg keys">
-      <button type="button" data-pick="a">Lado A</button>
-      <button type="button" data-pick="b">Lado B</button>
-      <button type="button" data-open="a">Abrir A</button>
-      <button type="button" data-open="b">Abrir B</button>
-      <button type="button" data-act="marcar" data-key="address">Marcar address</button>
-      <button type="button" data-act="marcar" data-key="top">Marcar arriba</button>
-      <button type="button" data-act="marcar" data-key="impact">Marcar impacto</button>
-      <button type="button" data-act="ir" data-key="address" hidden>Address</button>
-      <button type="button" data-act="ir" data-key="top" hidden>Arriba</button>
-      <button type="button" data-act="ir" data-key="impact" hidden>Impacto</button>
-      <button type="button" data-act="sync">Sincronizar</button>
-    </div>` : ""}
-    ${opts.overlay ? `<label class="op">Opacidad <input id="op" type="range" min="0.15" max="0.9" step="0.05" value="${opts.opacity ?? 0.45}"></label>` : ""}`;
+    ${two ? keyButtons : pinButtons(true)}`;
 
     const sheet = document.createElement("div");
     sheet.className = "sheet";
@@ -191,7 +226,7 @@
     rail.className = "rail";
     rail.setAttribute("role", "toolbar");
     rail.innerHTML = `<div class="rail-tools">${TOOLS.map(([id, name]) => `<button type="button" data-tool="${id}"${GROUP_START[id] ? ' data-g="1"' : ""} aria-label="${HUMAN[id] || name}">${ico(id)}<span>${name}</span></button>`).join("")
-      }<button type="button" data-act="estilo" aria-label="Color y grosor"><span class="dot"></span><span>Color</span></button></div>`
+      }<button type="button" data-act="estilo" aria-label="Color y grosor"><span class="dot"></span><span>Color</span></button><button type="button" data-act="riel" aria-label="Herramientas"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 9l7 6 7-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Más</span></button></div>`
       + `<button type="button" id="guardar">Guardar</button>`;
 
     const list = document.createElement("div");
@@ -204,7 +239,17 @@
     const marksBody = document.createElement("div");
     marksBody.className = "marks-body";
     marksBody.hidden = true;
-    list.append(marksToggle, marksBody);
+    const marksBar = document.createElement("div");
+    marksBar.className = "marks-bar";
+    marksBar.append(marksToggle);
+    if (!two) {
+      const dur = document.createElement("button");
+      dur.type = "button";
+      dur.dataset.act = "duracion";
+      dur.textContent = "Duración";
+      marksBar.append(dur);
+    }
+    list.append(marksBar, marksBody);
     let marksOpen = false;
     let marksPinned = false;
     const input = document.createElement("input");
@@ -376,13 +421,25 @@
       syncing = false;
     }
     function rangeEnd(p, f) {
-      const fps = fpsOf(p);
-      const horizon = f + Math.max(1, Math.round(3 * fps));
       const next = (p.cuts || []).find(c => c > f + 2);
-      const end = next != null ? Math.min(next - 1, horizon) : horizon;
       const last = frameLast(p);
-      const cap = last > f ? last : horizon;
-      return Math.max(f, Math.min(cap, end));
+      if (next != null) return Math.max(f, Math.min(last > f ? last : next - 1, next - 1));
+      return Math.max(f, last > f ? last : f);
+    }
+    function applyCuts(p) {
+      let changed = false;
+      for (const m of marks) {
+        if (m.side !== p.side || m.pin !== "range" || !m.auto) continue;
+        const next = (p.cuts || []).find(c => c > m.f0 + 2);
+        const end = next != null ? next - 1 : frameLast(p);
+        const f1 = Math.max(m.f0, end);
+        if (m.f1 !== f1) {
+          m.f1 = f1;
+          m.t1 = f1 / fpsOf(p);
+          changed = true;
+        }
+      }
+      if (changed && p.stage && p.stage.isConnected) { persist(); renderList(); paintAll(); }
     }
     function seekTo(video, t) {
       return new Promise((resolve, reject) => {
@@ -412,35 +469,75 @@
         if (p.scanToken !== token) return;
         p.cuts = cuts;
         if (Number.isFinite(v.duration) && v.duration > 0) p.knownDuration = v.duration;
+        applyCuts(p);
         if (stage && stage.isConnected) {
           stage.dataset.scanned = "1";
           stage.dataset.cuts = cuts.join(",");
+          if (Number.isFinite(v.duration) && v.duration > 0) stage.dataset.duration = String(v.duration);
         }
       };
       v.onerror = () => finish(p.cuts || []);
       v.onloadeddata = async () => {
+        if (!Number.isFinite(v.duration) || v.duration <= 0) {
+          await new Promise(resolve => {
+            const done = () => {
+              if (Number.isFinite(v.duration) && v.duration > 0) {
+                v.removeEventListener("durationchange", done);
+                v.removeEventListener("seeked", done);
+                resolve();
+              }
+            };
+            v.addEventListener("durationchange", done);
+            v.addEventListener("seeked", done);
+            try { v.currentTime = 1e101; } catch { resolve(); }
+            setTimeout(resolve, 1500);
+          });
+        }
         const fps = fpsOf(p);
         const dur = v.duration;
-        if (!Number.isFinite(dur) || dur <= 0) { finish([]); return; }
+        if (p.scanToken !== token || !Number.isFinite(dur) || dur <= 0) { finish([]); return; }
         const last = Math.max(0, Math.round(dur * fps) - 1);
-        const until = Math.min(last, Math.round(3.2 * fps));
         const c = document.createElement("canvas");
         c.width = 16; c.height = 16;
         const g = c.getContext("2d", { willReadFrequently: true });
         const cuts = [];
         let prev = null;
         const step = Math.max(1, Math.round(fps / 5));
+        const blocks = (data) => {
+          const out = [];
+          for (let by = 0; by < 4; by++) {
+            for (let bx = 0; bx < 4; bx++) {
+              let s = 0, n = 0;
+              for (let y = by * 4; y < by * 4 + 4; y++) {
+                for (let x = bx * 4; x < bx * 4 + 4; x++) {
+                  const i = (y * 16 + x) * 4;
+                  s += data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
+                  n++;
+                }
+              }
+              out.push(s / (n || 1));
+            }
+          }
+          return out;
+        };
+        const changed = (a, b) => {
+          let n = 0;
+          let sum = 0;
+          for (let i = 0; i < a.length; i++) {
+            const d = Math.abs(a[i] - b[i]);
+            sum += d;
+            if (d > 18) n++;
+          }
+          const mean = sum / (a.length || 1);
+          return n >= 8 || mean > 22;
+        };
         try {
-          for (let f = 0; f <= until; f += step) {
+          for (let f = 0; f <= last; f += step) {
             if (p.scanToken !== token) return;
             await seekTo(v, Math.min(dur - 0.001, f / fps));
             g.drawImage(v, 0, 0, 16, 16);
-            const data = g.getImageData(0, 0, 16, 16).data;
-            let lum = 0;
-            let n = 0;
-            for (let i = 0; i < data.length; i += 16) { lum += data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11; n++; }
-            const mean = lum / (n || 1);
-            if (prev != null && Math.abs(mean - prev) > 28) cuts.push(f);
+            const mean = blocks(g.getImageData(0, 0, 16, 16).data);
+            if (prev && changed(prev, mean)) cuts.push(f);
             prev = mean;
           }
         } catch { /* el archivo no permite saltar de cuadro */ }
@@ -455,7 +552,7 @@
       const endF = rangeEnd(p, f);
       const endT = p.kind === "video" ? endF / fpsOf(p) : endF;
       if (p.kind === "image" || pinMode === "all") return { pin: "all", f0: 0, f1: Math.max(last, f), t0: 0, t1: 1e9, media: p.kind };
-      if (pinMode === "range") return { pin: "range", f0: f, f1: endF, t0: t, t1: endT, media: p.kind };
+      if (pinMode === "range") return { pin: "range", f0: f, f1: endF, t0: t, t1: endT, media: p.kind, auto: true };
       return { pin: "frame", f0: f, f1: f, t0: t, t1: t, media: p.kind };
     }
     function visible(m, p) {
@@ -544,8 +641,12 @@
       root.querySelectorAll("[data-color]").forEach(b => b.classList.toggle("on", b.dataset.color === color));
       root.querySelectorAll("[data-pin]").forEach(b => b.classList.toggle("on", b.dataset.pin === pinMode));
       root.querySelectorAll("[data-speed]").forEach(b => b.classList.toggle("on", Number(b.dataset.speed) === rate));
-      const syncBtn = root.querySelector("[data-act=sync]");
-      if (syncBtn) { syncBtn.classList.toggle("on", syncOn); syncBtn.disabled = !canSync(); }
+      root.querySelectorAll("[data-act=sync]").forEach(syncBtn => {
+        syncBtn.classList.toggle("on", syncOn);
+        syncBtn.disabled = !canSync();
+      });
+      root.querySelectorAll("[data-pick]").forEach(b => b.classList.toggle("on", b.dataset.pick === active.side));
+      transport.querySelectorAll(".pins").forEach(el => { el.hidden = !pinOpen; });
       root.querySelectorAll("[data-act=ir]").forEach(b => { b.hidden = !active.fixed[b.dataset.key]; });
       const dot = root.querySelector(".dot");
       if (dot) dot.style.background = color;
@@ -590,9 +691,10 @@
       active = p;
       built.forEach(x => {
         x.root.classList.toggle("active", x === p);
-        x.root.style.zIndex = x === p ? "2" : "1";
+        x.root.style.zIndex = "";
+        x.root.style.opacity = "1";
       });
-      if (built[1]) built[1].root.style.opacity = opts.overlay ? String(opacity) : "1";
+      if (opts.overlay && built[1]) built[1].root.style.opacity = String(opacity);
       updateScrub();
       highlight();
       renderList();
@@ -630,13 +732,58 @@
     }
     function paintAll() { built.forEach(p => { if (p.kind === "diagram") drawDiagram(p); paintInk(p); }); updateScrub(); }
 
-    function drawText(g, x, y, str, fill) {
+    let textMeasure = null;
+    function textWidth(str, size) {
+      if (!textMeasure) textMeasure = document.createElement("canvas").getContext("2d");
+      textMeasure.font = "600 " + size + "px Geist, sans-serif";
+      return textMeasure.measureText(str).width;
+    }
+    function wrapLabel(str, size, maxW) {
+      const words = String(str || "").split(/\s+/).filter(Boolean);
+      const lines = [];
+      let line = "";
+      for (const word of words) {
+        const trial = line ? line + " " + word : word;
+        if (!line || textWidth(trial, size) <= maxW) line = trial;
+        else { lines.push(line); line = word; }
+      }
+      if (line) lines.push(line);
+      return lines.length ? lines : [String(str || "")];
+    }
+    function drawText(g, x, y, str, fill, box) {
+      const maxW = Math.max(24, (box ? box.w : 280) - 8);
+      const maxH = box ? Math.max(16, box.h - 4) : 400;
+      let size = 15;
+      let lines = wrapLabel(str, size, maxW);
+      while (size > 11) {
+        const widest = Math.max(...lines.map(l => textWidth(l, size)));
+        const block = lines.length * (size + 3);
+        const wordFits = String(str || "").split(/\s+/).every(w => !w || textWidth(w, size) <= maxW);
+        if (widest <= maxW && wordFits && block <= maxH) break;
+        size -= 1;
+        lines = wrapLabel(str, size, maxW);
+      }
+      const lineH = size + 3;
+      const widest = Math.max(...lines.map(l => textWidth(l, size)), 0);
+      let left = x;
+      let base = y;
+      if (box) {
+        if (left + widest > box.w - 4) left = Math.max(4, box.w - widest - 4);
+        if (left < 4) left = 4;
+        const block = lines.length * lineH;
+        if (base - size + block > box.h - 2) base = Math.max(size, box.h - 2 - (block - size));
+        if (base < size) base = size;
+      }
       const t = svgEl("text", {
-        x, y, fill, "font-size": 15, "font-family": "Geist, sans-serif", "font-weight": 600, "font-style": "normal",
+        x: left, y: base, fill, "font-size": size, "font-family": "Geist, sans-serif", "font-weight": 600, "font-style": "normal",
         stroke: "#0B2545", "stroke-width": 3, "vector-effect": "non-scaling-stroke", "paint-order": "stroke",
         "stroke-linejoin": "round",
       });
-      t.textContent = str;
+      lines.forEach((ln, i) => {
+        const span = svgEl("tspan", { x: left, dy: i === 0 ? 0 : lineH });
+        span.textContent = i < lines.length - 1 ? ln + " " : ln;
+        t.append(span);
+      });
       g.append(t);
     }
     function drawMark(m, box, hit) {
@@ -687,7 +834,7 @@
       } else if (m.tipo === "texto") {
         const x = clamp(X(m.pts[0].x), 4, box.w - 8);
         const y = clamp(Y(m.pts[0].y), 18, box.h - 6);
-        drawText(g, x, y, m.texto || "Nota", m.color);
+        drawText(g, x, y, m.texto || "Nota", m.color, box);
       } else if (m.tipo === "angulo") {
         const pts = m.pts;
         if (pts.length >= 2) { hitLine(X(pts[0].x), Y(pts[0].y), X(pts[1].x), Y(pts[1].y)); ink("line", { x1: X(pts[0].x), y1: Y(pts[0].y), x2: X(pts[1].x), y2: Y(pts[1].y), "stroke-width": m.sw }); }
@@ -698,7 +845,7 @@
           if (path) ink("path", { d: path, fill: "none", "stroke-width": m.sw });
           const deg = m.grados != null ? m.grados : degrees(pts[0], pts[1], pts[2], box);
           const pos = degreeLabelPos(pts, box, m);
-          drawText(g, pos.x, pos.y, deg + "°", m.color);
+          drawText(g, pos.x, pos.y, deg + "°", m.color, box);
         }
       } else if (m.pts.length >= 2) {
         const a = m.pts[0], b = m.pts[1];
@@ -707,7 +854,7 @@
         if (m.tipo === "flecha" || m.tipo === "objetivo") arrow(g, a, b, m, box);
         if (m.etiqueta && (m.tipo === "pies" || m.tipo === "objetivo" || m.tipo === "plano")) {
           const pos = labelPos(a, b, box);
-          drawText(g, pos.x, pos.y, m.texto || HUMAN[m.tipo], m.color);
+          drawText(g, pos.x, pos.y, m.texto || HUMAN[m.tipo], m.color, box);
         }
       }
       return g;
@@ -906,11 +1053,45 @@
       if (editBefore && editBefore !== now) { undo.push(editBefore); redo = []; persist(); renderList(); }
       editBefore = null;
     }
+    function armDrawChrome(on) {
+      if (window.innerWidth >= 900 || !on || tool === "mover" || tool === "encuadre") root.classList.remove("dibujando");
+      else root.classList.add("dibujando");
+    }
+    function toggleSolo(side) {
+      if (built.length < 2 || opts.overlay) return;
+      const on = panesEl.classList.contains("solo-" + side);
+      panesEl.classList.remove("solo-a", "solo-b");
+      if (!on) panesEl.classList.add("solo-" + side);
+      const back = root.querySelector("[data-act=juntos]");
+      if (back) back.hidden = !(panesEl.classList.contains("solo-a") || panesEl.classList.contains("solo-b"));
+      requestAnimationFrame(() => built.forEach(q => { layoutFit(q); paintInk(q); }));
+    }
+    function syncMenu() {
+      if (!menu) return;
+      const desk = window.innerWidth >= 900;
+      const btn = root.querySelector("[data-act=menu]");
+      if (desk) {
+        menu.hidden = false;
+        menu.classList.add("inline");
+        if (btn) btn.setAttribute("aria-expanded", "false");
+      } else {
+        menu.classList.remove("inline");
+        menu.hidden = !menuOpen;
+        if (btn) btn.setAttribute("aria-expanded", menuOpen ? "true" : "false");
+      }
+    }
     function onDown(e, p) {
       if (e.target.closest("button, a, input, label")) return;
       p.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       try { p.stage.setPointerCapture(e.pointerId); } catch { /* el puntero ya no está */ }
       if (p.pointers.size >= 2) { draft = null; return; }
+      const now = performance.now();
+      const dbl = built.length === 2 && !opts.overlay && now - tapAt < 320 && tapSide === p.side && Math.hypot(e.clientX - tapX, e.clientY - tapY) < 28;
+      tapAt = now;
+      tapSide = p.side;
+      tapX = e.clientX;
+      tapY = e.clientY;
+      if (dbl) { draft = null; toggleSolo(p.side); paintInk(p); return; }
       setActive(p);
       const pt = eventPos(p, e);
       if (tool === "encuadre") { drag = { kind: "pan", x: e.clientX, y: e.clientY, ox: p.view.x, oy: p.view.y }; return; }
@@ -934,6 +1115,7 @@
         return;
       }
       const origin = draft && draft.side === p.side && draft.pts.length ? draft.pts[draft.pts.length - 1] : null;
+      armDrawChrome(true);
       startDraft(p, tool === "angulo" ? eventPos(p, e, origin) : pt);
       showLoupe(p, e, pt);
     }
@@ -1011,6 +1193,7 @@
     function onUp(e, p) {
       p.pointers.delete(e.pointerId);
       if (p.pointers.size < 2) p.pinch = null;
+      armDrawChrome(false);
       hideLoupes();
       if (drag) { endEdit(); drag = null; paintAll(); return; }
       if (!draft || draft.tipo === "angulo") return;
@@ -1034,6 +1217,7 @@
       if (which === "desde") { m.f0 = f; m.t0 = t; if (m.f1 < m.f0) { m.f1 = m.f0; m.t1 = m.t0; } }
       else { m.f1 = f; m.t1 = t; if (m.f1 < m.f0) { m.f0 = m.f1; m.t0 = m.t1; } }
       m.pin = "range";
+      m.auto = false;
       pinMode = "range";
       persist();
       renderList();
@@ -1226,8 +1410,19 @@
             renderList();
           }
           highlight();
-        } else if (k === "estilo") sheet.hidden = !sheet.hidden;
-        else if (k === "marcas") {
+        }         else if (k === "estilo") sheet.hidden = !sheet.hidden;
+        else if (k === "menu") { menuOpen = !menuOpen; syncMenu(); }
+        else if (k === "riel") root.classList.toggle("riel");
+        else if (k === "duracion") { pinOpen = !pinOpen; highlight(); }
+        else if (k === "solo") {
+          const pane = act.closest(".pane");
+          if (pane) toggleSolo(pane.dataset.side);
+        } else if (k === "juntos") {
+          panesEl.classList.remove("solo-a", "solo-b");
+          const back = root.querySelector("[data-act=juntos]");
+          if (back) back.hidden = true;
+          requestAnimationFrame(() => built.forEach(q => { layoutFit(q); paintInk(q); }));
+        } else if (k === "marcas") {
           marksPinned = true;
           marksOpen = !marksOpen;
           marksBody.hidden = !marksOpen;
@@ -1262,7 +1457,7 @@
       const m = selMark();
       if (m && (m.tipo === "texto" || m.etiqueta)) { m.texto = textInput.value; persist(); paintAll(); renderList(); }
     });
-    const op = transport.querySelector("#op");
+    const op = root.querySelector("#op");
     if (op) op.addEventListener("input", () => { opacity = Number(op.value); if (built[1]) built[1].root.style.opacity = String(opacity); });
 
     function onKey(e) {
@@ -1280,6 +1475,8 @@
     const onResize = () => {
       const app = document.getElementById("app");
       if (app) app.classList.toggle("desk", window.innerWidth >= 900);
+      if (window.innerWidth >= 900) root.classList.remove("dibujando");
+      syncMenu();
     };
     window.addEventListener("resize", onResize);
     onResize();

@@ -135,8 +135,10 @@ test("cada pantalla de la vista previa se puede recorrer", { skip: !CHROME }, as
     await open("profe-06-lado", "#/comparar");
     assert.equal(await page.$eval('[data-act="sync"]', el => (el as HTMLButtonElement).disabled), true);
     assert.match(await page.$eval('[data-act="marcar"][data-key="address"]', el => el.textContent || ""), /Marcar address/);
+    await page.$eval('[data-act="menu"]', (el: HTMLButtonElement) => el.click());
     await page.click('[data-vista="sobre"]');
     await shot("profe-06-superpuesto");
+    await page.$eval('[data-act="menu"]', (el: HTMLButtonElement) => el.click());
     await page.click('[data-compare="referencia"]');
     await page.type("#ref", "https://www.youtube.com/watch?v=demo-ritmo");
     await page.click("#tomar");
@@ -244,10 +246,11 @@ test("el anotador 9:16 mide en píxeles y no tapa el video", { skip: !CHROME }, 
         return { id, top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width };
       });
       return {
-        stageBottom: stage.bottom, transportTop: transport.top, railTop: rr.top,
+        stageH: stage.height, stageBottom: stage.bottom, transportTop: transport.top, railTop: rr.top,
         scroll: rail.scrollWidth - rail.clientWidth, tools,
       };
     });
+    assert.ok(layout.stageH >= 540, "alto " + layout.stageH);
     assert.ok(layout.transportTop >= layout.stageBottom - 1, "el transporte tapa el video");
     assert.ok(layout.railTop >= layout.transportTop - 1);
     assert.ok(layout.scroll < 8, "la barra de herramientas se desplaza");
@@ -325,6 +328,11 @@ test("el anotador 9:16 mide en píxeles y no tapa el video", { skip: !CHROME }, 
     await video.goto(`http://127.0.0.1:${port}/profe-preview/index.html?blank=1#/anotar`, { waitUntil: "networkidle0" });
     await (await video.$("#abrir"))!.uploadFile("/tmp/profe-916.webm");
     await video.waitForFunction(() => document.querySelector("#stage")?.getAttribute("data-kind") === "video");
+    const stageH = await video.$eval("#stage", el => el.getBoundingClientRect().height);
+    assert.ok(stageH >= 540, "alto " + stageH);
+    assert.equal(await video.$eval(".transport .pins", el => (el as HTMLElement).hidden), true);
+    await video.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await video.screenshot({ path: `${ART}/profe-14-uno-390.png` });
     await video.waitForFunction(() => /\d+:\d{2}\.\d{2} · \d+/.test(document.querySelector("#reloj")?.textContent || ""));
     const before = await video.$eval("#reloj", el => el.textContent || "");
     await video.click('[data-step="1"]');
@@ -401,7 +409,7 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
-    const a = await clip(page, 110, 24, "#C8102E");
+    const a = await clip(page, 160, 110, "#C8102E");
     const b = await clip(page, 16, 99, "#3DDC97");
     writeFileSync("/tmp/profe-a.webm", Buffer.from(a));
     writeFileSync("/tmp/profe-b.webm", Buffer.from(b));
@@ -420,8 +428,8 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     assert.equal(sizes.length, 2);
     for (const s of sizes) {
       assert.equal(s.kind, "video");
-      assert.ok(s.w > 80 && s.h > 120, JSON.stringify(s));
-      assert.ok(s.fw > 40 && s.fh > 80, JSON.stringify(s));
+      assert.ok(s.w > 140 && s.h > 400, JSON.stringify(s));
+      assert.ok(s.fw > 80 && s.fh > 280, JSON.stringify(s));
       assert.ok(s.vw > 0);
     }
     assert.equal(await page.$eval("#app", el => el.classList.contains("lienzo") && el.classList.contains("archivo")), true);
@@ -430,16 +438,24 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     assert.equal(await page.$eval("#usar", el => el.getClientRects().length), 0);
     const fs = await page.$eval(".rail button", el => parseFloat(getComputedStyle(el).fontSize));
     assert.ok(fs >= 11);
+    await page.$eval('[data-act="menu"]', (el: HTMLButtonElement) => el.click());
     const pin = await page.$eval('[data-pin="range"]', el => ({ sheet: !!el.closest(".sheet"), w: el.getBoundingClientRect().width }));
     assert.equal(pin.sheet, false);
     assert.ok(pin.w > 8);
     await page.$eval('[data-pin="range"]', (el: HTMLButtonElement) => el.click());
+    await page.$eval('[data-act="menu"]', (el: HTMLButtonElement) => el.click());
     assert.equal(await page.$eval('[data-pin="range"]', el => el.classList.contains("on")), true);
     const clocks = await page.$$eval(".sideclock", ns => ns.map(n => n.textContent || ""));
     await page.$eval('.pane[data-side="b"] [data-side-step="1"]', (el: HTMLButtonElement) => el.click());
     await page.waitForFunction((prev) => (document.querySelector('.pane[data-side="b"] .sideclock')?.textContent || "") !== prev, {}, clocks[1]);
     assert.equal(await page.$eval('.pane[data-side="a"] .sideclock', el => el.textContent), clocks[0]);
     await page.waitForFunction(() => document.querySelector("#stage")?.getAttribute("data-scanned") === "1", { timeout: 20000 });
+    const scanInfo = await page.evaluate(() => {
+      const stage = document.querySelector("#stage");
+      const v = stage?.querySelector("video") as HTMLVideoElement | null;
+      return { cuts: stage?.getAttribute("data-cuts") || "", dur: v && Number.isFinite(v.duration) ? v.duration : Number(stage?.getAttribute("data-duration") || "0") };
+    });
+    assert.ok(scanInfo.cuts.split(",").map(Number).some(n => n > 96), JSON.stringify(scanInfo));
     await page.$eval('[data-tool="cabeza"]', (el: HTMLButtonElement) => el.click());
     const fit = await page.$eval("#stage .fit", el => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
     await page.mouse.move(fit.x + fit.w * 0.5, fit.y + fit.h * 0.35);
@@ -449,9 +465,13 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     await page.$eval('[data-act="marcas"]', (el: HTMLButtonElement) => el.click());
     await page.waitForFunction(() => /Cabeza · tramo/.test(document.body.innerText || ""));
     const range = await page.$eval("body", el => (el.innerText.match(/Cabeza · tramo (\d+)–(\d+)/) || []).slice(1).map(Number));
-    const last = await page.$eval("#stage video", v => Math.max(0, Math.round(v.duration * 30) - 1));
+    const last = await page.$eval("#stage", el => {
+      const v = el.querySelector("video") as HTMLVideoElement | null;
+      const live = v && Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Number(el.getAttribute("data-duration") || "0");
+      return Math.max(0, Math.round(live * 30) - 1);
+    });
     assert.ok(last > 100);
-    assert.ok(range[1] >= 20 && range[1] <= 96 && range[1] < last - 5, `tramo ${range.join("–")} de ${last}`);
+    assert.ok(range[1] > 96 && range[1] < last - 5, `tramo ${range.join("–")} de ${last}`);
     await page.$eval('[data-tool="angulo"]', (el: HTMLButtonElement) => el.click());
     await page.mouse.click(fit.x + fit.w * 0.2, fit.y + fit.h * 0.55);
     await page.mouse.click(fit.x + fit.w * 0.5, fit.y + fit.h * 0.35);
@@ -470,20 +490,78 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     assert.ok(listed >= 2);
     assert.notEqual(await page.$eval(".marks", el => getComputedStyle(el).maxHeight), "64px");
     await page.$eval('[data-act="marcas"]', (el: HTMLButtonElement) => el.click());
+    await page.$eval("#texto", (el: HTMLInputElement) => { el.value = "Brazo izquierdo extendido"; });
+    await page.$eval('[data-tool="texto"]', (el: HTMLButtonElement) => el.click());
+    await page.mouse.click(fit.x + fit.w * 0.85, fit.y + fit.h * 0.22);
+    const label = await page.evaluate(() => {
+      const svg = document.querySelector("#stage .ink") as SVGSVGElement | null;
+      const t = [...(svg?.querySelectorAll("text") || [])].find(n => (n.textContent || "").includes("Brazo")) as SVGGraphicsElement | undefined;
+      if (!t || !svg) return null;
+      const bb = t.getBBox();
+      const vb = svg.viewBox.baseVal;
+      return { x: bb.x, y: bb.y, r: bb.x + bb.width, b: bb.y + bb.height, vw: vb.width, vh: vb.height, text: t.textContent };
+    });
+    assert.ok(label, "falta la etiqueta");
+    assert.match(label.text || "", /Brazo izquierdo extendido/);
+    assert.ok(label.x >= -1 && label.y >= -1 && label.r <= label.vw + 2 && label.b <= label.vh + 2, JSON.stringify(label));
+    await page.$eval('.pane[data-side="a"] [data-act="solo"]', (el: HTMLButtonElement) => el.click());
+    const solo = await page.evaluate(() => {
+      const a = document.querySelector('.pane[data-side="a"]')!.getBoundingClientRect();
+      const b = document.querySelector('.pane[data-side="b"]')!.getBoundingClientRect();
+      const juntos = document.querySelector('[data-act="juntos"]') as HTMLElement | null;
+      return { aw: a.width, bw: b.width, juntos: !!juntos && !juntos.hidden };
+    });
+    assert.ok(solo.aw > 300 && solo.bw < 2 && solo.juntos, JSON.stringify(solo));
+    await page.$eval('[data-act="juntos"]', (el: HTMLButtonElement) => el.click());
+    await page.$eval('[data-tool="linea"]', (el: HTMLButtonElement) => el.click());
+    await page.mouse.move(fit.x + 12, fit.y + fit.h * 0.72);
+    await page.mouse.down();
+    assert.equal(await page.$eval(".anotador", el => el.classList.contains("dibujando")), true);
+    assert.equal(await page.$eval(".transport", el => getComputedStyle(el).visibility), "hidden");
+    await page.mouse.up();
+    assert.equal(await page.$eval(".anotador", el => el.classList.contains("dibujando")), false);
     await page.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
-    await page.screenshot({ path: `${ART}/profe-13-comparar-390.png` });
+    await page.screenshot({ path: `${ART}/profe-14-comparar-390.png` });
+    await page.$eval('[data-act="menu"]', (el: HTMLButtonElement) => el.click());
+    await page.click('[data-vista="sobre"]');
+    await page.waitForSelector("#op");
+    await page.waitForFunction(() => document.querySelector('.pane[data-side="a"]')?.classList.contains("active"));
+    const stack = await page.evaluate(() => {
+      const a = document.querySelector('.pane[data-side="a"]') as HTMLElement;
+      const b = document.querySelector('.pane[data-side="b"]') as HTMLElement;
+      const r = a.querySelector(".stage")!.getBoundingClientRect();
+      const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return {
+        az: getComputedStyle(a).zIndex, bz: getComputedStyle(b).zIndex,
+        bo: Number(getComputedStyle(b).opacity), bp: getComputedStyle(b).pointerEvents,
+        inA: !!(el && a.contains(el)),
+      };
+    });
+    assert.ok(Number(stack.bz) > Number(stack.az), JSON.stringify(stack));
+    assert.ok(stack.bo < 0.95 && stack.bo > 0.1, JSON.stringify(stack));
+    assert.equal(stack.bp, "none");
+    assert.equal(stack.inA, true);
+    await page.screenshot({ path: `${ART}/profe-14-sobre-a.png` });
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
     await page.evaluate(() => window.dispatchEvent(new Event("resize")));
     await page.waitForFunction(() => document.getElementById("app")?.classList.contains("desk"));
+    await page.$eval('[data-vista="lado"]', (el: HTMLButtonElement) => el.click());
+    await page.waitForSelector(".panes.lado");
     const desk = await page.evaluate(() => {
       const stages = [...document.querySelectorAll(".stage")].map(el => el.getBoundingClientRect());
       const g = document.querySelector("#guardar")!.getBoundingClientRect();
-      return { stages: stages.map(r => ({ w: r.width, h: r.height })), g: { top: g.top, bottom: g.bottom, h: g.height } };
+      const chip = document.querySelector('[data-vista="lado"]')!.getBoundingClientRect();
+      const video = document.querySelector("#stage .fit")!.getBoundingClientRect();
+      const overlap = Math.max(0, Math.min(chip.right, video.right) - Math.max(chip.left, video.left))
+        * Math.max(0, Math.min(chip.bottom, video.bottom) - Math.max(chip.top, video.top));
+      return { stages: stages.map(r => ({ w: r.width, h: r.height })), g: { top: g.top, bottom: g.bottom, h: g.height }, overlap, chipTop: chip.top, videoTop: video.top, cw: chip.width, ch: chip.height };
     });
     for (const s of desk.stages) assert.ok(s.w > 200 && s.h > 280, JSON.stringify(s));
     assert.ok(desk.g.h > 10 && desk.g.top >= 0 && desk.g.bottom <= 801);
-    await page.screenshot({ path: `${ART}/profe-13-comparar-1280.png` });
-    await page.click('[data-vista="sobre"]');
+    assert.equal(desk.overlap, 0);
+    assert.ok(desk.cw > 20 && desk.ch > 10 && desk.chipTop < desk.videoTop, JSON.stringify(desk));
+    await page.screenshot({ path: `${ART}/profe-14-comparar-1280.png` });
+    await page.$eval('[data-vista="sobre"]', (el: HTMLButtonElement) => el.click());
     await page.waitForSelector("#op");
     const over = await page.$$eval(".stage", ns => ns.map(el => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; }));
     assert.ok(over.every(s => s.w > 200 && s.h > 200));

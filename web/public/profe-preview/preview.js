@@ -161,18 +161,19 @@ function anotar() {
 }
 
 function comparar() {
-  const sobre = S.vista === "sobre";
   const ref = S.compare === "referencia";
-  return shell("#/video/frente", "Comparar", "Comparar", `
+  const chips = ref ? `
     <div class="seg">
       <button type="button" data-vista="lado" class="${S.vista === "lado" ? "on" : ""}">Lado a lado</button>
-      <button type="button" data-vista="sobre" class="${sobre ? "on" : ""}">Superpuesto</button>
+      <button type="button" data-vista="sobre" class="${S.vista === "sobre" ? "on" : ""}">Superpuesto</button>
     </div>
     <div class="seg">
       <button type="button" data-compare="antes" class="${S.compare === "antes" ? "on" : ""}">Antes y después</button>
       <button type="button" data-compare="profe" class="demo${S.compare === "profe" ? " on" : ""}">Clip de Martín</button>
-      <button type="button" data-compare="referencia" class="${ref ? "on" : ""}">Referencia</button>
-    </div>
+      <button type="button" data-compare="referencia" class="on">Referencia</button>
+    </div>` : "";
+  return shell("#/video/frente", "Comparar", "Comparar", `
+    ${chips}
     ${ref ? referenciaHtml() : `<div id="visor"></div>`}
     <p class="note">El video externo se abre en su sitio. No lo descargamos ni lo guardamos. Para dibujar, tomamos un cuadro.</p>`,
     `<button class="btn" type="button" id="usar">Usar en la clase</button>`);
@@ -265,6 +266,8 @@ function render() {
       modeA: which === "atras" ? "atras" : which === "salida" ? "profe" : "frente",
       modeB: S.compare === "profe" ? "profe" : "antes",
       stageId: ref ? "cuadro" : "stage",
+      vista: S.vista,
+      compare: S.compare,
       saveStyle: a === "comparar" ? "chip" : "btn",
       paint: drawSwing,
       marks: S.marcas,
@@ -337,13 +340,13 @@ function toast(t) {
 }
 
 app.addEventListener("click", e => {
-  if (e.target.id === "guardar") { save(); toast("Marcas guardadas"); return; }
-  if (e.target.closest("#visor")) return;
-  if (e.target.id === "voz") { voz = !voz; render(); return; }
+  if (e.target.id === "guardar" || (e.target.closest && e.target.closest("#guardar"))) { save(); toast("Marcas guardadas"); return; }
   const vista = e.target.closest("[data-vista]");
   if (vista) { S.vista = vista.dataset.vista; save(); render(); return; }
   const cmp = e.target.closest("[data-compare]");
   if (cmp) { S.compare = cmp.dataset.compare; save(); render(); return; }
+  if (e.target.closest("#visor")) return;
+  if (e.target.id === "voz") { voz = !voz; render(); return; }
   if (e.target.id === "tomar") {
     S.cuadro = { compare: S.compare };
     save(); toast("Cuadro tomado"); render(); return;

@@ -90,6 +90,7 @@ textarea{min-height:64px;resize:vertical}
 #app.lienzo .banner,#app.lienzo .bar,#app.lienzo h1,#app.lienzo .lead,#app.lienzo .main>.note{display:none !important}
 #app.lienzo #visor{flex:1;min-height:0;display:flex;flex-direction:column}
 #app.archivo .banner,#app.archivo .demo,#app.archivo .dock,#app.archivo h1,#app.archivo .main>.note{display:none !important}
+#app.lienzo .main>.seg{display:none}
 #app.lienzo .main .seg{margin:4px 8px 0}
 #app.lienzo .main .seg button{min-height:32px;padding:4px 8px;font-size:12px}
 .anotador{user-select:none;display:flex;flex-direction:column;min-height:0}
@@ -99,9 +100,12 @@ textarea{min-height:64px;resize:vertical}
 .panes.lado{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr);gap:4px;flex:1;min-height:0}
 .panes.lado .pane{min-width:0;min-height:0;display:flex;flex-direction:column;width:100%;height:100%}
 .panes.sobre{position:relative;flex:1;min-height:0}
-.panes.sobre .pane[data-side="a"]{position:relative;height:100%}
-.panes.sobre .pane[data-side="b"]{position:absolute;inset:0}
+.panes.sobre .pane[data-side="a"]{position:relative;height:100%;z-index:1}
+.panes.sobre .pane[data-side="b"]{position:absolute;inset:0;z-index:2}
 .panes.sobre .pane:not(.active){pointer-events:none}
+.panes.sobre .pane.active{pointer-events:auto}
+.panes.lado.solo-a,.panes.lado.solo-b{grid-template-columns:minmax(0,1fr)}
+.panes.lado.solo-a .pane[data-side="b"],.panes.lado.solo-b .pane[data-side="a"]{display:none}
 .stage{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0B2545;width:100%;height:56vh;min-height:240px;min-width:0;touch-action:none}
 #app.lienzo .anotador,#app.lienzo .stack,#app.lienzo .panes,#app.lienzo .pane,#app.lienzo .stage{flex:1;min-height:0}
 #app.lienzo .stage{height:auto}
@@ -121,6 +125,7 @@ textarea{min-height:64px;resize:vertical}
 .sidebar{display:flex;align-items:center;justify-content:center;gap:6px;padding:2px 4px;background:#F6F7F9;flex:none}
 .sidebar button{min-height:28px;padding:2px 8px;border:1px solid #DCE1E8;background:#fff;border-radius:999px;font-size:13px;font-weight:600;color:#0B2545}
 .sideclock{font-size:12px;font-weight:600;color:#0B2545;min-width:78px;text-align:center}
+button.sideclock{border:0;background:transparent;padding:0 4px}
 .panes.sobre .sidebar{display:none}
 .transport,.sheet,.rail,.marks{background:#F6F7F9;flex:none}
 .transport{padding:4px 8px 2px}
@@ -136,11 +141,14 @@ textarea{min-height:64px;resize:vertical}
 .rail .dot{width:14px;height:14px;border-radius:50%;background:#C8102E;box-shadow:inset 0 0 0 1px #fff}
 .rail #guardar{width:auto;min-width:46px;padding:0 8px;color:#C8102E}
 .marks{position:relative;max-height:none;overflow:visible;padding:0;display:flex;flex-direction:column}
+.marks-bar{display:flex;align-items:center}
 .marks-toggle{width:100%;border:0;background:transparent;text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#0B2545;min-height:36px}
+.marks-bar .marks-toggle{flex:1;width:auto}
+.marks-bar [data-act="duracion"]{border:0;background:transparent;color:#0B2545;font-weight:600;font-size:13px;min-height:28px;padding:4px 10px}
 .marks-body{position:absolute;left:0;right:0;bottom:100%;z-index:6;max-height:min(42vh,320px);overflow:auto;padding:4px 8px 8px;background:#F6F7F9;box-shadow:0 -8px 20px rgba(11,37,69,.16)}
 .swatch{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:inset 0 0 0 1px #DCE1E8;padding:0}
 .swatch.on{box-shadow:0 0 0 2px #0B2545}
-.mark span{flex:1;min-width:0}
+.mark span{flex:1;min-width:0;overflow-wrap:anywhere}
 .scrub{width:100%;margin-top:2px}
 #app.desk .anotador{flex-direction:row;align-items:stretch}
 #app.desk .stack{min-width:0}
@@ -151,3 +159,38 @@ textarea{min-height:64px;resize:vertical}
 #app.desk .stage{height:min(72vh,680px)}
 #app.desk.lienzo .stage{height:auto;flex:1}
 .toast{z-index:50}
+.topbar{display:flex;align-items:center;gap:6px;padding:4px 8px;background:#F6F7F9;flex:none;position:relative;z-index:7}
+.topbar>button{min-height:28px;padding:2px 8px;border:1px solid #DCE1E8;background:#fff;border-radius:999px;font-size:12px;font-weight:600;color:#0B2545}
+.topbar>button.on{background:#0B2545;color:#fff;border-color:#0B2545}
+.mode-now{font-size:12px;font-weight:600;color:#0B2545;white-space:nowrap}
+.menu{position:absolute;left:0;right:0;top:100%;z-index:8;background:#fff;padding:8px 8px 10px;box-shadow:0 12px 24px rgba(11,37,69,.18)}
+.top-op{margin:0 0 0 auto;min-width:0;flex:1;font-size:12px}
+#app.lienzo:not(.desk) .transport .keys{display:none}
+#app.lienzo:not(.desk) .transport{padding:2px 6px 0}
+#app.lienzo:not(.desk) .transport .seg button{min-height:28px;padding:2px 6px}
+#app.lienzo:not(.desk) .marks-toggle{min-height:28px;padding:4px 8px}
+#app.lienzo:not(.desk) .sidebar{padding:0 4px}
+#app.lienzo:not(.desk) .sidebar button{min-height:26px}
+#app:not(.desk) .anotador.dibujando .transport,
+#app:not(.desk) .anotador.dibujando .rail,
+#app:not(.desk) .anotador.dibujando .marks,
+#app:not(.desk) .anotador.dibujando .sheet,
+#app:not(.desk) .anotador.dibujando .topbar,
+#app:not(.desk) .anotador.dibujando .sidebar{visibility:hidden}
+#app:not(.desk) .rail{flex-wrap:nowrap;gap:0;padding:1px 2px 4px}
+#app:not(.desk) .rail-tools{display:flex;flex-wrap:nowrap;flex:1;min-width:0;gap:0}
+#app:not(.desk) .rail button{flex:1 1 0;width:auto;min-width:0;min-height:32px;padding:0}
+#app:not(.desk) .rail button[data-g]{margin-left:0}
+#app:not(.desk) .rail button span:not(.dot){position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+#app:not(.desk) .rail button svg{width:16px;height:16px}
+#app:not(.desk) .rail #guardar{flex:0 0 auto;padding:0 2px;font-size:11px}
+#app:not(.desk) .anotador.riel .rail{flex-wrap:wrap}
+#app:not(.desk) .anotador.riel .rail-tools{flex-wrap:wrap;overflow:visible}
+#app:not(.desk) .anotador.riel .rail button{flex:0 0 auto;min-width:64px;width:auto;padding:3px 4px}
+#app:not(.desk) .anotador.riel .rail button span{position:static;width:auto;height:auto;clip:auto;overflow:visible}
+#app.desk .topbar .mode-now,#app.desk .topbar>[data-act="menu"]{display:none}
+#app.desk .menu.inline{position:static;display:flex;flex-wrap:wrap;align-items:center;gap:6px;box-shadow:none;background:transparent;padding:0;flex:1 1 auto;min-width:min-content}
+#app.desk .top-op{flex:0 1 160px;margin-left:auto}
+#app.desk .menu.inline .pins,#app.desk .menu.inline .keys{display:none}
+#app.desk .menu.inline .seg{margin:0}
+#app.desk [data-act="riel"]{display:none}
