@@ -552,13 +552,6 @@
         paintTicks();
         syncHint();
       };
-      const total = (a, b) => {
-        let s = 0;
-        for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
-        return s;
-      };
-      const l1 = (a, b) => total(a, b) / (a.length || 1);
-      const distance = (a, b) => total(a.hist, b.hist) / 2 * 1.15 + l1(a.blocks, b.blocks) * 2.6 + l1(a.edges, b.edges) * 1.1;
       const featuresOf = (data, w, h) => {
         const hist = new Array(16).fill(0);
         const luma = new Float32Array(w * h);
@@ -598,7 +591,7 @@
           }
         }
         const base = mean || 1;
-        return { hist, blocks: blocks.map(val => val / base), edges: edges.map(val => val / 40), mean };
+        return { hist, raw: blocks, cols, rows, blocks: blocks.map(val => val / base), edges: edges.map(val => val / 40), mean };
       };
       v.onerror = () => finish([]);
       v.onloadeddata = async () => {
@@ -649,78 +642,8 @@
           g.drawImage(v, 0, 0, w, h);
           samples.push({ f, ...featuresOf(g.getImageData(0, 0, w, h).data, w, h) });
         }
-        const back = 15;
-        const panMax = 40;
-        const blockFrac = (a, b) => {
-          let n = 0;
-          const len = Math.min(a.blocks.length, b.blocks.length);
-          for (let i = 0; i < len; i++) if (Math.abs(a.blocks[i] - b.blocks[i]) > 0.1) n++;
-          return n / (len || 1);
-        };
-        const coverage = (a, b) => {
-          const blocks = blockFrac(a, b);
-          const hist = total(a.hist, b.hist) / 2;
-          return hist >= 0.35 ? Math.max(blocks, hist) : blocks;
-        };
-        const stays = (from, pre) => {
-          const end = Math.min(samples.length - 1, from + back);
-          if (end < from + 8) return false;
-          for (let k = from; k <= end; k += 3) if (distance(pre, samples[k]) < 0.16) return false;
-          return distance(pre, samples[end]) >= 0.18;
-        };
-        const found = [];
-        for (let i = back; i + back < samples.length; i++) {
-          const pre = samples[i - back];
-          const post = samples[i + back];
-          if (pre.mean < 14 || post.mean < 14) continue;
-          const dist = distance(pre, post);
-          const cover = coverage(pre, post);
-          if (dist < 0.22 || cover < 0.34 || !stays(i, pre)) continue;
-          let best = i, bestScore = -1;
-          for (let k = Math.max(1, i - back); k <= Math.min(samples.length - 1, i + back); k++) {
-            const step = distance(samples[k - 1], samples[k]);
-            if (step > bestScore) { bestScore = step; best = k; }
-          }
-          if (bestScore < 0.16 || samples[best].f < 8) continue;
-          const alta = dist >= 0.22 && cover >= 0.34 && bestScore >= 0.18;
-          found.push({ f: samples[best].f, alta });
-        }
-        for (let i = 0; i < samples.length - back; i++) {
-          const anchor = samples[i];
-          if (anchor.mean < 14) continue;
-          let crossed = -1;
-          for (let span = 12; span <= panMax && i + span < samples.length; span++) {
-            const end = samples[i + span];
-            const dist = distance(anchor, end);
-            const cover = coverage(anchor, end);
-            if (dist < 0.24 || cover < 0.34) continue;
-            let maxStep = 0;
-            for (let k = i + 1; k <= i + span; k++) maxStep = Math.max(maxStep, distance(samples[k - 1], samples[k]));
-            if (maxStep > Math.max(0.18, dist * 0.62)) continue;
-            const after = Math.min(samples.length - 1, i + span + Math.min(back, 10));
-            if (distance(anchor, samples[after]) < 0.2) continue;
-            if (crossed < 0) {
-              for (let k = i + 1; k <= i + span; k++) {
-                if (distance(anchor, samples[k]) > 0.28 && coverage(anchor, samples[k]) >= 0.28) { crossed = k; break; }
-              }
-            }
-            if (crossed < 0 || samples[crossed].f < 8) continue;
-            const alta = dist >= 0.26 && cover >= 0.34 && distance(anchor, samples[after]) >= 0.22;
-            found.push({ f: samples[crossed].f, alta });
-            break;
-          }
-        }
-        found.sort((a, b) => a.f - b.f);
-        const cuts = [];
-        for (const hit of found) {
-          const prev = cuts[cuts.length - 1];
-          if (prev && hit.f - prev.f < 45) {
-            if (hit.alta) prev.alta = true;
-            continue;
-          }
-          cuts.push({ f: hit.f, alta: !!hit.alta });
-        }
-        finish(cuts);
+        const decide = globalThis.GolfletCortes && globalThis.GolfletCortes.decideCuts;
+        finish(decide ? decide(samples) : []);
       };
       v.src = p.blob;
     }

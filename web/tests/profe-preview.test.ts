@@ -19,7 +19,8 @@ test("la vista previa no llama a la API y usa gente ficticia", async () => {
   const preview = await readFile(new URL("../public/profe-preview/preview.js", import.meta.url), "utf8");
   const anotador = await readFile(new URL("../public/profe-preview/anotador.js", import.meta.url), "utf8");
   const css = await readFile(new URL("../public/profe-preview/preview.css", import.meta.url), "utf8");
-  const js = preview + anotador;
+  const cortes = await readFile(new URL("../public/profe-preview/cortes.js", import.meta.url), "utf8");
+  const js = preview + anotador + cortes;
   const all = html + js + css;
   assert.equal(/TODO|FIXME/.test(all), false);
   assert.equal(/\p{Extended_Pictographic}/u.test(all), false);
@@ -655,11 +656,10 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
       const green = "#3E7A4A";
       const dark = "#2A5C38";
       for (let i = 0; i < 110; i++) {
-        g.fillStyle = green;
-        g.fillRect(0, 0, 180, 320);
-        g.fillStyle = dark;
-        if (i < 36) g.fillRect(70, 20, 40, 280);
-        else g.fillRect(10, 200, 160, 70);
+        g.fillStyle = i < 36 ? dark : green;
+        g.fillRect(0, 0, 90, 320);
+        g.fillStyle = i < 36 ? green : dark;
+        g.fillRect(90, 0, 90, 320);
         await new Promise(r => setTimeout(r, 40));
       }
       rec.stop();
@@ -786,9 +786,12 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
       const stage = document.querySelector("#stage");
       return { cuts: stage?.getAttribute("data-cuts") || "", hints: stage?.getAttribute("data-hints") || "", ticks: document.querySelectorAll(".ticks i").length };
     });
-    const panFrames = (panInfo.cuts || panInfo.hints).split(",").map(Number).filter(n => n > 0);
-    assert.ok(panFrames.some(n => n > 40 && n < 170), JSON.stringify(panInfo));
-    assert.ok(panInfo.ticks > 0, JSON.stringify(panInfo));
+    const panFirm = panInfo.cuts.split(",").map(Number).filter(n => n > 0);
+    const panHints = panInfo.hints.split(",").map(Number).filter(n => n > 0);
+    assert.deepEqual(panFirm, [], "el paneo no cierra la cabeza " + JSON.stringify(panInfo));
+    assert.ok(panHints.length <= 1, JSON.stringify(panInfo));
+    if (panHints.length) assert.ok(panHints[0] > 90, JSON.stringify(panInfo));
+    assert.equal(await page3.$eval(".hint", el => (el as HTMLElement).hidden), false);
     await page3.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
     await page3.screenshot({ path: `${ART}/profe-17-paneo.png` });
     const duro = await record("duro");
