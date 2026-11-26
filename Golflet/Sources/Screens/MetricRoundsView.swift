@@ -31,6 +31,7 @@ struct MetricRoundsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 header
                 if showsTrackBanner { trackBanner }
+                if showsTrackBanner, !model.linkAsks.isEmpty { linkAsk }
                 if query.showPeriod {
                     MetricPeriodStrip(period: $period)
                 }
@@ -113,9 +114,34 @@ struct MetricRoundsView: View {
         }
     }
 
+    private var linkAsk: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Hay más de una vuelta para esta tarjeta.")
+                .font(GType.headline)
+                .foregroundStyle(p.ink)
+            Text("Elegí cuál vincular. No las unimos solas.")
+                .font(GType.label)
+                .foregroundStyle(p.ink3)
+            ForEach(model.linkAsks) { ask in
+                ForEach(ask.liveIds, id: \.self) { live in
+                    ForEach(ask.roundIds, id: \.self) { round in
+                        Button("Vincular \(ask.course)") {
+                            Task { await model.confirmLink(liveId: live, roundId: round) }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("link-ask")
+                    }
+                }
+            }
+        }
+    }
+
     private var trackBanner: some View {
         ZStack(alignment: .topLeading) {
-            Button { model.showsReconstruct = true } label: {
+            Button {
+                model.todayTrack = nil
+                model.showsReconstruct = true
+            } label: {
                 HStack(spacing: 12) {
                     Text("TRACK")
                         .font(.system(size: 12, weight: .semibold))

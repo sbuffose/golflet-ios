@@ -502,6 +502,7 @@ struct ScoreMark: View {
     let strokes: Int?
     let result: HoleResult
     var diameter: CGFloat = 28
+    var differs: Bool = false
 
     var body: some View {
         let text = strokes.map(String.init) ?? "—"
@@ -510,6 +511,12 @@ struct ScoreMark: View {
             .tabular()
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
+            .overlay(alignment: .bottom) {
+                if differs {
+                    Rectangle().fill(Color(hex: 0xC8A86A)).frame(width: diameter - 6, height: 2)
+                }
+            }
+            .accessibilityLabel(differs ? "\(text). El track difiere. El score de la tarjeta queda igual." : text)
         switch result {
         case .par, .unknown:
             label

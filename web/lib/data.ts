@@ -6,6 +6,8 @@ import { clubDisplayName } from "./course-names";
 import { roundChips } from "./metrics";
 import { gpsPuttSql, gpsShotSql, manualPuttSql } from "./gps-shot";
 import { isUndefinedColumn } from "./scorecard-lease";
+import { artToday } from "./provisional-link";
+import { labelFor, trackGaps } from "./provisional-round";
 
 async function qFlex(withFlag: string, withoutFlag: string, params: unknown[]) {
   try { return await q(withFlag, params); }
@@ -91,9 +93,11 @@ export async function buildData(userId: string) {
       course_label: other ? (r.course && r.course !== played ? `${r.course} · ${played}` : played) : null,
       putts: r.putts, gir: r.gir, fir: r.fir, notes: r.notes, notes_at: r.notes_at,
       recap_id: r.recap_id ?? null, gps_shots: r.gps_shots ?? 0, manual_putts: r.manual_putts ?? 0, official: r.official !== false,
+      track_diff: [] as number[],
       ...roundChips({ holes: r.holes, summary_counts: r.data.summary_counts, is_9_holes: r.data.is_9_holes }, r.putts, r.gps_putts),
     };
   });
+  await trackGaps(userId, rounds).catch(() => undefined);
   const clubIds = [...new Set(accounts.map(a => a.club_id))];
   const cdefs = (clubIds.length ? await q(`select club_id, name, par, holes, tees, holes_override from course where club_id = any($1)`, [clubIds]) : [])
     .map((c: any) => c.holes_override ? { ...c, holes: applyHolesOverride(c.holes, c.holes_override), par: parTotal(applyHolesOverride(c.holes, c.holes_override)) ?? c.par } : c);
@@ -143,7 +147,7 @@ export async function buildData(userId: string) {
   const otherN = rounds.filter(r => r.other_course).length;
   let unofficial: any[] = [];
   try {
-    unofficial = await q(`select id, date::text as date, course, tee, club_code from live_round where user_id=$1 and official = false order by date desc limit 40`, [userId]);
+    unofficial = await q(`select id, date::text as date, course, tee, club_code, round_id, (ended_at is null) as in_play from live_round where user_id=$1 and official = false order by date desc limit 40`, [userId]);
   } catch (e) {
     if (!isUndefinedColumn(e, "official")) throw e;
     try {
@@ -153,16 +157,28 @@ export async function buildData(userId: string) {
       unofficial = [];
     }
   }
-  const unofficial_rounds = unofficial.map(r => ({
-    id: String(r.id), date: String(r.date).slice(0, 10), course: r.course || "", tee: r.tee || "", club_code: r.club_code || "", official: false,
-  }));
+  const today = artToday();
+  const unofficial_rounds = unofficial.map(r => {
+    const date = String(r.date).slice(0, 10);
+    const pending_label = labelFor(date, today, !!r.round_id, r.in_play === true || r.in_play === "t");
+    return {
+      id: String(r.id), date, course: r.course || "", tee: r.tee || "", club_code: r.club_code || "", official: false,
+      pending_label,
+    };
+  });
+  const today_round = unofficial_rounds.find(r => r.date === today && r.pending_label === "En juego") || null;
+  let today_booking: { id: string; course_label: string } | null = null;
+  try {
+    const [tee] = await q(`select id, course_label from tee_time where user_id=$1 and source='club' and gone_at is null and date=$2::date order by time limit 1`, [userId, today]);
+    if (tee) today_booking = { id: String(tee.id), course_label: tee.course_label ? String(tee.course_label) : "" };
+  } catch { today_booking = null; }
   return {
     generated: new Date().toISOString(),
     course_groups, other_course_rounds: otherN,
     player: lead ? { name: lead.player_name ?? fresh?.player_name ?? null, handicap_index: (fresh?.handicap_index ?? lead.handicap_index) == null ? null : Number(fresh?.handicap_index ?? lead.handicap_index), txtkey: lead.matricula } : null,
     clubs: accounts,
     hi_history: [...hiByDate.values()],
-    rounds, unofficial_rounds, courses,
+    rounds, unofficial_rounds, today, today_round, today_booking, courses,
     bag: bag?.clubs || DEFAULT_BAG,
   };
 }

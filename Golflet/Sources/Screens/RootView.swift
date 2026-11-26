@@ -76,6 +76,14 @@ struct RootView: View {
         }
     }
 
+    private var matchPreview: MatchPlayPreview? {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-ui-testing-match-up") { return .up }
+        if args.contains("-ui-testing-match-square") { return .square }
+        if args.contains("-ui-testing-match-done") { return .done }
+        return nil
+    }
+
     @ViewBuilder
     private var mainTabs: some View {
         let bindings = Bindable(model)
@@ -152,9 +160,9 @@ struct RootView: View {
             .golfletChrome()
             .environment(model)
         }
-        .fullScreenCover(isPresented: bindings.showsReconstruct) {
+        .fullScreenCover(isPresented: bindings.showsReconstruct, onDismiss: { model.todayTrack = nil }) {
             NavigationStack {
-                ReconstructView()
+                ReconstructView(context: model.todayTrack)
             }
             .golfletChrome()
             .environment(model)
@@ -172,6 +180,13 @@ struct RootView: View {
             }
             .golfletChrome()
             .environment(model)
+        }
+        .fullScreenCover(isPresented: Binding(get: { matchPreview != nil }, set: { _ in })) {
+            if let preview = matchPreview {
+                MatchPlayView(course: "Jockey Club Argentino · Azul", players: MatchPlayFixture.players(), scores: preview.scores)
+                    .golfletChrome()
+                    .environment(model)
+            }
         }
         .sheet(item: bindings.presentedRecap) { target in
             NavigationStack {

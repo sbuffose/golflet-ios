@@ -1,7 +1,7 @@
 /** Distances, hole stats, weather rates and private counts. No personal rows. */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyStatFill, shotDistanceLabel, trackHoleSummary } from "../lib/play-rules";
+import { countedPutts, emptyStatFill, shotDistanceLabel, trackHoleSummary } from "../lib/play-rules";
 import { tallyHoles, weatherPlay, type PlayRound, type Wx } from "../lib/weather-core";
 import { companionKey, privateMetrics, type PastTee } from "../lib/private-metrics-core";
 
@@ -24,10 +24,29 @@ test("el Driver guarda las yardas del punto al punto y un putt no es cualquier p
   const fringe = shotDistanceLabel({ lat: tee.lat, lng: tee.lng, end_lat: tee.lat + 0.00012, end_lng: tee.lng, lie: null, distance_kind: null });
   assert.equal(fringe.kind, "yards");
   const typed = shotDistanceLabel({ lat: land.lat, lng: land.lng, end_lat: land.lat + 0.00002, end_lng: land.lng, lie: "green", distance_m: "2,4", distance_kind: "manual" });
-  assert.equal(typed.text, "2,4 m a mano");
+  assert.equal(typed.text, "8 ft a mano");
   const putt = shotDistanceLabel({ lat: land.lat, lng: land.lng, end_lat: land.lat + 0.00002, end_lng: land.lng, lie: "green" });
   assert.equal(putt.kind, "putt");
-  assert.match(putt.text, / m$/);
+  assert.match(putt.text, / ft$/);
+});
+
+test("dos putts reconocidos y un A buena que no cuenta", () => {
+  const shots = [
+    { club: "Driver" },
+    { club: "GW" },
+    { club: "PT" },
+    { club: "Putter", intent: "recovery" },
+    { club: "Putter", lie: "green" },
+  ];
+  assert.equal(countedPutts(shots), 2);
+  assert.equal(countedPutts([{ intent: "recovery", club: "Putter" }]), 0);
+  assert.equal(countedPutts([{ result: "penalty" }]), null);
+  const eleven = shotDistanceLabel({ club: "PT", lie: "green", distance_m: 11 * 0.9144 });
+  assert.equal(eleven.kind, "putt");
+  assert.match(eleven.text, /ft$/);
+  const one = shotDistanceLabel({ club: "Putter", lie: "green", distance_m: 0.9144 });
+  assert.match(one.text, /ft$/);
+  assert.equal(one.text.includes("yd"), false);
 });
 
 test("los putts salen del green y el centro no completa el hoyo", () => {

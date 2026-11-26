@@ -113,6 +113,12 @@ struct TeeTimePrepView: View {
         TeeCourseResolve.place(booking: shown, rounds: model.rounds, courses: model.courses)
     }
 
+    private var isTodayBooking: Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: -3 * 3600) ?? .current
+        return calendar.isDateInToday(shown.startsAt)
+    }
+
     var body: some View {
         GScreen(id: "screen-tee-prep") {
             ScrollView(showsIndicators: false) {
@@ -151,6 +157,16 @@ struct TeeTimePrepView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("armar-partido")
+                    if isTodayBooking {
+                        Button { Task { await model.openTodayTrack(course: nil) } } label: {
+                            Text(model.rounds.contains { !$0.official && $0.cardStatus == "En juego" } ? "Seguir la vuelta de hoy" : "Trackear la vuelta de hoy")
+                                .font(GType.headline)
+                                .foregroundStyle(p.primary)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("tee-track")
+                    }
                     playingHandicap
                     VStack(alignment: .leading, spacing: 6) {
                         Text(shown.chipWhen)
@@ -188,6 +204,12 @@ struct TeeTimePrepView: View {
             }
         }
         .accessibilityIdentifier("screen-tee-prep")
+        .confirmationDialog(model.todayPrompt, isPresented: Binding(get: { !model.todayAsk.isEmpty }, set: { if !$0 { model.todayAsk = [] } }), titleVisibility: .visible) {
+            ForEach(model.todayAsk, id: \.self) { course in
+                Button(course) { Task { await model.openTodayTrack(course: course) } }
+            }
+            Button("Cancelar", role: .cancel) { model.todayAsk = [] }
+        }
         .safeAreaInset(edge: .top) { MetricBackBar() }
         .sheet(item: $scorecardJob) { job in
             scorecardSheet(job)

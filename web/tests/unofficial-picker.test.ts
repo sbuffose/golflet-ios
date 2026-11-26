@@ -138,7 +138,7 @@ test("cargar una vuelta ofrece la última tarjeta, el resto y una vuelta no ofic
           backTop: back.getBoundingClientRect().top,
         };
       });
-      assert.equal(shots.text, "Track Shots");
+      assert.equal(shots.text, "Trackear golpes");
       assert.equal(shots.bg, "rgb(11, 37, 69)");
       assert.ok(shots.left > shots.backRight, JSON.stringify(shots));
       assert.ok(Math.abs(shots.top - shots.backTop) < 24, JSON.stringify(shots));

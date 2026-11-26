@@ -3,6 +3,9 @@ import SwiftUI
 
 struct ReconstructView: View {
     var context: RoundTrackContext? = nil
+    var storedShots: [ReconstructionShot] = []
+    var onShots: (([ReconstructionShot]) -> Void)? = nil
+    var onHoleScore: ((Int, Int) -> Void)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
@@ -32,6 +35,23 @@ struct ReconstructView: View {
     @State private var showsManual = false
 
     private let clubs = ["Dr", "3W", "5W", "Hy", "4i", "5i", "6i", "7i", "8i", "9i", "PW", "GW", "SW", "LW", "Pt"]
+
+    private func clubName(_ code: String) -> String {
+        switch code {
+        case "Dr": return "Driver"
+        case "3W": return "Madera 3"
+        case "5W": return "Madera 5"
+        case "Hy": return "Híbrido"
+        case "PW": return "Pitching wedge"
+        case "GW": return "Gap wedge"
+        case "SW": return "Sand wedge"
+        case "LW": return "Lob wedge"
+        case "Pt": return "Putter"
+        default:
+            if code.hasSuffix("i"), let n = Int(code.dropLast()) { return "Hierro \(n)" }
+            return code
+        }
+    }
     private let teeNames = ["Azul", "Blanco", "Amarillo", "Colorado", "Negro"]
     private let results = ["fairway", "green", "rough", "bunker", "water", "ob", "penalty", "holed", "other"]
 
@@ -59,6 +79,7 @@ struct ReconstructView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(context == nil ? "Cerrar" : "Volver") {
+                    reportClosedHole()
                     model.showsReconstruct = false
                     dismiss()
                 }
@@ -215,13 +236,16 @@ struct ReconstructView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(clubs, id: \.self) { name in
-                        Button(name) { club = name }
-                            .font(GType.label)
-                            .padding(.horizontal, 10)
-                            .frame(minHeight: 36)
-                            .foregroundStyle(club == name ? Color.white : p.ink)
-                            .background(club == name ? p.primary : p.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        Button { club = name } label: {
+                            ClubThumb(brand: nil, model: nil, face: ClubGear.face(name))
+                                .frame(width: 36, height: 36)
+                                .padding(4)
+                                .background(Color.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(club == name ? p.primary : p.hairline, lineWidth: club == name ? 2 : 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(clubName(name))
                     }
                 }
             }
@@ -235,7 +259,7 @@ struct ReconstructView: View {
                 aim()
             }
             Picker("Palo", selection: $club) {
-                ForEach(clubs, id: \.self) { Text($0).tag($0) }
+                ForEach(clubs, id: \.self) { Text(clubName($0)).tag($0) }
             }
             Picker("Resultado", selection: $result) {
                 Text("Sin resultado").tag("")
@@ -248,6 +272,7 @@ struct ReconstructView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(p.accent)
                 .disabled(busy)
+                .accessibilityIdentifier("rc-save")
             ForEach(shots) { shot in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -269,7 +294,7 @@ struct ReconstructView: View {
                         .foregroundStyle(p.ink2)
                     HStack {
                         Button("Corregir") { load(shot) }
-                        Button("Borrar") { Task { if let live { await remove(live, shot) } } }
+                        Button("Borrar") { Task { await remove(live, shot) } }
                     }
                     .font(GType.label)
                 }
@@ -412,7 +437,50 @@ struct ReconstructView: View {
         return "\(formatter.string(from: date)) · \(course)"
     }
 
+    /// A holed hole replaces Vos's score on the match. The same total is not added twice.
+    private func reportClosedHole() {
+        guard let onHoleScore else { return }
+        let mine = shots.filter { $0.hole == hole }
+        guard mine.contains(where: { $0.result == "holed" }) else { return }
+        let strokes = mine.reduce(0) { partial, shot in
+            partial + (shot.penaltyStrokes > 0 ? shot.penaltyStrokes : 1)
+        }
+        if strokes > 0 { onHoleScore(hole, strokes) }
+    }
+
     private func loadSetup() async {
+        if let context, !context.liveId.isEmpty {
+            date = context.date
+            hole = min(18, max(1, context.hole))
+            do { setup = try await model.api.reconstructionSetup() }
+            catch {
+                roundId = ""
+                if shots.isEmpty { shots = storedShots }
+                staged = true
+                return
+            }
+            if let saved = setup.saved.first(where: { $0.id == context.liveId }) {
+                await open(saved)
+                hole = min(18, max(1, context.hole))
+                return
+            }
+            roundId = ""
+            if shots.isEmpty { shots = storedShots }
+            staged = true
+            return
+        }
+        if let context, context.roundId.isEmpty {
+            date = context.date
+            roundId = ""
+            hole = min(18, max(1, context.hole))
+            if shots.isEmpty { shots = storedShots }
+            staged = true
+            if let course = RoundTrackCourse.match(courses: model.courses, clubCode: context.clubCode, name: context.courseName) {
+                courseKey = course.id
+                await loadMap(club: course.clubCode, name: course.name)
+            }
+            return
+        }
         do { setup = try await model.api.reconstructionSetup() }
         catch { note = error.localizedDescription; return }
         guard let context else { return }
@@ -453,7 +521,7 @@ struct ReconstructView: View {
     private func loadMap(club: String, name: String) async {
         let id = ReconstructionCourseId.make(clubCode: club, course: name)
         var bag: [Int: HoleEnds] = [:]
-        if let detail = try? await model.api.gpsCourse(id: id, lat: nil, lng: nil) {
+        if let detail = try? await model.api.gpsCourse(id: id, lat: nil, lng: nil, playedOn: artDate()) {
             for hole in detail.holes {
                 var ends = HoleEnds()
                 if let tee = hole.tee, ReconstructPayload.knownPoint(["lat": tee.lat, "lng": tee.lng] as [String: Any]) != nil {
@@ -465,7 +533,7 @@ struct ReconstructView: View {
                 bag[hole.number] = ends
             }
         }
-        if !club.isEmpty, !name.isEmpty, let map = try? await model.api.courseMap(club: club, course: name) {
+        if !club.isEmpty, !name.isEmpty, let map = try? await model.api.courseMap(club: club, course: name, playedOn: artDate()) {
             ReconstructPayload.mergeCourseMap(map, into: &bag)
         }
         holeEnds = bag
@@ -498,6 +566,7 @@ struct ReconstructView: View {
         live = round
         do {
             shots = try await model.api.reconstructionShots(liveRoundId: round.id)
+            onShots?(shots)
             let name = round.vmCourse.isEmpty ? round.course : round.vmCourse
             if !round.clubCode.isEmpty { await loadMap(club: round.clubCode, name: name) }
         } catch { note = error.localizedDescription }
@@ -509,6 +578,10 @@ struct ReconstructView: View {
     }
 
     private func commit(_ round: ReconstructionRound?) async {
+        if round == nil, context?.roundId.isEmpty == true {
+            keepLocal()
+            return
+        }
         if let round {
             await save(round)
             return
@@ -533,6 +606,9 @@ struct ReconstructView: View {
     private func save(_ round: ReconstructionRound) async {
         busy = true
         defer { busy = false }
+        let edited = editing != nil
+        let holeN = draft().hole
+        let holed = draft().result == "holed"
         do {
             if let editing {
                 let shot = try await model.api.updateReconstructionShot(liveRoundId: round.id, shotId: editing, shot: draft())
@@ -545,6 +621,8 @@ struct ReconstructView: View {
             end = nil
             typedDistance = ""
             note = ""
+            onShots?(shots)
+            publishHole(holeN, edited: edited || holed)
         } catch { note = error.localizedDescription }
     }
 
@@ -560,10 +638,59 @@ struct ReconstructView: View {
         aim()
     }
 
-    private func remove(_ round: ReconstructionRound, _ shot: ReconstructionShot) async {
-        do {
-            try await model.api.deleteReconstructionShot(liveRoundId: round.id, shotId: shot.id)
-            shots.removeAll { $0.id == shot.id }
-        } catch { note = error.localizedDescription }
+    private func publishHole(_ hole: Int, edited: Bool) {
+        guard let onHoleScore else { return }
+        let mine = shots.filter { $0.hole == hole }
+        let closed = mine.contains { $0.result == "holed" }
+        guard edited || closed else { return }
+        let strokes = mine.reduce(0) { $0 + ($1.penaltyStrokes > 0 ? $1.penaltyStrokes : 1) }
+        if strokes > 0 { onHoleScore(hole, strokes) }
+    }
+
+    private func keepLocal() {
+        let made = draft()
+        let edited = editing != nil
+        let id = editing ?? UUID().uuidString
+        let meters = made.distanceM
+        let shot = ReconstructionShot(
+            id: id,
+            hole: made.hole,
+            club: made.club,
+            result: made.result,
+            penaltyStrokes: made.penaltyStrokes,
+            lat: made.lat,
+            lng: made.lng,
+            endLat: made.endLat,
+            endLng: made.endLng,
+            distanceM: made.distanceM,
+            lie: nil,
+            positionLabel: "Marcado",
+            distanceLabel: meters.map { "\(Int($0.rounded())) m" } ?? "sin distancia",
+            intent: nil
+        )
+        if let editing, let index = shots.firstIndex(where: { $0.id == editing }) { shots[index] = shot }
+        else { shots.append(shot) }
+        self.editing = nil
+        start = nil
+        end = nil
+        typedDistance = ""
+        note = ""
+        onShots?(shots)
+        publishHole(shot.hole, edited: edited || made.result == "holed")
+    }
+
+    private func remove(_ round: ReconstructionRound?, _ shot: ReconstructionShot) async {
+        if let round {
+            do {
+                try await model.api.deleteReconstructionShot(liveRoundId: round.id, shotId: shot.id)
+                shots.removeAll { $0.id == shot.id }
+                onShots?(shots)
+                publishHole(shot.hole, edited: true)
+            } catch { note = error.localizedDescription }
+            return
+        }
+        shots.removeAll { $0.id == shot.id }
+        onShots?(shots)
+        publishHole(shot.hole, edited: true)
     }
 }

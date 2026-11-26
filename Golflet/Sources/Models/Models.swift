@@ -164,6 +164,7 @@ struct Round: Identifiable, Hashable, Sendable {
     var gpsShots: Int = 0
     var isCompetition: Bool = false
     var official: Bool = true
+    var trackDiff: [Int] = []
 
     var isOtherCourse: Bool {
         otherCourse || courseKey.hasPrefix("x:")
@@ -606,6 +607,15 @@ struct AppSnapshot: Sendable {
     var courseGroups: [CourseFilter] = []
     var teeTimes: [TeeTime] = []
     var profesores: [Profesor] = []
+    var linkAsks: [LinkAsk] = []
+}
+
+struct LinkAsk: Equatable, Sendable, Identifiable {
+    var id: String { liveIds.joined(separator: ",") + "|" + roundIds.joined(separator: ",") }
+    var date: String
+    var course: String
+    var liveIds: [String]
+    var roundIds: [String]
 }
 
 struct TeeTime: Identifiable, Hashable, Sendable {

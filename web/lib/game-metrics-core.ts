@@ -14,7 +14,7 @@ export type GmRound = { id: string; date: string; course_label: string; pars: Re
 
 export const BUCKETS: [number, number, string][] = [[125, 150, "150-125"], [100, 125, "125-100"], [75, 100, "100-75"], [50, 75, "75-50"], [30, 50, "50-30"]];
 export const BUCKET_LABEL: Record<string, string> = { "150-125": "150–125 yd", "125-100": "125–100 yd", "100-75": "100–75 yd", "75-50": "75–50 yd", "50-30": "50–30 yd" };
-export const PUTT_BINS: [number, number, string][] = [[0, 3, "0–3 yd"], [3, 7, "3–7 yd"], [7, 15, "7–15 yd"], [15, 999, "15 yd o más"]];
+export const PUTT_BINS: [number, number, string][] = [[0, 3, "0–9 ft"], [3, 7, "9–21 ft"], [7, 15, "21–45 ft"], [15, 999, "45 ft o más"]];
 export const FAIRWAY_BAND_YD = 15;           // reference band drawn on the dispersion chart only (we don't know real fairway widths)
 const PEN: Record<string, number> = { ob: 1, water: 1, penalty: 1 };
 const MISS_RESULTS = new Set(["rough", "bunker", "water", "ob", "penalty", "other"]);

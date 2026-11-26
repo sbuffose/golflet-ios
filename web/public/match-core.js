@@ -19,12 +19,13 @@ var GolfletMatchCore = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // web/lib/match-core.ts
+  // lib/match-core.ts
   var match_core_exports = {};
   __export(match_core_exports, {
     DEFAULT_ALLOWANCE: () => DEFAULT_ALLOWANCE,
     HOLES: () => HOLES,
     aggregate: () => aggregate,
+    applyHoleScore: () => applyHoleScore,
     bookingCourseName: () => bookingCourseName,
     cardFromHoles: () => cardFromHoles,
     companionLabel: () => companionLabel,
@@ -41,6 +42,7 @@ var GolfletMatchCore = (() => {
     matchPlay: () => matchPlay,
     myOutcome: () => myOutcome,
     normName: () => normName,
+    pairStanding: () => pairStanding,
     pickOfficialCard: () => pickOfficialCard,
     playOrder: () => playOrder,
     playerKey: () => playerKey,
@@ -284,6 +286,25 @@ var GolfletMatchCore = (() => {
     const remaining = HOLES - played, finished = closed || remaining === 0;
     return { up, played, remaining, finished, dormie: !finished && up !== 0 && Math.abs(up) === remaining, text: statusText(up, remaining, finished), result: finished ? up > 0 ? "A" : up < 0 ? "B" : "H" : null, margin: Math.abs(up), holes };
   }
+  function pairStanding(a, b, state, name, me = "me") {
+    const who = (id) => id === me ? "Vos" : name(id);
+    const other = (id) => who(id === a ? b : a);
+    if (state.finished) {
+      if (state.up === 0) return { text: "Empate", tone: "even", versus: `${who(a)} vs ${who(b)}` };
+      const winner = state.up > 0 ? a : b;
+      return { text: `Gan\xF3 ${who(winner)} ${state.text}`, tone: winner === me ? "me" : "them", versus: other(winner) };
+    }
+    if (state.up === 0) return { text: state.text, tone: "even", versus: `${who(a)} vs ${who(b)}` };
+    const leader = state.up > 0 ? a : b;
+    return { text: `${who(leader)} ${state.text}`, tone: leader === me ? "me" : "them", versus: other(leader) };
+  }
+  function applyHoleScore(scores, player, hole, strokes) {
+    const h = hole - 1;
+    const next = { ...scores, [player]: [...scores[player] || Array(18).fill(null)] };
+    if (h < 0 || h > 17 || !Number.isInteger(strokes) || strokes < 1 || strokes > 20) return scores;
+    next[player][h] = strokes;
+    return next;
+  }
   function evaluate(def, scores) {
     const P = def.players, hcpMode = def.scoring === "hcp", al = Number.isFinite(def.allowance) ? def.allowance : DEFAULT_ALLOWANCE[def.modality];
     const DONE = marksOf(scores).done || [];
@@ -327,7 +348,8 @@ var GolfletMatchCore = (() => {
       }
       table.sort((x, y) => y.won - x.won || y.holes_up - x.holes_up || x.lost - y.lost || x.name.localeCompare(y.name, "es"));
       const finished = pairs.length > 0 && pairs.every((p) => p.state.finished);
-      return { modality: "metralleta", strokes: strokes2, hole_strokes: hsOf(strokes2), strokes_placed: placed, sides: ids2.map((i) => [i]), main: null, pairs, table, finished, summary: finished ? `Gan\xF3 ${table[0]?.name ?? ""}` : `${pairs.filter((p) => p.state.finished).length}/${pairs.length} partidos terminados`, playing };
+      const board = pairs.map((p) => pairStanding(p.a, p.b, p.state, name));
+      return { modality: "metralleta", strokes: strokes2, hole_strokes: hsOf(strokes2), strokes_placed: placed, sides: ids2.map((i) => [i]), main: null, pairs, table, finished, summary: board.map((s) => s.text).join(" \xB7 ") || "All square", playing };
     }
     const sides = def.modality === "single" ? [[P[0]?.id], [P[1]?.id]].map((s) => s.filter(Boolean)) : def.sides || [];
     const ids = sides.flat(), strokes = strokesOf(ids), hs = hsOf(strokes), main = matchPlay(sides[0] || [], sides[1] || [], scores, hs, start, marksOf(scores).conc || [], DONE);

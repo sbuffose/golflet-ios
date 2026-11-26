@@ -104,6 +104,12 @@ test("a reconstruction saves without coordinates, stays off the official card, a
   assert.equal(keptIntent?.intent, "recovery");
   assert.equal(keptIntent?.result, "lost");
   assert.equal(keptIntent?.club, "6i");
+  await updateManualShot("owner", live.id, tagged.id, { hole: 1, club: "6i", result: "lost", intent: null, lat: -34.55, lng: -58.48, end_lat: -34.551, end_lng: -58.481 }, sql);
+  const cleared = (await listManualShots("owner", live.id, sql)).find(s => s.id === tagged.id);
+  assert.equal(cleared?.intent ?? null, null);
+  await deleteManualShot("owner", live.id, bare.id, sql);
+  const left = await listManualShots("owner", live.id, sql);
+  assert.equal(left.find(s => s.id === tagged.id)?.shot_number, 1);
 });
 
 test("an owned shot cannot be changed through another round, and a manual putt is not a GPS putt", async (t) => {

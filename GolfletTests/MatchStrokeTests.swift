@@ -91,4 +91,41 @@ final class MatchStrokeTests: XCTestCase {
         XCTAssertNil(built.si[0])
         XCTAssertFalse(MatchStrokes.placed(built.si))
     }
+
+    func testBoardSaysWhoIsUpAndAFinishedMatch() {
+        var me = Array<Int?>(repeating: nil, count: 18)
+        var joaquin = me
+        var augusto = me
+        me[0] = 4; joaquin[0] = 5; me[1] = 4; joaquin[1] = 5; joaquin[2] = 4; augusto[2] = 5
+        let mine = MatchStrokes.standing(aId: "me", bId: "joaquin", aName: "Joaquín L.", bName: "Joaquín L.", state: MatchStrokes.match(a: me, b: joaquin))
+        let even = MatchStrokes.standing(aId: "me", bId: "augusto", aName: "Augusto L.", bName: "Augusto L.", state: MatchStrokes.match(a: me, b: augusto))
+        let theirs = MatchStrokes.standing(aId: "joaquin", bId: "augusto", aName: "Joaquín L.", bName: "Augusto L.", state: MatchStrokes.match(a: joaquin, b: augusto))
+        XCTAssertEqual(mine.text, "Vos 2 arriba")
+        XCTAssertEqual(mine.tone, "me")
+        XCTAssertEqual(even.text, "All square")
+        XCTAssertEqual(theirs.text, "Joaquín L. 1 arriba")
+        XCTAssertEqual(theirs.tone, "them")
+
+        for hole in 0..<3 { me[hole] = 4; joaquin[hole] = 5; augusto[hole] = 6 }
+        for hole in 3..<16 { me[hole] = 4; joaquin[hole] = 4; augusto[hole] = 4 }
+        let closed = MatchStrokes.standing(aId: "me", bId: "joaquin", aName: "Joaquín L.", bName: "Joaquín L.", state: MatchStrokes.match(a: me, b: joaquin))
+        XCTAssertEqual(closed.text, "Ganó Vos 3&2")
+        XCTAssertFalse(closed.text.contains("partidos terminados"))
+    }
+
+    func testAStrokeTurnsALostHoleIntoAHalf() {
+        let five = [Optional(5)] + Array(repeating: Optional<Int>.none, count: 17)
+        let four = [Optional(4)] + Array(repeating: Optional<Int>.none, count: 17)
+        XCTAssertEqual(MatchStrokes.match(a: five, b: four).up, -1)
+        XCTAssertEqual(MatchStrokes.match(a: five, b: four, aDots: [1]).up, 0)
+        XCTAssertEqual(MatchStrokes.match(a: five, b: four, aDots: [2]).text, "1 arriba")
+    }
+
+    func testTrackTotalReplacesTheHole() {
+        let start: [Int?] = [4] + Array(repeating: nil, count: 17)
+        let next = MatchStrokes.applyHoleScore(start, hole: 1, strokes: 5)
+        XCTAssertEqual(next[0], 5)
+        XCTAssertEqual(MatchStrokes.applyHoleScore(next, hole: 1, strokes: 5)[0], 5)
+        XCTAssertEqual(MatchStrokes.applyHoleScore(start, hole: 1, strokes: 0)[0], 4)
+    }
 }

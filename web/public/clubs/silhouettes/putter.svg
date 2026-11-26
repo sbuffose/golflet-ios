@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="putter"><path stroke="#0B2545" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" d="M32 52 V24"/><path stroke="#0B2545" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" d="M20 22h22v8H20z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 96" role="img" aria-label="putter">
+  <path fill="#0B2545" d="M30.6 94V40h2.8V94z"/>
+  <path fill="#0B2545" d="M6 14h52c2.6 0 4.4 2 4.4 4.6v14.2c0 4.2-3.2 7.2-8.2 7.2H9.8C4.8 40 1.6 37 1.6 32.8V18.6C1.6 16 3.4 14 6 14z"/>
+  <path fill="#F6F7F9" d="M30 18h4v16h-4z"/>
+  <circle fill="#F6F7F9" cx="18" cy="26" r="1.7"/>
+  <circle fill="#F6F7F9" cx="46" cy="26" r="1.7"/>
+  <path fill="#F6F7F9" d="M10 34h44v2.2H10z"/>
+</svg>

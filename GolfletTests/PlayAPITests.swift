@@ -75,6 +75,20 @@ final class PlayAPITests: XCTestCase {
         ])
         XCTAssertEqual(paced?.minutesPerHole, 14)
 
+        let noted = PlayParser.courseDetail([
+            "course_id": "118-jockey-azul",
+            "holes": [[
+                "hole": 17,
+                "par": 4,
+                "hcp": 2,
+                "yards": ["AZUL": 411, "AMARILLO": 391],
+                "yards_note": "El handbook marca 391. La tarjeta dice 500 en el amarillo del hoyo 8 físico."
+            ]]
+        ])
+        XCTAssertEqual(noted?.holes.first?.yards["AZUL"], 411)
+        XCTAssertEqual(noted?.holes.first?.yards["AMARILLO"], 391)
+        XCTAssertEqual(noted?.holes.first?.yardsNote, "El handbook marca 391. La tarjeta dice 500 en el amarillo del hoyo 8 físico.")
+
         let pending = PlayParser.recap([
             "id": "r1",
             "status": "pending_ai",
@@ -305,9 +319,15 @@ final class PlayAPITests: XCTestCase {
         let azul = try await api.courseStrategy(courseKey: "1:Azul", courseId: nil)
         XCTAssertEqual(azul.holes.count, 18)
         XCTAssertEqual(azul.publishedHoles, Array(1...18))
-        XCTAssertEqual(azul.hole(7)?.planTitle, "Híbrido al centro y wedge al green")
-        XCTAssertEqual(azul.hole(7)?.teeClub, "Híbrido")
-        XCTAssertEqual(azul.hole(7)?.hazards.count, 3)
+        XCTAssertEqual(azul.hole(16)?.planTitle, "Híbrido al centro y wedge al green")
+        XCTAssertEqual(azul.hole(16)?.teeClub, "Híbrido")
+        XCTAssertEqual(azul.hole(16)?.hazards.count, 3)
+        XCTAssertEqual(azul.hole(12)?.planTitle, "Par 4 · 345 yd")
+        XCTAssertEqual(azul.hole(3)?.planTitle, "Par 4 · 409 yd")
+        XCTAssertEqual(azul.hole(1)?.planTitle, "Par 5 · 485 yd")
+        XCTAssertEqual(azul.hole(2)?.planTitle, "Par 5 · 474 yd")
+        XCTAssertEqual(azul.hole(10)?.planTitle, "Par 5 · 483 yd")
+        XCTAssertEqual(azul.hole(11)?.planTitle, "Par 3 · 186 yd")
         XCTAssertNotNil(azul.overview)
         let colorada = try await api.courseStrategy(courseKey: "1:Colorada", courseId: nil)
         XCTAssertEqual(colorada.holes.count, 18)

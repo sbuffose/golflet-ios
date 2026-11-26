@@ -29,6 +29,7 @@ struct TrackMark: Equatable, Sendable, Identifiable {
     var lost: Bool = false
     var provisional: Bool = false
     var recovery: Bool = false
+    var conceded: Bool = false
 }
 
 enum TrackSession {
@@ -47,9 +48,9 @@ enum TrackSession {
             case .confirmTee: return "Arrastrá el mapa para confirmar el tee"
             case .confirmFlag: return "Arrastrá el mapa para marcar la bandera"
             case .tracking: return "Arrastrá el mapa hasta donde terminó el golpe"
-            case .penaltyWhere: return "Penalidad: ¿adónde fue?"
+            case .penaltyWhere: return "Penalidad: ¿dónde fue?"
             case .relief: return "Penalidad. Elegí otra vez o drop"
-            case .drop: return "Arrastrá el mapa hasta el drop"
+            case .drop: return "Arrastrá hasta el lugar del drop"
             }
         }
     }
@@ -63,6 +64,33 @@ enum TrackSession {
     static func puttFeet(meters: Double) -> Int? {
         guard meters > 1.2, meters <= 25 else { return nil }
         return Int((meters * 3.28084).rounded())
+    }
+
+    /// The ball is in the cup. Any greater distance is still a shot in play.
+    static func inTheCup(meters: Double) -> Bool {
+        greenToHole(meters: meters) == "En el hoyo"
+    }
+
+    /// Under 3 ft, and not already in the cup.
+    static func shortPutt(meters: Double) -> Bool {
+        guard let label = greenToHole(meters: meters) else { return false }
+        return label.hasSuffix(" in")
+    }
+
+    /// Closing while the ball is still out adds the missing putt. It never lowers the total.
+    static func scoredClose(strokes: Int, putts: Int?, inCup: Bool) -> (strokes: Int, putts: Int?) {
+        let n = max(0, strokes)
+        if inCup { return (n, putts) }
+        return (n + 1, (putts ?? 0) + 1)
+    }
+
+    /// On the green the hole is in feet, or in inches under 3 ft. Under one inch is the cup.
+    static func greenToHole(meters: Double) -> String? {
+        guard meters.isFinite, meters >= 0 else { return nil }
+        let inches = Int((meters / 0.0254).rounded())
+        if inches < 1 { return "En el hoyo" }
+        if meters / 0.3048 < 3 - 0.000001 { return "\(inches) in" }
+        return "\(Int((meters / 0.3048).rounded())) ft"
     }
 
     static func set(_ state: State, at point: TrackPoint) -> State {
