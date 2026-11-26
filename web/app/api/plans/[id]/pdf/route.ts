@@ -12,7 +12,7 @@ export const GET = handle(async (req: Request, ctx: C) => {
   if (!d.course) return new Response(JSON.stringify({ error: "Todavía no tenemos el mapa de esta cancha" }), { status: 404, headers: { "content-type": "application/json" } });
   // t198u: printing is gated on course completeness (Jockey-level mapping); no half-empty cards
   if (d.course.completeness && !d.course.completeness.ready.libreta) return new Response(JSON.stringify({ error: "Cancha en relevamiento: todavía no tenemos todos los datos de esta cancha para imprimir la libreta", completeness: d.course.completeness }), { status: 409, headers: { "content-type": "application/json", "cache-control": "private, no-store" } });
-  const m = await getCourseMap(d.course.club_code, d.course.course);
+  const m = await getCourseMap(d.course.club_code, d.course.course, { layout: "current" });
   const pdf = yardagePdf(d, m);
   const name = `estrategia-${String(d.course.course).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${d.plan.date}.pdf`;
   return new Response(new Uint8Array(pdf), { headers: { "content-type": "application/pdf", "content-disposition": `inline; filename="${name}"`, "cache-control": "private, no-store" } });

@@ -100,7 +100,7 @@ test("the public bundle opens the already-played round and the two explicit read
     await page.waitForFunction(() => (document.querySelector("#cardstat")?.textContent || "").includes("No hay una tarjeta nueva"));
     await page.goto(`http://127.0.0.1:${port}/#/inicio`, { waitUntil: "networkidle0" });
     await page.waitForSelector('a[href="#/tee/tt-fixture"]');
-    await page.click('a[href="#/tee/tt-fixture"]');
+    await page.evaluate(() => (document.querySelector('a[href="#/tee/tt-fixture"]') as HTMLElement).click());
     await page.waitForSelector("#refresh-booking");
     const clear = await page.evaluate(() => {
       const button = document.querySelector("#refresh-booking") as HTMLElement;

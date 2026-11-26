@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="wedge"><path stroke="#0B2545" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" d="M30 52 V30"/><path stroke="#0B2545" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" d="M22 32h18l-1 16H24z"/><path stroke="#0B2545" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" d="M24 40h14"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 96" role="img" aria-label="wedge">
+  <path fill="#0B2545" d="M30.4 94V62h3.2V94z"/>
+  <path fill="#0B2545" d="M27 54h10l1.4 8H25.6z"/>
+  <path fill="#0B2545" d="M12 16h34c3.2 0 5.6 2.4 5 5.4L46 46c-1.2 6.2-6.4 10-14.2 10.6H22C14 56 8.4 51.6 7.2 45.2L6.2 22C5.6 18.6 8.2 16 12 16z"/>
+  <path fill="#F6F7F9" d="M18 24h26l-1.6 16H19.8z"/>
+  <path fill="none" stroke="#0B2545" stroke-width="1.15" stroke-linecap="round" d="M20 28.5h22M20 32.5h22M20 36.5h20"/>
+  <path fill="#0B2545" d="M6 48h50c1.6 0 2.6 1.5 2 3.2l-2.2 6.2c-.8 2.2-2.8 3.6-5.2 3.6H12.2c-2.6 0-4.8-1.4-5.6-3.8L4.2 51C3.6 49.4 4.6 48 6.2 48z"/>
+</svg>

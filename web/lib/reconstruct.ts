@@ -39,6 +39,8 @@ export type ManualRoundInput = {
   clubId: number | null;
   roundId: string | null;
   tee?: string | null;
+  /** Today's round is still being played, so it stays open until the card arrives. */
+  inPlay?: boolean;
 };
 
 const dayOk = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -58,9 +60,9 @@ export async function createManualRound(input: ManualRoundInput, sql?: Sql) {
   const tee = String(input.tee || "").trim().slice(0, 40) || null;
   const official = !!roundId;
   const [row] = await db(`insert into live_round (user_id, club_code, vm_course, club_id, course, date, tee, current_hole, origin, ended_at, round_id, official)
-    values ($1,$2,$3,$4,$5,$6,$7,1,'manual',now(),$8,$9)
+    values ($1,$2,$3,$4,$5,$6,$7,1,'manual', case when $10 then null else now() end, $8,$9)
     returning id, date::text as date, course, tee, club_code, vm_course, round_id, origin, official`, [
-    input.userId, input.clubCode, input.vmCourse, input.clubId, input.course, input.date, tee, roundId, official,
+    input.userId, input.clubCode, input.vmCourse, input.clubId, input.course, input.date, tee, roundId, official, !!input.inPlay,
   ]);
   return {
     id: String(row.id),
@@ -175,11 +177,12 @@ export async function updateManualShot(userId: string, liveId: string, shotId: s
   if (!existing) throw new HttpError(404, "No encontrado");
   const shot = shotFields({ ...body, hole: body.hole ?? 1 });
   const hole = body.hole == null ? null : shot.hole;
+  const touchIntent = Object.prototype.hasOwnProperty.call(body, "intent");
   const rows = await db(`update shot set lat=$2, lng=$3, source=$4, end_lat=$5, end_lng=$6, end_source=$7, penalty_strokes=$8, distance_m=$9, distance_kind=$10,
-      club=coalesce($11, club), lie=$12, result=$13, hole=coalesce($14, hole), intent=coalesce($17, intent), accuracy_m=null, updated_at=now()
+      club=coalesce($11, club), lie=$12, result=$13, hole=coalesce($14, hole), intent=case when $18::boolean then $17 else intent end, accuracy_m=null, updated_at=now()
     where id=$1 and user_id=$15 and live_round_id=$16 returning id`, [
     shotId, shot.placed.lat, shot.placed.lng, shot.placed.source, shot.placed.end_lat, shot.placed.end_lng, shot.placed.end_source,
-    shot.placed.penalty_strokes, shot.placed.distance_m, shot.placed.distance_kind, shot.club, shot.lie, shot.result, hole, userId, liveId, shot.intent,
+    shot.placed.penalty_strokes, shot.placed.distance_m, shot.placed.distance_kind, shot.club, shot.lie, shot.result, hole, userId, liveId, shot.intent, touchIntent,
   ]);
   if (!rows.length) throw new HttpError(404, "No encontrado");
   return present(shotId, shot);
@@ -188,9 +191,19 @@ export async function updateManualShot(userId: string, liveId: string, shotId: s
 export async function deleteManualShot(userId: string, liveId: string, shotId: string, sql?: Sql) {
   const db = wrap(sql);
   if (!/^[0-9a-f-]{36}$/i.test(shotId) || await liveOrigin(userId, liveId, db) !== "manual") throw new HttpError(404, "No encontrado");
-  const rows = await db(`delete from shot where id=$1 and user_id=$2 and live_round_id=$3 returning id`, [shotId, userId, liveId]);
+  const rows = await db(`delete from shot where id=$1 and user_id=$2 and live_round_id=$3 returning id, hole`, [shotId, userId, liveId]);
   if (!rows.length) throw new HttpError(404, "No encontrado");
+  await renumberHole(db, liveId, userId, Number(rows[0].hole));
   return { ok: true };
+}
+
+async function renumberHole(db: Sql, liveId: string, userId: string, hole: number) {
+  await db(`update shot s set shot_number = n.rn
+    from (
+      select id, row_number() over (order by shot_number, taken_at nulls last, id) as rn
+      from shot where live_round_id=$1 and user_id=$2 and hole=$3
+    ) n
+    where s.id = n.id and s.shot_number is distinct from n.rn`, [liveId, userId, hole]);
 }
 
 export async function listManualShots(userId: string, liveId: string, sql?: Sql) {

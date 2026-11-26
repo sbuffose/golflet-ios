@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createRequire } from "node:module";
 import { createWithLedger, normalizeIdempotencyKey, presentCreatedGroup } from "../lib/group-create";
-import { HI_UNIDENTIFIED, hiAttribution, hiCardLine, matchRoundCourse, monthColumns, MONTHS_VISIBLE, officialIndex, onCup, puttFeet, strategyChoice, trackCancel, trackDrop, trackEnter, trackNew, trackPenalty, trackReload, trackSet, windPlay, windRelative, coursePickerGroups } from "../lib/play-rules";
+import { HI_UNIDENTIFIED, hiAttribution, hiCardLine, holeCloseText, matchRoundCourse, monthColumns, MONTHS_VISIBLE, officialIndex, onCup, puttFeet, greenToHole, inTheCup, shortPutt, puttFollowsMiss, scoredClose, strategyChoice, trackCancel, trackDrop, trackEnter, trackNew, trackPenalty, trackReload, trackSet, windPlay, windRelative, coursePickerGroups } from "../lib/play-rules";
 
 const js = createRequire(import.meta.url)("../public/play-rules.js") as typeof import("../lib/play-rules");
 
@@ -139,6 +139,28 @@ test("la mira confirma tee, bandera y el hoyo solo en la copa", () => {
   assert.equal(onCup(1.3), false);
   assert.equal(puttFeet(10), Math.round(10 * 3.28084));
   assert.equal(puttFeet(1), null);
+  assert.equal(greenToHole(1.8288)?.text, "6 ft");
+  assert.equal(greenToHole(0.4572)?.text, "18 in");
+  assert.equal(greenToHole(0.9)?.unit, "in");
+  assert.equal(greenToHole(0.9144)?.text, "3 ft");
+  assert.equal(greenToHole(0)?.text, "En el hoyo");
+  assert.equal(inTheCup(0), true);
+  assert.equal(inTheCup(0.2794), false);
+  assert.equal(shortPutt(0.2794), true);
+  assert.equal(shortPutt(1.8288), false);
+  assert.equal(puttFollowsMiss([{ club: "Putter", result: null }]), true);
+  assert.equal(puttFollowsMiss([{ club: "Putter", result: "holed" }]), false);
+  assert.equal(puttFollowsMiss([{ club: "Putter", intent: "recovery" }]), false);
+  assert.equal(puttFollowsMiss([{ club: "Lob wedge", lie: "green" }]), false);
+  assert.equal(js.puttFollowsMiss([{ club: "Putter", result: null }]), true);
+  const forced = scoredClose(3, null, false);
+  assert.equal(forced.strokes, 4);
+  assert.equal(forced.putts, 1);
+  assert.equal(scoredClose(4, 2, true).strokes, 4);
+  const birdie = holeCloseText(5, forced.strokes, forced.putts);
+  assert.match(birdie.line, /4 golpes/);
+  assert.equal(birdie.vs, "Birdie");
+  assert.equal(birdie.line.includes("Águila"), false);
   const holed = trackEnter(far.state, { lat: 1.001, lng: 1 }, "Pt", true);
   assert.equal(holed.holed, true);
   let pen = trackPenalty(far.state);
@@ -155,6 +177,9 @@ test("la mira confirma tee, bandera y el hoyo solo en la copa", () => {
   const undone = trackCancel(pen);
   assert.equal(undone.marks.some(m => m.penalty), false);
   assert.equal(js.onCup(1.2), true);
+  assert.equal(js.inTheCup(0.2794), false);
+  assert.equal(js.shortPutt(0.2794), true);
+  assert.equal(js.scoredClose(3, null, false).strokes, 4);
   assert.equal(js.trackEnter(js.trackNew(), { lat: 0, lng: 0 }, null, true).recorded, false);
 });
 

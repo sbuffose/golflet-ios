@@ -89,7 +89,7 @@ struct HoleDetailView: View {
 
     private var map: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let geo = AzulCourse.layout(forCourse: courseName, hole: currentHole) {
+            if let geo = AzulCourse.layout(forCourse: courseName, hole: currentHole, playedOn: AzulCourse.legacyDay) {
                 DetailSatelliteMap(hole: geo)
                     .frame(height: 340)
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))

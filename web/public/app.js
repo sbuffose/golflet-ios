@@ -228,9 +228,38 @@ function heroMeta(){
     <a id="hcpimp" href="#/impacto"><div>Impacto</div><b class="num">${homeImpactMark()}</b></a>
   </div>`;
 }
+function trackCue(n){
+  const count = Math.max(0, Number(n) || 0);
+  if (!count) return "Trackear golpes";
+  return `Seguir track · ${count} ${count === 1 ? "golpe" : "golpes"}`;
+}
+function todayTrackCard(){
+  const round = G.today_round;
+  const booking = G.today_booking;
+  const ask = G.today_ask;
+  if (round?.id) return `<a class="card row vx-tap" id="today-track" href="#/reconstruir/${encodeURIComponent(round.id)}"><div class="body"><div class="t">Seguir la vuelta de hoy</div><div class="s">${esc(round.course || "Cancha")} · En juego · Tarjeta pendiente</div></div></a>`;
+  if (Array.isArray(ask) && ask.length) return `<div class="card" id="today-ask"><p class="t">${esc(G.today_prompt || "¿Azul o Colorada?")}</p><div class="seg">${ask.map(c => `<button type="button" data-today-course="${esc(c)}">${esc(c)}</button>`).join("")}</div></div>`;
+  if (booking && !booking.course_label) return `<div class="card" id="today-ask"><p class="t">¿Azul o Colorada?</p><div class="seg">${["Azul", "Colorada"].map(c => `<button type="button" data-today-course="${esc(c)}">${esc(c)}</button>`).join("")}</div></div>`;
+  if (booking) return `<button type="button" class="btn ghost" id="today-start">Trackear la vuelta de hoy</button>`;
+  return "";
+}
+function heroPlay(){
+  const round = G.today_round;
+  if (round?.id) return `<a class="hp-prac" id="today-track" href="#/reconstruir/${encodeURIComponent(round.id)}" aria-label="Seguir la vuelta de hoy"><span>Seguir vuelta</span></a>`;
+  if (G.today_booking || (Array.isArray(G.today_ask) && G.today_ask.length)) return `<button type="button" class="hp-prac" id="today-start-hero" aria-label="Trackear la vuelta de hoy"><span>Trackear</span></button>`;
+  return `<a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a>`;
+}
+function todayHeroFoot(){
+  const round = G.today_round;
+  const ask = Array.isArray(G.today_ask) && G.today_ask.length ? G.today_ask : (G.today_booking && !G.today_booking.course_label ? ["Azul", "Colorada"] : null);
+  if (round?.id) return `<a class="hi-hoy" href="#/reconstruir/${encodeURIComponent(round.id)}">${esc(round.course || "Cancha")} · En juego · Tarjeta pendiente</a>`;
+  if (ask) return `<div class="hi-hoy" id="today-ask"><span>${esc(G.today_prompt || "¿Azul o Colorada?")}</span>${ask.map(c => `<button type="button" data-today-course="${esc(c)}">${esc(c)}</button>`).join("")}</div>`;
+  if (G.today_booking) return `<p class="hi-hoy">${esc(G.today_booking.course_label || "Hoy")} · Tarjeta pendiente</p>`;
+  return "";
+}
 function heroActions(play){
   if (!play) return '';
-  return `<div class="hi-avs"><div id="hiprofs" hidden></div><div id="higroups" hidden></div><div class="hi-prac"><a class="hp-prac" href="#/jugar" aria-label="Jugar: mapa a pantalla completa para marcar el golpe"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Jugar</span></a><a class="hi-ch-l" href="#/cambios">Cambios</a></div></div>`;
+  return `<div class="hi-avs"><div id="hiprofs" hidden></div><div id="higroups" hidden></div><div class="hi-prac">${heroPlay()}<a class="hi-ch-l" href="#/cambios">Cambios</a></div></div>`;
 }
 function homeCircle(){
   return '';
@@ -239,7 +268,7 @@ function vInicio(){
   const av = G.user?.photo_url ? `<img class="avatar av-img" src="${esc(G.user.photo_url)}" alt="">` : esc(initials());
   const top = `<div class="top"><img class="cad xs" src="/brand/caddie.png" alt=""><span class="overline">${esc(G.clubs[0]?.club_name || 'Golflet')}${G.clubs.length>1?` +${G.clubs.length-1}`:''}</span><span class="tophead"><a class="avatar" href="#/cuenta" aria-label="Tu cuenta">${av}${NBADGE}</a></span><a class="ttpill" id="ttpill" href="#/tees" hidden><span class="tp-l">Próximo tee time</span><span class="tp-v num"></span><span class="tp-c"></span></a></div>
   <h1 class="ltitle greet" id="greet"><span class="soft">Hola,</span> <span class="accent">${esc(firstName())}</span></h1>`;
-  if (!valid.length) return top + homeCircle() + revealCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas. Actualizalas desde Cuenta.</div>` : emptyData('Empecemos por tu club'));
+  if (!valid.length) return top + homeCircle() + revealCard() + todayTrackCard() + (G.clubs.length ? `<div class="msg" style="margin-top:12px">Tus clubes están vinculados pero todavía no hay tarjetas. Actualizalas desde Cuenta.</div>` : emptyData('Empecemos por tu club'));
   const hi = G.hi_history, d = hi.length>1 ? hi[hi.length-1].hi - hi[0].hi : null;
   const last = rounds.find(r => r.official !== false) || rounds[0];
   const hiNow = window.GolfletRules ? window.GolfletRules.officialIndex(G.player?.handicap_index, (hi || []).filter(h => h.hi != null).map(h => ({ date: h.date, hi: +h.hi }))) : (hi.at(-1)?.hi ?? G.player?.handicap_index ?? null);
@@ -249,6 +278,7 @@ function vInicio(){
     <a class="vx-hlink" href="${rlink('handicap',{scope:'all'})}"><div class="overline">Handicap Index</div>
     ${hiMark}</a>${hiNow == null ? '' : hiBand(hi, d)}
     ${heroMeta()}
+    ${todayHeroFoot()}
   </div>${homeCircle()}</div>
   <div class="o2"><div class="section"><h2>Última ronda</h2><a href="#/rondas">Ver todas</a></div>
   ${roundRow(last, true, true)}</div></div>
@@ -393,10 +423,18 @@ function vRondas(){
   if (segL!=='Todas' && !course(segL)) segL='Todas';
   const list = rounds.filter(r=>segL==='Todas'||r.course_key===segL), by = {};
   list.forEach(r=>(by[r.date.slice(0,4)] ||= []).push(r));
-  const unofficial = (G.unofficial_rounds || []).map(r => `<a class="row rc-off" href="#/reconstruir/${encodeURIComponent(r.id)}">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course || "Cancha")}</div><div class="s">No oficial${r.tee ? " · Tee " + esc(r.tee) : ""}</div></div><span class="badge">No oficial</span></a>`).join("");
-  const unofficialBlock = unofficial ? `<div class="section"><h2>No oficial</h2></div><p class="foot">Estas vueltas no tienen tarjeta del club. No entran en tus promedios ni en los números del grupo.</p><div class="list">${unofficial}</div>` : "";
+  const unofficial = (G.unofficial_rounds || []).map(r => {
+    const pending = r.pending_label === "En juego" || r.pending_label === "Tarjeta pendiente" ? r.pending_label : "";
+    const badge = pending || "No oficial";
+    const line = pending === "En juego" ? "Tarjeta pendiente" : badge;
+    const tee = r.tee ? " · Tee " + esc(r.tee) : "";
+    return `<a class="row rc-off" href="#/reconstruir/${encodeURIComponent(r.id)}">${dateBlock(r.date)}<div class="body"><div class="t">${esc(r.course || "Cancha")}</div><div class="s">${line}${tee}</div></div><span class="badge">${badge}</span></a>`;
+  }).join("");
+  const linkAsk = (G.link_asks || []).map(a => `<div class="card" id="link-ask"><b>Hay más de una vuelta para esta tarjeta.</b><p class="foot">Elegí cuál vincular. No las unimos solas.</p>${(a.liveIds || []).flatMap(live => (a.roundIds || []).map(round => `<button type="button" class="btn ghost sm" data-link-live="${esc(live)}" data-link-round="${esc(round)}">Vincular ${esc(a.course || "la cancha")} · ${esc(a.date || "")}</button>`)).join("")}</div>`).join("");
+  const pendingRows = (G.unofficial_rounds || []).some(r => r.pending_label === "En juego" || r.pending_label === "Tarjeta pendiente");
+  const unofficialBlock = unofficial ? `<div class="section"><h2>${pendingRows ? "En juego" : "No oficial"}</h2></div><p class="foot">${pendingRows ? "La tarjeta del club todavía no llegó. Cuando llegue, esta vuelta cuenta como oficial." : "Estas vueltas no tienen tarjeta del club. No entran en tus promedios ni en los números del grupo."}</p><div class="list">${unofficial}</div>` : "";
   return `<div class="top"><span class="overline">${rounds.length} tarjetas · ${G.clubs.length===1?esc(G.clubs[0].club_name):G.clubs.length+' clubes'}</span></div>
-  <h1 class="ltitle">Rondas</h1>${reconEntry()}${G.courses.length>1?`<div class="seg">${segBtns(segL,'segl')}</div>`:''}
+  <h1 class="ltitle">Rondas</h1>${reconEntry()}${linkAsk}${todayTrackCard()}${G.courses.length>1?`<div class="seg">${segBtns(segL,'segl')}</div>`:''}
   <div class="rsort" role="radiogroup" aria-label="Ordenar"><span aria-hidden="true">Ordenar</span>${[['date','Fecha'],['gross','Mejor gross'],['net','Mejor neto']].map(([k,l])=>`<button type="button" role="radio" aria-checked="${sortL===k}" class="${sortL===k?'on':''}" data-sortl="${k}">${l}</button>`).join('')}</div>
   ${sortL==='gross' ? `<div class="list">${list.filter(r=>r.valid_card&&r.gross&&!r.is_9_holes).sort((a,b)=>a.gross-b.gross||(a.date<b.date?1:-1)).map(r=>roundRow(r, false, true)).join('')}</div><p class="foot">Solo tarjetas válidas de 18 hoyos, de la mejor a la peor.</p>` :
     sortL==='net' ? `<div class="list">${list.filter(r=>r.valid_card&&r.gross&&!r.is_9_holes).sort((a,b)=>(a.net==null)-(b.net==null)||(a.net??0)-(b.net??0)||(a.date<b.date?1:-1)).map(r=>roundRow(r, false, true)).join('')}</div><p class="foot">Solo tarjetas válidas de 18 hoyos, por neto de menor a mayor; las que no tienen neto van al final.</p>` :
@@ -416,7 +454,7 @@ function nine(r, c, from){
     <span class="lab">Hoyo</span>${hs.map(h=>`<span class="h">${h[0]}</span>`).join('')}<span class="h">${from?'VTA':'IDA'}</span>
     ${ydRow}
     <span class="lab">Par</span>${hs.map(h=>`<span class="c">${h[1]??''}</span>`).join('')}<span class="tot" style="color:var(--color-ink2);font-weight:var(--fw500,500)">${tot(hs.map(h=>h[1]))}</span>
-    <span class="lab"></span>${hs.map(h=>`<span class="sc-s"><span class="b ${cls(h[2]==null||h[1]==null?null:h[2]-h[1])}">${h[2]??'·'}</span></span>`).join('')}<span class="tot">${tot(hs.map(h=>h[2]))}</span>
+    <span class="lab"></span>${hs.map(h=>`<span class="sc-s"><span class="b ${cls(h[2]==null||h[1]==null?null:h[2]-h[1])}${(r.track_diff || []).includes(h[0]) ? " gap" : ""}">${h[2]??'·'}</span></span>`).join('')}<span class="tot">${tot(hs.map(h=>h[2]))}</span>
   </div>`;
 }
 function holeTally(r){
@@ -451,6 +489,7 @@ function sRonda(id){
   ${r.holes?.length?`<div class="card" style="margin-top:12px;padding:14px 12px">${nine(r,c,0)}<div class="sc"><span class="div"></span></div>${nine(r,c,9)}
     ${scoreKey(holeTally(r))}</div>`:`<div class="msg" style="margin-top:12px">${r.other_course?`Tarjeta jugada en ${esc(r.club_name)}. Tu club solo comparte los totales de las canchas que no son de tus clubes, así que no cuenta para las estadísticas por hoyo.`:'Tu club no publica el detalle hoyo por hoyo de esta tarjeta.'}</div>`}
   <p class="foot" id="difnote">${r.position?`${r.position}º de ${r.field_size}. `:''}*Diferencial estimado por Golflet.${warn.length?` <span class="warnmark">*</span>Yardas a revisar en hoyos ${warn.join(', ')}.`:''}</p>
+  ${(r.track_diff || []).length ? `<p class="foot" id="track-gap">El hoyo ${(r.track_diff || []).join(", ")} difiere del track. El score de la tarjeta queda igual.</p>` : ""}
   <div id="hmap"></div>
   <div id="rwx" hidden></div>
   <div class="section"><h2>Estadísticas de la ronda</h2>${has?'<span class="badge" id="gamebadge">Cargado</span>':''}</div>
@@ -741,30 +780,22 @@ function sourcesNote(clubs){
   return `<div class="tt-src">${clubs.map(c => { const b = c.pages.bookings; const bad = Object.entries(c.pages).filter(([,v]) => v.status==='missing' || v.status==='error');
     return `<div><b>${esc(c.club_name)}</b><span>${!b ? 'Todavía sin leer: se lee en la próxima actualización.' : b.status==='ok' ? `${b.items} ${b.items===1?'reserva':'reservas'} · leído ${ago(b.checked_at)}` : b.status==='empty' ? `Sin reservas próximas · leído ${ago(b.checked_at)}` : b.status==='missing' ? 'Este club no tiene la página de reservas.' : `No pudimos leer las reservas. La última lectura sigue siendo ${ago(b.checked_at)}.`}${bad.filter(([k])=>k!=='bookings').length ? ` · Falta: ${bad.filter(([k])=>k!=='bookings').map(([k])=>PAGEL[k]).join(', ')}` : ''}</span></div>`; }).join('')}</div>`;
 }
-/* t145u: "Hola, <Nombre>" never overlaps the PRÓXIMO TEE TIME tab and is never truncated.
-   1) reserve = tab width (inside the content box) + 12px gap; 2) if the greeting fits on one line at 42px → leave it;
-   3) else scale it down to fit (not below 28px); 4) still too long → tab drops to its own row under the greeting (flush right)
-   and the greeting gets the full width (scaled ≥ 28px, wrapping only as a last resort). No tee time → full width, same 42→28 rule. */
+/* "Hola, <Nombre>" keeps the full width (scaled from 42px down to 28px only when the name itself does not fit).
+   The next-tee-time chip never shares that line: it sits on its own row, under the greeting. */
 function fitGreeting(){
   const h = $('#greet'); if (!h) return; const top = h.previousElementSibling, pill = $('#ttpill'), has = !!(pill && !pill.hidden);
   h.style.fontSize = ''; h.style.paddingRight = '0px'; h.style.whiteSpace = 'nowrap'; h.style.marginBottom = ''; h.style.minHeight = ''; h.classList.remove('tt-below'); if (pill) pill.style.top = '';
   const base = parseFloat(getComputedStyle(h).fontSize) || 42, MIN = 28, W = h.clientWidth; if (!W) return;
   const rg = document.createRange(); rg.selectNodeContents(h); const nat = rg.getBoundingClientRect().width + 2;
-  const vp = parseFloat(getComputedStyle(view).paddingRight) || 18, reserve = has ? Math.max(0, pill.offsetWidth - vp) + 12 : 0, avail = W - reserve;
-  if (nat <= avail) { h.style.paddingRight = reserve + 'px'; return; }
-  const s = base * avail / nat * .98;
-  if (has && s >= MIN) { h.style.fontSize = s.toFixed(1) + 'px'; h.style.paddingRight = reserve + 'px'; return; }
-  const s2 = base * W / nat * .98; h.style.paddingRight = '0px';
-  if (s2 < base) h.style.fontSize = Math.max(MIN, s2).toFixed(1) + 'px';
-  if (s2 < MIN) h.style.whiteSpace = 'normal';
-  if (!has) return;
+  if (nat > W) { const s = base * W / nat * .98; h.style.fontSize = Math.max(MIN, s).toFixed(1) + 'px'; if (s < MIN) h.style.whiteSpace = 'normal'; }
+  if (!has || !top) return;
+  /* The tee-time chip used to share the greeting line and cover the name. It sits on its own row, under the whole greeting. */
   h.classList.add('tt-below'); h.style.minHeight = '0px';
-  const tb = (() => { const r2 = document.createRange(); r2.selectNodeContents(h); return r2.getBoundingClientRect().bottom; })();
-  const off = Math.max(h.getBoundingClientRect().bottom, tb) - top.getBoundingClientRect().top + 6;
-  pill.style.top = off + 'px'; h.style.marginBottom = (pill.offsetHeight + 4 + 18) + 'px';
+  const off = h.getBoundingClientRect().bottom - top.getBoundingClientRect().top + 8;
+  pill.style.top = off + 'px'; h.style.marginBottom = (pill.offsetHeight + 16) + 'px';
 }
 let fitT; addEventListener('resize', () => { clearTimeout(fitT); fitT = setTimeout(fitGreeting, 80); });
-document.fonts?.addEventListener?.('loadingdone', () => fitGreeting());
+document.fonts?.addEventListener?.('loadingdone', () => { fitGreeting(); sizeHiAvs(); });
 async function loadTeeCard(fresh){
   const el = $('#tees'); if (!el) return;
   let d = fresh; if (!d) { try { d = await api('/api/tee-times?scope=upcoming&limit=4'); } catch(e){ el.innerHTML = ''; return; } }
@@ -1132,6 +1163,7 @@ async function loadTee(id, opts){
       ${t.event_name?`<p class="foot" style="margin-top:8px">${esc(t.event_name)}</p>`:''}
       <button type="button" class="btn ghost sm" id="refresh-booking">Actualizar reserva</button><p class="foot" id="bookstat">${esc(BOOK_NOTE)}</p>
       <a class="btn gm-cta" href="#/partido/nuevo?tee=${esc(t.id)}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4 16L14 6M14 6h-5M14 6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.5" cy="15.5" r="2" fill="currentColor"/></svg>Armar partido</a>
+      ${String(t.date) === String(G.today || "") ? (G.today_round?.id ? `<a class="btn ghost" id="tee-track" href="#/reconstruir/${encodeURIComponent(G.today_round.id)}">Seguir la vuelta de hoy</a>` : `<button type="button" class="btn ghost" id="today-start" data-tee="${esc(t.id)}">Trackear la vuelta de hoy</button>`) : ""}
       ${minsTo > 30 ? `<a class="btn gp-cta" href="#/plan/nuevo?tee=${esc(t.id)}">Preparar estrategia de juego</a>` : ''}
       <div class="section"><h2>Jugás con</h2><a class="link" href="#/partidos">Historial</a></div>${comps(t).length?`<div class="list">${comps(t).map(c=>`<a class="row gm-crow" href="#/partidos?p=${encodeURIComponent('n:' + (window.GolfletMatchCore ? window.GolfletMatchCore.normName(c.name) : c.name.toLowerCase()))}" aria-label="${esc(c.name)}${c.hcp!=null?`, HI ${f1(c.hcp)}`:', HI no disponible'}. Ver partidos con ${esc(c.name)}"><div class="avatar sm">${esc(compInit(c.name))}</div><div class="body"><div class="t">${esc(c.name)}</div></div>${c.hcp!=null?`<div class="score"><b class="num">${f1(c.hcp)}</b><span>HI</span></div>`:`<div class="score"><span>HI no disponible</span></div>`}</a>`).join('')}</div>`:'<p class="foot">Sin otros jugadores en la línea por ahora.</p>'}
       <div id="scorecards"></div>
@@ -1239,6 +1271,15 @@ function sPutting(m){ return `<div class="bar"><span class="overline">Putting ·
 function asidePutting(m){ return `<div class="mdl-h">Putting</div><a class="mdl-row ${!m?'on':''}" href="#/putting"><span class="mdl-t">Resumen</span></a>` + Object.entries(PM).map(([k,l])=>`<a class="mdl-row ${k===m?'on':''}" href="#/putting/${k}"><span class="mdl-t">${l}</span></a>`).join(''); }
 const NOGPS = `<div class="msg">Esto sale de las rondas con GPS: en el iPhone marcá cada putt con el putter. Todavía no hay hoyos con putts marcados en este período.</div>`;
 const NONOTES = `<div class="msg">Todavía no cargaste putts. Abrí una ronda en Rondas y completá “Putts” al final.</div>`;
+const puttLen = yd => {
+  const Rules = globalThis.GolfletRules;
+  if (yd == null || !Number.isFinite(+yd)) return '—';
+  if (Rules && typeof Rules.greenToHole === 'function') {
+    const span = Rules.greenToHole(+yd * 0.9144);
+    if (span && span.unit !== 'cup') return span.text;
+  }
+  return '—';
+};
 async function loadPutting(m){
   const el = $('#putting'); if (!el) return;
   let d; try { d = PUT = await api(`/api/putting?${rq()}`); } catch(e){ el.innerHTML = `${errBox(e)}`; return; }
@@ -1253,7 +1294,7 @@ async function loadPutting(m){
       ${tile('one', PM.one, d.one_putts.pct==null?'—':d.one_putts.pct+'%', d.one_putts.per_round!=null?`${nf(d.one_putts.per_round)} por ronda`:'necesita GPS')}
       ${tile('three', PM.three, d.three_putts.pct==null?'—':d.three_putts.pct+'%', d.three_putts.per_round!=null?`${nf(d.three_putts.per_round)} por ronda`:'necesita GPS')}
       ${tile('course', PM.course, d.by_course.length, 'canchas con datos')}
-      ${tile('distance', 'Primer putt', d.distance.avg_yd==null?'—':nf(d.distance.avg_yd)+' yd', d.distance.holes_yd?`${d.distance.holes_yd} hoyos`:'necesita GPS')}</div>
+      ${tile('distance', 'Primer putt', puttLen(d.distance.avg_yd), d.distance.holes_yd?`${d.distance.holes_yd} hoyos`:'necesita GPS')}</div>
       ${d.per_round.trend?`<div class="section"><h2>Tendencia</h2></div><a class="card ot-card vx-tap" href="#/putting/putts">${lineChart(d.per_round.series.map(x=>({ v:x.putts, label:dmy(x.date) })), null)}<p class="foot" style="margin:6px 2px 0">Primera mitad ${nf(d.per_round.trend.first_half)} · segunda mitad ${nf(d.per_round.trend.second_half)} putts por ronda.</p></a>`:''}${src}`;
   } else if (m === 'putts'){
     const s = d.per_round.series;
@@ -1269,7 +1310,7 @@ async function loadPutting(m){
     const o = m === 'one' ? d.one_putts : d.three_putts, k = m === 'one' ? 'one_putt_pct' : 'three_putt_pct';
     h = `<div class="stitle">${PM[m]}</div>` + (!o.holes ? NOGPS : `<div class="pills"><div class="pill dark"><b class="num">${o.pct}%</b><span>De los hoyos</span></div><div class="pill"><b class="num">${o.count}</b><span>Hoyos</span></div><div class="pill"><b class="num">${nf(o.per_round)}</b><span>Por ronda</span></div></div>
       ${d.distance.holes_yd?`<div class="section"><h2>Según la distancia del primer putt</h2></div><div class="card gg-bars">${d.distance.bins_yd.filter(b=>b.n).map(b=>`<div class="bx-dist"><span class="bx-dl">${b.label}<small class="num">${b.n} hoyos</small></span><span class="bx-bar"><span style="flex:${b[k]||0};background:${m==='one'?'#0F3D2E':'#C8102E'}"></span><span style="flex:${100-(b[k]||0)};background:#F1EEE6"></span></span><b class="num pt-pct">${b[k]}%</b></div>`).join('')}</div>`:''}
-      ${m==='three' && o.list.length?`<div class="section"><h2>Últimos 3 putts</h2></div><div class="list">${o.list.map(x=>`<div class="row"><div class="date"><b class="num">${x.hole}</b><span>hoyo</span></div><div class="body"><div class="t">${esc(x.course_label)}</div><div class="s">${dmy(x.date)}${x.first_putt_yd!=null?` · primer putt a ${nf(x.first_putt_yd)} yd`:''}</div></div><div class="score"><b class="num">${x.putts}</b><span>putts</span></div></div>`).join('')}</div>`:''}`);
+      ${m==='three' && o.list.length?`<div class="section"><h2>Últimos 3 putts</h2></div><div class="list">${o.list.map(x=>`<div class="row"><div class="date"><b class="num">${x.hole}</b><span>hoyo</span></div><div class="body"><div class="t">${esc(x.course_label)}</div><div class="s">${dmy(x.date)}${x.first_putt_yd!=null?` · primer putt a ${puttLen(x.first_putt_yd)}`:''}</div></div><div class="score"><b class="num">${x.putts}</b><span>putts</span></div></div>`).join('')}</div>`:''}`);
   } else if (m === 'course'){
     h = `<div class="stitle">${PM.course}</div>` + (!d.by_course.length ? NONOTES : `<div class="list">${d.by_course.map(c=>`<div class="row"><div class="body"><div class="t">${esc(c.course_label)}</div><div class="s">${c.rounds_noted} ronda${c.rounds_noted===1?'':'s'} con putts${c.gps_holes?` · ${nf(c.putts_per_hole,2)} putts por hoyo con GPS · 3 putts ${c.three_putt_pct}%`:''}</div></div><div class="score"><b class="num">${nf(c.avg_putts)}</b><span>putts/ronda</span></div></div>`).join('')}</div>
       ${d.by_course.some(c=>c.gps_holes)?`<p class="foot"><a class="link" href="#/putting/hole">Ver putts hoyo por hoyo</a></p>`:''}`);
@@ -1278,9 +1319,9 @@ async function loadPutting(m){
     h = `<div class="stitle">${PM.hole}</div>` + (!cs.length ? NOGPS : cs.map(c=>{ const mx = Math.max(3, ...c.by_hole.map(x=>x.avg_putts));
       return `<div class="section"><h2>${esc(c.course_label)}</h2><span class="badge">${c.gps_holes} hoyos</span></div><div class="card pt-holes">${c.by_hole.map(x=>`<a class="pt-hr" href="#/hoyo/${encodeURIComponent(c.course_key)}/${x.hole}"><span class="num pt-hn">${x.hole}</span><span class="pt-hb"><span style="width:${x.avg_putts/mx*100}%;background:${x.avg_putts>=2.2?'#C8102E':x.avg_putts<=1.6?'#0F3D2E':'#9DB8A6'}"></span></span><b class="num">${nf(x.avg_putts,2)}</b><small class="num">${x.three_putts?`${x.three_putts}× 3p`:''}</small></a>`).join('')}</div>`; }).join('') + `<p class="foot">Putts promedio por hoyo en tus rondas con GPS. Rojo: 2,2 o más; verde: 1,6 o menos.</p>`);
   } else if (m === 'distance'){
-    h = `<div class="stitle">${PM.distance}</div>` + (!d.distance.holes_yd ? NOGPS : `<div class="pills"><div class="pill dark"><b class="num">${nf(d.distance.avg_yd)} yd</b><span>Promedio</span></div><div class="pill"><b class="num">${d.distance.holes_yd}</b><span>Hoyos</span></div><div class="pill"><b class="num">${d.distance.at_pin}</b><span>Con bandera</span></div></div>
+    h = `<div class="stitle">${PM.distance}</div>` + (!d.distance.holes_yd ? NOGPS : `<div class="pills"><div class="pill dark"><b class="num">${puttLen(d.distance.avg_yd)}</b><span>Promedio</span></div><div class="pill"><b class="num">${d.distance.holes_yd}</b><span>Hoyos</span></div><div class="pill"><b class="num">${d.distance.at_pin}</b><span>Con bandera</span></div></div>
       <div class="card"><table class="gg-t pt-bins"><thead><tr><th>Primer putt</th><th>Hoyos</th><th>Putts</th><th>1 putt</th><th>3 putts</th></tr></thead><tbody>${d.distance.bins_yd.map(b=>`<tr><th>${b.label}</th><td class="num">${b.n}</td><td class="num">${nf(b.avg_putts,2)}</td><td class="num">${b.one_putt_pct==null?'—':b.one_putt_pct+'%'}</td><td class="num">${b.three_putt_pct==null?'—':b.three_putt_pct+'%'}</td></tr>`).join('')}</tbody></table></div>`)
-      + `<div class="section"><h2>Cómo se mide</h2></div><div class="card qt-how"><p>Es la distancia, en yardas, entre donde marcaste el primer putt con GPS y la <b>bandera de ese día</b>: la que cargó el club, la que marcaste vos con “Estoy en la bandera” o la que marcó otro jugador ese día.</p><p>Si nadie marcó la bandera de ese hoyo se mide al <b>centro del green</b>: con la bandera adelante o atrás puede errar varias yardas.</p></div>`;
+      + `<div class="section"><h2>Cómo se mide</h2></div><div class="card qt-how"><p>Es la distancia, en pies (o en pulgadas si queda a menos de 3 ft), entre donde marcaste el primer putt con GPS y la <b>bandera de ese día</b>: la que cargó el club, la que marcaste vos con “Estoy en la bandera” o la que marcó otro jugador ese día.</p><p>Si nadie marcó la bandera de ese hoyo se mide al <b>centro del green</b>: con la bandera adelante o atrás puede errar unos pies.</p></div>`;
   } else h = `<div class="msg err">Métrica desconocida.</div>`;
   el.innerHTML = h + (m ? src : '');
 }
@@ -1412,7 +1453,7 @@ async function loadMetricas(sub, b){
   el.innerHTML = `<div class="grid2">${metTile('#/putting/putts', 'Putts por ronda', nf(pu.per_round ?? P?.per_round?.avg ?? pu.per_round_est), pu.per_round != null ? `${pu.rounds.length} ${pu.rounds.length === 1 ? 'ronda' : 'rondas'}` : P?.per_round?.avg != null ? `${P.per_round.n} rondas` : pu.per_round_est != null ? `estimado con ${pu.holes} hoyos` : '')}
       ${metTile('#/putting/hole', 'Putts por hoyo', nf(pu.per_hole, 2), `${pu.holes} ${pu.holes === 1 ? 'hoyo' : 'hoyos'}`)}${metTile('#/putting/one', '1 putt', pctv(pu.one_putt_pct), 'de los hoyos')}${metTile('#/putting/three', '3 putts', pctv(pu.three_putt_pct), 'de los hoyos')}</div>
     <div class="section"><h2>Primer putt</h2>${fp.holes ? `<span class="badge">${fp.holes}</span>` : ''}</div>
-    ${fp.holes ? `<a class="card stat vx-tap met-t" href="#/putting/distance"><div class="k">Distancia promedio a la bandera</div><div class="v num">${nf(fp.avg_yd)} yd</div><div class="d">${fp.holes} ${fp.holes === 1 ? 'hoyo' : 'hoyos'} con el primer putt marcado</div></a>
+    ${fp.holes ? `<a class="card stat vx-tap met-t" href="#/putting/distance"><div class="k">Distancia promedio a la bandera</div><div class="v num">${puttLen(fp.avg_yd)}</div><div class="d">${fp.holes} ${fp.holes === 1 ? 'hoyo' : 'hoyos'} con el primer putt marcado</div></a>
       <div class="card list met-list">${fp.bins.map(x => `<div class="row"><div><div class="t num">${x.label}</div><div class="s"><span class="num">${x.holes}</span> ${x.holes === 1 ? 'hoyo' : 'hoyos'}</div></div><div class="r"><b class="num">${x.avg_putts == null ? '—' : nf(x.avg_putts, 2)}</b><span class="s">putts promedio</span></div></div>`).join('')}</div>
       <p class="foot">Desde donde marcaste el primer putt hasta la bandera que marcaste${fp.at_center ? `; en <b class="num">${fp.at_center}</b> ${fp.at_center === 1 ? 'hoyo' : 'hoyos'} sin bandera marcada, al centro del green` : ''}.</p>`
       : `<p class="foot">Marcá el primer putt con “Marcar putt con GPS” para ver desde qué distancia putteás.</p>`}
@@ -1448,6 +1489,7 @@ async function loadJugar(id){
     const groups = window.GolfletRules ? window.GolfletRules.coursePickerGroups(cs) : [{ code: 'c', club: '', distance: null, rows: cs.map(c => ({ id: c.course_id, name: c.course_label || c.label })) }];
     const courseRadios = (rows, checkedFirst) => rows.map((c, i) => `<label class="row jg-course" id="course-${esc(c.id)}"><input type="radio" name="jgc" value="${esc(c.id)}" ${checkedFirst && i === 0 ? 'checked' : ''}><span class="body"><span class="t">${esc(c.name)}</span>${c.club ? `<span class="s">${esc(c.club)}</span>` : ''}</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 1l6 6-6 6"/></svg></label>`).join('');
     el.innerHTML = `<div class="stitle">Empezar ronda</div>
+      ${todayTrackCard()}
       ${open ? `<a class="card row vx-tap jg-open" href="#/jugar/${esc(open.id)}"><div><div class="t">Seguir la ronda de hoy</div><div class="s">${esc(open.course || open.vm_course || 'Cancha')} · hoyo ${open.current_hole || 1}</div></div>${ICON.chev || '›'}</a>` : ''}
       <p class="lede">Elegí la cancha. En el hoyo confirmás el tee, después la bandera, y cada golpe con ENTER. El mapa se mueve bajo la mira.</p>
       <div class="section"><h2>Mis clubes</h2></div>
@@ -1529,7 +1571,12 @@ async function loadJugar(id){
   if (!$('#jugbody')) return;
   if (window.GolfletTrack) {
     if (LV?.watch != null && navigator.geolocation) navigator.geolocation.clearWatch(LV.watch);
-    window.GolfletTrack.mount(el, { id, live: LV.live, shots: LV.shots || [], holes: LV.holes || [], api, esc, toast, cid, bag: G.bag || [] });
+    let playBag = G.bag || [];
+    try {
+      const gear = await api('/api/my-clubs/items');
+      if (window.GolfletGear && typeof window.GolfletGear.attach === 'function') playBag = window.GolfletGear.attach(playBag, gear.clubs || []);
+    } catch (e) {}
+    window.GolfletTrack.mount(el, { id, live: LV.live, shots: LV.shots || [], holes: LV.holes || [], api, esc, toast, cid, bag: playBag });
     return;
   }
   drawJugar(); jugPace(); jugWatch();
@@ -1756,7 +1803,7 @@ function vBolsa(){
   <div class="section"><h2>Distancias</h2><span class="badge">yardas</span></div>
   <div class="card bagsum">${yard.length?`<p class="bagsum-n num" id="bagcount">${filled} de ${yard.length}</p>`:`<p><a class="btn" id="bag-add" href="#/equipo/nuevo">Agregar palo</a></p>`}<div id="bagmsg" class="bagsum-d">${yard.length?(filled?'Palos con una distancia que cargaste vos.':'Todavía sin distancias. Cargá carry y total en yardas para que Golflet te sugiera el tiro en cada hoyo.'):'La bolsa está vacía.'}</div><p class="bagsum-note">Lo que escribís y los tiros medidos por GPS se cuentan aparte. Un guion es un dato que no cargaste. El putter no lleva yardas acá.</p></div>
   <div class="bagtable"><div class="baghdr" aria-hidden="true"><span>Palo</span><span>Carry</span><span>Total</span></div>
-  <div class="list">${bag.map((b,i)=>isPutterName(b.club) ? `<div class="bagrow bag-putter" data-club="${esc(b.club)}" data-putter="1"><span class="n">${esc(b.club)}<small class="bsrc">Sin distancia en la bolsa</small></span><span class="bag-noputt">El putter no lleva yardas. En TRACK los metros del putt se cargan en el hoyo.</span></div>` : `<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
+  <div class="list">${bag.map((b,i)=>isPutterName(b.club) ? `<div class="bagrow bag-putter" data-club="${esc(b.club)}" data-putter="1"><span class="n">${esc(b.club)}<small class="bsrc">Sin distancia en la bolsa</small></span><span class="bag-noputt">El putter no lleva yardas. En TRACK la distancia del putt se muestra en pies o pulgadas.</span></div>` : `<div class="bagrow" data-club="${esc(b.club)}"><span class="n">${esc(b.club)}<small class="bsrc"></small></span><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="carry" value="${b.carry??''}" placeholder="—" aria-label="Carry de ${esc(b.club)} en yardas${b.carry==null?', sin dato':''}"><span>yd</span></label><label class="bagyd"><input inputmode="numeric" data-i="${i}" data-k="total" value="${b.total??''}" placeholder="—" aria-label="Total de ${esc(b.club)} en yardas${b.total==null?', sin dato':''}"><span>yd</span></label><div class="bgps" hidden></div></div>`).join('')}</div></div>
   <p class="foot" id="bagsaved">Tu distancia es la que manda. Al lado, lo que mediste con GPS (total, no carry). Yardas, sin datos inventados.</p>
   <div class="section"><h2>Distancias por palo</h2><span class="badge gold">GPS</span></div><div id="cdist"><div style="padding:20px 0;text-align:center"><span class="spin"></span></div></div><div id="gpsrounds"></div>`;
 }
@@ -1819,16 +1866,24 @@ async function loadHiProfs(){
     }
     el.hidden = false;
   } catch(e){ el.hidden = true; }
+  sizeHiAvs();
 }
 /* t147u/t148u/t149u: the player's groups on the HI card, as ONE element (stacked photos/initials + count) → #/amigos (list) → #/grupo/:id.
    No groups → gold "+" circle "Crear grupo" → #/amigos/nuevo. */
 function sizeHiAvs(){ const a = document.querySelector('.hero .hi-avs'), h = a?.closest('.hero'); if (!h) return; h.classList.remove('avs-below');
-  /* t155u: profesor on top, groups below, right-aligned. If the stack would touch the label's longest word or the big HI number, it moves to its own row above. */
-  const w = [...a.children].some(c => !c.hidden) ? a.offsetWidth + 14 : 0; h.style.setProperty('--avw', w + 'px'); if (!w) return;
-  const ov = h.querySelector('.vx-hlink .overline');
-  if (ov) { const probe = document.createElement('span'); probe.textContent = 'HANDICAP'; probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap'; ov.appendChild(probe); const need = probe.offsetWidth; probe.remove(); if (ov.clientWidth - w < need) { h.classList.add('avs-below'); return; } }
-  const big = h.querySelector('.big'); if (!big) return; const rg = document.createRange(); rg.selectNodeContents(big); const b = rg.getBoundingClientRect(), r = a.getBoundingClientRect();
-  if (r.left < b.right + 10 && r.bottom > b.top + 6) h.classList.add('avs-below'); }
+  /* Avatars stay pinned top-right. The title clears only the avatars; the number clears the whole right column (avatars, then Seguir vuelta and Cambios). The stack never jumps above the title. */
+  const avs = [...a.querySelectorAll('#hiprofs, #higroups')].filter(c => !c.hidden && c.offsetWidth);
+  const avw = avs.length ? Math.max(...avs.map(c => c.offsetWidth)) + 14 : 0;
+  const stack = [...a.children].some(c => !c.hidden) ? a.offsetWidth + 14 : 0;
+  h.style.setProperty('--avw', avw + 'px');
+  h.style.setProperty('--hiw', Math.max(avw, stack) + 'px');
+  const meta = h.querySelector('.meta');
+  if (!meta) return;
+  meta.style.marginTop = '';
+  const base = parseFloat(getComputedStyle(meta).marginTop) || 0;
+  const overlap = a.getBoundingClientRect().bottom + 8 - meta.getBoundingClientRect().top;
+  if (overlap > 0) meta.style.marginTop = (base + overlap) + 'px';
+}
 addEventListener('resize', () => sizeHiAvs());
 function grossPlace(members){
   const rows = (members || []).filter(m => m && m.avg_gross != null && !(m.hidden || []).includes('scores'));
@@ -3662,6 +3717,8 @@ function bindQuick(id){
       if (found) {
         const pack = await api(`/api/reconstructions/${encodeURIComponent(found.id)}/shots`);
         const shots = (pack && pack.shots) || [];
+        const cue = document.getElementById('track-shots');
+        if (cue) cue.textContent = trackCue(shots.length);
         holes.forEach(h => {
           const mine = shots.filter(s => Number(s.hole) === Number(h[0]));
           derived.set(h[0], Rules.deriveHoleCard(h[1] == null ? null : Number(h[1]), mine.map(factOf)));
@@ -3992,7 +4049,8 @@ function render(keepScroll){
     const here = location.hash || '#/inicio', back = (GROUPISH(p[0]) && GG) ? GG.parent(here) : (p[0] === 'plan' && GP) ? GP.parent(here) : ((p[0] === 'partido' || p[0] === 'partidos') && GM) ? GM.parent(here) : (p[0] === 'metricas' && p[2]) ? `#/metricas/${metTab(p[1])}` : (p[0] === 'diferencial' && p[1]) ? (BACK[here] || `#/ronda/${p[1]}`) : (BACK[here] || PARENT[p[0]] || '#/inicio');
     detail = detail.replace(/<button class="close" data-close>[\s\S]*?<\/button>/g, '');
     view.dataset.v = 'd-' + p[0];
-    const trackShots = p[0] === 'ronda' && p[1] ? `<a class="track-shots" id="track-shots" href="#/reconstruir?ronda=${encodeURIComponent(p[1])}&amp;hole=1">Track Shots</a>` : '';
+    const trackedRound = p[0] === 'ronda' && p[1] ? rounds.find(x => x.round_id === p[1]) : null;
+    const trackShots = p[0] === 'ronda' && p[1] ? `<a class="track-shots" id="track-shots" href="#/reconstruir?ronda=${encodeURIComponent(p[1])}&amp;hole=1">${trackCue(trackedRound && trackedRound.gps_shots)}</a>` : '';
     view.innerHTML = `<div class="pg"><nav class="crumbs" aria-label="Volver"><a class="crumb-back" href="${esc(back)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1L3 6l5 5"/></svg>${esc(labelFor(back))}</a>${trackShots}</nav>
       <div class="md${aside ? ' has-aside' : ''}">${aside ? `<aside class="md-list">${aside}</aside>` : ''}<article class="md-detail">${detail}</article></div></div>`;
     window.scrollTo(0, 0);
@@ -4043,7 +4101,24 @@ function askInline(btn, msg, yes = 'Sí, confirmar'){
     row.querySelector('[data-yes]').onclick = () => done(true); row.querySelector('[data-no]').onclick = () => done(false);
   });
 }
+async function openToday(course, teeId){
+  try {
+    const res = await api("/api/today-round", { method: "POST", body: JSON.stringify({ course: course || "", tee_id: teeId || G.today_booking?.id || "" }) });
+    if (res.ask?.length) { G.today_ask = res.ask; G.today_prompt = res.prompt || "¿Azul o Colorada?"; render(true); return; }
+    if (res.live_round?.id) { G.today_round = res.live_round; location.hash = `#/reconstruir/${res.live_round.id}`; }
+  } catch (e) { const box = document.querySelector("#today-ask, #today-start"); if (box) box.insertAdjacentHTML("afterend", `<p class="foot">${esc(e.message || "No pudimos abrir la vuelta de hoy.")}</p>`); }
+}
+async function confirmTodayLink(liveId, roundId, btn){
+  btn.disabled = true;
+  try {
+    await api("/api/today-round/link", { method: "POST", body: JSON.stringify({ live_id: liveId, round_id: roundId }) });
+    G = { ...G, ...(await api("/api/data")) }; derive(); render(true);
+  } catch (e) { btn.disabled = false; btn.insertAdjacentHTML("afterend", `<p class="foot">${esc(e.message || "No pudimos vincular la vuelta.")}</p>`); }
+}
 function bind(p, isDetail){
+  view.querySelectorAll("#today-start, #today-start-hero").forEach(starter => starter.onclick = () => openToday("", starter.dataset.tee || ""));
+  view.querySelectorAll("[data-today-course]").forEach(b => b.onclick = () => openToday(b.dataset.todayCourse, ""));
+  view.querySelectorAll("[data-link-live]").forEach(b => b.onclick = () => confirmTodayLink(b.dataset.linkLive, b.dataset.linkRound, b));
   view.querySelectorAll('[data-seg]').forEach(b=>b.onclick=()=>{ segR=b.dataset.seg; render(true); });
   view.querySelectorAll('[data-segl]').forEach(b=>b.onclick=()=>{ segL=b.dataset.segl; render(true); });
   view.querySelectorAll('[data-sortl]').forEach(b=>b.onclick=()=>{ sortL=b.dataset.sortl; render(true); });

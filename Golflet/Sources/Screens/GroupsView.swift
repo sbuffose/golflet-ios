@@ -131,7 +131,7 @@ struct GroupsView: View {
     private func groupRow(_ group: GolfletGroup) -> some View {
         GCard(radius: 18, padding: 14) {
             HStack(spacing: 12) {
-                GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 44, cacheID: group.id)
+                GroupPhotoView(url: group.photoURL, initials: GroupsParser.initials(group.name), size: 40, cacheID: group.id)
                     .accessibilityIdentifier("group-photo-\(group.id)")
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.name)
@@ -155,7 +155,7 @@ struct GroupsView: View {
 struct MemberFaceStack: View {
     @Environment(\.palette) private var p
     var members: [GroupMember]
-    var size: CGFloat = 26
+    var size: CGFloat = 38
 
     var body: some View {
         HStack(spacing: -8) {
@@ -555,17 +555,15 @@ struct GroupPhotoView: View {
     var cacheID: String? = nil
 
     var body: some View {
-        monogram
-            .overlay {
-                photo
-                    .frame(width: size, height: size)
-                    .clipped()
-            }
-            .frame(width: size, height: size)
-            .clipShape(Circle())
-            .contentShape(Circle())
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(initials)
+        ZStack {
+            monogram
+            photo
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .contentShape(Circle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(initials)
     }
 
     @ViewBuilder

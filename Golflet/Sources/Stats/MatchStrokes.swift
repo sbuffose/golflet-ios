@@ -183,4 +183,79 @@ enum MatchStrokes {
     private static func same(_ a: String, _ b: String) -> Bool {
         a.compare(b, options: .caseInsensitive, locale: Locale(identifier: "es")) == .orderedSame
     }
+
+    struct HoleState: Equatable {
+        var up: Int
+        var played: Int
+        var remaining: Int
+        var finished: Bool
+        var text: String
+    }
+
+    struct Standing: Equatable {
+        var text: String
+        var tone: String
+        var versus: String
+    }
+
+    static func statusText(up: Int, remaining: Int, finished: Bool) -> String {
+        let margin = abs(up)
+        if finished {
+            if margin == 0 { return "Empate" }
+            return remaining > 0 ? "\(margin)&\(remaining)" : "\(margin) arriba"
+        }
+        if margin == 0 { return "All square" }
+        return margin == remaining ? "Dormie (\(margin) arriba)" : "\(margin) arriba"
+    }
+
+    /// Net match between two score rows. A hole counts when both cells are entered. Zero is «no terminó» and is not a score.
+    static func match(a: [Int?], b: [Int?], aDots: [Int] = [], bDots: [Int] = []) -> HoleState {
+        var up = 0
+        var played = 0
+        var closed = false
+        for hole in 0..<holes {
+            if closed { break }
+            let rawA = hole < a.count ? a[hole] : nil
+            let rawB = hole < b.count ? b[hole] : nil
+            guard let rawA, let rawB, (0...20).contains(rawA), (0...20).contains(rawB) else { continue }
+            let netA: Int? = rawA > 0 ? rawA - (hole < aDots.count ? aDots[hole] : 0) : nil
+            let netB: Int? = rawB > 0 ? rawB - (hole < bDots.count ? bDots[hole] : 0) : nil
+            played += 1
+            if let netA, let netB {
+                if netA < netB { up += 1 } else if netB < netA { up -= 1 }
+            } else if netA != nil {
+                up += 1
+            } else if netB != nil {
+                up -= 1
+            }
+            if abs(up) > holes - played { closed = true }
+        }
+        let remaining = holes - played
+        let finished = closed || remaining == 0
+        return HoleState(up: up, played: played, remaining: remaining, finished: finished, text: statusText(up: up, remaining: remaining, finished: finished))
+    }
+
+    static func standing(aId: String, bId: String, aName: String, bName: String, state: HoleState, me: String = "me") -> Standing {
+        func who(_ id: String, _ name: String) -> String { id == me ? "Vos" : name }
+        func other(of id: String) -> String { id == aId ? who(bId, bName) : who(aId, aName) }
+        if state.finished {
+            if state.up == 0 { return Standing(text: "Empate", tone: "even", versus: "\(who(aId, aName)) vs \(who(bId, bName))") }
+            let winner = state.up > 0 ? aId : bId
+            let winnerName = winner == aId ? aName : bName
+            return Standing(text: "Ganó \(who(winner, winnerName)) \(state.text)", tone: winner == me ? "me" : "them", versus: other(of: winner))
+        }
+        if state.up == 0 { return Standing(text: state.text, tone: "even", versus: "\(who(aId, aName)) vs \(who(bId, bName))") }
+        let leader = state.up > 0 ? aId : bId
+        let leaderName = leader == aId ? aName : bName
+        return Standing(text: "\(who(leader, leaderName)) \(state.text)", tone: leader == me ? "me" : "them", versus: other(of: leader))
+    }
+
+    /// The track total replaces the cell. The same number is not added on top.
+    static func applyHoleScore(_ scores: [Int?], hole: Int, strokes: Int) -> [Int?] {
+        guard (1...holes).contains(hole), (1...20).contains(strokes) else { return scores }
+        var next = scores
+        if next.count < holes { next += Array(repeating: nil, count: holes - next.count) }
+        next[hole - 1] = strokes
+        return next
+    }
 }

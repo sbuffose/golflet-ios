@@ -138,7 +138,7 @@ struct RoundDetailView: View {
                 .accessibilityLabel("Tee times")
                 Spacer()
                 Button { showsTrack = true } label: {
-                    Text("Track Shots")
+                    Text(trackCue)
                         .font(GFont.ui(14, weight: .semibold))
                         .foregroundStyle(Color.white)
                         .padding(.horizontal, 12)
@@ -151,6 +151,12 @@ struct RoundDetailView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
         }
+    }
+
+    private var trackCue: String {
+        let n = round.gpsShots
+        if n < 1 { return "Trackear golpes" }
+        return "Seguir track · \(n) \(n == 1 ? "golpe" : "golpes")"
     }
 
     private var header: some View {
@@ -265,6 +271,12 @@ struct RoundDetailView: View {
                     legend(item)
                 }
             }
+            if !round.trackDiff.isEmpty {
+                Text("El hoyo \(round.trackDiff.map(String.init).joined(separator: ", ")) difiere del track. El score de la tarjeta queda igual.")
+                    .font(GType.label)
+                    .foregroundStyle(p.ink3)
+                    .accessibilityIdentifier("track-gap")
+            }
         }
     }
 
@@ -278,7 +290,7 @@ struct RoundDetailView: View {
                     .font(GType.overline)
                     .frame(width: 44, alignment: .leading)
                 ForEach(holes) { hole in
-                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 28)
+                    ScoreMark(strokes: hole.strokes, result: hole.result, diameter: 28, differs: round.trackDiff.contains(hole.number))
                         .frame(maxWidth: .infinity)
                         .frame(height: 34)
                 }

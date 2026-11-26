@@ -10,7 +10,7 @@
     const q = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
     const params = new URLSearchParams(q);
     const hole = Number(params.get("hole"));
-    return { roundId: params.get("ronda") || "", hole: hole >= 1 && hole <= 18 ? String(hole) : "" };
+    return { roundId: params.get("ronda") || "", hole: hole >= 1 && hole <= 18 ? String(hole) : "", matchId: params.get("partido") || "" };
   }
 
   function matchCourse(official, courses) {
@@ -23,6 +23,10 @@
     if (!root) return;
     const id = root.dataset.id || "";
     const query = roundQuery();
+    if (!id && query.matchId) {
+      mountMatch(root, query.matchId, query.hole);
+      return;
+    }
     if (!id && query.roundId) {
       mountRound(root, query.roundId, query.hole);
       return;
@@ -179,6 +183,80 @@
     return Array.isArray(row) ? row[1] : (row.par || null);
   }
 
+  function fold(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
+  function sameRound(row, date, label, courseId) {
+    if (!row || String(row.date || "").slice(0, 10) !== date) return false;
+    const tail = fold(label).split("·").pop().trim();
+    const blob = fold(`${row.course || ""} ${row.vm_course || ""} ${row.label || ""}`);
+    if (tail && blob.includes(tail)) return true;
+    if (courseId && row.club_code && row.vm_course) {
+      const id = `${row.club_code}-${fold(row.vm_course).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+      if (id === courseId) return true;
+    }
+    return false;
+  }
+
+  function linkMatchTrack(matchId, liveId) {
+    try {
+      const key = `golflet.match.${matchId}`;
+      const match = JSON.parse(localStorage.getItem(key) || "null");
+      if (match && liveId) { match.track_id = liveId; localStorage.setItem(key, JSON.stringify(match)); }
+    } catch { /* the round still opens */ }
+  }
+
+  async function mountMatch(root, matchId, hole) {
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(`golflet.match.${matchId}`) || "null"); } catch { stored = null; }
+    const back = `#/partido/${matchId}?hoyo=${hole || 1}`;
+    const onHoleClosed = (n, strokes) => { if (window.GolfletMatch?.applyTrack) window.GolfletMatch.applyTrack(matchId, n, strokes); };
+    const date = stored?.date || new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+    const label = stored?.course_label || "";
+    root.innerHTML = `<div class="card"><p class="s">Abriendo la vuelta de esta cancha. No cuenta para tus tarjetas.</p></div>`;
+    let courseId = stored?.course_id || "";
+    if (!courseId) {
+      try {
+        const pack = await api("/api/gps/courses");
+        const want = fold(label);
+        const hit = (pack.courses || []).find(c => want && fold(`${c.label || ""} ${c.course || ""} ${c.vm_course || ""}`).split(" ").some(bit => bit && want.includes(bit) && bit.length > 2));
+        const named = (pack.courses || []).find(c => want && fold(c.label || c.course || c.vm_course || "").length && want.includes(fold(c.label || c.course || c.vm_course || "")));
+        courseId = (named || hit)?.course_id || "";
+      } catch { courseId = ""; }
+    }
+    let liveId = "";
+    try {
+      const setup = await api("/api/reconstructions");
+      const rows = setup.reconstructions || [];
+      const linked = rows.find(r => r.id && r.id === stored?.track_id);
+      const loose = rows.filter(r => r.official === false || (!r.round_id && r.official !== true));
+      const found = loose.find(r => sameRound(r, date, label, courseId)) || rows.find(r => sameRound(r, date, label, courseId));
+      liveId = (found && found.id) || (linked && linked.id) || "";
+      if (!liveId && courseId) {
+        const created = await api("/api/reconstructions", { method: "POST", body: JSON.stringify({ date, course_id: courseId, tee: stored?.tee || undefined }) });
+        liveId = created?.live_round?.id || "";
+      }
+    } catch { liveId = stored?.track_id || ""; }
+    if (liveId) linkMatchTrack(matchId, liveId);
+    if (!courseId && !liveId) {
+      root.innerHTML = picker();
+      await mountPicker(root);
+      const err = root.querySelector("#rc-err");
+      if (err) err.textContent = "Elegí la cancha. El track del partido es la vuelta no oficial de ese día y no entra en tus tarjetas.";
+      return;
+    }
+    await mountEditor(root, liveId, hole, {
+      courseId,
+      date,
+      courseName: label,
+      back,
+      onHoleClosed,
+      matchId,
+      unofficial: true,
+    });
+  }
+
   async function mountEditor(root, id, holeHint, pending) {
     const visit = ++VISIT;
     const mine = () => visit === VISIT && !!root.isConnected;
@@ -191,8 +269,9 @@
     let savedHole = 0;
     let courseName = pending?.courseName || "";
     let roundId = pending?.roundId || "";
-    let unofficial = !roundId;
+    let unofficial = pending?.unofficial === true || !roundId;
     const back = pending?.back || (roundId ? `#/ronda/${roundId}` : "#/rondas");
+    let playedOn = String(pending?.date || "").slice(0, 10);
     let holes = [];
     let shots = [];
     let bag = null;
@@ -210,18 +289,21 @@
         if (row) {
           courseName = courseName || row.course || "";
           roundId = roundId || row.round_id || "";
-          if (row.official === false || (!row.round_id && row.official !== true)) unofficial = true;
-          if (row.round_id) unofficial = false;
+          if (pending?.unofficial === true) unofficial = true;
+          else if (row.official === false || (!row.round_id && row.official !== true)) unofficial = true;
+          else if (row.round_id) unofficial = false;
           const kept = Number(row.current_hole);
           if (kept >= 1 && kept <= 18) savedHole = kept;
           if (row.club_code) clubCode = clubCode || row.club_code;
+          if (row.date) playedOn = String(row.date).slice(0, 10);
           if (!courseId && row.club_code && row.vm_course) {
             courseId = `${row.club_code}-${String(row.vm_course).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
           }
         }
       }
       if (courseId) {
-        const geo = await api("/api/gps/courses/" + encodeURIComponent(courseId));
+        const layoutQ = /^\d{4}-\d{2}-\d{2}$/.test(playedOn) ? "?played_on=" + encodeURIComponent(playedOn) : "?layout=current";
+        const geo = await api("/api/gps/courses/" + encodeURIComponent(courseId) + layoutQ);
         if (!mine()) return;
         const raw = geo.course?.holes || [];
         holes = raw.map(h => {
@@ -236,10 +318,19 @@
         if (!mine()) return;
         shots = pack.shots || [];
       }
+      if (pending?.matchId && window.GolfletMatch?.trackShots) {
+        const local = window.GolfletMatch.trackShots(pending.matchId);
+        if (local.length > shots.length) shots = local;
+      }
       try {
-        const pack = await api("/api/bag");
+        const [pack, gear] = await Promise.all([
+          api("/api/bag").catch(() => null),
+          api("/api/my-clubs/items").catch(() => null),
+        ]);
         const rows = Array.isArray(pack) ? pack : (Array.isArray(pack?.clubs) ? pack.clubs : (Array.isArray(pack?.bag) ? pack.bag : null));
         if (Array.isArray(rows)) bag = rows;
+        const items = Array.isArray(gear?.clubs) ? gear.clubs : [];
+        if (items.length && window.GolfletGear && typeof window.GolfletGear.attach === "function") bag = window.GolfletGear.attach(bag, items);
       } catch (e) {}
     } catch (e) {
       if (!mine()) return;
@@ -248,22 +339,33 @@
     }
     if (!mine()) return;
     if (!window.GolfletTrack) { fail("No se cargó el mapa."); return; }
+    const syncMatch = (rows, hole) => {
+      if (!pending?.matchId || !window.GolfletMatch?.applyTrack) return;
+      const mineRows = (rows || []).filter(s => Number(s.hole) === Number(hole));
+      const strokes = mineRows.reduce((n, s) => n + (Number(s.penalty_strokes) > 0 ? Number(s.penalty_strokes) : 1), 0);
+      if (strokes > 0) window.GolfletMatch.applyTrack(pending.matchId, Number(hole), strokes);
+    };
+    const holeClosed = (rows, hole) => (rows || []).some(s => Number(s.hole) === Number(hole) && s.result === "holed");
+    let known = shots.slice();
+    const remember = rows => { if (Array.isArray(rows)) known = rows; return rows; };
     const explicit = Number(holeHint) >= 1 && Number(holeHint) <= 18 ? Number(holeHint) : 0;
     const hole = explicit || savedHole || 1;
     window.GolfletTrack.mount(host, {
       retro: true,
       id: liveId,
       back,
-      live: { course: courseName || "Golflet", course_id: courseId, club_code: clubCode || null, current_hole: hole },
+      live: { course: courseName || "Golflet", course_id: courseId, club_code: clubCode || null, current_hole: hole, date: playedOn || null },
       shots,
       holes,
       course: { holes, course: courseName, course_id: courseId, club_code: clubCode || null },
       bag: Array.isArray(bag) ? bag : CLUBS.map(c => ({ code: c })),
       roundId: roundId || "",
       unofficial,
+      onHoleClosed: pending?.onHoleClosed || null,
       api, esc, toast: () => {}, cid: () => "",
       onSave: async (shot) => {
         if (!mine()) return null;
+        const kept = () => pending?.matchId && window.GolfletMatch?.trackKeep ? window.GolfletMatch.trackKeep(pending.matchId, shot) : null;
         try {
           if (!liveId) {
             if (!pending?.courseId || !pending?.date) throw new Error("Elegí la cancha.");
@@ -271,9 +373,17 @@
             if (!mine()) return null;
             liveId = created?.live_round?.id || "";
             if (!liveId) throw new Error("No pudimos abrir la vuelta.");
+            if (pending?.matchId) {
+              try {
+                const key = `golflet.match.${pending.matchId}`;
+                const match = JSON.parse(localStorage.getItem(key) || "null");
+                if (match) { match.track_id = liveId; localStorage.setItem(key, JSON.stringify(match)); }
+              } catch { /* the score still returns through onHoleClosed */ }
+            }
             if (!mine()) return null;
             const ronda = pending.roundId ? `&ronda=${encodeURIComponent(pending.roundId)}` : "";
-            history.replaceState(null, "", `#/reconstruir/${liveId}?hole=${shot.hole}${ronda}`);
+            const partido = pending.matchId ? `&partido=${encodeURIComponent(pending.matchId)}` : "";
+            history.replaceState(null, "", `#/reconstruir/${liveId}?hole=${shot.hole}${ronda}${partido}`);
           }
           if (!mine()) return null;
           const body = {
@@ -292,8 +402,15 @@
           };
           const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`, { method: "POST", body: JSON.stringify(body) });
           if (!mine()) return null;
-          return pack.shots || [];
+          const rows = Array.isArray(pack.shots) ? pack.shots : null;
+          if (rows && pending?.matchId && window.GolfletMatch?.trackReplace) window.GolfletMatch.trackReplace(pending.matchId, rows);
+          if (rows) { remember(rows); if (holeClosed(rows, shot.hole)) syncMatch(rows, shot.hole); return rows; }
+          const local = kept();
+          if (local) { remember(local); if (holeClosed(local, shot.hole)) syncMatch(local, shot.hole); return local; }
+          return [];
         } catch (e) {
+          const local = kept();
+          if (local) { remember(local); if (holeClosed(local, shot.hole)) syncMatch(local, shot.hole); return local; }
           if (!mine()) return null;
           throw e;
         }
@@ -315,15 +432,35 @@
         if (!mine()) return null;
         const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
         if (!mine()) return null;
-        return pack.shots || [];
+        const rows = pack.shots || [];
+        remember(rows);
+        syncMatch(rows, shot.hole);
+        return rows;
       },
       onUndo: async (shotId) => {
         if (!mine()) return null;
-        await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots?shot=${encodeURIComponent(shotId)}`, { method: "DELETE" });
-        if (!mine()) return null;
-        const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
-        if (!mine()) return null;
-        return pack.shots || [];
+        const holeN = (known.find(s => s.id === shotId) || {}).hole || 0;
+        const drop = () => pending?.matchId && window.GolfletMatch?.trackDrop ? window.GolfletMatch.trackDrop(pending.matchId, shotId) : null;
+        if (!liveId || String(shotId).startsWith("local-")) {
+          const local = drop();
+          if (local && holeN) syncMatch(remember(local), holeN);
+          return local;
+        }
+        try {
+          await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots?shot=${encodeURIComponent(shotId)}`, { method: "DELETE" });
+          if (!mine()) return null;
+          const pack = await api(`/api/reconstructions/${encodeURIComponent(liveId)}/shots`);
+          if (!mine()) return null;
+          const rows = pack.shots || [];
+          if (pending?.matchId && window.GolfletMatch?.trackReplace) window.GolfletMatch.trackReplace(pending.matchId, rows);
+          if (holeN) syncMatch(remember(rows), holeN);
+          return rows;
+        } catch (e) {
+          const local = drop();
+          if (local && holeN) syncMatch(remember(local), holeN);
+          if (local) return local;
+          throw e;
+        }
       },
     });
   }

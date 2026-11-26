@@ -11,7 +11,7 @@ export const GET = handle(async (req: Request, ctx: { params: Promise<{ club: st
   if (hole != null && (!Number.isInteger(hole) || hole < 1 || hole > 36)) throw new HttpError(400, "Hoyo inválido");
   if ((windFrom == null) !== (windKmh == null)) throw new HttpError(400, "Mandá wind_from y wind_kmh juntos");
   if (windKmh != null && (windKmh < 0 || windKmh > 200)) throw new HttpError(400, "wind_kmh inválido");
-  const m = await getCourseMap(club, decodeURIComponent(course), { hole, windFrom, windKmh });
+  const m = await getCourseMap(club, decodeURIComponent(course), { hole, windFrom, windKmh, playedOn: u.searchParams.get("played_on"), layout: u.searchParams.get("layout") });
   if (!m) throw new HttpError(404, "Todavía no tenemos el mapa detallado de esta cancha");
   if (hole != null && !m.holes.length) throw new HttpError(404, "Hoyo no encontrado");
   return json(m);
