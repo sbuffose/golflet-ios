@@ -484,12 +484,15 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     await page.$eval('[data-act="marcas"]', (el: HTMLButtonElement) => el.click());
     await page.waitForFunction(() => /Cabeza · tramo/.test(document.body.innerText || ""));
     const range = await page.$eval("body", el => (el.innerText.match(/Cabeza · tramo (\d+)–(\d+)/) || []).slice(1).map(Number));
-    const last = await page.$eval("#stage", el => {
+    const lastInfo = await page.$eval("#stage", el => {
       const v = el.querySelector("video") as HTMLVideoElement | null;
-      const live = v && Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Number(el.getAttribute("data-duration") || "0");
-      return Math.max(0, Math.round(live * 30) - 1);
+      const shown = v && Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+      const stored = Number(el.getAttribute("data-duration") || "0");
+      const live = Math.max(shown, stored);
+      return { last: Math.max(0, Math.round(live * 30) - 1), shown, stored };
     });
-    assert.ok(last > 100);
+    const last = lastInfo.last;
+    assert.ok(last > 100, JSON.stringify({ lastInfo, range, scanInfo }));
     assert.ok(range[1] > 96 && range[1] < last - 5, `tramo ${range.join("–")} de ${last}`);
     await page.$eval('[data-tool="angulo"]', (el: HTMLButtonElement) => el.click());
     await page.mouse.click(fit.x + fit.w * 0.2, fit.y + fit.h * 0.55);
@@ -523,6 +526,30 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     assert.ok(label, "falta la etiqueta");
     assert.match(label.text || "", /Brazo izquierdo extendido/);
     assert.ok(label.x >= -1 && label.y >= -1 && label.r <= label.vw + 2 && label.b <= label.vh + 2, JSON.stringify(label));
+    await page.$eval('[data-tool="mover"]', (el: HTMLButtonElement) => el.click());
+    await page.mouse.click(fit.x + 10, fit.y + fit.h - 12);
+    await page.$eval('[data-tool="texto"]', (el: HTMLButtonElement) => el.click());
+    await page.$eval("#texto", (el: HTMLInputElement) => { el.value = "Punta abierta"; });
+    await page.mouse.click(fit.x + fit.w * 0.9, fit.y + fit.h * 0.55);
+    const punta = await page.evaluate(() => {
+      const svg = document.querySelector("#stage .ink");
+      const t = [...(svg?.querySelectorAll("text") || [])].find(n => (n.textContent || "").includes("Punta")) as SVGGraphicsElement | undefined;
+      const box = document.querySelector("#stage .fit")!.getBoundingClientRect();
+      if (!t) return null;
+      const r = t.getBoundingClientRect();
+      return {
+        text: t.textContent, w: r.width, h: r.height,
+        inside: r.width > 12 && r.height > 6 && r.left >= box.left - 2 && r.right <= box.right + 3 && r.top >= box.top - 2 && r.bottom <= box.bottom + 3,
+      };
+    });
+    if (!punta) {
+      const dump = await page.evaluate(() => [...document.querySelectorAll("#stage text")].map(n => n.textContent).join(" | "));
+      assert.ok(punta, "falta Punta abierta [" + dump + "]");
+    }
+    assert.match(punta.text || "", /Punta abierta/);
+    assert.equal(punta.inside, true, JSON.stringify(punta));
+    await page.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await page.screenshot({ path: `${ART}/profe-18-punta.png` });
     const relojA = await page.$eval("#reloj", el => el.textContent || "");
     await page.$eval('.pane[data-side="b"] [data-act="solo"]', (el: HTMLButtonElement) => el.click());
     const solo = await page.evaluate(() => {
@@ -573,12 +600,18 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
       const b = document.querySelector('.pane[data-side="b"]') as HTMLElement;
       const r = a.querySelector(".stage")!.getBoundingClientRect();
       const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const ar = a.getBoundingClientRect();
+      const br = b.getBoundingClientRect();
       return {
         az: getComputedStyle(a).zIndex, bz: getComputedStyle(b).zIndex,
         bo: Number(getComputedStyle(b).opacity), bp: getComputedStyle(b).pointerEvents,
         inA: !!(el && a.contains(el)),
+        ar: { x: ar.x, y: ar.y, w: ar.width, h: ar.height },
+        br: { x: br.x, y: br.y, w: br.width, h: br.height },
       };
     });
+    assert.ok(stack.br.h > 400 && Math.abs(stack.ar.w - stack.br.w) < 3 && Math.abs(stack.ar.h - stack.br.h) < 3, JSON.stringify(stack));
+    assert.ok(Math.abs(stack.ar.x - stack.br.x) < 3 && Math.abs(stack.ar.y - stack.br.y) < 3, JSON.stringify(stack));
     assert.ok(Number(stack.bz) > Number(stack.az), JSON.stringify(stack));
     assert.ok(stack.bo < 0.95 && stack.bo > 0.1, JSON.stringify(stack));
     assert.equal(stack.bp, "none");
@@ -621,7 +654,7 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
       rec.start(80);
       const green = "#3E7A4A";
       const dark = "#2A5C38";
-      for (let i = 0; i < 70; i++) {
+      for (let i = 0; i < 110; i++) {
         g.fillStyle = green;
         g.fillRect(0, 0, 180, 320);
         g.fillStyle = dark;
@@ -661,6 +694,115 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     await page2.waitForFunction(() => /Cabeza · tramo 0–7/.test(document.body.innerText || ""));
     await page2.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
     await page2.screenshot({ path: `${ART}/profe-15-corte.png` });
+    const record = async (kind: "mano" | "paneo" | "duro") => page2.evaluate(async (mode) => {
+      const c = document.createElement("canvas");
+      c.width = 180; c.height = 320;
+      const g = c.getContext("2d");
+      if (!g) return [];
+      const stream = c.captureStream(30);
+      const rec = new MediaRecorder(stream, { mimeType: "video/webm" });
+      const chunks: Blob[] = [];
+      rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      const done = new Promise<void>(r => { rec.onstop = () => r(); });
+      rec.start(80);
+      const n = mode === "mano" ? 110 : mode === "paneo" ? 165 : 100;
+      for (let i = 0; i < n; i++) {
+        const t = i * 0.04;
+        if (mode === "duro") {
+          g.fillStyle = t < 1.6 ? "#0B2545" : "#C8102E";
+          g.fillRect(0, 0, 180, 320);
+        } else {
+          g.fillStyle = "#3E7A4A";
+          g.fillRect(0, 0, 180, 320);
+          g.fillStyle = "#2A5C38";
+          if (mode === "mano") {
+            g.fillRect(70, 20, 40, 280);
+            if (t >= 1.6 && t < 2.6) {
+              g.fillStyle = "#E8C4A8";
+              g.fillRect(112, 48, 52, 78);
+            }
+          } else {
+            const p = t < 1.8 ? 0 : t > 4.8 ? 1 : (t - 1.8) / 3;
+            g.save();
+            g.translate(-p * 180, 0);
+            g.fillStyle = "#3E7A4A";
+            g.fillRect(0, 0, 180, 320);
+            g.fillStyle = "#2A5C38";
+            g.fillRect(40, 16, 36, 288);
+            g.restore();
+            g.save();
+            g.translate((1 - p) * 180, 0);
+            g.fillStyle = "#0B2545";
+            g.fillRect(0, 0, 180, 320);
+            g.fillStyle = "#C8A86A";
+            g.fillRect(8, 214, 164, 64);
+            g.restore();
+          }
+        }
+        await new Promise(r => setTimeout(r, 40));
+      }
+      rec.stop();
+      await done;
+      return Array.from(new Uint8Array(await new Blob(chunks, { type: "video/webm" }).arrayBuffer()));
+    }, kind);
+    const mano = await record("mano");
+    writeFileSync("/tmp/profe-mano.webm", Buffer.from(mano));
+    const page3 = await browser.newPage();
+    await page3.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await page3.goto(`http://127.0.0.1:${port}/profe-preview/index.html?blank=1#/anotar`, { waitUntil: "networkidle0" });
+    await (await page3.$("#abrir"))!.uploadFile("/tmp/profe-mano.webm");
+    await page3.waitForFunction(() => document.querySelector("#stage")?.getAttribute("data-scanned") === "1", { timeout: 25000 });
+    const manoCuts = await page3.$eval("#stage", el => (el.getAttribute("data-cuts") || "").split(",").map(Number).filter(n => n > 0));
+    assert.deepEqual(manoCuts, [], "la mano no es un corte " + manoCuts.join(","));
+    await page3.$eval('[data-tool="cabeza"]', (el: HTMLButtonElement) => el.click());
+    const fitM = await page3.$eval("#stage .fit", el => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+    await page3.mouse.move(fitM.x + fitM.w * 0.45, fitM.y + fitM.h * 0.3);
+    await page3.mouse.down();
+    await page3.mouse.move(fitM.x + fitM.w * 0.45 + 26, fitM.y + fitM.h * 0.3 + 8, { steps: 3 });
+    await page3.mouse.up();
+    await page3.$eval('[data-act="marcas"]', (el: HTMLButtonElement) => el.click());
+    await page3.waitForFunction(() => /Cabeza · tramo/.test(document.body.innerText || ""));
+    const manoRange = await page3.$eval("body", el => (el.innerText.match(/Cabeza · tramo (\d+)–(\d+)/) || []).slice(1).map(Number));
+    const manoLast = await page3.$eval("#stage", el => {
+      const v = el.querySelector("video") as HTMLVideoElement | null;
+      const shown = v && Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+      const live = Math.max(shown, Number(el.getAttribute("data-duration") || "0"));
+      return Math.max(0, Math.round(live * 30) - 1);
+    });
+    assert.ok(manoRange[1] > manoLast - 5, `la cabeza se cortó en la mano ${manoRange.join("–")} de ${manoLast}`);
+    assert.equal(await page3.$eval(".hint", el => (el as HTMLElement).hidden), false);
+    assert.match(await page3.$eval(".hint", el => el.textContent || ""), /Revisá hasta dónde va la cabeza/);
+    await page3.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await page3.screenshot({ path: `${ART}/profe-17-mano.png` });
+    const paneo = await record("paneo");
+    writeFileSync("/tmp/profe-paneo.webm", Buffer.from(paneo));
+    const manoDur = await page3.$eval("#stage", el => el.getAttribute("data-duration") || "");
+    await (await page3.$("#abrir"))!.uploadFile("/tmp/profe-paneo.webm");
+    await page3.waitForFunction((prev) => {
+      const stage = document.querySelector("#stage");
+      return stage?.getAttribute("data-scanned") === "1" && (stage.getAttribute("data-duration") || "") !== prev;
+    }, { timeout: 30000 }, manoDur);
+    const panInfo = await page3.evaluate(() => {
+      const stage = document.querySelector("#stage");
+      return { cuts: stage?.getAttribute("data-cuts") || "", hints: stage?.getAttribute("data-hints") || "", ticks: document.querySelectorAll(".ticks i").length };
+    });
+    const panFrames = (panInfo.cuts || panInfo.hints).split(",").map(Number).filter(n => n > 0);
+    assert.ok(panFrames.some(n => n > 40 && n < 170), JSON.stringify(panInfo));
+    assert.ok(panInfo.ticks > 0, JSON.stringify(panInfo));
+    await page3.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await page3.screenshot({ path: `${ART}/profe-17-paneo.png` });
+    const duro = await record("duro");
+    writeFileSync("/tmp/profe-duro.webm", Buffer.from(duro));
+    const panDur = await page3.$eval("#stage", el => el.getAttribute("data-duration") || "");
+    await (await page3.$("#abrir"))!.uploadFile("/tmp/profe-duro.webm");
+    await page3.waitForFunction((prev) => {
+      const stage = document.querySelector("#stage");
+      const cuts = (stage?.getAttribute("data-cuts") || "").split(",").map(Number);
+      return stage?.getAttribute("data-scanned") === "1" && (stage.getAttribute("data-duration") || "") !== prev && cuts.some(n => n > 30 && n < 90);
+    }, { timeout: 25000 }, panDur);
+    await page3.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await page3.screenshot({ path: `${ART}/profe-16-cortes.png` });
+    await page3.close();
     await page2.close();
   } finally {
     await browser.close();

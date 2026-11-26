@@ -149,7 +149,10 @@ button.sideclock{border:0;background:transparent;padding:0 4px}
 .swatch{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:inset 0 0 0 1px #DCE1E8;padding:0}
 .swatch.on{box-shadow:0 0 0 2px #0B2545}
 .mark span{flex:1;min-width:0;overflow-wrap:anywhere}
-.scrub{width:100%;margin-top:2px}
+.scrub{position:relative;width:100%;margin-top:2px}
+.ticks{position:absolute;left:0;right:0;bottom:6px;height:10px;pointer-events:none}
+.ticks i{position:absolute;bottom:0;width:2px;height:8px;background:#C8A86A;border-radius:1px}
+.hint{margin:0;padding:0 10px 4px;font-size:12px;font-weight:600;color:#3E4C62;font-style:normal}
 #app.desk .anotador{flex-direction:row;align-items:stretch}
 #app.desk .stack{min-width:0}
 #app.desk .rail{flex-direction:column;flex-wrap:nowrap;width:92px;overflow:hidden;border-left:1px solid #DCE1E8;justify-content:flex-start}
@@ -176,7 +179,9 @@ button.sideclock{border:0;background:transparent;padding:0 4px}
 #app.lienzo:not(.desk) .rail{position:absolute;left:0;right:0;bottom:0;z-index:8}
 #app.lienzo:not(.desk) .topbar{position:absolute;top:0;left:0;right:0;z-index:8}
 #app.lienzo:not(.desk) .chrome{position:absolute;left:0;right:0;bottom:40px;z-index:6}
-#app.lienzo:not(.desk) .pane{position:relative}
+#app.lienzo:not(.desk) .panes.lado .pane{position:relative}
+#app.lienzo:not(.desk) .panes.sobre .pane[data-side="a"]{position:relative;height:100%;z-index:1}
+#app.lienzo:not(.desk) .panes.sobre .pane[data-side="b"]{position:absolute;inset:0;height:100%;z-index:2}
 #app.lienzo:not(.desk) .sidebar{position:absolute;left:0;right:0;bottom:132px;z-index:7;background:rgba(246,247,249,.94)}
 #app:not(.desk) .anotador.dibujando .chrome,
 #app:not(.desk) .anotador.dibujando .rail,

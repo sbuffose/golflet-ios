@@ -204,7 +204,7 @@
       <button type="button" data-act="captura">Cuadro</button>
       <button type="button" data-act="volver" hidden>Volver</button>
     </div>
-    <label class="op scrub"><span id="reloj">Cuadro</span><input id="scrub" type="range" min="0" max="23" step="1" value="0"></label>
+    <label class="op scrub"><span id="reloj">Cuadro</span><span class="ticks" aria-hidden="true"></span><input id="scrub" type="range" min="0" max="23" step="1" value="0"></label>
     ${two ? keyButtons : pinButtons(true)}`;
 
     const sheet = document.createElement("div");
@@ -259,7 +259,11 @@
     corte.setAttribute("aria-label", "Corte de cámara aquí");
     corte.textContent = "Corte de cámara aquí";
     marksBar.append(corte);
-    list.append(marksBar, marksBody);
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.hidden = true;
+    hint.textContent = "Revisá hasta dónde va la cabeza";
+    list.append(marksBar, hint, marksBody);
     let marksOpen = false;
     let marksPinned = false;
     const input = document.createElement("input");
@@ -397,6 +401,7 @@
           if (p.stage) {
             p.stage.dataset.scanned = "1";
             p.stage.dataset.cuts = (p.cuts || []).join(",");
+            p.stage.dataset.hints = (p.suggestions || []).map(s => s.f).join(",");
             if (p.knownDuration) p.stage.dataset.duration = String(p.knownDuration);
           }
         } else scanCuts(p);
@@ -415,11 +420,13 @@
       if (p.kind === "video") {
         p.cuts = [];
         p.manualCuts = [];
+        p.suggestions = [];
+        p.firm = [];
         p.scanned = false;
         p.holdTime = 0;
         p.knownDuration = 0;
         p.scanToken = (p.scanToken || 0) + 1;
-        if (p.stage) { p.stage.dataset.scanned = ""; p.stage.dataset.cuts = ""; }
+        if (p.stage) { p.stage.dataset.scanned = ""; p.stage.dataset.cuts = ""; p.stage.dataset.hints = ""; }
         bindVideo(p);
       } else {
         p.img.onload = () => { layoutFit(p); paintInk(p); };
@@ -524,24 +531,26 @@
       v.muted = true;
       v.playsInline = true;
       v.preload = "auto";
+      let scannedDur = 0;
       const finish = (found) => {
         if (p.scanToken !== token) return;
-        const merged = [...new Set([...(found || []), ...(p.manualCuts || [])])].sort((a, b) => a - b);
-        p.cuts = merged;
+        const suggestions = (found || []).slice().sort((a, b) => a.f - b.f);
+        const firm = suggestions.filter(s => s.alta).map(s => s.f);
+        p.suggestions = suggestions;
+        p.firm = firm;
+        p.cuts = [...new Set([...firm, ...(p.manualCuts || [])])].sort((a, b) => a - b);
         p.scanned = true;
-        if (Number.isFinite(v.duration) && v.duration > 0) p.knownDuration = v.duration;
+        const durNow = scannedDur > 0 ? scannedDur : (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0);
+        if (durNow > 0) p.knownDuration = durNow;
         if (stage && stage.isConnected) {
           stage.dataset.scanned = "1";
-          stage.dataset.cuts = merged.join(",");
-          if (Number.isFinite(v.duration) && v.duration > 0) stage.dataset.duration = String(v.duration);
+          stage.dataset.cuts = p.cuts.join(",");
+          stage.dataset.hints = suggestions.map(s => s.f).join(",");
+          if (p.knownDuration) stage.dataset.duration = String(p.knownDuration);
           applyCuts(p);
         }
-      };
-      const median = (xs) => {
-        if (!xs.length) return 0;
-        const s = xs.slice().sort((a, b) => a - b);
-        const m = s.length >> 1;
-        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+        paintTicks();
+        syncHint();
       };
       const total = (a, b) => {
         let s = 0;
@@ -591,7 +600,7 @@
         const base = mean || 1;
         return { hist, blocks: blocks.map(val => val / base), edges: edges.map(val => val / 40), mean };
       };
-        v.onerror = () => finish(p.cuts || []);
+      v.onerror = () => finish([]);
       v.onloadeddata = async () => {
         if (!Number.isFinite(v.duration) || v.duration <= 0) {
           await new Promise(resolve => {
@@ -611,6 +620,7 @@
         const fps = fpsOf(p);
         const dur = v.duration;
         if (p.scanToken !== token || !Number.isFinite(dur) || dur <= 0) { finish([]); return; }
+        scannedDur = dur;
         const last = Math.max(0, Math.round(dur * fps) - 1);
         const vw = v.videoWidth || 48;
         const vh = v.videoHeight || 48;
@@ -639,22 +649,76 @@
           g.drawImage(v, 0, 0, w, h);
           samples.push({ f, ...featuresOf(g.getImageData(0, 0, w, h).data, w, h) });
         }
-        const scores = [];
-        for (let i = 1; i < samples.length; i++) scores.push(distance(samples[i - 1], samples[i]));
-        const cuts = [];
-        for (let i = 1; i < samples.length; i++) {
-          const score = scores[i - 1];
-          const prev = scores.slice(Math.max(0, i - 13), i - 1);
-          const med = median(prev);
-          const mad = median(prev.map(s => Math.abs(s - med)));
-          const gate = prev.length ? med + Math.max(0.14, mad * 3) : 0.28;
-          if (score <= 0.18 || score <= gate || score <= med * 2.2 + 0.1 || samples[i - 1].mean < 14) continue;
-          if (i + 1 < samples.length) {
-            const stay = distance(samples[i - 1], samples[i + 1]);
-            const settle = distance(samples[i], samples[i + 1]);
-            if (stay < 0.16 || settle > Math.max(0.12, score * 0.65)) continue;
+        const back = 15;
+        const panMax = 40;
+        const blockFrac = (a, b) => {
+          let n = 0;
+          const len = Math.min(a.blocks.length, b.blocks.length);
+          for (let i = 0; i < len; i++) if (Math.abs(a.blocks[i] - b.blocks[i]) > 0.1) n++;
+          return n / (len || 1);
+        };
+        const coverage = (a, b) => {
+          const blocks = blockFrac(a, b);
+          const hist = total(a.hist, b.hist) / 2;
+          return hist >= 0.35 ? Math.max(blocks, hist) : blocks;
+        };
+        const stays = (from, pre) => {
+          const end = Math.min(samples.length - 1, from + back);
+          if (end < from + 8) return false;
+          for (let k = from; k <= end; k += 3) if (distance(pre, samples[k]) < 0.16) return false;
+          return distance(pre, samples[end]) >= 0.18;
+        };
+        const found = [];
+        for (let i = back; i + back < samples.length; i++) {
+          const pre = samples[i - back];
+          const post = samples[i + back];
+          if (pre.mean < 14 || post.mean < 14) continue;
+          const dist = distance(pre, post);
+          const cover = coverage(pre, post);
+          if (dist < 0.22 || cover < 0.34 || !stays(i, pre)) continue;
+          let best = i, bestScore = -1;
+          for (let k = Math.max(1, i - back); k <= Math.min(samples.length - 1, i + back); k++) {
+            const step = distance(samples[k - 1], samples[k]);
+            if (step > bestScore) { bestScore = step; best = k; }
           }
-          cuts.push(samples[i].f);
+          if (bestScore < 0.16 || samples[best].f < 8) continue;
+          const alta = dist >= 0.22 && cover >= 0.34 && bestScore >= 0.18;
+          found.push({ f: samples[best].f, alta });
+        }
+        for (let i = 0; i < samples.length - back; i++) {
+          const anchor = samples[i];
+          if (anchor.mean < 14) continue;
+          let crossed = -1;
+          for (let span = 12; span <= panMax && i + span < samples.length; span++) {
+            const end = samples[i + span];
+            const dist = distance(anchor, end);
+            const cover = coverage(anchor, end);
+            if (dist < 0.24 || cover < 0.34) continue;
+            let maxStep = 0;
+            for (let k = i + 1; k <= i + span; k++) maxStep = Math.max(maxStep, distance(samples[k - 1], samples[k]));
+            if (maxStep > Math.max(0.18, dist * 0.62)) continue;
+            const after = Math.min(samples.length - 1, i + span + Math.min(back, 10));
+            if (distance(anchor, samples[after]) < 0.2) continue;
+            if (crossed < 0) {
+              for (let k = i + 1; k <= i + span; k++) {
+                if (distance(anchor, samples[k]) > 0.28 && coverage(anchor, samples[k]) >= 0.28) { crossed = k; break; }
+              }
+            }
+            if (crossed < 0 || samples[crossed].f < 8) continue;
+            const alta = dist >= 0.26 && cover >= 0.34 && distance(anchor, samples[after]) >= 0.22;
+            found.push({ f: samples[crossed].f, alta });
+            break;
+          }
+        }
+        found.sort((a, b) => a.f - b.f);
+        const cuts = [];
+        for (const hit of found) {
+          const prev = cuts[cuts.length - 1];
+          if (prev && hit.f - prev.f < 45) {
+            if (hit.alta) prev.alta = true;
+            continue;
+          }
+          cuts.push({ f: hit.f, alta: !!hit.alta });
         }
         finish(cuts);
       };
@@ -726,7 +790,31 @@
       const deg = m.tipo === "angulo" && m.grados != null ? ` ${m.grados}°` : "";
       return `${name}${deg} · ${pinText(m)}`;
     }
+    function headNeedsReview(p) {
+      if (!p || p.kind !== "video" || !p.scanned) return false;
+      const last = frameLast(p);
+      if (last < 8) return false;
+      return marks.some(m => m.side === p.side && m.tipo === "cabeza" && m.pin === "range" && m.auto && m.f1 >= last - 2);
+    }
+    function syncHint() {
+      hint.hidden = !headNeedsReview(active);
+    }
+    function paintTicks() {
+      const host = transport.querySelector(".ticks");
+      if (!host) return;
+      host.replaceChildren();
+      const p = active;
+      if (!p || p.kind !== "video") return;
+      const last = Math.max(1, frameLast(p));
+      const frames = [...(p.suggestions || []).map(s => s.f), ...(p.manualCuts || [])];
+      for (const f of frames) {
+        const tick = document.createElement("i");
+        tick.style.left = Math.min(100, Math.max(0, 100 * f / last)) + "%";
+        host.append(tick);
+      }
+    }
     function renderList() {
+      syncHint();
       const rows = marks.filter(m => m.side === active.side);
       marksToggle.textContent = rows.length ? `Marcas · ${rows.length}` : "Marcas";
       marksToggle.setAttribute("aria-expanded", marksOpen ? "true" : "false");
@@ -801,6 +889,7 @@
         else if (pane.kind === "diagram") el.textContent = "Cuadro " + pane.frame;
         else el.textContent = pane.kind === "image" ? "Imagen" : "Sin archivo";
       });
+      paintTicks();
     }
     function setActive(p) {
       active = p;
@@ -857,28 +946,42 @@
       const words = String(str || "").split(/\s+/).filter(Boolean);
       const lines = [];
       let line = "";
+      const piecesOf = (word) => {
+        if (textWidth(word, size) <= maxW) return [word];
+        const parts = [];
+        let chunk = "";
+        for (const ch of word) {
+          const trial = chunk + ch;
+          if (!chunk || textWidth(trial, size) <= maxW) chunk = trial;
+          else { parts.push(chunk); chunk = ch; }
+        }
+        if (chunk) parts.push(chunk);
+        return parts.length ? parts : [word];
+      };
       for (const word of words) {
-        const trial = line ? line + " " + word : word;
-        if (!line || textWidth(trial, size) <= maxW) line = trial;
-        else { lines.push(line); line = word; }
+        for (const piece of piecesOf(word)) {
+          const trial = line ? line + " " + piece : piece;
+          if (!line || textWidth(trial, size) <= maxW) line = trial;
+          else { if (line) lines.push(line); line = piece; }
+        }
       }
       if (line) lines.push(line);
       return lines.length ? lines : [String(str || "")];
     }
     function drawText(g, x, y, str, fill, box) {
-      const maxW = Math.max(24, (box ? box.w : 280) - 8);
-      const maxH = box ? Math.max(16, box.h - 4) : 400;
+      const maxW = Math.max(16, (box ? box.w : 280) - 8);
+      const maxH = box ? Math.max(14, box.h - 4) : 400;
       let size = 15;
       let lines = wrapLabel(str, size, maxW);
-      while (size > 11) {
+      while (size > 8) {
         const widest = Math.max(...lines.map(l => textWidth(l, size)));
-        const block = lines.length * (size + 3);
-        const wordFits = String(str || "").split(/\s+/).every(w => !w || textWidth(w, size) <= maxW);
+        const block = lines.length * (size + 2);
+        const wordFits = lines.every(l => textWidth(l, size) <= maxW + 1);
         if (widest <= maxW && wordFits && block <= maxH) break;
         size -= 1;
         lines = wrapLabel(str, size, maxW);
       }
-      const lineH = size + 3;
+      const lineH = size + 2;
       const widest = Math.max(...lines.map(l => textWidth(l, size)), 0);
       let left = x;
       let base = y;
