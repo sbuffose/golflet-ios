@@ -250,8 +250,8 @@ test("el anotador 9:16 mide en píxeles y no tapa el video", { skip: !CHROME }, 
         scroll: rail.scrollWidth - rail.clientWidth, tools,
       };
     });
-    assert.ok(layout.stageH >= 540, "alto " + layout.stageH);
-    assert.ok(layout.transportTop >= layout.stageBottom - 1, "el transporte tapa el video");
+    assert.ok(layout.stageH >= 700, "alto " + layout.stageH);
+    assert.ok(layout.transportTop < layout.stageBottom - 20, "el transporte sigue ocupando alto del video");
     assert.ok(layout.railTop >= layout.transportTop - 1);
     assert.ok(layout.scroll < 8, "la barra de herramientas se desplaza");
     for (const t of layout.tools) {
@@ -329,7 +329,7 @@ test("el anotador 9:16 mide en píxeles y no tapa el video", { skip: !CHROME }, 
     await (await video.$("#abrir"))!.uploadFile("/tmp/profe-916.webm");
     await video.waitForFunction(() => document.querySelector("#stage")?.getAttribute("data-kind") === "video");
     const stageH = await video.$eval("#stage", el => el.getBoundingClientRect().height);
-    assert.ok(stageH >= 540, "alto " + stageH);
+    assert.ok(stageH >= 700, "alto " + stageH);
     assert.equal(await video.$eval(".transport .pins", el => (el as HTMLElement).hidden), true);
     await video.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
     await video.screenshot({ path: `${ART}/profe-14-uno-390.png` });
@@ -343,7 +343,18 @@ test("el anotador 9:16 mide en píxeles y no tapa el video", { skip: !CHROME }, 
     const fitV = await video.$eval(".fit", el => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
     await video.$eval('[data-tool="linea"]', el => (el as HTMLButtonElement).click());
     await video.mouse.move(fitV.x + 30, fitV.y + 40);
+    const h0 = await video.$eval("#stage", el => el.getBoundingClientRect().height);
     await video.mouse.down();
+    const mid = await video.evaluate(() => ({
+      h: document.querySelector("#stage")!.getBoundingClientRect().height,
+      vis: getComputedStyle(document.querySelector(".transport")!).visibility,
+      gone: document.querySelector(".rail")!.getClientRects().length,
+    }));
+    assert.ok(Math.abs(mid.h - h0) < 2, `salto ${h0} → ${mid.h}`);
+    assert.equal(mid.vis, "hidden");
+    assert.equal(mid.gone, 0);
+    await video.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await video.screenshot({ path: `${ART}/profe-15-dibujando.png` });
     await video.mouse.move(fitV.x + 120, fitV.y + 180, { steps: 6 });
     await video.mouse.up();
     await video.$eval('[data-act="marcas"]', (el: HTMLButtonElement) => el.click());
@@ -358,6 +369,14 @@ test("el anotador 9:16 mide en píxeles y no tapa el video", { skip: !CHROME }, 
     await video.mouse.move(fitV.x + fitV.w * 0.5 + 34, fitV.y + 90, { steps: 4 });
     await video.mouse.up();
     await video.waitForFunction(() => /Cabeza · tramo/.test(document.body.innerText || ""));
+    const cabezaAntes = await video.$eval("body", el => (el.innerText.match(/Cabeza · tramo \d+–\d+/) || [""])[0]);
+    await video.$eval('[data-pin="frame"]', (el: HTMLButtonElement) => el.click());
+    const cabezaIgual = await video.$eval("body", el => (el.innerText.match(/Cabeza · tramo \d+–\d+/) || [""])[0]);
+    assert.equal(cabezaIgual, cabezaAntes);
+    assert.equal(await video.$eval('[data-pin="frame"]', el => el.classList.contains("on")), true);
+    await video.$eval('[data-tool="mover"]', (el: HTMLButtonElement) => el.click());
+    await video.$eval('[data-pin="frame"]', (el: HTMLButtonElement) => el.click());
+    await video.waitForFunction(() => /Cabeza · cuadro/.test(document.body.innerText || ""));
     assert.equal(/todo el clip/.test(await video.$eval("body", el => el.innerText)), false);
     await video.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
     await video.screenshot({ path: `${ART}/profe-12-video.png` });
@@ -504,26 +523,49 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     assert.ok(label, "falta la etiqueta");
     assert.match(label.text || "", /Brazo izquierdo extendido/);
     assert.ok(label.x >= -1 && label.y >= -1 && label.r <= label.vw + 2 && label.b <= label.vh + 2, JSON.stringify(label));
-    await page.$eval('.pane[data-side="a"] [data-act="solo"]', (el: HTMLButtonElement) => el.click());
+    const relojA = await page.$eval("#reloj", el => el.textContent || "");
+    await page.$eval('.pane[data-side="b"] [data-act="solo"]', (el: HTMLButtonElement) => el.click());
     const solo = await page.evaluate(() => {
       const a = document.querySelector('.pane[data-side="a"]')!.getBoundingClientRect();
       const b = document.querySelector('.pane[data-side="b"]')!.getBoundingClientRect();
       const juntos = document.querySelector('[data-act="juntos"]') as HTMLElement | null;
-      return { aw: a.width, bw: b.width, juntos: !!juntos && !juntos.hidden };
+      const reloj = document.querySelector("#reloj")?.textContent || "";
+      const side = document.querySelector('.pane[data-side="b"] .sideclock')?.textContent || "";
+      return {
+        aw: a.width, bw: b.width, juntos: !!juntos && !juntos.hidden, reloj, side,
+        rf: Number((reloj.split("·")[1] || "").trim()),
+        sf: Number((side.split("·")[1] || "").trim()),
+      };
     });
-    assert.ok(solo.aw > 300 && solo.bw < 2 && solo.juntos, JSON.stringify(solo));
+    assert.ok(solo.bw > 300 && solo.aw < 2 && solo.juntos, JSON.stringify(solo));
+    assert.equal(solo.rf, solo.sf);
+    assert.notEqual(solo.rf, Number((relojA.split("·")[1] || "").trim()));
     await page.$eval('[data-act="juntos"]', (el: HTMLButtonElement) => el.click());
     await page.$eval('[data-tool="linea"]', (el: HTMLButtonElement) => el.click());
     await page.mouse.move(fit.x + 12, fit.y + fit.h * 0.72);
+    const h0 = await page.$eval("#stage", el => el.getBoundingClientRect().height);
     await page.mouse.down();
-    assert.equal(await page.$eval(".anotador", el => el.classList.contains("dibujando")), true);
-    assert.equal(await page.$eval(".transport", el => getComputedStyle(el).visibility), "hidden");
+    const mid = await page.evaluate(() => ({
+      h: document.querySelector("#stage")!.getBoundingClientRect().height,
+      vis: getComputedStyle(document.querySelector(".transport")!).visibility,
+      dib: document.querySelector(".anotador")!.classList.contains("dibujando"),
+    }));
+    assert.equal(mid.dib, true);
+    assert.equal(mid.vis, "hidden");
+    assert.ok(Math.abs(mid.h - h0) < 2, `salto ${h0} → ${mid.h}`);
     await page.mouse.up();
     assert.equal(await page.$eval(".anotador", el => el.classList.contains("dibujando")), false);
     await page.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
     await page.screenshot({ path: `${ART}/profe-14-comparar-390.png` });
+    const times = await page.$$eval(".sideclock", ns => ns.map(n => n.textContent || ""));
     await page.$eval('[data-act="menu"]', (el: HTMLButtonElement) => el.click());
     await page.click('[data-vista="sobre"]');
+    await page.waitForFunction((prev) => {
+      const b = document.querySelector('.pane[data-side="b"] .sideclock')?.textContent || "";
+      const now = Number((b.split("·")[1] || "").trim());
+      const was = Number((String(prev).split("·")[1] || "").trim());
+      return now === was && now > 0;
+    }, {}, times[1]);
     await page.waitForSelector("#op");
     await page.waitForFunction(() => document.querySelector('.pane[data-side="a"]')?.classList.contains("active"));
     const stack = await page.evaluate(() => {
@@ -565,6 +607,61 @@ test("comparar dos clips ocupa la pantalla", { skip: !CHROME }, async () => {
     await page.waitForSelector("#op");
     const over = await page.$$eval(".stage", ns => ns.map(el => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; }));
     assert.ok(over.every(s => s.w > 200 && s.h > 200));
+
+    const struct = await page.evaluate(async () => {
+      const c = document.createElement("canvas");
+      c.width = 180; c.height = 320;
+      const g = c.getContext("2d");
+      if (!g) return [];
+      const stream = c.captureStream(30);
+      const rec = new MediaRecorder(stream, { mimeType: "video/webm" });
+      const chunks: Blob[] = [];
+      rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      const done = new Promise<void>(r => { rec.onstop = () => r(); });
+      rec.start(80);
+      const green = "#3E7A4A";
+      const dark = "#2A5C38";
+      for (let i = 0; i < 70; i++) {
+        g.fillStyle = green;
+        g.fillRect(0, 0, 180, 320);
+        g.fillStyle = dark;
+        if (i < 36) g.fillRect(70, 20, 40, 280);
+        else g.fillRect(10, 200, 160, 70);
+        await new Promise(r => setTimeout(r, 40));
+      }
+      rec.stop();
+      await done;
+      return Array.from(new Uint8Array(await new Blob(chunks, { type: "video/webm" }).arrayBuffer()));
+    });
+    writeFileSync("/tmp/profe-struct.webm", Buffer.from(struct));
+    const page2 = await browser.newPage();
+    await page2.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await page2.goto(`http://127.0.0.1:${port}/profe-preview/index.html?blank=1#/anotar`, { waitUntil: "networkidle0" });
+    await (await page2.$("#abrir"))!.uploadFile("/tmp/profe-struct.webm");
+    await page2.waitForFunction(() => document.querySelector("#stage")?.getAttribute("data-kind") === "video");
+    await page2.waitForFunction(() => document.querySelector("#stage")?.getAttribute("data-scanned") === "1", { timeout: 20000 });
+    const found = await page2.evaluate(() => {
+      const stage = document.querySelector("#stage");
+      return { cuts: (stage?.getAttribute("data-cuts") || "").split(",").map(Number).filter(n => n > 0) };
+    });
+    assert.ok(found.cuts.some(n => n > 20 && n < 80), JSON.stringify(found));
+    await page2.$eval('[data-tool="cabeza"]', (el: HTMLButtonElement) => el.click());
+    const fit2 = await page2.$eval("#stage .fit", el => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+    await page2.mouse.move(fit2.x + fit2.w * 0.5, fit2.y + fit2.h * 0.3);
+    await page2.mouse.down();
+    await page2.mouse.move(fit2.x + fit2.w * 0.5 + 30, fit2.y + fit2.h * 0.3 + 10, { steps: 4 });
+    await page2.mouse.up();
+    await page2.$eval('[data-act="marcas"]', (el: HTMLButtonElement) => el.click());
+    await page2.waitForFunction(() => /Cabeza · tramo/.test(document.body.innerText || ""));
+    const autoEnd = await page2.$eval("body", el => (el.innerText.match(/Cabeza · tramo (\d+)–(\d+)/) || []).slice(1).map(Number));
+    assert.ok(autoEnd[1] > 18 && autoEnd[1] < 78, JSON.stringify({ autoEnd, found }));
+    await page2.$eval("#scrub", (el: HTMLInputElement) => { el.value = "8"; el.dispatchEvent(new Event("input", { bubbles: true })); });
+    await page2.waitForFunction(() => Number((document.querySelector("#reloj")?.textContent || "").split("·")[1]) >= 8);
+    await page2.$eval('[data-act="corte"]', (el: HTMLButtonElement) => el.click());
+    await page2.waitForFunction(() => /Cabeza · tramo 0–7/.test(document.body.innerText || ""));
+    await page2.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await page2.screenshot({ path: `${ART}/profe-15-corte.png` });
+    await page2.close();
   } finally {
     await browser.close();
     server.close();

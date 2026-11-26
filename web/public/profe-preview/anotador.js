@@ -61,8 +61,12 @@
 
   function mount(host, opts) {
     const panesSpec = opts.panes === 2 ? ["a", "b"] : ["a"];
+    let holdSide = "a";
     panesSpec.forEach(side => {
       const p = cache[side];
+      if (p.root && p.root.classList.contains("active")) holdSide = side;
+      if (p.video && p.kind === "video" && Number.isFinite(p.video.currentTime)) p.holdTime = p.video.currentTime;
+      if (p.kind === "video" && p.blob && !p.scanned) p.scanToken = (p.scanToken || 0) + 1;
       const mode = side === "a" ? opts.modeA : opts.modeB;
       if (mode) p.mode = mode;
       if (!p.booted) {
@@ -249,6 +253,12 @@
       dur.textContent = "Duración";
       marksBar.append(dur);
     }
+    const corte = document.createElement("button");
+    corte.type = "button";
+    corte.dataset.act = "corte";
+    corte.setAttribute("aria-label", "Corte de cámara aquí");
+    corte.textContent = "Corte de cámara aquí";
+    marksBar.append(corte);
     list.append(marksBar, marksBody);
     let marksOpen = false;
     let marksPinned = false;
@@ -257,7 +267,10 @@
     input.type = "file";
     input.accept = "image/*,video/*";
     input.hidden = true;
-    stack.append(transport, sheet, list);
+    const chrome = document.createElement("div");
+    chrome.className = "chrome";
+    chrome.append(transport, sheet, list);
+    stack.append(chrome);
     root.append(rail, input);
     host.append(root);
 
@@ -369,6 +382,26 @@
       applyView(p);
       syncChrome();
     }
+    function bindVideo(p) {
+      p.video.onloadedmetadata = () => {
+        const hold = p.holdTime;
+        if (Number.isFinite(hold) && hold > 0.001) {
+          const d = p.video.duration;
+          const t = Number.isFinite(d) && d > 0 ? Math.min(hold, Math.max(0, d - 0.001)) : hold;
+          try { p.video.currentTime = t; } catch { /* el medio todavía no acepta el salto */ }
+        }
+        layoutFit(p);
+        paintInk(p);
+        updateScrub();
+        if (p.scanned) {
+          if (p.stage) {
+            p.stage.dataset.scanned = "1";
+            p.stage.dataset.cuts = (p.cuts || []).join(",");
+            if (p.knownDuration) p.stage.dataset.duration = String(p.knownDuration);
+          }
+        } else scanCuts(p);
+      };
+    }
     function useFile(p, file) {
       if (!file) return;
       if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) { say("Elegí una foto o un video"); return; }
@@ -381,8 +414,13 @@
       p.fps = 30;
       if (p.kind === "video") {
         p.cuts = [];
+        p.manualCuts = [];
+        p.scanned = false;
+        p.holdTime = 0;
+        p.knownDuration = 0;
         p.scanToken = (p.scanToken || 0) + 1;
-        p.video.onloadedmetadata = () => { layoutFit(p); paintInk(p); updateScrub(); scanCuts(p); };
+        if (p.stage) { p.stage.dataset.scanned = ""; p.stage.dataset.cuts = ""; }
+        bindVideo(p);
       } else {
         p.img.onload = () => { layoutFit(p); paintInk(p); };
       }
@@ -441,6 +479,27 @@
       }
       if (changed && p.stage && p.stage.isConnected) { persist(); renderList(); paintAll(); }
     }
+    function addCutHere() {
+      const p = active;
+      if (p.kind !== "video") { say("Elegí un video"); return; }
+      const f = frameNow(p);
+      p.manualCuts = p.manualCuts || [];
+      if (!p.manualCuts.includes(f)) p.manualCuts.push(f);
+      p.cuts = [...new Set([...(p.cuts || []), f])].sort((a, b) => a - b);
+      if (p.stage) p.stage.dataset.cuts = p.cuts.join(",");
+      const m = selMark();
+      if (m && m.side === p.side && m.pin === "range" && m.f0 < f && m.f1 >= f) {
+        checkpoint();
+        m.f1 = Math.max(m.f0, f - 1);
+        m.t1 = m.f1 / fpsOf(p);
+        m.auto = false;
+      }
+      applyCuts(p);
+      persist();
+      renderList();
+      paintAll();
+      say("Corte de cámara");
+    }
     function seekTo(video, t) {
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => { cleanup(); reject(new Error("seek")); }, 1200);
@@ -465,18 +524,74 @@
       v.muted = true;
       v.playsInline = true;
       v.preload = "auto";
-      const finish = (cuts) => {
+      const finish = (found) => {
         if (p.scanToken !== token) return;
-        p.cuts = cuts;
+        const merged = [...new Set([...(found || []), ...(p.manualCuts || [])])].sort((a, b) => a - b);
+        p.cuts = merged;
+        p.scanned = true;
         if (Number.isFinite(v.duration) && v.duration > 0) p.knownDuration = v.duration;
-        applyCuts(p);
         if (stage && stage.isConnected) {
           stage.dataset.scanned = "1";
-          stage.dataset.cuts = cuts.join(",");
+          stage.dataset.cuts = merged.join(",");
           if (Number.isFinite(v.duration) && v.duration > 0) stage.dataset.duration = String(v.duration);
+          applyCuts(p);
         }
       };
-      v.onerror = () => finish(p.cuts || []);
+      const median = (xs) => {
+        if (!xs.length) return 0;
+        const s = xs.slice().sort((a, b) => a - b);
+        const m = s.length >> 1;
+        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+      };
+      const total = (a, b) => {
+        let s = 0;
+        for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+        return s;
+      };
+      const l1 = (a, b) => total(a, b) / (a.length || 1);
+      const distance = (a, b) => total(a.hist, b.hist) / 2 * 1.15 + l1(a.blocks, b.blocks) * 2.6 + l1(a.edges, b.edges) * 1.1;
+      const featuresOf = (data, w, h) => {
+        const hist = new Array(16).fill(0);
+        const luma = new Float32Array(w * h);
+        let sum = 0;
+        for (let i = 0; i < w * h; i++) {
+          const o = i * 4;
+          const y = data[o] * 0.299 + data[o + 1] * 0.587 + data[o + 2] * 0.114;
+          luma[i] = y;
+          sum += y;
+          hist[Math.min(15, y >> 4)]++;
+        }
+        const n = w * h || 1;
+        const mean = sum / n;
+        for (let i = 0; i < 16; i++) hist[i] /= n;
+        const cols = w >= h ? 8 : 6;
+        const rows = h >= w ? 8 : 6;
+        const blocks = [];
+        const edges = [];
+        for (let by = 0; by < rows; by++) {
+          const y0 = Math.floor(by * h / rows);
+          const y1 = Math.max(y0 + 1, Math.floor((by + 1) * h / rows));
+          for (let bx = 0; bx < cols; bx++) {
+            const x0 = Math.floor(bx * w / cols);
+            const x1 = Math.max(x0 + 1, Math.floor((bx + 1) * w / cols));
+            let s = 0, c = 0, e = 0, ec = 0;
+            for (let y = y0; y < y1; y++) {
+              for (let x = x0; x < x1; x++) {
+                const yv = luma[y * w + x];
+                s += yv;
+                c++;
+                if (x + 1 < w) { e += Math.abs(yv - luma[y * w + x + 1]); ec++; }
+                if (y + 1 < h) { e += Math.abs(yv - luma[(y + 1) * w + x]); ec++; }
+              }
+            }
+            blocks.push(s / (c || 1));
+            edges.push(e / (ec || 1));
+          }
+        }
+        const base = mean || 1;
+        return { hist, blocks: blocks.map(val => val / base), edges: edges.map(val => val / 40), mean };
+      };
+        v.onerror = () => finish(p.cuts || []);
       v.onloadeddata = async () => {
         if (!Number.isFinite(v.duration) || v.duration <= 0) {
           await new Promise(resolve => {
@@ -497,50 +612,50 @@
         const dur = v.duration;
         if (p.scanToken !== token || !Number.isFinite(dur) || dur <= 0) { finish([]); return; }
         const last = Math.max(0, Math.round(dur * fps) - 1);
+        const vw = v.videoWidth || 48;
+        const vh = v.videoHeight || 48;
+        const scale = 48 / Math.max(vw, vh);
+        const w = Math.max(16, Math.round(vw * scale));
+        const h = Math.max(16, Math.round(vh * scale));
         const c = document.createElement("canvas");
-        c.width = 16; c.height = 16;
+        c.width = w;
+        c.height = h;
         const g = c.getContext("2d", { willReadFrequently: true });
-        const cuts = [];
-        let prev = null;
-        const step = Math.max(1, Math.round(fps / 5));
-        const blocks = (data) => {
-          const out = [];
-          for (let by = 0; by < 4; by++) {
-            for (let bx = 0; bx < 4; bx++) {
-              let s = 0, n = 0;
-              for (let y = by * 4; y < by * 4 + 4; y++) {
-                for (let x = bx * 4; x < bx * 4 + 4; x++) {
-                  const i = (y * 16 + x) * 4;
-                  s += data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
-                  n++;
-                }
-              }
-              out.push(s / (n || 1));
-            }
-          }
-          return out;
-        };
-        const changed = (a, b) => {
-          let n = 0;
-          let sum = 0;
-          for (let i = 0; i < a.length; i++) {
-            const d = Math.abs(a[i] - b[i]);
-            sum += d;
-            if (d > 18) n++;
-          }
-          const mean = sum / (a.length || 1);
-          return n >= 8 || mean > 22;
-        };
-        try {
-          for (let f = 0; f <= last; f += step) {
-            if (p.scanToken !== token) return;
+        const step = Math.max(1, Math.round(fps / 10));
+        const samples = [];
+        let misses = 0;
+        for (let f = 0; f <= last; f += step) {
+          if (p.scanToken !== token) return;
+          try {
             await seekTo(v, Math.min(dur - 0.001, f / fps));
-            g.drawImage(v, 0, 0, 16, 16);
-            const mean = blocks(g.getImageData(0, 0, 16, 16).data);
-            if (prev && changed(prev, mean)) cuts.push(f);
-            prev = mean;
+            misses = 0;
+          } catch {
+            misses++;
+            if (misses >= 4) break;
+            continue;
           }
-        } catch { /* el archivo no permite saltar de cuadro */ }
+          if (!g || !v.videoWidth) continue;
+          // drawImage toma el cuadro ya rotado, como lo muestra el reproductor.
+          g.drawImage(v, 0, 0, w, h);
+          samples.push({ f, ...featuresOf(g.getImageData(0, 0, w, h).data, w, h) });
+        }
+        const scores = [];
+        for (let i = 1; i < samples.length; i++) scores.push(distance(samples[i - 1], samples[i]));
+        const cuts = [];
+        for (let i = 1; i < samples.length; i++) {
+          const score = scores[i - 1];
+          const prev = scores.slice(Math.max(0, i - 13), i - 1);
+          const med = median(prev);
+          const mad = median(prev.map(s => Math.abs(s - med)));
+          const gate = prev.length ? med + Math.max(0.14, mad * 3) : 0.28;
+          if (score <= 0.18 || score <= gate || score <= med * 2.2 + 0.1 || samples[i - 1].mean < 14) continue;
+          if (i + 1 < samples.length) {
+            const stay = distance(samples[i - 1], samples[i + 1]);
+            const settle = distance(samples[i], samples[i + 1]);
+            if (stay < 0.16 || settle > Math.max(0.12, score * 0.65)) continue;
+          }
+          cuts.push(samples[i].f);
+        }
         finish(cuts);
       };
       v.src = p.blob;
@@ -1061,7 +1176,11 @@
       if (built.length < 2 || opts.overlay) return;
       const on = panesEl.classList.contains("solo-" + side);
       panesEl.classList.remove("solo-a", "solo-b");
-      if (!on) panesEl.classList.add("solo-" + side);
+      if (!on) {
+        panesEl.classList.add("solo-" + side);
+        const pane = built.find(q => q.side === side);
+        if (pane) setActive(pane);
+      }
       const back = root.querySelector("[data-act=juntos]");
       if (back) back.hidden = !(panesEl.classList.contains("solo-a") || panesEl.classList.contains("solo-b"));
       requestAnimationFrame(() => built.forEach(q => { layoutFit(q); paintInk(q); }));
@@ -1226,6 +1345,8 @@
     }
 
     built.forEach(p => {
+      p.video.addEventListener("seeked", () => { paintInk(p); updateScrub(); });
+      if (p.kind === "video" && p.blob) bindVideo(p);
       applyMedia(p);
       p.stage.addEventListener("pointerdown", e => onDown(e, p));
       p.stage.addEventListener("pointermove", e => onMove(e, p));
@@ -1235,7 +1356,6 @@
       p.stage.addEventListener("dragover", e => { e.preventDefault(); p.stage.classList.add("over"); });
       p.stage.addEventListener("dragleave", () => p.stage.classList.remove("over"));
       p.stage.addEventListener("drop", e => { e.preventDefault(); p.stage.classList.remove("over"); useFile(p, e.dataTransfer.files && e.dataTransfer.files[0]); });
-      p.video.addEventListener("seeked", () => { paintInk(p); updateScrub(); });
     });
 
     function step(dir) {
@@ -1358,10 +1478,11 @@
       if (pbtn) {
         pinMode = pbtn.dataset.pin;
         const m = selMark();
-        if (m) {
+        if (m && tool === "mover") {
           checkpoint();
           const stamped = stamp(active);
           m.pin = stamped.pin; m.f0 = stamped.f0; m.f1 = stamped.f1; m.t0 = stamped.t0; m.t1 = stamped.t1;
+          m.auto = false;
           persist(); renderList(); paintAll();
         }
         highlight();
@@ -1414,6 +1535,7 @@
         else if (k === "menu") { menuOpen = !menuOpen; syncMenu(); }
         else if (k === "riel") root.classList.toggle("riel");
         else if (k === "duracion") { pinOpen = !pinOpen; highlight(); }
+        else if (k === "corte") addCutHere();
         else if (k === "solo") {
           const pane = act.closest(".pane");
           if (pane) toggleSolo(pane.dataset.side);
@@ -1481,7 +1603,7 @@
     window.addEventListener("resize", onResize);
     onResize();
 
-    setActive(built[0]);
+    setActive(built.find(p => p.side === holdSide) || built[0]);
     requestAnimationFrame(() => paintAll());
 
     return {
