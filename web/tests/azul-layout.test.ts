@@ -74,15 +74,16 @@ test("desde el 22 nov 2026 el 3 muestra el 12 guardado y el 10 no se mueve", () 
   assert.equal(card.holes.find(h => h.hole === 17)?.yards.AZUL, 490);
 });
 
-test("las tarjetas importadas hasta el 4 oct 2026 siguen en el orden viejo", () => {
-  const round = rounds.find(r => r.date === "2026-10-04" && r.course === "Azul")!;
+test("las tarjetas de demostración anteriores al cambio siguen en el orden guardado", () => {
+  const round = rounds.find(r => r.date === "2026-05-03" && r.course === "Azul" && r.club_name === "Club Demo Golflet")!;
   const third = round.holes.find(h => h.hole === 3)!;
   const twelfth = round.holes.find(h => h.hole === 12)!;
   assert.equal(third.par, 4);
-  assert.equal(third.hole_hcp, 9);
-  assert.equal(third.yards, 345);
-  assert.equal(twelfth.yards, 409);
-  assert.equal(twelfth.hole_hcp, 16);
+  assert.equal(third.hole_hcp, 11);
+  assert.equal(third.yards, 370);
+  assert.equal(twelfth.par, 3);
+  assert.equal(twelfth.yards, 145);
+  assert.equal(twelfth.hole_hcp, 18);
   assert.equal(round.holes.map(h => h.hole).join(","), Array.from({ length: 18 }, (_, i) => i + 1).join(","));
 });
 
