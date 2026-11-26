@@ -249,7 +249,8 @@ function render() {
   else if (a === "biblioteca") html = biblioteca();
   else if (a === "mia") html = mia();
   app.innerHTML = html;
-  app.classList.toggle("lienzo", a === "anotar");
+  const refCompare = a === "comparar" && S.compare === "referencia";
+  app.classList.toggle("lienzo", a === "anotar" || (a === "comparar" && !refCompare));
   document.querySelectorAll("[data-mini]").forEach(c => drawSwing(c.getContext("2d"), c.width, c.height, c.dataset.mini === "atras" ? 16 : 6, c.dataset.mini));
   const visor = document.getElementById("visor");
   if (visor && window.GolfletAnotador) {

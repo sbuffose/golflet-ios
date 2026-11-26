@@ -36,7 +36,7 @@
     return {
       side, kind: "diagram", mode: "frente", frame: 4, blob: "", still: "", user: false, booted: false, fps: 30,
       keys: { address: null, top: null, impact: null }, fixed: { address: false, top: false, impact: false },
-      view: { s: 1, x: 0, y: 0 }, prev: null,
+      view: { s: 1, x: 0, y: 0 }, prev: null, cuts: [], scanToken: 0,
     };
   }
 
@@ -109,11 +109,12 @@
       const pane = document.createElement("div");
       pane.className = "pane" + (i === 0 ? " active" : "");
       pane.dataset.side = side;
-      pane.innerHTML = `<div class="stage"${i === 0 ? ` id="${opts.stageId || "stage"}"` : ""} data-kind="${data.kind}">
+      const stageId = i === 0 ? (opts.stageId || "stage") : "lado-b";
+      pane.innerHTML = `<div class="stage" id="${stageId}" data-kind="${data.kind}">
         <div class="fit"><div class="world"><canvas class="media diagram"></canvas><video class="media video" playsinline preload="metadata"></video><img class="media image" alt=""><svg class="ink" viewBox="0 0 100 100" preserveAspectRatio="none"></svg></div></div>
         <div class="loupe" hidden><canvas width="168" height="168"></canvas><span class="snap"></span></div>
         <div class="drop"><p>Elegí una foto o un video</p><p class="note">Queda en este aparato. No se sube.</p><button type="button" class="btn" data-open="${side}">Abrir archivo</button><p class="note">O soltalo acá.</p></div>
-      </div>`;
+      </div>${panesSpec.length === 2 ? `<div class="sidebar"><button type="button" data-side-step="-1" aria-label="Cuadro anterior">−</button><span class="sideclock"></span><button type="button" data-side-step="1" aria-label="Cuadro siguiente">+</button></div>` : ""}`;
       panesEl.append(pane);
       const stage = pane.querySelector(".stage");
       data.root = pane;
@@ -147,9 +148,16 @@
       <button type="button" data-act="volver" hidden>Volver</button>
     </div>
     <label class="op scrub"><span id="reloj">Cuadro</span><input id="scrub" type="range" min="0" max="23" step="1" value="0"></label>
+    <div class="seg pins" role="group" aria-label="Duración">
+      <button type="button" data-pin="frame" class="on">Este cuadro</button>
+      <button type="button" data-pin="range">Tramo</button>
+      <button type="button" data-pin="all">Todo</button>
+    </div>
     ${built.length === 2 ? `<div class="seg keys">
       <button type="button" data-pick="a">Lado A</button>
       <button type="button" data-pick="b">Lado B</button>
+      <button type="button" data-open="a">Abrir A</button>
+      <button type="button" data-open="b">Abrir B</button>
       <button type="button" data-act="marcar" data-key="address">Marcar address</button>
       <button type="button" data-act="marcar" data-key="top">Marcar arriba</button>
       <button type="button" data-act="marcar" data-key="impact">Marcar impacto</button>
@@ -165,11 +173,6 @@
     sheet.hidden = true;
     sheet.innerHTML = `<div class="seg colors" role="group" aria-label="Color">${COLORS.map(([c, name]) => `<button type="button" class="swatch${c === color ? " on" : ""}" data-color="${c}" style="background:${c}" aria-label="${name}"></button>`).join("")}</div>
       <label class="op">Grosor <input id="grosor" type="range" min="2" max="8" step="1" value="3"></label>
-      <div class="seg" role="group" aria-label="Duración">
-        <button type="button" data-pin="frame" class="on">Este cuadro</button>
-        <button type="button" data-pin="range">Tramo</button>
-        <button type="button" data-pin="all">Todo</button>
-      </div>
       <div class="seg">
         <button type="button" data-act="desde">Desde acá</button>
         <button type="button" data-act="hasta">Hasta acá</button>
@@ -187,12 +190,23 @@
     const rail = document.createElement("div");
     rail.className = "rail";
     rail.setAttribute("role", "toolbar");
-    rail.innerHTML = TOOLS.map(([id, name]) => `<button type="button" data-tool="${id}"${GROUP_START[id] ? ' data-g="1"' : ""} aria-label="${HUMAN[id] || name}">${ico(id)}<span>${name}</span></button>`).join("")
-      + `<button type="button" data-act="estilo" aria-label="Color y grosor"><span class="dot"></span><span>Color</span></button>`
+    rail.innerHTML = `<div class="rail-tools">${TOOLS.map(([id, name]) => `<button type="button" data-tool="${id}"${GROUP_START[id] ? ' data-g="1"' : ""} aria-label="${HUMAN[id] || name}">${ico(id)}<span>${name}</span></button>`).join("")
+      }<button type="button" data-act="estilo" aria-label="Color y grosor"><span class="dot"></span><span>Color</span></button></div>`
       + `<button type="button" id="guardar">Guardar</button>`;
 
     const list = document.createElement("div");
     list.className = "marks";
+    const marksToggle = document.createElement("button");
+    marksToggle.type = "button";
+    marksToggle.className = "marks-toggle";
+    marksToggle.dataset.act = "marcas";
+    marksToggle.setAttribute("aria-expanded", "false");
+    const marksBody = document.createElement("div");
+    marksBody.className = "marks-body";
+    marksBody.hidden = true;
+    list.append(marksToggle, marksBody);
+    let marksOpen = false;
+    let marksPinned = false;
     const input = document.createElement("input");
     input.id = "abrir";
     input.type = "file";
@@ -241,8 +255,9 @@
     function frameLast(p) {
       if (p.kind === "diagram") return 23;
       if (p.kind === "video") {
-        const d = p.video.duration;
-        if (!Number.isFinite(d) || d <= 0) return frameNow(p);
+        const live = p.video.duration;
+        const d = Number.isFinite(live) && live > 0 ? live : p.knownDuration;
+        if (!Number.isFinite(d) || d <= 0) return Math.max(frameNow(p), (p.cuts && p.cuts.length ? p.cuts[p.cuts.length - 1] : frameNow(p)));
         return Math.max(0, Math.round(d * fpsOf(p)) - 1);
       }
       return 0;
@@ -320,7 +335,9 @@
       p.kind = file.type.startsWith("video/") ? "video" : "image";
       p.fps = 30;
       if (p.kind === "video") {
-        p.video.onloadedmetadata = () => { layoutFit(p); paintInk(p); updateScrub(); };
+        p.cuts = [];
+        p.scanToken = (p.scanToken || 0) + 1;
+        p.video.onloadedmetadata = () => { layoutFit(p); paintInk(p); updateScrub(); scanCuts(p); };
       } else {
         p.img.onload = () => { layoutFit(p); paintInk(p); };
       }
@@ -358,13 +375,87 @@
       setUnit(other, fromPhase(other, phase(src)));
       syncing = false;
     }
+    function rangeEnd(p, f) {
+      const fps = fpsOf(p);
+      const horizon = f + Math.max(1, Math.round(3 * fps));
+      const next = (p.cuts || []).find(c => c > f + 2);
+      const end = next != null ? Math.min(next - 1, horizon) : horizon;
+      const last = frameLast(p);
+      const cap = last > f ? last : horizon;
+      return Math.max(f, Math.min(cap, end));
+    }
+    function seekTo(video, t) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { cleanup(); reject(new Error("seek")); }, 1200);
+        const done = () => { cleanup(); resolve(); };
+        const fail = () => { cleanup(); reject(new Error("media")); };
+        const cleanup = () => {
+          clearTimeout(timer);
+          video.removeEventListener("seeked", done);
+          video.removeEventListener("error", fail);
+        };
+        video.addEventListener("seeked", done);
+        video.addEventListener("error", fail);
+        try { video.currentTime = t; } catch (err) { cleanup(); reject(err); }
+      });
+    }
+    function scanCuts(p) {
+      if (p.kind !== "video" || !p.blob) return;
+      const token = (p.scanToken || 0) + 1;
+      p.scanToken = token;
+      const stage = p.stage;
+      const v = document.createElement("video");
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = "auto";
+      const finish = (cuts) => {
+        if (p.scanToken !== token) return;
+        p.cuts = cuts;
+        if (Number.isFinite(v.duration) && v.duration > 0) p.knownDuration = v.duration;
+        if (stage && stage.isConnected) {
+          stage.dataset.scanned = "1";
+          stage.dataset.cuts = cuts.join(",");
+        }
+      };
+      v.onerror = () => finish(p.cuts || []);
+      v.onloadeddata = async () => {
+        const fps = fpsOf(p);
+        const dur = v.duration;
+        if (!Number.isFinite(dur) || dur <= 0) { finish([]); return; }
+        const last = Math.max(0, Math.round(dur * fps) - 1);
+        const until = Math.min(last, Math.round(3.2 * fps));
+        const c = document.createElement("canvas");
+        c.width = 16; c.height = 16;
+        const g = c.getContext("2d", { willReadFrequently: true });
+        const cuts = [];
+        let prev = null;
+        const step = Math.max(1, Math.round(fps / 5));
+        try {
+          for (let f = 0; f <= until; f += step) {
+            if (p.scanToken !== token) return;
+            await seekTo(v, Math.min(dur - 0.001, f / fps));
+            g.drawImage(v, 0, 0, 16, 16);
+            const data = g.getImageData(0, 0, 16, 16).data;
+            let lum = 0;
+            let n = 0;
+            for (let i = 0; i < data.length; i += 16) { lum += data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11; n++; }
+            const mean = lum / (n || 1);
+            if (prev != null && Math.abs(mean - prev) > 28) cuts.push(f);
+            prev = mean;
+          }
+        } catch { /* el archivo no permite saltar de cuadro */ }
+        finish(cuts);
+      };
+      v.src = p.blob;
+    }
     function stamp(p) {
       const f = frameNow(p);
       const last = frameLast(p);
       const t = p.kind === "video" ? (p.video.currentTime || 0) : f;
-      const endT = p.kind === "video" ? (p.video.duration || t) : last;
+      const endF = rangeEnd(p, f);
+      const endT = p.kind === "video" ? endF / fpsOf(p) : endF;
       if (p.kind === "image" || pinMode === "all") return { pin: "all", f0: 0, f1: Math.max(last, f), t0: 0, t1: 1e9, media: p.kind };
-      if (pinMode === "range") return { pin: "range", f0: f, f1: Math.max(last, f), t0: t, t1: endT, media: p.kind };
+      if (pinMode === "range") return { pin: "range", f0: f, f1: endF, t0: t, t1: endT, media: p.kind };
       return { pin: "frame", f0: f, f1: f, t0: t, t1: t, media: p.kind };
     }
     function visible(m, p) {
@@ -424,13 +515,15 @@
       return `${name}${deg} · ${pinText(m)}`;
     }
     function renderList() {
-      list.replaceChildren();
       const rows = marks.filter(m => m.side === active.side);
+      marksToggle.textContent = rows.length ? `Marcas · ${rows.length}` : "Marcas";
+      marksToggle.setAttribute("aria-expanded", marksOpen ? "true" : "false");
+      marksBody.replaceChildren();
       if (!rows.length) {
         const n = document.createElement("p");
         n.className = "note";
         n.textContent = "Todavía no hay marcas.";
-        list.append(n);
+        marksBody.append(n);
         return;
       }
       for (const m of rows.slice().reverse()) {
@@ -443,7 +536,7 @@
         btn.dataset.del = m.id;
         btn.textContent = "Quitar";
         row.append(span, btn);
-        list.append(row);
+        marksBody.append(row);
       }
     }
     function highlight() {
@@ -485,6 +578,13 @@
         scrub.disabled = true;
         reloj.textContent = p.kind === "image" ? "Imagen" : "Sin archivo";
       }
+      built.forEach(pane => {
+        const el = pane.root.querySelector(".sideclock");
+        if (!el) return;
+        if (pane.kind === "video") el.textContent = clock(pane.video.currentTime || 0) + " · " + frameNow(pane);
+        else if (pane.kind === "diagram") el.textContent = "Cuadro " + pane.frame;
+        else el.textContent = pane.kind === "image" ? "Imagen" : "Sin archivo";
+      });
     }
     function setActive(p) {
       active = p;
@@ -597,9 +697,8 @@
           const path = arcPath(pts[1], pts[0], pts[2], 28, box);
           if (path) ink("path", { d: path, fill: "none", "stroke-width": m.sw });
           const deg = m.grados != null ? m.grados : degrees(pts[0], pts[1], pts[2], box);
-          const lx = clamp(X(pts[1].x) + 10, 4, box.w - 36);
-          const ly = clamp(Y(pts[1].y) - 10, 16, box.h - 4);
-          drawText(g, lx, ly, deg + "°", m.color);
+          const pos = degreeLabelPos(pts, box, m);
+          drawText(g, pos.x, pos.y, deg + "°", m.color);
         }
       } else if (m.pts.length >= 2) {
         const a = m.pts[0], b = m.pts[1];
@@ -612,6 +711,37 @@
         }
       }
       return g;
+    }
+    function degreeLabelPos(pts, box, self) {
+      const vx = pts[1].x * box.w, vy = pts[1].y * box.h;
+      const a1 = Math.atan2((pts[0].y - pts[1].y) * box.h, (pts[0].x - pts[1].x) * box.w);
+      const a2 = Math.atan2((pts[2].y - pts[1].y) * box.h, (pts[2].x - pts[1].x) * box.w);
+      let sweep = a2 - a1;
+      while (sweep > Math.PI) sweep -= Math.PI * 2;
+      while (sweep < -Math.PI) sweep += Math.PI * 2;
+      const bis = a1 + sweep / 2;
+      const circles = marks.filter(m => m !== self && m.side === self.side && (m.tipo === "cabeza" || m.tipo === "elipse" || m.tipo === "caja") && m.pts[0]).map(m => {
+        const c0 = m.pts[0], e = m.pts[1] || c0;
+        const r = (m.tipo === "cabeza" || m.snap === "c")
+          ? Math.hypot((e.x - c0.x) * box.w, (e.y - c0.y) * box.h)
+          : Math.max(Math.abs((e.x - c0.x) * box.w), Math.abs((e.y - c0.y) * box.h));
+        return { x: c0.x * box.w, y: c0.y * box.h, r: r + 10 };
+      });
+      const textW = 40, textH = 18;
+      const hits = (x, y) => circles.some(c => {
+        const cx = clamp(c.x, x, x + textW);
+        const cy = clamp(c.y, y - textH, y);
+        return Math.hypot(cx - c.x, cy - c.y) < c.r;
+      });
+      const dirs = [bis, bis + Math.PI, bis + Math.PI / 2, bis - Math.PI / 2];
+      for (const dir of dirs) {
+        for (const dist of [52, 74, 96]) {
+          const x = clamp(vx + Math.cos(dir) * dist, 4, box.w - textW);
+          const y = clamp(vy + Math.sin(dir) * dist, textH, box.h - 4);
+          if (Math.hypot(x - vx, y - vy) > 34 && !hits(x, y)) return { x, y };
+        }
+      }
+      return { x: clamp(vx + Math.cos(bis) * 52, 4, box.w - textW), y: clamp(vy + Math.sin(bis) * 52, textH, box.h - 4) };
     }
     function labelPos(a, b, box) {
       const ax = a.x * box.w, ay = a.y * box.h, bx = b.x * box.w, by = b.y * box.h;
@@ -1032,11 +1162,19 @@
         highlight();
         return;
       }
+      const sideStep = e.target.closest("[data-side-step]");
+      if (sideStep) {
+        const pane = sideStep.closest(".pane");
+        const p = built.find(x => x.side === (pane && pane.dataset.side)) || active;
+        setActive(p);
+        step(Number(sideStep.dataset.sideStep));
+        return;
+      }
       const pbtn = e.target.closest("[data-pin]");
       if (pbtn) {
         pinMode = pbtn.dataset.pin;
         const m = selMark();
-        if (m && tool === "mover") {
+        if (m) {
           checkpoint();
           const stamped = stamp(active);
           m.pin = stamped.pin; m.f0 = stamped.f0; m.f1 = stamped.f1; m.t0 = stamped.t0; m.t1 = stamped.t1;
@@ -1089,6 +1227,12 @@
           }
           highlight();
         } else if (k === "estilo") sheet.hidden = !sheet.hidden;
+        else if (k === "marcas") {
+          marksPinned = true;
+          marksOpen = !marksOpen;
+          marksBody.hidden = !marksOpen;
+          renderList();
+        }
         return;
       }
       const pickBtn = e.target.closest("[data-pick]");

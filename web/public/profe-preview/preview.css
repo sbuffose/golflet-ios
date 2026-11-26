@@ -89,20 +89,23 @@ textarea{min-height:64px;resize:vertical}
 #app.lienzo .main{flex:1;min-height:0;display:flex;flex-direction:column;padding:0}
 #app.lienzo .banner,#app.lienzo .bar,#app.lienzo h1,#app.lienzo .lead,#app.lienzo .main>.note{display:none !important}
 #app.lienzo #visor{flex:1;min-height:0;display:flex;flex-direction:column}
-#app.archivo .banner,#app.archivo .demo{display:none !important}
+#app.archivo .banner,#app.archivo .demo,#app.archivo .dock,#app.archivo h1,#app.archivo .main>.note{display:none !important}
+#app.lienzo .main .seg{margin:4px 8px 0}
+#app.lienzo .main .seg button{min-height:32px;padding:4px 8px;font-size:12px}
 .anotador{user-select:none;display:flex;flex-direction:column;min-height:0}
 .stack{display:flex;flex-direction:column;flex:1;min-height:0}
 .panes.uno{display:flex;flex-direction:column;flex:1;min-height:0}
 .panes.uno .pane{display:flex;flex-direction:column;flex:1;min-height:0}
-.panes.lado{display:grid;grid-template-columns:1fr 1fr;gap:4px;flex:1;min-height:0}
-.panes.lado .pane{min-width:0;min-height:0;display:flex}
+.panes.lado{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr);gap:4px;flex:1;min-height:0}
+.panes.lado .pane{min-width:0;min-height:0;display:flex;flex-direction:column;width:100%;height:100%}
 .panes.sobre{position:relative;flex:1;min-height:0}
 .panes.sobre .pane[data-side="a"]{position:relative;height:100%}
 .panes.sobre .pane[data-side="b"]{position:absolute;inset:0}
 .panes.sobre .pane:not(.active){pointer-events:none}
-.stage{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0B2545;height:56vh;min-height:240px;touch-action:none}
+.stage{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0B2545;width:100%;height:56vh;min-height:240px;min-width:0;touch-action:none}
 #app.lienzo .anotador,#app.lienzo .stack,#app.lienzo .panes,#app.lienzo .pane,#app.lienzo .stage{flex:1;min-height:0}
 #app.lienzo .stage{height:auto}
+#app.lienzo .panes.lado .stage,#app.lienzo .panes.sobre .stage{width:100%;height:100%;min-height:0}
 .stage.over{outline:2px solid #C8A86A}
 .panes.lado .pane.active .stage,.panes.sobre .pane.active .stage{outline:2px solid #C8A86A;outline-offset:-2px}
 .fit{position:relative;overflow:hidden;flex:none;max-width:100%;max-height:100%}
@@ -115,26 +118,35 @@ textarea{min-height:64px;resize:vertical}
 .drop{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:6px;padding:16px;text-align:center;color:#F6F7F9}
 .drop p{margin:0}
 .drop .btn{max-width:240px}
+.sidebar{display:flex;align-items:center;justify-content:center;gap:6px;padding:2px 4px;background:#F6F7F9;flex:none}
+.sidebar button{min-height:28px;padding:2px 8px;border:1px solid #DCE1E8;background:#fff;border-radius:999px;font-size:13px;font-weight:600;color:#0B2545}
+.sideclock{font-size:12px;font-weight:600;color:#0B2545;min-width:78px;text-align:center}
+.panes.sobre .sidebar{display:none}
 .transport,.sheet,.rail,.marks{background:#F6F7F9;flex:none}
 .transport{padding:4px 8px 2px}
 .transport .seg{margin-top:0}
 .transport .seg button{min-height:32px;padding:4px 8px;font-size:12px}
 .sheet{padding:6px 8px 8px}
 .rail{display:flex;flex-wrap:wrap;justify-content:center;align-content:center;gap:2px;padding:4px 4px 8px;overflow:hidden}
-.rail button{width:42px;min-height:36px;padding:2px 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:0;background:transparent;color:#0B2545;font-size:8px;font-weight:600;line-height:1.05}
+.rail-tools{display:contents}
+.rail button{width:auto;min-width:64px;min-height:40px;padding:3px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:0;background:transparent;color:#0B2545;font-size:11px;font-weight:600;line-height:1.05}
 .rail button[data-g]{margin-left:6px}
 .rail button.on{background:#0B2545;color:#fff;border-radius:10px}
 .rail button svg{display:block}
 .rail .dot{width:14px;height:14px;border-radius:50%;background:#C8102E;box-shadow:inset 0 0 0 1px #fff}
 .rail #guardar{width:auto;min-width:46px;padding:0 8px;color:#C8102E}
-.marks{max-height:64px;overflow:auto;padding:0 8px 6px}
+.marks{position:relative;max-height:none;overflow:visible;padding:0;display:flex;flex-direction:column}
+.marks-toggle{width:100%;border:0;background:transparent;text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#0B2545;min-height:36px}
+.marks-body{position:absolute;left:0;right:0;bottom:100%;z-index:6;max-height:min(42vh,320px);overflow:auto;padding:4px 8px 8px;background:#F6F7F9;box-shadow:0 -8px 20px rgba(11,37,69,.16)}
 .swatch{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:inset 0 0 0 1px #DCE1E8;padding:0}
 .swatch.on{box-shadow:0 0 0 2px #0B2545}
 .mark span{flex:1;min-width:0}
 .scrub{width:100%;margin-top:2px}
 #app.desk .anotador{flex-direction:row;align-items:stretch}
 #app.desk .stack{min-width:0}
-#app.desk .rail{flex-direction:column;flex-wrap:nowrap;width:84px;overflow:auto;border-left:1px solid #DCE1E8;justify-content:flex-start}
+#app.desk .rail{flex-direction:column;flex-wrap:nowrap;width:92px;overflow:hidden;border-left:1px solid #DCE1E8;justify-content:flex-start}
+#app.desk .rail-tools{display:flex;flex-direction:column;flex-wrap:nowrap;overflow:auto;flex:1;min-height:0;width:100%}
+#app.desk .rail button{width:100%;min-width:0}
 #app.desk .rail button[data-g]{margin-left:0;margin-top:6px}
 #app.desk .stage{height:min(72vh,680px)}
 #app.desk.lienzo .stage{height:auto;flex:1}
