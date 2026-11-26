@@ -31,6 +31,7 @@ const seed = () => ({
 });
 
 let S = load();
+const BLANK = new URLSearchParams(location.search).get("blank") === "1";
 function load() {
   try { const raw = sessionStorage.getItem(KEY); if (raw) return { ...seed(), ...JSON.parse(raw) }; } catch { /* sesión nueva */ }
   return seed();
@@ -46,13 +47,9 @@ const PUNTO = [
 ];
 
 const app = document.getElementById("app");
-let raf = 0;
-let playing = false;
-let frame = 8;
+let mounted = null;
 let voz = false;
 let clip = "";
-
-function stop() { cancelAnimationFrame(raf); raf = 0; playing = false; }
 
 function shell(back, over, title, body, action) {
   return `${back ? `<div class="bar"><a class="back" href="${back}">Atrás</a><span class="ov">${esc(over)}</span></div>` : `<div class="bar"><span class="ov">${esc(over)}</span></div>`}
@@ -145,34 +142,22 @@ function clase(id) {
 }
 
 function video(which) {
-  if (clip !== which) {
-    clip = which;
-    frame = which === "atras" ? 16 : 4;
-  }
-  const ang = anguloDe(frame);
-  return shell("#/clase/wedges", "Video", "Wedge de Lucía", `
+  clip = which || "frente";
+  const title = which === "salida" ? "Salida de Martín" : "Wedge de Lucía";
+  return shell("#/clase/wedges", "Video", title, `
     <p class="lead">Diagrama de demostración. No es una persona.</p>
-    <div class="stage-wrap"><canvas id="stage" width="720" height="900"></canvas></div>
-    <div class="seg" role="group" aria-label="Tramo">
-      <button type="button" data-tramo="frente" class="${ang === "frente" ? "on" : ""}">De frente</button>
-      <button type="button" data-tramo="atras" class="${ang === "atras" ? "on" : ""}">Desde atrás</button>
-    </div>
-    <div class="seg">
-      <button type="button" data-speed="0.25">Lento</button>
-      <button type="button" data-speed="1">Normal</button>
-      <button type="button" id="play">Reproducir</button>
-      <button type="button" data-step="-1">Anterior</button>
-      <button type="button" data-step="1">Siguiente</button>
-      <button type="button" id="crop" class="${S.crop ? "on" : ""}">Recorte</button>
-    </div>
-    <div class="tools" role="group" aria-label="Dibujo">
-      ${["linea", "flecha", "circulo", "angulo", "texto", "eje"].map(t => `<button type="button" data-tool="${t}" class="${(S.tool || "linea") === t ? "on" : ""}">${etiqueta(t)}</button>`).join("")}
-    </div>
-    <label class="fld" id="texto-box" ${S.tool === "texto" ? "" : "hidden"}><span>Texto de la marca</span><input id="texto" type="text" maxlength="80" value="${esc(S.texto || "")}"></label>
-    <div class="marks" id="marks">${marcasHtml()}</div>
+    <div id="visor"></div>
     <div class="voz"><button type="button" id="voz" aria-label="Reproducir la nota de voz">Voz</button><div><b>Nota de Martín</b><div class="st">0:18 · el concepto de la clase</div><div class="bars${voz ? " play" : ""}">${"<span></span>".repeat(12)}</div></div></div>
-    <p class="note"><a href="#/comparar">Comparar este clip</a></p>`,
-    `<button class="btn" type="button" id="guardar">Guardar marcas</button>`);
+    <p class="note"><a href="#/comparar">Comparar este clip</a> · <a href="?blank=1#/anotar">Abrir vacío</a></p>`,
+    "");
+}
+
+function anotar() {
+  return shell("", "Anotador", "Anotador", `
+    <p class="lead">${BLANK ? "Elegí una foto o un video de este aparato." : "Diagrama de demostración. No es una persona."}</p>
+    <div id="visor"></div>
+    <p class="note">Nada se envía a Golflet.</p>`,
+    "");
 }
 
 function comparar() {
@@ -188,26 +173,17 @@ function comparar() {
       <button type="button" data-compare="profe" class="${S.compare === "profe" ? "on" : ""}">Clip de Martín</button>
       <button type="button" data-compare="referencia" class="${ref ? "on" : ""}">Referencia</button>
     </div>
-    ${ref ? referenciaHtml() : parHtml(sobre)}
-    ${sobre && !ref ? `<label class="op">Opacidad <input id="op" type="range" min="0.15" max="0.9" step="0.05" value="${S.opacidad}"></label>` : ""}
-    <div class="seg"><button type="button" id="sync">Mover los dos juntos</button></div>
+    ${ref ? referenciaHtml() : `<div id="visor"></div>`}
     <p class="note">El video externo se abre en su sitio. No lo descargamos ni lo guardamos. Para dibujar, tomamos un cuadro.</p>`,
     `<button class="btn" type="button" id="usar">Usar en la clase</button>`);
 }
 
-function parHtml(sobre) {
-  if (sobre) {
-    return `<div class="over stage-wrap"><canvas id="a" width="720" height="900"></canvas><canvas id="b" class="top" width="720" height="900"></canvas></div>`;
-  }
-  return `<div class="pair"><div class="stage-wrap"><canvas id="a" width="640" height="800"></canvas></div><div class="stage-wrap"><canvas id="b" width="640" height="800"></canvas></div></div>`;
-}
-
 function referenciaHtml() {
   const id = youtubeId(S.refUrl);
-  const frame = S.cuadro ? `<div class="stage-wrap"><canvas id="cuadro" width="720" height="900"></canvas></div><p class="note">Cuadro tomado. El video sigue en su sitio.</p>` : "";
+  const cuadro = S.cuadro ? `<div id="visor"></div><p class="note">Cuadro tomado. El video sigue en su sitio.</p>` : "";
   const embed = id ? `<div class="stage-wrap"><iframe title="Referencia en YouTube" src="https://www.youtube-nocookie.com/embed/${esc(id)}" style="width:100%;aspect-ratio:16/9;border:0" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>` : "";
   return `<label class="fld"><span>Link de YouTube o Instagram</span><input id="ref" type="url" inputmode="url" placeholder="https://" value="${esc(S.refUrl)}"></label>
-    ${embed}${frame}
+    ${embed}${cuadro}
     <div class="seg"><button type="button" id="tomar">Tomar cuadro</button></div>`;
 }
 
@@ -259,7 +235,7 @@ function anguloDe(f) {
 }
 
 function render() {
-  stop();
+  if (mounted) { mounted.destroy(); mounted = null; }
   document.querySelectorAll(".toast").forEach(n => n.remove());
   const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   const [a, b] = p;
@@ -268,134 +244,32 @@ function render() {
   else if (a === "alumno") html = alumno(b || "lucia");
   else if (a === "clase") html = clase(b || "wedges");
   else if (a === "video") html = video(b || "frente");
+  else if (a === "anotar") html = anotar();
   else if (a === "comparar") html = comparar();
   else if (a === "biblioteca") html = biblioteca();
   else if (a === "mia") html = mia();
   app.innerHTML = html;
   document.querySelectorAll("[data-mini]").forEach(c => drawSwing(c.getContext("2d"), c.width, c.height, c.dataset.mini === "atras" ? 16 : 6, c.dataset.mini));
-  const stage = document.getElementById("stage");
-  if (stage) bindStage(stage);
-  ["a", "b", "cuadro"].forEach(id => {
-    const c = document.getElementById(id);
-    if (!c) return;
-    const mode = id === "b" ? (S.compare === "profe" ? "profe" : "antes") : (id === "cuadro" ? "frente" : "frente");
-    const fr = id === "b" && S.compare === "antes" ? Math.max(0, frame - 10) : frame;
-    drawSwing(c.getContext("2d"), c.width, c.height, fr, mode);
-    if (id === "b" && S.vista === "sobre") c.style.opacity = String(S.opacidad);
-    if (id === "cuadro") drawMarks(c.getContext("2d"), c.width, c.height);
-  });
-}
-
-function bindStage(canvas) {
-  const ctx = canvas.getContext("2d");
-  const paint = () => {
-    drawSwing(ctx, canvas.width, canvas.height, frame, anguloDe(frame));
-    if (S.crop) crop(ctx, canvas.width, canvas.height);
-    drawMarks(ctx, canvas.width, canvas.height);
-  };
-  paint();
-  const loop = () => {
-    if (!playing) return;
-    frame = (frame + 1) % 24;
-    paint();
-    raf = requestAnimationFrame(() => setTimeout(loop, S.speed === 0.25 ? 140 : 50));
-  };
-  canvas.onpointerdown = e => startDraw(canvas, e);
-  canvas.onpointermove = e => moveDraw(canvas, e);
-  canvas.onpointerup = () => endDraw();
-  app.dataset.loop = "1";
-  app._loop = loop;
-}
-
-let draft = null;
-function pos(canvas, e) {
-  const r = canvas.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
-}
-function startDraw(canvas, e) {
-  const p = pos(canvas, e);
-  const tipo = S.tool || "linea";
-  if (tipo === "angulo") {
-    S._pts = S._pts || [];
-    S._pts.push(p);
-    if (S._pts.length === 3) {
-      S.marcas.push({ tipo, pts: S._pts, angulo: anguloDe(frame), texto: "Ángulo" });
-      S._pts = [];
-      save();
-      render();
-    }
-    return;
+  const visor = document.getElementById("visor");
+  if (visor && window.GolfletAnotador) {
+    const ref = a === "comparar" && S.compare === "referencia";
+    const two = a === "comparar" && !ref;
+    const which = a === "video" ? (b || "frente") : "frente";
+    mounted = GolfletAnotador.mount(visor, {
+      blank: BLANK && a === "anotar",
+      panes: two ? 2 : 1,
+      overlay: two && S.vista === "sobre",
+      opacity: S.opacidad,
+      modeA: which === "atras" ? "atras" : which === "salida" ? "profe" : "frente",
+      modeB: S.compare === "profe" ? "profe" : "antes",
+      stageId: ref ? "cuadro" : "stage",
+      saveStyle: a === "comparar" ? "chip" : "btn",
+      paint: drawSwing,
+      marks: S.marcas,
+      persist(marks) { S.marcas = marks; save(); },
+      toast,
+    });
   }
-  if (tipo === "texto") {
-    S.marcas.push({ tipo, pts: [p], angulo: anguloDe(frame), texto: S.texto || "Nota" });
-    save();
-    render();
-    return;
-  }
-  draft = { tipo, pts: [p, p], angulo: anguloDe(frame), texto: etiqueta(tipo) };
-  canvas.setPointerCapture(e.pointerId);
-}
-function moveDraw(canvas, e) {
-  if (!draft) return;
-  draft.pts[1] = pos(canvas, e);
-  const ctx = canvas.getContext("2d");
-  drawSwing(ctx, canvas.width, canvas.height, frame, anguloDe(frame));
-  if (S.crop) crop(ctx, canvas.width, canvas.height);
-  drawMarks(ctx, canvas.width, canvas.height);
-  trace(ctx, canvas.width, canvas.height, draft);
-}
-function endDraw() {
-  if (!draft) return;
-  S.marcas.push(draft);
-  draft = null;
-  save();
-  render();
-}
-
-function drawMarks(ctx, w, h) {
-  S.marcas.filter(m => m.angulo === anguloDe(frame) || m.angulo === "frente" && anguloDe(frame) === "frente" || m.angulo === "atras" && anguloDe(frame) === "atras").forEach(m => trace(ctx, w, h, m));
-}
-function trace(ctx, w, h, m) {
-  const X = n => n * w, Y = n => n * h;
-  ctx.save();
-  ctx.lineWidth = m.tipo === "eje" ? 4 : 3;
-  ctx.strokeStyle = m.tipo === "eje" ? "#C8A86A" : "#C8102E";
-  ctx.fillStyle = "#C8102E";
-  ctx.lineCap = "round";
-  const a = m.pts[0], b = m.pts[1] || m.pts[0];
-  if (m.tipo === "circulo") {
-    const r = Math.hypot(X(b.x) - X(a.x), Y(b.y) - Y(a.y));
-    ctx.beginPath(); ctx.arc(X(a.x), Y(a.y), Math.max(8, r), 0, Math.PI * 2); ctx.stroke();
-  } else if (m.tipo === "angulo" && m.pts.length === 3) {
-    ctx.beginPath(); ctx.moveTo(X(m.pts[0].x), Y(m.pts[0].y)); ctx.lineTo(X(m.pts[1].x), Y(m.pts[1].y)); ctx.lineTo(X(m.pts[2].x), Y(m.pts[2].y)); ctx.stroke();
-  } else if (m.tipo === "texto") {
-    ctx.font = "600 28px Geist, sans-serif";
-    ctx.fillText(m.texto || "Nota", X(a.x), Y(a.y));
-  } else {
-    ctx.beginPath(); ctx.moveTo(X(a.x), Y(a.y)); ctx.lineTo(X(b.x), Y(b.y)); ctx.stroke();
-    if (m.tipo === "flecha") head(ctx, X(a.x), Y(a.y), X(b.x), Y(b.y));
-  }
-  ctx.restore();
-}
-function head(ctx, x1, y1, x2, y2) {
-  const a = Math.atan2(y2 - y1, x2 - x1);
-  ctx.beginPath();
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(x2 - 16 * Math.cos(a - 0.4), y2 - 16 * Math.sin(a - 0.4));
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(x2 - 16 * Math.cos(a + 0.4), y2 - 16 * Math.sin(a + 0.4));
-  ctx.stroke();
-}
-function crop(ctx, w, h) {
-  const x = w * 0.18, y = h * 0.12, rw = w * 0.64, rh = h * 0.7;
-  ctx.fillStyle = "rgba(11,37,69,.55)";
-  ctx.fillRect(0, 0, w, y);
-  ctx.fillRect(0, y + rh, w, h - y - rh);
-  ctx.fillRect(0, y, x, rh);
-  ctx.fillRect(x + rw, y, w - x - rw, rh);
-  ctx.strokeStyle = "#C8A86A";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(x, y, rw, rh);
 }
 
 function drawSwing(ctx, w, h, fr, mode) {
@@ -461,35 +335,15 @@ function toast(t) {
 }
 
 app.addEventListener("click", e => {
-  const tool = e.target.closest("[data-tool]");
-  if (tool) { S.tool = tool.dataset.tool; save(); render(); return; }
-  const tramo = e.target.closest("[data-tramo]");
-  if (tramo) {
-    const i = frame <= S.segmentos[0].hasta ? 0 : 1;
-    S.segmentos[i].angulo = tramo.dataset.tramo;
-    save(); render(); return;
-  }
-  if (e.target.id === "play") {
-    playing = !playing;
-    if (playing && app._loop) app._loop();
-    e.target.textContent = playing ? "Pausa" : "Reproducir";
-    return;
-  }
-  const step = e.target.closest("[data-step]");
-  if (step) { playing = false; frame = (frame + 24 + Number(step.dataset.step)) % 24; render(); return; }
-  if (e.target.dataset.speed) { S.speed = Number(e.target.dataset.speed); save(); return; }
-  if (e.target.id === "crop") { S.crop = !S.crop; save(); render(); return; }
   if (e.target.id === "guardar") { save(); toast("Marcas guardadas"); return; }
+  if (e.target.closest("#visor")) return;
   if (e.target.id === "voz") { voz = !voz; render(); return; }
-  const del = e.target.closest("[data-del]");
-  if (del) { S.marcas.splice(Number(del.dataset.del), 1); save(); render(); return; }
   const vista = e.target.closest("[data-vista]");
   if (vista) { S.vista = vista.dataset.vista; save(); render(); return; }
   const cmp = e.target.closest("[data-compare]");
   if (cmp) { S.compare = cmp.dataset.compare; save(); render(); return; }
-  if (e.target.id === "sync") { frame = (frame + 1) % 24; render(); return; }
   if (e.target.id === "tomar") {
-    S.cuadro = { frame, compare: S.compare };
+    S.cuadro = { compare: S.compare };
     save(); toast("Cuadro tomado"); render(); return;
   }
   if (e.target.id === "usar") { toast("Quedó en la clase"); location.hash = "#/clase/wedges"; return; }
@@ -534,5 +388,7 @@ app.addEventListener("change", e => {
 });
 
 addEventListener("hashchange", render);
-if (!location.hash) location.hash = "#/";
+const bare = !location.hash || location.hash === "#" || location.hash === "#/";
+if (BLANK && bare) location.hash = "#/anotar";
+else if (!location.hash) location.hash = "#/";
 render();

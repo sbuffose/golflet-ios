@@ -1,4 +1,5 @@
 *{box-sizing:border-box;font-style:normal}
+[hidden]{display:none !important}
 html,body{margin:0;background:#E6ECF5;color:#0E1B2C;font-family:Geist,-apple-system,system-ui,sans-serif}
 button,input,textarea{font:inherit;color:inherit}
 a{color:inherit;text-decoration:none}
@@ -58,7 +59,7 @@ textarea{min-height:64px;resize:vertical}
 .note{margin:14px 0 0;color:#5C687B;font-size:13px;line-height:1.4}
 .stage-wrap{position:relative;border-radius:18px;overflow:hidden;background:#0B2545}
 .stage-wrap canvas{width:100%;height:auto;display:block;touch-action:none}
-.tools{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 2px}
+.tools{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;padding:10px 0 2px;scrollbar-width:none}
 .tools button,.seg button{border:1px solid #DCE1E8;background:#fff;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:600;color:#0B2545;white-space:nowrap;min-height:40px}
 .tools button.on,.seg button.on{background:#0B2545;color:#fff;border-color:#0B2545}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
@@ -83,3 +84,30 @@ textarea{min-height:64px;resize:vertical}
 .tag{display:inline-block;background:#E6ECF5;color:#0B2545;border-radius:999px;padding:4px 8px;font-size:12px;font-weight:600;margin:6px 6px 0 0}
 .banner{margin:0 16px;background:#fff;border-left:3px solid #C8A86A;border-radius:10px;padding:8px 10px;color:#3E4C62;font-size:12px;line-height:1.35}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0B2545;color:#fff;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;z-index:5}
+#app.desk{max-width:1040px}
+.anotador{user-select:none}
+.panes.lado{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.panes.sobre{position:relative}
+.panes.sobre .pane[data-side="a"]{position:relative}
+.panes.sobre .pane[data-side="b"]{position:absolute;inset:0}
+.panes.sobre .pane:not(.active){pointer-events:none}
+.stage{position:relative;overflow:hidden;background:#0B2545;border-radius:18px;aspect-ratio:4/5;min-height:220px;max-height:58vh;touch-action:none}
+.stage.over{outline:2px solid #C8A86A}
+.pane.active .stage{outline:2px solid #C8A86A;outline-offset:2px}
+.panes.uno .pane .stage{outline:none}
+.world{position:absolute;inset:0;transform-origin:0 0}
+.media{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}
+.ink{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.loupe{position:absolute;width:132px;height:132px;border-radius:50%;overflow:hidden;border:2px solid #C8A86A;box-shadow:0 8px 20px rgba(11,37,69,.35);pointer-events:none;z-index:4;background:#0B2545}
+.loupe canvas{width:100%;height:100%;display:block}
+.loupe .snap{position:absolute;left:0;right:0;bottom:10px;text-align:center;color:#C8A86A;font-size:11px;font-weight:600;font-style:normal}
+.drop{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:6px;padding:16px;text-align:center;color:#F6F7F9}
+.drop p{margin:0}
+.drop .btn{max-width:240px}
+.media[hidden],.drop[hidden],.loupe[hidden]{display:none !important}
+.tray{position:sticky;bottom:0;z-index:3;background:#F6F7F9;padding:4px 0 8px;max-height:42vh;overflow:auto}
+.swatch{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:inset 0 0 0 1px #DCE1E8;padding:0}
+.swatch.on{box-shadow:0 0 0 2px #0B2545}
+.mark span{flex:1;min-width:0}
+.scrub{width:100%}
+#app.desk .stage{aspect-ratio:16/10;max-height:62vh}
