@@ -170,7 +170,7 @@ function comparar() {
     </div>
     <div class="seg">
       <button type="button" data-compare="antes" class="${S.compare === "antes" ? "on" : ""}">Antes y después</button>
-      <button type="button" data-compare="profe" class="${S.compare === "profe" ? "on" : ""}">Clip de Martín</button>
+      <button type="button" data-compare="profe" class="demo${S.compare === "profe" ? " on" : ""}">Clip de Martín</button>
       <button type="button" data-compare="referencia" class="${ref ? "on" : ""}">Referencia</button>
     </div>
     ${ref ? referenciaHtml() : `<div id="visor"></div>`}
@@ -249,6 +249,7 @@ function render() {
   else if (a === "biblioteca") html = biblioteca();
   else if (a === "mia") html = mia();
   app.innerHTML = html;
+  app.classList.toggle("lienzo", a === "anotar");
   document.querySelectorAll("[data-mini]").forEach(c => drawSwing(c.getContext("2d"), c.width, c.height, c.dataset.mini === "atras" ? 16 : 6, c.dataset.mini));
   const visor = document.getElementById("visor");
   if (visor && window.GolfletAnotador) {

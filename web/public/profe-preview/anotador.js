@@ -1,19 +1,41 @@
-/* Anotador local. Coordenadas normalizadas de 0 a 1. El archivo no sale del aparato. */
+/* Anotador local. Coordenadas de 0 a 1. Geometría en píxeles del medio. El archivo no sale del aparato. */
 (function () {
   const NS = "http://www.w3.org/2000/svg";
   const COLORS = [["#3DDC97", "Verde"], ["#F5A524", "Naranja"], ["#C8102E", "Rojo"], ["#F5D90A", "Amarillo"], ["#FFFFFF", "Blanco"]];
   const TOOLS = [
-    ["mover", "Mover"], ["encuadre", "Encuadre"], ["linea", "Línea"], ["libre", "Libre"], ["flecha", "Flecha"],
+    ["mover", "Mover"], ["encuadre", "Marco"], ["linea", "Línea"], ["libre", "Libre"], ["flecha", "Flecha"],
     ["elipse", "Elipse"], ["caja", "Caja"], ["angulo", "Ángulo"], ["cabeza", "Cabeza"], ["pies", "Pies"],
-    ["objetivo", "Objetivo"], ["plano", "Plano"], ["vertical", "Vertical"], ["horizontal", "Horizontal"], ["texto", "Texto"],
+    ["objetivo", "Objetivo"], ["plano", "Plano"], ["vertical", "V"], ["horizontal", "H"], ["texto", "Texto"],
   ];
-  const NAME = Object.fromEntries(TOOLS);
+  const HUMAN = {
+    linea: "Línea", libre: "Línea libre", flecha: "Flecha", elipse: "Elipse", caja: "Caja",
+    angulo: "Ángulo", cabeza: "Cabeza", pies: "Línea de pies", objetivo: "Línea de objetivo",
+    plano: "Plano del palo", vertical: "Vertical", horizontal: "Horizontal", texto: "Texto",
+  };
+  const ICO = {
+    mover: "M12 3v18M3 12h18M12 3l-2.2 2.2M12 3l2.2 2.2M12 21l-2.2-2.2M12 21l2.2-2.2M3 12l2.2-2.2M3 12l2.2 2.2M21 12l-2.2-2.2M21 12l-2.2 2.2",
+    encuadre: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5",
+    linea: "M5 19L19 5",
+    libre: "M4 16c3-7 5-7 8 0s5 7 8 0",
+    flecha: "M5 19L19 5M19 5h-6M19 5v6",
+    elipse: "M12 5a7 7 0 1 0 0.1 0",
+    caja: "M5 6h14v12H5z",
+    angulo: "M5 19L12 5L19 16",
+    cabeza: "M12 12m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0M12 9v6M9 12h6",
+    pies: "M4 16h16M7 16v3M17 16v3",
+    objetivo: "M4 18L18 8M18 8h-5M18 8v5",
+    plano: "M5 19L19 7",
+    vertical: "M12 3v18",
+    horizontal: "M3 12h18",
+    texto: "M6 6h12M12 6v12",
+  };
+  const GROUP_START = { mover: 1, linea: 1, elipse: 1, angulo: 1, cabeza: 1, texto: 1 };
   const cache = { a: blankPane("a"), b: blankPane("b") };
 
   function blankPane(side) {
     return {
-      side, kind: "diagram", mode: "frente", frame: 4, blob: "", still: "", user: false, booted: false,
-      keys: { address: 1, top: 11, impact: 17 }, fixed: { address: false, top: false, impact: false },
+      side, kind: "diagram", mode: "frente", frame: 4, blob: "", still: "", user: false, booted: false, fps: 30,
+      keys: { address: null, top: null, impact: null }, fixed: { address: false, top: false, impact: false },
       view: { s: 1, x: 0, y: 0 }, prev: null,
     };
   }
@@ -25,12 +47,15 @@
     for (const [k, v] of Object.entries(attrs || {})) if (v != null) n.setAttribute(k, String(v));
     return n;
   }
+  function ico(id) {
+    return `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="${ICO[id] || ""}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
   function norm(m) {
     return {
       id: m.id || uid(), tipo: m.tipo || "linea", pts: (m.pts || []).map(p => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 })),
-      color: m.color || "#C8102E", sw: Number(m.sw) || 3, texto: m.texto || "", pin: m.pin || "all",
-      f0: m.f0 ?? 0, f1: m.f1 ?? 23, t0: m.t0 ?? 0, t1: m.t1 ?? 1e9, side: m.side || "a",
-      grados: m.grados, media: m.media || "diagram",
+      color: m.color || "#C8102E", sw: Number(m.sw) || 3, texto: m.texto || "", etiqueta: !!m.etiqueta, snap: m.snap || "",
+      pin: m.pin || "frame", f0: m.f0 ?? 0, f1: m.f1 ?? m.f0 ?? 0, t0: m.t0 ?? 0, t1: m.t1 ?? m.t0 ?? 0,
+      side: m.side || "a", grados: m.grados, media: m.media || "diagram",
     };
   }
 
@@ -53,9 +78,9 @@
     let color = "#C8102E";
     let sw = 3;
     let pinMode = "frame";
+    let labelOn = false;
     let rate = 1;
-    let syncOn = panesSpec.length === 2;
-    let activeKey = "address";
+    let syncOn = false;
     let playing = false;
     let playTimer = 0;
     let draft = null;
@@ -71,10 +96,13 @@
     host.innerHTML = "";
     const root = document.createElement("div");
     root.className = "anotador";
+    const stack = document.createElement("div");
+    stack.className = "stack";
     const layout = panesSpec.length === 2 ? (opts.overlay ? "sobre" : "lado") : "uno";
     const panesEl = document.createElement("div");
     panesEl.className = "panes " + layout;
-    root.append(panesEl);
+    stack.append(panesEl);
+    root.append(stack);
 
     panesSpec.forEach((side, i) => {
       const data = cache[side];
@@ -82,7 +110,7 @@
       pane.className = "pane" + (i === 0 ? " active" : "");
       pane.dataset.side = side;
       pane.innerHTML = `<div class="stage"${i === 0 ? ` id="${opts.stageId || "stage"}"` : ""} data-kind="${data.kind}">
-        <div class="world"><canvas class="media diagram"></canvas><video class="media video" playsinline preload="metadata"></video><img class="media image" alt="Archivo de este aparato"><svg class="ink" viewBox="0 0 1 1" preserveAspectRatio="none"></svg></div>
+        <div class="fit"><div class="world"><canvas class="media diagram"></canvas><video class="media video" playsinline preload="metadata"></video><img class="media image" alt=""><svg class="ink" viewBox="0 0 100 100" preserveAspectRatio="none"></svg></div></div>
         <div class="loupe" hidden><canvas width="168" height="168"></canvas><span class="snap"></span></div>
         <div class="drop"><p>Elegí una foto o un video</p><p class="note">Queda en este aparato. No se sube.</p><button type="button" class="btn" data-open="${side}">Abrir archivo</button><p class="note">O soltalo acá.</p></div>
       </div>`;
@@ -90,6 +118,7 @@
       const stage = pane.querySelector(".stage");
       data.root = pane;
       data.stage = stage;
+      data.fit = stage.querySelector(".fit");
       data.world = stage.querySelector(".world");
       data.canvas = stage.querySelector("canvas.diagram");
       data.video = stage.querySelector("video");
@@ -105,52 +134,62 @@
     const transport = document.createElement("div");
     transport.className = "transport";
     transport.innerHTML = `<div class="seg">
-      <button type="button" data-step="-1">Anterior</button>
-      <button type="button" data-step="1">Siguiente</button>
+      <button type="button" data-step="-1" aria-label="Cuadro anterior">−</button>
+      <button type="button" id="play" aria-label="Reproducir">Ver</button>
+      <button type="button" data-step="1" aria-label="Cuadro siguiente">+</button>
       <button type="button" data-speed="0.25">0.25</button>
       <button type="button" data-speed="0.5">0.5</button>
-      <button type="button" data-speed="1">Normal</button>
-      <button type="button" id="play">Reproducir</button>
-      <button type="button" data-act="captura">Tomar cuadro</button>
+      <button type="button" data-speed="1" class="on">1</button>
+      <button type="button" data-act="acercar" aria-label="Acercar">Zoom</button>
+      <button type="button" data-act="alejar" aria-label="Alejar">Lejos</button>
+      <button type="button" data-act="ajustar">1:1</button>
+      <button type="button" data-act="captura">Cuadro</button>
       <button type="button" data-act="volver" hidden>Volver</button>
     </div>
     <label class="op scrub"><span id="reloj">Cuadro</span><input id="scrub" type="range" min="0" max="23" step="1" value="0"></label>
-    <div class="seg zoom">
-      <button type="button" data-act="acercar">Acercar</button>
-      <button type="button" data-act="alejar">Alejar</button>
-      <button type="button" data-act="ajustar">Ajustar</button>
-    </div>
     ${built.length === 2 ? `<div class="seg keys">
       <button type="button" data-pick="a">Lado A</button>
       <button type="button" data-pick="b">Lado B</button>
-      <button type="button" data-key="address">Address</button>
-      <button type="button" data-key="top">Arriba</button>
-      <button type="button" data-key="impact">Impacto</button>
-      <button type="button" data-act="fijar">Fijar</button>
-      <button type="button" data-act="sync" class="on">Sincronizar</button>
+      <button type="button" data-act="marcar" data-key="address">Marcar address</button>
+      <button type="button" data-act="marcar" data-key="top">Marcar arriba</button>
+      <button type="button" data-act="marcar" data-key="impact">Marcar impacto</button>
+      <button type="button" data-act="ir" data-key="address" hidden>Address</button>
+      <button type="button" data-act="ir" data-key="top" hidden>Arriba</button>
+      <button type="button" data-act="ir" data-key="impact" hidden>Impacto</button>
+      <button type="button" data-act="sync">Sincronizar</button>
     </div>` : ""}
     ${opts.overlay ? `<label class="op">Opacidad <input id="op" type="range" min="0.15" max="0.9" step="0.05" value="${opts.opacity ?? 0.45}"></label>` : ""}`;
 
-    const tray = document.createElement("div");
-    tray.className = "tray";
-    tray.innerHTML = `<div class="tools" role="group" aria-label="Dibujo">${TOOLS.map(([id, name]) => `<button type="button" data-tool="${id}" class="${id === "linea" ? "on" : ""}">${name}</button>`).join("")}</div>
-      <div class="seg colors" role="group" aria-label="Color">${COLORS.map(([c, name]) => `<button type="button" class="swatch${c === color ? " on" : ""}" data-color="${c}" style="background:${c}" aria-label="${name}"></button>`).join("")}</div>
+    const sheet = document.createElement("div");
+    sheet.className = "sheet";
+    sheet.hidden = true;
+    sheet.innerHTML = `<div class="seg colors" role="group" aria-label="Color">${COLORS.map(([c, name]) => `<button type="button" class="swatch${c === color ? " on" : ""}" data-color="${c}" style="background:${c}" aria-label="${name}"></button>`).join("")}</div>
       <label class="op">Grosor <input id="grosor" type="range" min="2" max="8" step="1" value="3"></label>
       <div class="seg" role="group" aria-label="Duración">
         <button type="button" data-pin="frame" class="on">Este cuadro</button>
         <button type="button" data-pin="range">Tramo</button>
         <button type="button" data-pin="all">Todo</button>
       </div>
-      <label class="fld" id="texto-box" hidden><span>Texto de la marca</span><input id="texto" type="text" maxlength="80"></label>
+      <div class="seg">
+        <button type="button" data-act="desde">Desde acá</button>
+        <button type="button" data-act="hasta">Hasta acá</button>
+        <button type="button" data-act="etiqueta">Etiqueta</button>
+      </div>
+      <label class="fld" id="texto-box" hidden><span>Texto</span><input id="texto" type="text" maxlength="80"></label>
       <div class="seg">
         <button type="button" data-act="deshacer">Deshacer</button>
         <button type="button" data-act="rehacer">Rehacer</button>
         <button type="button" data-act="borrar">Borrar</button>
         <button type="button" data-act="limpiar">Limpiar</button>
-        <button type="button" data-open="a">Abrir archivo</button>
-      </div>
-      <p class="note">Coordenadas de 0 a 1. Quedan en este aparato.</p>
-      <button type="button" id="guardar" class="${opts.saveStyle === "chip" ? "" : "btn"}">Guardar marcas</button>`;
+        <button type="button" data-open="a">Abrir</button>
+      </div>`;
+
+    const rail = document.createElement("div");
+    rail.className = "rail";
+    rail.setAttribute("role", "toolbar");
+    rail.innerHTML = TOOLS.map(([id, name]) => `<button type="button" data-tool="${id}"${GROUP_START[id] ? ' data-g="1"' : ""} aria-label="${HUMAN[id] || name}">${ico(id)}<span>${name}</span></button>`).join("")
+      + `<button type="button" data-act="estilo" aria-label="Color y grosor"><span class="dot"></span><span>Color</span></button>`
+      + `<button type="button" id="guardar">Guardar</button>`;
 
     const list = document.createElement("div");
     list.className = "marks";
@@ -159,31 +198,81 @@
     input.type = "file";
     input.accept = "image/*,video/*";
     input.hidden = true;
-    root.append(transport, tray, list, input);
+    stack.append(transport, sheet, list);
+    root.append(rail, input);
     host.append(root);
 
     const playBtn = transport.querySelector("#play");
     const scrub = transport.querySelector("#scrub");
     const reloj = transport.querySelector("#reloj");
-    const saveBtn = tray.querySelector("#guardar");
-    const textBox = tray.querySelector("#texto-box");
-    const textInput = tray.querySelector("#texto");
+    const saveBtn = rail.querySelector("#guardar");
+    const textBox = sheet.querySelector("#texto-box");
+    const textInput = sheet.querySelector("#texto");
     const volverBtn = transport.querySelector("[data-act=volver]");
     let opacity = opts.opacity ?? 0.45;
     let active = built[0];
 
     function say(t) { if (opts.toast) opts.toast(t); }
-    function persist() { if (opts.persist) opts.persist(marks.map(m => ({ ...m, pts: m.pts.map(p => ({ x: p.x, y: p.y })) }))); }
+    function persist() {
+      if (opts.persist) opts.persist(marks.map(m => ({
+        ...m, pts: m.pts.map(p => ({ x: p.x, y: p.y })),
+      })));
+    }
     function checkpoint() { undo.push(JSON.stringify(marks)); if (undo.length > 60) undo.shift(); redo = []; }
     function selMark() { return marks.find(m => m.id === sel) || null; }
+    function syncChrome() {
+      const app = document.getElementById("app");
+      if (app) app.classList.toggle("archivo", built.some(p => p.user));
+    }
+    function boxOf(p) {
+      return { w: Math.max(1, p.fit.clientWidth), h: Math.max(1, p.fit.clientHeight) };
+    }
+    function mediaPx(p) {
+      if (p.kind === "video" && p.video.videoWidth) return { w: p.video.videoWidth, h: p.video.videoHeight };
+      if (p.kind === "image" && p.img.naturalWidth) return { w: p.img.naturalWidth, h: p.img.naturalHeight };
+      return boxOf(p);
+    }
+    function fpsOf(p) { return p.fps || 30; }
+    function frameNow(p) {
+      if (p.kind === "diagram") return p.frame;
+      if (p.kind === "video") return Math.max(0, Math.round((p.video.currentTime || 0) * fpsOf(p)));
+      return 0;
+    }
+    function frameLast(p) {
+      if (p.kind === "diagram") return 23;
+      if (p.kind === "video") {
+        const d = p.video.duration;
+        if (!Number.isFinite(d) || d <= 0) return frameNow(p);
+        return Math.max(0, Math.round(d * fpsOf(p)) - 1);
+      }
+      return 0;
+    }
+    function keysReady(p) { return !!(p.fixed.address && p.fixed.top && p.fixed.impact); }
+    function canSync() { return built.length === 2 && built.every(keysReady); }
 
+    function layoutFit(p) {
+      const sw = p.stage.clientWidth;
+      const sh = p.stage.clientHeight;
+      if (sw < 2 || sh < 2) return;
+      let aw = 9, ah = 16;
+      if (p.kind === "video" && p.video.videoWidth) { aw = p.video.videoWidth; ah = p.video.videoHeight; }
+      else if (p.kind === "image" && p.img.naturalWidth) { aw = p.img.naturalWidth; ah = p.img.naturalHeight; }
+      else if (p.kind === "diagram") { aw = 4; ah = 5; }
+      else { aw = sw; ah = sh; }
+      const s = Math.min(sw / aw, sh / ah);
+      const w = Math.max(2, Math.floor(aw * s));
+      const h = Math.max(2, Math.floor(ah * s));
+      p.fit.style.width = w + "px";
+      p.fit.style.height = h + "px";
+      p.svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    }
     function applyView(p) {
       const v = p.view;
       p.world.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.s})`;
       p.world.dataset.zoom = v.s.toFixed(2);
     }
     function zoomAt(p, clientX, clientY, factor) {
-      const r = p.stage.getBoundingClientRect();
+      const r = p.fit.getBoundingClientRect();
       const px = clientX - r.left;
       const py = clientY - r.top;
       const v = p.view;
@@ -193,15 +282,15 @@
       v.s = ns;
       v.x = ns <= 1 ? 0 : px - wx * ns;
       v.y = ns <= 1 ? 0 : py - wy * ns;
-      if (ns <= 1) v.s = 1;
+      if (ns <= 1) { v.s = 1; v.x = 0; v.y = 0; }
       applyView(p);
     }
     function drawDiagram(p) {
       if (p.kind !== "diagram" || !opts.paint) return;
-      const r = p.stage.getBoundingClientRect();
+      const b = boxOf(p);
       const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const w = Math.max(2, Math.round(r.width * dpr));
-      const h = Math.max(2, Math.round((r.height || r.width * 1.25) * dpr));
+      const w = Math.max(2, Math.round(b.w * dpr));
+      const h = Math.max(2, Math.round(b.h * dpr));
       if (p.canvas.width !== w || p.canvas.height !== h) { p.canvas.width = w; p.canvas.height = h; }
       opts.paint(p.canvas.getContext("2d"), w, h, p.frame, p.mode);
     }
@@ -213,10 +302,12 @@
       p.drop.hidden = p.kind !== "empty";
       if (p.kind === "video" && p.blob && p.video.src !== p.blob) p.video.src = p.blob;
       if (p.kind === "image") p.img.src = p.still || p.blob;
-      if (p.kind === "diagram") requestAnimationFrame(() => drawDiagram(p));
       saveBtn.hidden = built.every(x => x.kind === "empty");
       if (volverBtn) volverBtn.hidden = !active.prev;
+      layoutFit(p);
+      if (p.kind === "diagram") drawDiagram(p);
       applyView(p);
+      syncChrome();
     }
     function useFile(p, file) {
       if (!file) return;
@@ -227,19 +318,11 @@
       p.user = true;
       p.prev = null;
       p.kind = file.type.startsWith("video/") ? "video" : "image";
+      p.fps = 30;
       if (p.kind === "video") {
-        p.video.onloadedmetadata = () => {
-          const d = p.video.duration || 1;
-          if (!p.fixed.address) p.keys.address = d * 0.08;
-          if (!p.fixed.top) p.keys.top = d * 0.42;
-          if (!p.fixed.impact) p.keys.impact = d * 0.62;
-          if (p.video.videoWidth) p.stage.style.aspectRatio = `${p.video.videoWidth} / ${p.video.videoHeight}`;
-          updateScrub();
-        };
+        p.video.onloadedmetadata = () => { layoutFit(p); paintInk(p); updateScrub(); };
       } else {
-        p.img.onload = () => {
-          if (p.img.naturalWidth) p.stage.style.aspectRatio = `${p.img.naturalWidth} / ${p.img.naturalHeight}`;
-        };
+        p.img.onload = () => { layoutFit(p); paintInk(p); };
       }
       applyMedia(p);
       say("Queda en este aparato. No se sube.");
@@ -259,8 +342,8 @@
     function phase(p) {
       const k = p.keys;
       const t = unitNow(p);
-      if (t <= k.top) return { leg: 0, u: (t - k.address) / (k.top - k.address || 1) };
-      return { leg: 1, u: (t - k.top) / (k.impact - k.top || 1) };
+      if (t <= k.top) return { leg: 0, u: (t - k.address) / ((k.top - k.address) || 1) };
+      return { leg: 1, u: (t - k.top) / ((k.impact - k.top) || 1) };
     }
     function fromPhase(p, ph) {
       const k = p.keys;
@@ -268,7 +351,7 @@
       return k.top + ph.u * (k.impact - k.top);
     }
     function syncTo(src) {
-      if (!syncOn || syncing || built.length < 2) return;
+      if (!syncOn || syncing || !canSync()) return;
       const other = built.find(p => p !== src);
       if (!other || other.kind === "empty" || other.kind === "image") return;
       syncing = true;
@@ -276,33 +359,33 @@
       syncing = false;
     }
     function stamp(p) {
-      const now = p.kind === "video" ? (p.video.currentTime || 0) : p.frame;
-      const endT = p.kind === "video" ? (p.video.duration || now) : 1e9;
-      const endF = 23;
-      if (p.kind === "image" || pinMode === "all" || tool === "cabeza") return { pin: "all", f0: 0, f1: endF, t0: 0, t1: 1e9, media: p.kind };
-      if (pinMode === "range") return { pin: "range", f0: p.frame, f1: endF, t0: now, t1: endT, media: p.kind };
-      return { pin: "frame", f0: p.frame, f1: p.frame, t0: now, t1: now, media: p.kind };
+      const f = frameNow(p);
+      const last = frameLast(p);
+      const t = p.kind === "video" ? (p.video.currentTime || 0) : f;
+      const endT = p.kind === "video" ? (p.video.duration || t) : last;
+      if (p.kind === "image" || pinMode === "all") return { pin: "all", f0: 0, f1: Math.max(last, f), t0: 0, t1: 1e9, media: p.kind };
+      if (pinMode === "range") return { pin: "range", f0: f, f1: Math.max(last, f), t0: t, t1: endT, media: p.kind };
+      return { pin: "frame", f0: f, f1: f, t0: t, t1: t, media: p.kind };
     }
     function visible(m, p) {
       if (m.side !== p.side || p.kind === "empty") return false;
       if (m.pin === "all" || p.kind === "image") return true;
-      if (p.kind === "diagram") return p.frame >= m.f0 && p.frame <= m.f1;
-      const t = p.video.currentTime || 0;
-      return t >= m.t0 - 0.034 && t <= m.t1 + 0.034;
+      const f = frameNow(p);
+      return f >= m.f0 && f <= m.f1;
     }
     function eventPos(p, e, origin) {
       const r = p.svg.getBoundingClientRect();
       let q = { x: clamp((e.clientX - r.left) / (r.width || 1), 0, 1), y: clamp((e.clientY - r.top) / (r.height || 1), 0, 1) };
-      const tx = 8 / (r.width || 1);
-      const ty = 8 / (r.height || 1);
+      const px = 8 / (r.width || 1);
+      const py = 8 / (r.height || 1);
       if (origin) {
-        if (Math.abs(q.y - origin.y) < ty && Math.abs(q.x - origin.x) >= tx) q = { x: q.x, y: origin.y, snap: "h" };
-        else if (Math.abs(q.x - origin.x) < tx && Math.abs(q.y - origin.y) >= ty) q = { x: origin.x, y: q.y, snap: "v" };
+        if (Math.abs(q.y - origin.y) < py && Math.abs(q.x - origin.x) >= px) q = { x: q.x, y: origin.y, snap: "h" };
+        else if (Math.abs(q.x - origin.x) < px && Math.abs(q.y - origin.y) >= py) q = { x: origin.x, y: q.y, snap: "v" };
       }
       for (const m of marks) {
         if (m.side !== p.side) continue;
         for (const pt of m.pts) {
-          if (Math.abs(q.x - pt.x) < tx && Math.abs(q.y - pt.y) < ty) return { x: pt.x, y: pt.y, snap: q.snap || "p" };
+          if (Math.abs(q.x - pt.x) < px && Math.abs(q.y - pt.y) < py) return { x: pt.x, y: pt.y, snap: q.snap || "p" };
         }
       }
       return q;
@@ -311,34 +394,46 @@
       const r = p.svg.getBoundingClientRect();
       return Math.hypot((a.x - b.x) * r.width, (a.y - b.y) * r.height) >= 4;
     }
-    function degrees(a, v, c) {
-      const ux = a.x - v.x, uy = a.y - v.y, wx = c.x - v.x, wy = c.y - v.y;
+    function degrees(a, v, c, box) {
+      const ux = (a.x - v.x) * box.w, uy = (a.y - v.y) * box.h;
+      const wx = (c.x - v.x) * box.w, wy = (c.y - v.y) * box.h;
       const du = Math.hypot(ux, uy), dw = Math.hypot(wx, wy);
       if (du < 1e-6 || dw < 1e-6) return 0;
       const cos = clamp((ux * wx + uy * wy) / (du * dw), -1, 1);
       return Math.round(Math.acos(cos) * 180 / Math.PI);
     }
+    function circlePoint(origin, pt, box) {
+      const dx = (pt.x - origin.x) * box.w;
+      const dy = (pt.y - origin.y) * box.h;
+      const r = Math.hypot(dx, dy) || 1;
+      return {
+        x: origin.x + Math.sign(dx || 1) * r / box.w,
+        y: origin.y + Math.sign(dy || 1) * r / box.h,
+        snap: "c",
+      };
+    }
     function pinText(m) {
-      if (m.pin === "all") return "Todo el clip";
-      if (m.media === "video") return m.pin === "range" ? `${m.t0.toFixed(2)}–${m.t1.toFixed(2)} s` : `${m.t0.toFixed(2)} s`;
-      return m.pin === "range" ? `Cuadro ${m.f0}–${m.f1}` : `Cuadro ${m.f0}`;
+      if (m.media === "image") return "en la imagen";
+      if (m.pin === "all") return "todo el clip";
+      if (m.pin === "range") return `tramo ${m.f0}–${m.f1}`;
+      return `cuadro ${m.f0}`;
     }
     function markLabel(m) {
-      const p0 = m.pts[0];
-      const xy = p0 ? `${p0.x.toFixed(2)}, ${p0.y.toFixed(2)}` : "";
-      const deg = m.tipo === "angulo" && m.grados != null ? ` · ${m.grados}°` : "";
-      return `${NAME[m.tipo] || m.tipo}${deg} · ${xy} · ${pinText(m)}`;
+      const name = m.tipo === "texto" && m.texto ? m.texto : (HUMAN[m.tipo] || m.tipo);
+      const deg = m.tipo === "angulo" && m.grados != null ? ` ${m.grados}°` : "";
+      return `${name}${deg} · ${pinText(m)}`;
     }
     function renderList() {
       list.replaceChildren();
-      if (!marks.length) {
+      const rows = marks.filter(m => m.side === active.side);
+      if (!rows.length) {
         const n = document.createElement("p");
         n.className = "note";
         n.textContent = "Todavía no hay marcas.";
         list.append(n);
         return;
       }
-      for (const m of marks.slice().reverse()) {
+      for (const m of rows.slice().reverse()) {
         const row = document.createElement("div");
         row.className = "mark";
         const span = document.createElement("span");
@@ -354,32 +449,42 @@
     function highlight() {
       root.querySelectorAll("[data-tool]").forEach(b => b.classList.toggle("on", b.dataset.tool === tool));
       root.querySelectorAll("[data-color]").forEach(b => b.classList.toggle("on", b.dataset.color === color));
-      root.querySelectorAll("[data-pin]").forEach(b => {
-        b.classList.toggle("on", b.dataset.pin === pinMode);
-        b.disabled = tool === "cabeza" && b.dataset.pin !== "all";
-      });
+      root.querySelectorAll("[data-pin]").forEach(b => b.classList.toggle("on", b.dataset.pin === pinMode));
       root.querySelectorAll("[data-speed]").forEach(b => b.classList.toggle("on", Number(b.dataset.speed) === rate));
-      root.querySelectorAll("[data-key]").forEach(b => b.classList.toggle("on", b.dataset.key === activeKey));
       const syncBtn = root.querySelector("[data-act=sync]");
-      if (syncBtn) syncBtn.classList.toggle("on", syncOn);
+      if (syncBtn) { syncBtn.classList.toggle("on", syncOn); syncBtn.disabled = !canSync(); }
+      root.querySelectorAll("[data-act=ir]").forEach(b => { b.hidden = !active.fixed[b.dataset.key]; });
+      const dot = root.querySelector(".dot");
+      if (dot) dot.style.background = color;
       const m = selMark();
-      textBox.hidden = tool !== "texto" && !(m && m.tipo === "texto");
-      if (m && m.tipo === "texto" && document.activeElement !== textInput) textInput.value = m.texto || "";
+      const showText = tool === "texto" || (m && (m.tipo === "texto" || m.etiqueta));
+      textBox.hidden = !showText;
+      if (m && (m.tipo === "texto" || m.etiqueta) && document.activeElement !== textInput) textInput.value = m.texto || "";
+      const et = root.querySelector("[data-act=etiqueta]");
+      if (et) et.classList.toggle("on", labelOn || !!(m && m.etiqueta));
       if (volverBtn) volverBtn.hidden = !active.prev;
+    }
+    function clock(t) {
+      if (!Number.isFinite(t) || t < 0) t = 0;
+      const m = Math.floor(t / 60);
+      const s = Math.floor(t % 60);
+      const cs = Math.floor(t * 100 + 1e-4) % 100;
+      return m + ":" + String(s).padStart(2, "0") + "." + String(cs).padStart(2, "0");
     }
     function updateScrub() {
       const p = active;
-      if (p.kind === "diagram") { scrub.max = "23"; scrub.step = "1"; scrub.disabled = false; scrub.value = String(p.frame); reloj.textContent = "Cuadro " + p.frame; }
-      else if (p.kind === "video") {
-        const d = p.video.duration || 0;
-        scrub.max = String(d || 1); scrub.step = "0.01"; scrub.disabled = !d; scrub.value = String(p.video.currentTime || 0);
-        reloj.textContent = clock(p.video.currentTime || 0) + " / " + clock(d);
-      } else { scrub.disabled = true; reloj.textContent = p.kind === "image" ? "Imagen" : "Sin archivo"; }
-    }
-    function clock(t) {
-      if (!Number.isFinite(t)) return "0:00";
-      const s = Math.floor(t % 60).toString().padStart(2, "0");
-      return Math.floor(t / 60) + ":" + s;
+      if (p.kind === "diagram") {
+        scrub.max = "23"; scrub.step = "1"; scrub.disabled = false; scrub.value = String(p.frame);
+        reloj.textContent = "Cuadro " + p.frame;
+      } else if (p.kind === "video") {
+        const last = frameLast(p);
+        scrub.max = String(Math.max(0, last)); scrub.step = "1"; scrub.disabled = !p.video.duration;
+        scrub.value = String(frameNow(p));
+        reloj.textContent = clock(p.video.currentTime || 0) + " · " + frameNow(p);
+      } else {
+        scrub.disabled = true;
+        reloj.textContent = p.kind === "image" ? "Imagen" : "Sin archivo";
+      }
     }
     function setActive(p) {
       active = p;
@@ -390,139 +495,160 @@
       if (built[1]) built[1].root.style.opacity = opts.overlay ? String(opacity) : "1";
       updateScrub();
       highlight();
+      renderList();
     }
     function stopPlay() {
       playing = false;
       clearTimeout(playTimer);
-      playBtn.textContent = "Reproducir";
+      playBtn.textContent = "Ver";
       built.forEach(p => { if (p.kind === "video") { p.video.pause(); p.video.ontimeupdate = null; } });
     }
     function paintInk(p) {
+      layoutFit(p);
+      const box = boxOf(p);
       const svg = p.svg;
       while (svg.firstChild) svg.firstChild.remove();
-      svg.append(svgEl("rect", { class: "pad", x: 0, y: 0, width: 1, height: 1, fill: "transparent" }));
-      const rect = p.svg.getBoundingClientRect();
+      svg.append(svgEl("rect", { class: "pad", x: 0, y: 0, width: box.w, height: box.h, fill: "transparent" }));
       const show = marks.filter(m => visible(m, p));
-      const live = liveMark(p);
+      const live = liveMark(p, box);
       if (live) show.push(live);
-      for (const m of show) svg.append(drawMark(m, rect, tool === "mover"));
+      for (const m of show) svg.append(drawMark(m, box, tool === "mover"));
       if (tool === "mover" && sel) {
         const m = marks.find(x => x.id === sel && x.side === p.side);
-        if (m && visible(m, p)) drawHandles(svg, m, rect);
+        if (m && visible(m, p)) drawHandles(svg, m, box);
       }
     }
-    function liveMark(p) {
+    function liveMark(p, box) {
       if (!draft || draft.side !== p.side) return null;
       if (draft.tipo === "angulo" && draft.hover && draft.pts.length < 3) {
         const pts = draft.pts.concat([draft.hover]);
         const m = { ...draft, pts };
-        if (pts.length === 3) m.grados = degrees(pts[0], pts[1], pts[2]);
+        if (pts.length === 3) m.grados = degrees(pts[0], pts[1], pts[2], box);
         return m;
       }
       return draft;
     }
     function paintAll() { built.forEach(p => { if (p.kind === "diagram") drawDiagram(p); paintInk(p); }); updateScrub(); }
 
-    function drawMark(m, rect, hit) {
+    function drawText(g, x, y, str, fill) {
+      const t = svgEl("text", {
+        x, y, fill, "font-size": 15, "font-family": "Geist, sans-serif", "font-weight": 600, "font-style": "normal",
+        stroke: "#0B2545", "stroke-width": 3, "vector-effect": "non-scaling-stroke", "paint-order": "stroke",
+        "stroke-linejoin": "round",
+      });
+      t.textContent = str;
+      g.append(t);
+    }
+    function drawMark(m, box, hit) {
       const g = svgEl("g", { "data-ann": m.id });
       g.style.pointerEvents = hit ? "auto" : "none";
+      const X = n => n * box.w;
+      const Y = n => n * box.h;
       const ink = (el, attrs) => {
         g.append(svgEl(el, { ...attrs, stroke: "#0B2545", "stroke-width": (Number(attrs["stroke-width"]) || m.sw) + 2, "vector-effect": "non-scaling-stroke", fill: "none" }));
-        g.append(svgEl(el, { ...attrs, stroke: m.color, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", "stroke-linejoin": "round" }));
+        g.append(svgEl(el, { ...attrs, stroke: m.color, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", "stroke-linejoin": "round", fill: attrs.fill || "none" }));
       };
-      const hitLine = (x1, y1, x2, y2) => g.append(svgEl("line", { x1, y1, x2, y2, stroke: "transparent", "stroke-width": 0.08, "stroke-linecap": "round" }));
+      const hitLine = (x1, y1, x2, y2) => g.append(svgEl("line", { x1, y1, x2, y2, stroke: "transparent", "stroke-width": 16, "stroke-linecap": "round" }));
       if (m.tipo === "libre" && m.pts.length > 1) {
-        const points = m.pts.map(p => `${p.x},${p.y}`).join(" ");
-        g.append(svgEl("polyline", { points, fill: "none", stroke: "transparent", "stroke-width": 0.08, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+        const points = m.pts.map(p => `${X(p.x)},${Y(p.y)}`).join(" ");
+        g.append(svgEl("polyline", { points, fill: "none", stroke: "transparent", "stroke-width": 16, "stroke-linejoin": "round", "stroke-linecap": "round" }));
         ink("polyline", { points, fill: "none", "stroke-width": m.sw });
       } else if (m.tipo === "elipse" || m.tipo === "cabeza") {
         const c0 = m.pts[0], e = m.pts[1] || c0;
-        const rx = Math.max(0.01, Math.abs(e.x - c0.x)), ry = Math.max(0.01, Math.abs(e.y - c0.y));
-        g.append(svgEl("ellipse", { cx: c0.x, cy: c0.y, rx, ry, fill: "transparent", stroke: "transparent", "stroke-width": 0.06 }));
-        ink("ellipse", { cx: c0.x, cy: c0.y, rx, ry, fill: "none", "stroke-width": m.sw });
+        const dx = (e.x - c0.x) * box.w, dy = (e.y - c0.y) * box.h;
+        let rx, ry;
+        if (m.tipo === "cabeza" || m.snap === "c") {
+          const r = Math.max(6, Math.hypot(dx, dy));
+          rx = r; ry = r;
+        } else {
+          rx = Math.max(6, Math.abs(dx));
+          ry = Math.max(6, Math.abs(dy));
+        }
+        g.append(svgEl("ellipse", { cx: X(c0.x), cy: Y(c0.y), rx, ry, fill: "transparent", stroke: "transparent", "stroke-width": 14 }));
+        ink("ellipse", { cx: X(c0.x), cy: Y(c0.y), rx, ry, fill: "none", "stroke-width": m.sw });
         if (m.tipo === "cabeza") {
-          const hx = 8 / (rect.width || 1), hy = 8 / (rect.height || 1);
-          ink("line", { x1: c0.x - hx, y1: c0.y, x2: c0.x + hx, y2: c0.y, "stroke-width": m.sw });
-          ink("line", { x1: c0.x, y1: c0.y - hy, x2: c0.x, y2: c0.y + hy, "stroke-width": m.sw });
+          ink("line", { x1: X(c0.x) - 8, y1: Y(c0.y), x2: X(c0.x) + 8, y2: Y(c0.y), "stroke-width": m.sw });
+          ink("line", { x1: X(c0.x), y1: Y(c0.y) - 8, x2: X(c0.x), y2: Y(c0.y) + 8, "stroke-width": m.sw });
         }
       } else if (m.tipo === "caja") {
         const a = m.pts[0], b = m.pts[1] || a;
-        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.max(0.01, Math.abs(b.x - a.x)), h = Math.max(0.01, Math.abs(b.y - a.y));
-        g.append(svgEl("rect", { x, y, width: w, height: h, fill: "transparent", stroke: "transparent", "stroke-width": 0.06 }));
+        const x = Math.min(X(a.x), X(b.x)), y = Math.min(Y(a.y), Y(b.y));
+        const w = Math.max(6, Math.abs(X(b.x) - X(a.x))), h = Math.max(6, Math.abs(Y(b.y) - Y(a.y)));
+        g.append(svgEl("rect", { x, y, width: w, height: h, fill: "transparent", stroke: "transparent", "stroke-width": 14 }));
         ink("rect", { x, y, width: w, height: h, fill: "none", "stroke-width": m.sw });
       } else if (m.tipo === "vertical") {
-        const x = m.pts[0].x;
-        hitLine(x, 0, x, 1);
-        ink("line", { x1: x, y1: 0, x2: x, y2: 1, "stroke-width": m.sw });
+        const x = X(m.pts[0].x);
+        hitLine(x, 0, x, box.h);
+        ink("line", { x1: x, y1: 0, x2: x, y2: box.h, "stroke-width": m.sw });
       } else if (m.tipo === "horizontal") {
-        const y = m.pts[0].y;
-        hitLine(0, y, 1, y);
-        ink("line", { x1: 0, y1: y, x2: 1, y2: y, "stroke-width": m.sw });
+        const y = Y(m.pts[0].y);
+        hitLine(0, y, box.w, y);
+        ink("line", { x1: 0, y1: y, x2: box.w, y2: y, "stroke-width": m.sw });
       } else if (m.tipo === "texto") {
-        const t = svgEl("text", { x: m.pts[0].x, y: m.pts[0].y, fill: m.color, "font-size": 0.045, "font-family": "Geist, sans-serif", "font-weight": 600, "font-style": "normal", "dominant-baseline": "hanging" });
-        t.setAttribute("paint-order", "stroke");
-        t.setAttribute("stroke", "#0B2545");
-        t.setAttribute("stroke-width", "3px");
-        t.textContent = m.texto || "Nota";
-        g.append(t);
+        const x = clamp(X(m.pts[0].x), 4, box.w - 8);
+        const y = clamp(Y(m.pts[0].y), 18, box.h - 6);
+        drawText(g, x, y, m.texto || "Nota", m.color);
       } else if (m.tipo === "angulo") {
         const pts = m.pts;
-        if (pts.length >= 2) { hitLine(pts[0].x, pts[0].y, pts[1].x, pts[1].y); ink("line", { x1: pts[0].x, y1: pts[0].y, x2: pts[1].x, y2: pts[1].y, "stroke-width": m.sw }); }
+        if (pts.length >= 2) { hitLine(X(pts[0].x), Y(pts[0].y), X(pts[1].x), Y(pts[1].y)); ink("line", { x1: X(pts[0].x), y1: Y(pts[0].y), x2: X(pts[1].x), y2: Y(pts[1].y), "stroke-width": m.sw }); }
         if (pts.length === 3) {
-          hitLine(pts[1].x, pts[1].y, pts[2].x, pts[2].y);
-          ink("line", { x1: pts[1].x, y1: pts[1].y, x2: pts[2].x, y2: pts[2].y, "stroke-width": m.sw });
-          const path = arcPath(pts[1], pts[0], pts[2], 28, rect);
+          hitLine(X(pts[1].x), Y(pts[1].y), X(pts[2].x), Y(pts[2].y));
+          ink("line", { x1: X(pts[1].x), y1: Y(pts[1].y), x2: X(pts[2].x), y2: Y(pts[2].y), "stroke-width": m.sw });
+          const path = arcPath(pts[1], pts[0], pts[2], 28, box);
           if (path) ink("path", { d: path, fill: "none", "stroke-width": m.sw });
-          const deg = m.grados != null ? m.grados : degrees(pts[0], pts[1], pts[2]);
-          const t = svgEl("text", { x: pts[1].x + 0.02, y: pts[1].y - 0.02, fill: m.color, "font-size": 0.05, "font-family": "Geist, sans-serif", "font-weight": 600, "font-style": "normal" });
-          t.textContent = deg + "°";
-          g.append(t);
+          const deg = m.grados != null ? m.grados : degrees(pts[0], pts[1], pts[2], box);
+          const lx = clamp(X(pts[1].x) + 10, 4, box.w - 36);
+          const ly = clamp(Y(pts[1].y) - 10, 16, box.h - 4);
+          drawText(g, lx, ly, deg + "°", m.color);
         }
       } else if (m.pts.length >= 2) {
         const a = m.pts[0], b = m.pts[1];
-        hitLine(a.x, a.y, b.x, b.y);
-        ink("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, "stroke-width": m.sw });
-        if (m.tipo === "flecha" || m.tipo === "objetivo") arrow(g, a, b, m, rect);
-        if (m.tipo === "pies" || m.tipo === "objetivo" || m.tipo === "plano") {
-          const t = svgEl("text", { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 0.03, fill: m.color, "font-size": 0.04, "font-family": "Geist, sans-serif", "font-weight": 600, "font-style": "normal" });
-          t.textContent = NAME[m.tipo];
-          g.append(t);
+        hitLine(X(a.x), Y(a.y), X(b.x), Y(b.y));
+        ink("line", { x1: X(a.x), y1: Y(a.y), x2: X(b.x), y2: Y(b.y), "stroke-width": m.sw });
+        if (m.tipo === "flecha" || m.tipo === "objetivo") arrow(g, a, b, m, box);
+        if (m.etiqueta && (m.tipo === "pies" || m.tipo === "objetivo" || m.tipo === "plano")) {
+          const pos = labelPos(a, b, box);
+          drawText(g, pos.x, pos.y, m.texto || HUMAN[m.tipo], m.color);
         }
       }
       return g;
     }
-    function arrow(g, a, b, m, rect) {
-      const ang = Math.atan2((b.y - a.y) * rect.height, (b.x - a.x) * rect.width);
-      const px = b.x * rect.width, py = b.y * rect.height;
-      const tip = (d) => ({ x: (px - 14 * Math.cos(ang + d)) / rect.width, y: (py - 14 * Math.sin(ang + d)) / rect.height });
-      const p1 = tip(-0.45), p2 = tip(0.45);
-      g.append(svgEl("line", { x1: b.x, y1: b.y, x2: p1.x, y2: p1.y, stroke: m.color, "stroke-width": m.sw, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
-      g.append(svgEl("line", { x1: b.x, y1: b.y, x2: p2.x, y2: p2.y, stroke: m.color, "stroke-width": m.sw, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+    function labelPos(a, b, box) {
+      const ax = a.x * box.w, ay = a.y * box.h, bx = b.x * box.w, by = b.y * box.h;
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const x = clamp(bx + ((bx - ax) / len) * 14, 4, box.w - 8);
+      const y = clamp(by + ((by - ay) / len) * 14, 16, box.h - 6);
+      return { x, y };
     }
-    function arcPath(v, a, c, rPx, rect) {
-      const vx = v.x * rect.width, vy = v.y * rect.height;
-      const a1 = Math.atan2(a.y * rect.height - vy, a.x * rect.width - vx);
-      const a2 = Math.atan2(c.y * rect.height - vy, c.x * rect.width - vx);
+    function arrow(g, a, b, m, box) {
+      const ax = a.x * box.w, ay = a.y * box.h, bx = b.x * box.w, by = b.y * box.h;
+      const ang = Math.atan2(by - ay, bx - ax);
+      const tip = (d) => ({ x: bx - 14 * Math.cos(ang + d), y: by - 14 * Math.sin(ang + d) });
+      const p1 = tip(-0.45), p2 = tip(0.45);
+      g.append(svgEl("line", { x1: bx, y1: by, x2: p1.x, y2: p1.y, stroke: m.color, "stroke-width": m.sw, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+      g.append(svgEl("line", { x1: bx, y1: by, x2: p2.x, y2: p2.y, stroke: m.color, "stroke-width": m.sw, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+    }
+    function arcPath(v, a, c, rPx, box) {
+      const vx = v.x * box.w, vy = v.y * box.h;
+      const a1 = Math.atan2(a.y * box.h - vy, a.x * box.w - vx);
+      const a2 = Math.atan2(c.y * box.h - vy, c.x * box.w - vx);
       let d = a2 - a1;
       while (d > Math.PI) d -= Math.PI * 2;
       while (d < -Math.PI) d += Math.PI * 2;
       const sweep = d > 0 ? 1 : 0;
-      const p1x = (vx + Math.cos(a1) * rPx) / rect.width;
-      const p1y = (vy + Math.sin(a1) * rPx) / rect.height;
-      const p2x = (vx + Math.cos(a2) * rPx) / rect.width;
-      const p2y = (vy + Math.sin(a2) * rPx) / rect.height;
-      return `M ${p1x} ${p1y} A ${rPx / rect.width} ${rPx / rect.height} 0 0 ${sweep} ${p2x} ${p2y}`;
+      const p1x = vx + Math.cos(a1) * rPx, p1y = vy + Math.sin(a1) * rPx;
+      const p2x = vx + Math.cos(a2) * rPx, p2y = vy + Math.sin(a2) * rPx;
+      return `M ${p1x} ${p1y} A ${rPx} ${rPx} 0 0 ${sweep} ${p2x} ${p2y}`;
     }
-    function drawHandles(svg, m, rect) {
+    function drawHandles(svg, m, box) {
       const ix = m.tipo === "libre" ? libreHandles(m.pts.length) : m.pts.map((_, i) => i);
       for (const i of ix) {
         const p = m.pts[i];
-        const h = svgEl("ellipse", {
-          cx: p.x, cy: p.y, rx: 7 / (rect.width || 1), ry: 7 / (rect.height || 1),
+        svg.append(svgEl("ellipse", {
+          cx: p.x * box.w, cy: p.y * box.h, rx: 7, ry: 7,
           fill: "#FFFFFF", stroke: "#0B2545", "stroke-width": 2, "vector-effect": "non-scaling-stroke",
           "data-h": i, "data-ann": m.id,
-        });
-        svg.append(h);
+        }));
       }
     }
     function libreHandles(n) {
@@ -534,38 +660,89 @@
     function showLoupe(p, e, pt) {
       if (tool === "mover" || tool === "encuadre" || p.kind === "empty") { p.loupe.hidden = true; return; }
       p.loupe.hidden = false;
-      const r = p.stage.getBoundingClientRect();
       const size = 132;
-      let x = e.clientX - r.left - size - 16;
-      let y = e.clientY - r.top - size - 16;
-      if (x < 8) x = e.clientX - r.left + 20;
-      if (y < 8) y = e.clientY - r.top + 20;
-      p.loupe.style.left = x + "px";
-      p.loupe.style.top = y + "px";
+      const gap = 28;
+      const candidates = [
+        { x: e.clientX - size - gap, y: e.clientY - size - gap },
+        { x: e.clientX + gap, y: e.clientY - size - gap },
+        { x: e.clientX - size - gap, y: e.clientY + gap },
+        { x: e.clientX + gap, y: e.clientY + gap },
+      ];
+      let best = candidates[0], bestD = -1;
+      for (const c of candidates) {
+        const cx = clamp(c.x, 8, window.innerWidth - size - 8);
+        const cy = clamp(c.y, 8, window.innerHeight - size - 8);
+        const d = Math.hypot(cx + size / 2 - e.clientX, cy + size / 2 - e.clientY);
+        const inside = c.x >= 4 && c.y >= 4 && c.x + size <= window.innerWidth - 4 && c.y + size <= window.innerHeight - 4;
+        const score = d + (inside ? 80 : 0);
+        if (score > bestD) { bestD = score; best = { x: cx, y: cy }; }
+      }
+      p.loupe.style.left = best.x + "px";
+      p.loupe.style.top = best.y + "px";
       const src = p.kind === "video" ? p.video : p.kind === "image" ? p.img : p.canvas;
       const ctx = p.loupe.querySelector("canvas").getContext("2d");
-      const cw = 168, ch = 168, z = 3, sw = cw / z, sh = ch / z;
-      const mw = src.videoWidth || src.naturalWidth || src.width || 1;
-      const mh = src.videoHeight || src.naturalHeight || src.height || 1;
+      const cw = 168, ch = 168, z = 3;
+      const mw = src.videoWidth || src.naturalWidth || src.width || mediaPx(p).w || 1;
+      const mh = src.videoHeight || src.naturalHeight || src.height || mediaPx(p).h || 1;
+      const sw = cw / z, sh = ch / z;
+      const sx = pt.x * mw - sw / 2, sy = pt.y * mh - sh / 2;
       ctx.fillStyle = "#0B2545";
       ctx.fillRect(0, 0, cw, ch);
-      try { ctx.drawImage(src, pt.x * mw - sw / 2, pt.y * mh - sh / 2, sw, sh, 0, 0, cw, ch); } catch { /* el cuadro todavía no está */ }
+      try { ctx.drawImage(src, sx, sy, sw, sh, 0, 0, cw, ch); } catch { /* el cuadro todavía no está */ }
+      drawLoupeMarks(ctx, p, sx, sy, z, mw, mh);
       ctx.strokeStyle = "#C8A86A";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(cw / 2, 0); ctx.lineTo(cw / 2, ch);
       ctx.moveTo(0, ch / 2); ctx.lineTo(cw, ch / 2);
       ctx.stroke();
       p.loupe.querySelector(".snap").textContent = pt.snap === "h" ? "Horizontal" : pt.snap === "v" ? "Vertical" : pt.snap === "c" ? "Círculo" : "";
     }
+    function drawLoupeMarks(ctx, p, sx, sy, z, mw, mh) {
+      const listM = marks.filter(m => visible(m, p));
+      if (draft && draft.side === p.side) listM.push(draft);
+      const X = n => (n * mw - sx) * z;
+      const Y = n => (n * mh - sy) * z;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      for (const m of listM) {
+        if (!m.pts.length) continue;
+        ctx.strokeStyle = m.color || color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (m.tipo === "libre") {
+          m.pts.forEach((q, i) => i ? ctx.lineTo(X(q.x), Y(q.y)) : ctx.moveTo(X(q.x), Y(q.y)));
+        } else if (m.tipo === "elipse" || m.tipo === "cabeza") {
+          const c0 = m.pts[0], e = m.pts[1] || c0;
+          const rx = Math.abs(e.x - c0.x) * mw * z, ry = Math.abs(e.y - c0.y) * mh * z;
+          const r = (m.tipo === "cabeza" || m.snap === "c") ? Math.hypot((e.x - c0.x) * mw, (e.y - c0.y) * mh) * z : 0;
+          ctx.ellipse(X(c0.x), Y(c0.y), r || rx || 1, r || ry || 1, 0, 0, Math.PI * 2);
+        } else if (m.pts.length >= 2) {
+          ctx.moveTo(X(m.pts[0].x), Y(m.pts[0].y));
+          ctx.lineTo(X(m.pts[1].x), Y(m.pts[1].y));
+          if (m.tipo === "angulo" && m.pts[2]) { ctx.moveTo(X(m.pts[1].x), Y(m.pts[1].y)); ctx.lineTo(X(m.pts[2].x), Y(m.pts[2].y)); }
+        } else if (m.tipo === "vertical") {
+          ctx.moveTo(X(m.pts[0].x), Y(0)); ctx.lineTo(X(m.pts[0].x), Y(1));
+        } else if (m.tipo === "horizontal") {
+          ctx.moveTo(X(0), Y(m.pts[0].y)); ctx.lineTo(X(1), Y(m.pts[0].y));
+        }
+        ctx.stroke();
+      }
+    }
     function hideLoupes() { built.forEach(p => { p.loupe.hidden = true; }); }
 
     function startDraft(p, pt) {
       if (p.kind === "empty") return;
-      const base = { id: uid(), tipo: tool, side: p.side, color, sw, texto: textInput.value || "Nota", pts: [], ...stamp(p) };
+      const align = tool === "pies" || tool === "objetivo" || tool === "plano";
+      const base = {
+        id: uid(), tipo: tool, side: p.side, color, sw,
+        texto: textInput.value || (tool === "texto" ? "Nota" : ""),
+        etiqueta: align && labelOn, snap: pt.snap === "c" ? "c" : "",
+        pts: [], ...stamp(p),
+      };
       if (tool === "angulo") {
         if (!draft || draft.tipo !== "angulo" || draft.side !== p.side || draft.pts.length >= 3) draft = { ...base, pts: [pt] };
-        else { draft.pts.push(pt); if (draft.pts.length === 3) finishDraft(p); }
+        else { draft.pts.push(pt); if (draft.pts.length === 3) { draft.grados = degrees(draft.pts[0], draft.pts[1], draft.pts[2], boxOf(p)); finishDraft(p); return; } }
         paintInk(p);
         return;
       }
@@ -578,7 +755,8 @@
     }
     function finishDraft(p) {
       if (!draft) return;
-      if (draft.tipo === "angulo" && draft.pts.length === 3) draft.grados = degrees(draft.pts[0], draft.pts[1], draft.pts[2]);
+      const box = boxOf(p);
+      if (draft.tipo === "angulo" && draft.pts.length === 3) draft.grados = degrees(draft.pts[0], draft.pts[1], draft.pts[2], box);
       if ((draft.tipo === "linea" || draft.tipo === "flecha" || draft.tipo === "elipse" || draft.tipo === "cabeza" || draft.tipo === "caja" || draft.tipo === "pies" || draft.tipo === "objetivo" || draft.tipo === "plano") && draft.pts[1] && !far(p, draft.pts[0], draft.pts[1])) {
         draft = null; paintInk(p); return;
       }
@@ -619,7 +797,7 @@
           sel = m ? m.id : null;
           beginEdit();
           drag = { kind: "move", id: ann.dataset.ann, x: pt.x, y: pt.y, origin: m ? m.pts.map(q => ({ ...q })) : [] };
-          if (m && m.tipo === "texto") textInput.value = m.texto || "";
+          if (m && (m.tipo === "texto" || m.etiqueta)) textInput.value = m.texto || "";
         } else sel = null;
         highlight();
         paintInk(p);
@@ -646,7 +824,7 @@
         if (!m) return;
         if (drag.kind === "handle") moveHandle(m, drag, pt);
         else moveBody(m, drag, pt);
-        if (m.tipo === "angulo" && m.pts.length === 3) m.grados = degrees(m.pts[0], m.pts[1], m.pts[2]);
+        if (m.tipo === "angulo" && m.pts.length === 3) m.grados = degrees(m.pts[0], m.pts[1], m.pts[2], boxOf(p));
         paintInk(p);
         showLoupe(p, e, pt);
         return;
@@ -658,15 +836,13 @@
       else if (draft.tipo === "horizontal") draft.pts[0] = { x: 0.5, y: pt.y, snap: pt.snap };
       else if (draft.tipo === "texto") draft.pts[0] = pt;
       else if (draft.pts[1]) {
-        if ((draft.tipo === "elipse" || draft.tipo === "cabeza" || draft.tipo === "caja") && draft.pts[0]) {
-          const dx = pt.x - draft.pts[0].x, dy = pt.y - draft.pts[0].y;
-          if (Math.abs(Math.abs(dx) - Math.abs(dy)) < 0.03) {
-            const s = (Math.abs(dx) + Math.abs(dy)) / 2 || 0.01;
-            pt = { x: draft.pts[0].x + Math.sign(dx || 1) * s, y: draft.pts[0].y + Math.sign(dy || 1) * s, snap: "c" };
-          }
-        }
+        const box = boxOf(p);
+        const dx = (pt.x - draft.pts[0].x) * box.w, dy = (pt.y - draft.pts[0].y) * box.h;
+        if (draft.tipo === "cabeza") pt = circlePoint(draft.pts[0], pt, box);
+        else if (draft.tipo === "elipse" && Math.abs(Math.abs(dx) - Math.abs(dy)) < 10) pt = circlePoint(draft.pts[0], pt, box);
+        else if (draft.tipo === "caja" && Math.abs(Math.abs(dx) - Math.abs(dy)) < 10) pt = circlePoint(draft.pts[0], pt, box);
         draft.pts[1] = pt;
-        draft.snap = pt.snap;
+        draft.snap = pt.snap === "c" ? "c" : "";
       }
       paintInk(p);
       showLoupe(p, e, pt);
@@ -680,6 +856,7 @@
       } else if (m.tipo === "vertical") m.pts[0] = { x: pt.x, y: 0.5 };
       else if (m.tipo === "horizontal") m.pts[0] = { x: 0.5, y: pt.y };
       else m.pts[d.i] = { x: pt.x, y: pt.y };
+      if (m.tipo === "cabeza" && m.pts[1]) m.snap = "c";
     }
     function moveBody(m, d, pt) {
       const dx = pt.x - d.x, dy = pt.y - d.y;
@@ -709,6 +886,30 @@
       if (!draft || draft.tipo === "angulo") return;
       finishDraft(p);
     }
+    function markKey(name) {
+      if (active.kind !== "diagram" && active.kind !== "video") return;
+      active.keys[name] = unitNow(active);
+      active.fixed[name] = true;
+      if (!canSync()) syncOn = false;
+      const label = name === "address" ? "Address" : name === "top" ? "Arriba" : "Impacto";
+      say(label + " marcado");
+      highlight();
+    }
+    function shiftRange(which) {
+      const m = selMark();
+      if (!m || m.pin === "all" || active.kind === "image") return;
+      const f = frameNow(active);
+      const t = active.kind === "video" ? (active.video.currentTime || 0) : f;
+      checkpoint();
+      if (which === "desde") { m.f0 = f; m.t0 = t; if (m.f1 < m.f0) { m.f1 = m.f0; m.t1 = m.t0; } }
+      else { m.f1 = f; m.t1 = t; if (m.f1 < m.f0) { m.f0 = m.f1; m.t0 = m.t1; } }
+      m.pin = "range";
+      pinMode = "range";
+      persist();
+      renderList();
+      paintAll();
+      highlight();
+    }
 
     built.forEach(p => {
       applyMedia(p);
@@ -726,9 +927,12 @@
     function step(dir) {
       stopPlay();
       const p = active;
-      if (p.kind === "video") setUnit(p, (p.video.currentTime || 0) + dir / 30);
-      else if (p.kind === "diagram") setUnit(p, (p.frame + dir + 24) % 24);
-      if (syncOn) syncTo(p);
+      if (p.kind === "video") {
+        const f = clamp(frameNow(p) + dir, 0, frameLast(p));
+        p.video.pause();
+        p.video.currentTime = f / fpsOf(p);
+      } else if (p.kind === "diagram") setUnit(p, (p.frame + dir + 24) % 24);
+      if (syncOn && canSync()) syncTo(p);
       paintAll();
     }
     function togglePlay() {
@@ -741,7 +945,7 @@
         p.video.playbackRate = rate;
         p.video.play();
         p.video.ontimeupdate = () => {
-          if (syncOn) syncTo(p);
+          if (syncOn && canSync()) syncTo(p);
           built.forEach(paintInk);
           updateScrub();
           if (p.video.ended) stopPlay();
@@ -750,7 +954,7 @@
         const loop = () => {
           if (!playing) return;
           p.frame = (p.frame + 1) % 24;
-          if (syncOn) syncTo(p);
+          if (syncOn && canSync()) syncTo(p);
           paintAll();
           playTimer = setTimeout(loop, 1000 / (12 * rate));
         };
@@ -814,51 +1018,77 @@
       const tbtn = e.target.closest("[data-tool]");
       if (tbtn) {
         tool = tbtn.dataset.tool;
-        if (tool === "cabeza") pinMode = "all";
+        if (tool === "cabeza") pinMode = "range";
         draft = null;
         highlight();
         paintAll();
         return;
       }
       const cbtn = e.target.closest("[data-color]");
-      if (cbtn) { color = cbtn.dataset.color; const m = selMark(); if (m && tool === "mover") { checkpoint(); m.color = color; persist(); paintAll(); } highlight(); return; }
+      if (cbtn) {
+        color = cbtn.dataset.color;
+        const m = selMark();
+        if (m && tool === "mover") { checkpoint(); m.color = color; persist(); paintAll(); }
+        highlight();
+        return;
+      }
       const pbtn = e.target.closest("[data-pin]");
-      if (pbtn && !pbtn.disabled) { pinMode = pbtn.dataset.pin; highlight(); return; }
+      if (pbtn) {
+        pinMode = pbtn.dataset.pin;
+        const m = selMark();
+        if (m && tool === "mover") {
+          checkpoint();
+          const stamped = stamp(active);
+          m.pin = stamped.pin; m.f0 = stamped.f0; m.f1 = stamped.f1; m.t0 = stamped.t0; m.t1 = stamped.t1;
+          persist(); renderList(); paintAll();
+        }
+        highlight();
+        return;
+      }
       const speed = e.target.closest("[data-speed]");
       if (speed) { rate = Number(speed.dataset.speed); built.forEach(p => { if (p.kind === "video") p.video.playbackRate = rate; }); highlight(); return; }
       const st = e.target.closest("[data-step]");
       if (st) { step(Number(st.dataset.step)); return; }
-      if (e.target.id === "play") { togglePlay(); return; }
+      if (e.target.id === "play" || e.target.closest("#play")) { togglePlay(); return; }
       const act = e.target.closest("[data-act]");
       if (act) {
         const k = act.dataset.act;
         if (k === "captura") capture();
         else if (k === "volver") restore();
         else if (k === "acercar" || k === "alejar") {
-          const r = active.stage.getBoundingClientRect();
+          const r = active.fit.getBoundingClientRect();
           zoomAt(active, r.left + r.width / 2, r.top + r.height / 2, k === "acercar" ? 1.25 : 0.8);
         } else if (k === "ajustar") { active.view = { s: 1, x: 0, y: 0 }; applyView(active); }
         else if (k === "deshacer") undoDo();
         else if (k === "rehacer") redoDo();
         else if (k === "borrar") removeSel();
         else if (k === "limpiar") { checkpoint(); marks = marks.filter(m => m.side !== active.side); sel = null; persist(); renderList(); paintAll(); }
-        else if (k === "sync") { syncOn = !syncOn; highlight(); }
-        else if (k === "fijar") {
-          if (active.kind === "diagram" || active.kind === "video") {
-            active.keys[activeKey] = unitNow(active);
-            active.fixed[activeKey] = true;
-            say((activeKey === "address" ? "Address" : activeKey === "top" ? "Arriba" : "Impacto") + " fijado");
+        else if (k === "sync") {
+          if (!canSync()) { say("Marcá address, arriba e impacto en los dos lados"); return; }
+          syncOn = !syncOn;
+          highlight();
+        } else if (k === "marcar") markKey(act.dataset.key);
+        else if (k === "ir") {
+          const name = act.dataset.key;
+          if (!active.fixed[name]) return;
+          stopPlay();
+          setUnit(active, active.keys[name]);
+          if (syncOn && canSync()) syncTo(active);
+          paintAll();
+        } else if (k === "desde") shiftRange("desde");
+        else if (k === "hasta") shiftRange("hasta");
+        else if (k === "etiqueta") {
+          labelOn = !labelOn;
+          const m = selMark();
+          if (m && (m.tipo === "pies" || m.tipo === "objetivo" || m.tipo === "plano")) {
+            checkpoint();
+            m.etiqueta = labelOn;
+            persist();
+            paintAll();
+            renderList();
           }
-        }
-        return;
-      }
-      const key = e.target.closest("[data-key]");
-      if (key) {
-        activeKey = key.dataset.key;
-        stopPlay();
-        built.forEach(p => { if (p.kind === "diagram" || p.kind === "video") setUnit(p, p.keys[activeKey]); });
-        highlight();
-        paintAll();
+          highlight();
+        } else if (k === "estilo") sheet.hidden = !sheet.hidden;
         return;
       }
       const pickBtn = e.target.closest("[data-pick]");
@@ -871,14 +1101,22 @@
       useFile(pick || active, f);
       input.value = "";
     });
-    tray.querySelector("#grosor").addEventListener("input", e => {
+    scrub.addEventListener("input", () => {
+      stopPlay();
+      const f = Number(scrub.value);
+      if (active.kind === "video") active.video.currentTime = f / fpsOf(active);
+      else setUnit(active, f);
+      if (syncOn && canSync()) syncTo(active);
+      paintAll();
+    });
+    sheet.querySelector("#grosor").addEventListener("input", e => {
       sw = Number(e.target.value);
       const m = selMark();
       if (m && tool === "mover") { m.sw = sw; persist(); paintAll(); }
     });
     textInput.addEventListener("input", () => {
       const m = selMark();
-      if (m && m.tipo === "texto") { m.texto = textInput.value; persist(); paintAll(); renderList(); }
+      if (m && (m.tipo === "texto" || m.etiqueta)) { m.texto = textInput.value; persist(); paintAll(); renderList(); }
     });
     const op = transport.querySelector("#op");
     if (op) op.addEventListener("input", () => { opacity = Number(op.value); if (built[1]) built[1].root.style.opacity = String(opacity); });
@@ -893,14 +1131,16 @@
       else if (e.key === " ") { e.preventDefault(); togglePlay(); }
     }
     document.addEventListener("keydown", onKey);
-    const ro = new ResizeObserver(() => built.forEach(p => { if (p.kind === "diagram") drawDiagram(p); }));
+    const ro = new ResizeObserver(() => built.forEach(p => { layoutFit(p); if (p.kind === "diagram") drawDiagram(p); paintInk(p); }));
     built.forEach(p => ro.observe(p.stage));
-    const onResize = () => document.getElementById("app").classList.toggle("desk", window.innerWidth >= 900);
+    const onResize = () => {
+      const app = document.getElementById("app");
+      if (app) app.classList.toggle("desk", window.innerWidth >= 900);
+    };
     window.addEventListener("resize", onResize);
     onResize();
 
     setActive(built[0]);
-    renderList();
     requestAnimationFrame(() => paintAll());
 
     return {
@@ -910,7 +1150,7 @@
         document.removeEventListener("keydown", onKey);
         window.removeEventListener("resize", onResize);
         const app = document.getElementById("app");
-        if (app) app.classList.remove("desk");
+        if (app) { app.classList.remove("desk"); app.classList.remove("archivo"); }
       },
     };
   }

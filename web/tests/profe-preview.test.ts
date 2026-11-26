@@ -35,9 +35,12 @@ test("la vista previa no llama a la API y usa gente ficticia", async () => {
   assert.match(preview, /blank/);
   assert.match(anotador, /createObjectURL/);
   assert.match(anotador, /vector-effect/);
+  assert.match(anotador, /non-scaling-stroke/);
   assert.match(anotador, /Ángulo/);
   assert.match(anotador, /Cabeza/);
   assert.match(anotador, /0\.25/);
+  assert.match(anotador, /Marcar address/);
+  assert.match(anotador, /Línea de pies/);
 });
 
 test("cada pantalla de la vista previa se puede recorrer", { skip: !CHROME }, async () => {
@@ -97,14 +100,13 @@ test("cada pantalla de la vista previa se puede recorrer", { skip: !CHROME }, as
     assert.match(await page.$eval("body", el => el.innerText), /Brazo izquierdo/);
     await open("profe-05-video", "#/video/frente");
     await page.$eval('[data-tool="linea"]', el => (el as HTMLButtonElement).click());
-    await page.$eval("#stage", el => el.scrollIntoView({ block: "start", inline: "nearest" }));
-    const box = await page.$eval("#stage", el => {
+    const box = await page.$eval(".fit", el => {
       const r = el.getBoundingClientRect();
       return { x: r.left, y: r.top, w: r.width, h: r.height };
     });
-    await page.mouse.move(box.x + 40, box.y + 80);
+    await page.mouse.move(box.x + box.w * 0.2, box.y + box.h * 0.25);
     await page.mouse.down();
-    await page.mouse.move(box.x + 180, box.y + 220, { steps: 6 });
+    await page.mouse.move(box.x + box.w * 0.7, box.y + box.h * 0.55, { steps: 6 });
     assert.equal(await page.$eval(".loupe", el => el.hidden), false);
     await page.screenshot({ path: `${ART}/profe-05-lupa.png` });
     await page.mouse.up();
@@ -118,18 +120,20 @@ test("cada pantalla de la vista previa se puede recorrer", { skip: !CHROME }, as
     assert.ok(zoom > 1);
     await page.click('[data-act="ajustar"]');
     await page.$eval('[data-tool="angulo"]', el => (el as HTMLButtonElement).click());
-    const box2 = await page.$eval("#stage", el => {
+    const box2 = await page.$eval(".fit", el => {
       const r = el.getBoundingClientRect();
-      return { x: r.left, y: r.top };
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
     });
-    for (const [dx, dy] of [[70, 200], [150, 90], [230, 210]]) {
-      await page.mouse.click(box2.x + dx, box2.y + dy);
+    for (const [nx, ny] of [[0.3, 0.7], [0.55, 0.4], [0.8, 0.62]]) {
+      await page.mouse.click(box2.x + box2.w * nx, box2.y + box2.h * ny);
     }
     await page.waitForFunction(() => /°/.test(document.body.innerText || ""));
     await page.click("#guardar");
     await page.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
     await shot("profe-05-video");
     await open("profe-06-lado", "#/comparar");
+    assert.equal(await page.$eval('[data-act="sync"]', el => (el as HTMLButtonElement).disabled), true);
+    assert.match(await page.$eval('[data-act="marcar"][data-key="address"]', el => el.textContent || ""), /Marcar address/);
     await page.click('[data-vista="sobre"]');
     await shot("profe-06-superpuesto");
     await page.click('[data-compare="referencia"]');
@@ -155,6 +159,198 @@ test("cada pantalla de la vista previa se puede recorrer", { skip: !CHROME }, as
     await page.waitForFunction(() => (document.body.innerText || "").includes("Video elegido"));
     await shot("profe-08-alumna");
     assert.equal(hits.some(p => p.startsWith("/api/")), false);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("el anotador 9:16 mide en píxeles y no tapa el video", { skip: !CHROME }, async () => {
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    const file = url.pathname === "/profe-preview" ? "/profe-preview/index.html" : url.pathname;
+    try {
+      const buf = await readFile(new URL(file.slice(1), ROOT));
+      res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" });
+      res.end(buf);
+    } catch { res.writeHead(404); res.end("missing"); }
+  });
+  await new Promise<void>(r => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const { default: puppeteer } = await import("puppeteer-core");
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+    await page.goto(`http://127.0.0.1:${port}/profe-preview/index.html?blank=1#/anotar`, { waitUntil: "networkidle0" });
+    const webm = await page.evaluate(async () => {
+      const c = document.createElement("canvas");
+      c.width = 180; c.height = 320;
+      const g = c.getContext("2d");
+      if (!g) return [];
+      const stream = c.captureStream(30);
+      const rec = new MediaRecorder(stream, { mimeType: "video/webm" });
+      const chunks: Blob[] = [];
+      rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      const done = new Promise<void>(r => { rec.onstop = () => r(); });
+      rec.start(100);
+      for (let i = 0; i < 18; i++) {
+        g.fillStyle = "#0B2545";
+        g.fillRect(0, 0, 180, 320);
+        g.fillStyle = "#C8102E";
+        g.fillRect(70, 30 + i * 10, 28, 28);
+        await new Promise(r => setTimeout(r, 40));
+      }
+      rec.stop();
+      await done;
+      return Array.from(new Uint8Array(await new Blob(chunks, { type: "video/webm" }).arrayBuffer()));
+    });
+    writeFileSync("/tmp/profe-916.webm", Buffer.from(webm));
+    const png = await page.evaluate(() => {
+      const c = document.createElement("canvas");
+      c.width = 180; c.height = 320;
+      const g = c.getContext("2d");
+      if (!g) return "";
+      g.fillStyle = "#0B2545";
+      g.fillRect(0, 0, 180, 320);
+      g.strokeStyle = "#F6F7F9";
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(90, 24);
+      g.lineTo(90, 296);
+      g.stroke();
+      g.fillStyle = "#C8A86A";
+      g.beginPath();
+      g.arc(90, 250, 8, 0, Math.PI * 2);
+      g.fill();
+      return c.toDataURL("image/png").split(",")[1];
+    });
+    writeFileSync("/tmp/profe-916.png", Buffer.from(png, "base64"));
+    const abrir = await page.$("#abrir");
+    assert.ok(abrir);
+    await abrir.uploadFile("/tmp/profe-916.png");
+    await page.waitForFunction(() => document.querySelector("#stage")?.getAttribute("data-kind") === "image");
+    assert.equal(await page.$eval("#app", el => el.classList.contains("archivo")), true);
+    assert.equal(await page.$eval(".banner", el => getComputedStyle(el).display), "none");
+    assert.equal((await page.$eval("body", el => el.innerText)).includes("Coordenadas de 0 a 1"), false);
+    const layout = await page.evaluate(() => {
+      const stage = document.querySelector("#stage")!.getBoundingClientRect();
+      const transport = document.querySelector(".transport")!.getBoundingClientRect();
+      const rail = document.querySelector(".rail")!;
+      const rr = rail.getBoundingClientRect();
+      const tools = ["angulo", "cabeza", "pies", "plano"].map(id => {
+        const r = document.querySelector(`[data-tool="${id}"]`)!.getBoundingClientRect();
+        return { id, top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width };
+      });
+      return {
+        stageBottom: stage.bottom, transportTop: transport.top, railTop: rr.top,
+        scroll: rail.scrollWidth - rail.clientWidth, tools,
+      };
+    });
+    assert.ok(layout.transportTop >= layout.stageBottom - 1, "el transporte tapa el video");
+    assert.ok(layout.railTop >= layout.transportTop - 1);
+    assert.ok(layout.scroll < 8, "la barra de herramientas se desplaza");
+    for (const t of layout.tools) {
+      assert.ok(t.w > 8 && t.top >= 0 && t.bottom <= 844 && t.left >= 0 && t.right <= 390, t.id);
+    }
+    const fit = await page.$eval(".fit", el => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
+    });
+    assert.ok(Math.abs(fit.w / fit.h - 180 / 320) < 0.02);
+    const at = (nx: number, ny: number) => page.mouse.click(fit.x + nx * fit.w, fit.y + ny * fit.h);
+    await page.$eval('[data-tool="angulo"]', el => (el as HTMLButtonElement).click());
+    const dx = 0.4;
+    const dy = dx * fit.w * Math.tan(6 * Math.PI / 180) / fit.h;
+    await at(0.75, 0.62);
+    await at(0.25, 0.62);
+    await at(0.25 + dx, 0.62 - dy);
+    await page.waitForFunction(() => /Ángulo 6°/.test(document.body.innerText || ""));
+    await page.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await page.$eval('[data-tool="cabeza"]', el => (el as HTMLButtonElement).click());
+    await page.mouse.move(fit.x + fit.w * 0.5, fit.y + fit.h * 0.28);
+    await page.mouse.down();
+    await page.mouse.move(fit.x + fit.w * 0.5 + 36, fit.y + fit.h * 0.28 + 12, { steps: 4 });
+    const loupe = await page.evaluate((fx, fy) => {
+      const r = document.querySelector(".loupe")!.getBoundingClientRect();
+      return { hidden: (document.querySelector(".loupe") as HTMLElement).hidden, cover: fx >= r.left && fx <= r.right && fy >= r.top && fy <= r.bottom };
+    }, fit.x + fit.w * 0.5 + 36, fit.y + fit.h * 0.28 + 12);
+    assert.equal(loupe.hidden, false);
+    assert.equal(loupe.cover, false);
+    await page.screenshot({ path: `${ART}/profe-10-lupa.png` });
+    await page.mouse.up();
+    const circle = await page.evaluate(() => {
+      const ell = [...document.querySelectorAll(".ink ellipse")].find(e => e.getAttribute("stroke") === "#C8102E");
+      return ell ? { rx: Number(ell.getAttribute("rx")), ry: Number(ell.getAttribute("ry")) } : null;
+    });
+    assert.ok(circle);
+    assert.ok(Math.abs(circle.rx - circle.ry) < 1.5);
+    await page.$eval('[data-tool="pies"]', el => (el as HTMLButtonElement).click());
+    await page.mouse.move(fit.x + fit.w * 0.15, fit.y + fit.h * 0.82);
+    await page.mouse.down();
+    await page.mouse.move(fit.x + fit.w * 0.85, fit.y + fit.h * 0.82);
+    await page.mouse.up();
+    await page.waitForFunction(() => /Línea de pies/.test(document.body.innerText || ""));
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll(".ink text")].some(n => (n.textContent || "").includes("Pies"))), false);
+    await page.$eval('[data-tool="texto"]', el => (el as HTMLButtonElement).click());
+    await at(0.22, 0.18);
+    const halo = await page.$eval(".ink text", el => ({
+      sw: Number(el.getAttribute("stroke-width")),
+      ve: el.getAttribute("vector-effect"),
+      vb: el.ownerSVGElement?.viewBox.baseVal.width || 0,
+    }));
+    assert.equal(halo.ve, "non-scaling-stroke");
+    assert.ok(halo.sw <= 4 && halo.vb > 80 && halo.sw * 8 < halo.vb);
+    await page.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await page.screenshot({ path: `${ART}/profe-10-916.png` });
+
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
+    await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+    await page.waitForFunction(() => document.getElementById("app")?.classList.contains("desk"));
+    const desk = await page.evaluate(() => {
+      const stage = document.querySelector("#stage")!.getBoundingClientRect();
+      const rail = document.querySelector(".rail")!.getBoundingClientRect();
+      const fit = document.querySelector(".fit")!.getBoundingClientRect();
+      return { sw: stage.width, sh: stage.height, rx: rail.left, rw: rail.width, fw: fit.width, fh: fit.height };
+    });
+    assert.ok(desk.rx >= desk.sw - 2);
+    assert.ok(desk.sh > 500 && desk.sw > 700);
+    assert.ok(Math.abs(desk.fw / desk.fh - 180 / 320) < 0.03);
+    await page.screenshot({ path: `${ART}/profe-11-desk.png` });
+
+    const video = await browser.newPage();
+    await video.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await video.goto(`http://127.0.0.1:${port}/profe-preview/index.html?blank=1#/anotar`, { waitUntil: "networkidle0" });
+    await (await video.$("#abrir"))!.uploadFile("/tmp/profe-916.webm");
+    await video.waitForFunction(() => document.querySelector("#stage")?.getAttribute("data-kind") === "video");
+    await video.waitForFunction(() => /\d+:\d{2}\.\d{2} · \d+/.test(document.querySelector("#reloj")?.textContent || ""));
+    const before = await video.$eval("#reloj", el => el.textContent || "");
+    await video.click('[data-step="1"]');
+    await video.waitForFunction((prev) => (document.querySelector("#reloj")?.textContent || "") !== prev, {}, before);
+    const after = await video.$eval("#reloj", el => el.textContent || "");
+    const frameOf = (s: string) => Number(s.split("·")[1]);
+    assert.equal(frameOf(after), frameOf(before) + 1);
+    const fitV = await video.$eval(".fit", el => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+    await video.$eval('[data-tool="linea"]', el => (el as HTMLButtonElement).click());
+    await video.mouse.move(fitV.x + 30, fitV.y + 40);
+    await video.mouse.down();
+    await video.mouse.move(fitV.x + 120, fitV.y + 180, { steps: 6 });
+    await video.mouse.up();
+    await video.waitForFunction(() => /cuadro /.test(document.body.innerText || ""));
+    const onFrame = await video.$$eval(".ink line", ns => ns.length);
+    assert.ok(onFrame > 0);
+    await video.click('[data-step="1"]');
+    await video.waitForFunction(() => document.querySelectorAll(".ink line").length === 0);
+    await video.$eval('[data-tool="cabeza"]', el => (el as HTMLButtonElement).click());
+    await video.mouse.move(fitV.x + fitV.w * 0.5, fitV.y + 70);
+    await video.mouse.down();
+    await video.mouse.move(fitV.x + fitV.w * 0.5 + 34, fitV.y + 90, { steps: 4 });
+    await video.mouse.up();
+    await video.waitForFunction(() => /Cabeza · tramo/.test(document.body.innerText || ""));
+    assert.equal(/todo el clip/.test(await video.$eval("body", el => el.innerText)), false);
+    await video.evaluate(() => document.querySelectorAll(".toast").forEach(n => n.remove()));
+    await video.screenshot({ path: `${ART}/profe-12-video.png` });
+    await video.close();
   } finally {
     await browser.close();
     server.close();
